@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#123a5b">
+  <title>McLay Swimming OS — Version 1.2 Secure</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>McLay Swimming OS</h1>
+      <div class="header-subtitle">Version 1.2 Secure · secure cloud-first starting point</div>
+    </div>
+    <div class="status-cluster">
+      <span id="dataModeBadge" class="badge warning">Local only</span>
+      <span id="syncBadge" class="badge">Ready</span>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <button data-view="overview" class="nav-button active">Overview</button>
+      <button data-view="attendance" class="nav-button">Attendance</button>
+      <button data-view="capture" class="nav-button">Capture</button>
+      <button data-view="times" class="nav-button">Timed sets</button>
+      <button data-view="sessions" class="nav-button">Sessions</button>
+      <button data-view="athletes" class="nav-button">Athletes</button>
+      <button data-view="reports" class="nav-button">Reports</button>
+      <button data-view="settings" class="nav-button">Connection</button>
+    </aside>
+
+    <main>
+      <section id="overview" class="view active">
+        <div class="view-heading">
+          <div>
+            <h2>Today</h2>
+            <p>The phone and desktop use this same session record.</p>
+          </div>
+          <select id="sessionPicker" class="compact-control"></select>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="card session-main">
+            <div class="eyebrow">Current session</div>
+            <h2 id="sessionLabel">Thursday AM 23/7/26</h2>
+            <h3 id="sessionTitle">Threshold Pressure</h3>
+            <div id="sessionChips" class="chip-row"></div>
+            <p id="sessionPurpose"></p>
+            <div class="button-row">
+              <button data-view-jump="attendance">Take attendance</button>
+              <button data-view-jump="capture" class="secondary">Capture</button>
+              <button data-view-jump="times" class="secondary">Record times</button>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="eyebrow">Progression</div>
+            <div id="progressionCard"></div>
+          </article>
+
+          <article class="card board-card">
+            <div class="card-heading">
+              <h3>Workout</h3>
+              <button id="copyWorkoutBtn" class="secondary small">Copy</button>
+            </div>
+            <pre id="workoutBoard"></pre>
+          </article>
+
+          <article class="card">
+            <div class="eyebrow">Session snapshot</div>
+            <div class="kpi-grid">
+              <div><strong id="kpiAttendance">0/0</strong><span>attendance</span></div>
+              <div><strong id="kpiCaptures">0</strong><span>captures</span></div>
+              <div><strong id="kpiTimed">0</strong><span>timed sets</span></div>
+              <div><strong id="kpiDistance">0m</strong><span>planned</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="attendance" class="view">
+        <div class="view-heading">
+          <div><h2>Attendance</h2><p id="attendanceHeading"></p></div>
+          <div class="button-row">
+            <button id="markAllPresentBtn" class="secondary">Mark all here</button>
+            <button id="clearAttendanceBtn" class="secondary">Clear</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="attendanceList"></div>
+          <button id="saveAttendanceBtn" class="full-width">Save attendance</button>
+        </div>
+      </section>
+
+      <section id="capture" class="view">
+        <div class="view-heading">
+          <div>
+            <h2>Capture</h2>
+            <p>Use one tap, voice, camera, or paste directly from chat.</p>
+          </div>
+        </div>
+
+        <article class="card phone-action-card">
+          <h3>Fast poolside capture</h3>
+          <label for="captureAthlete">Attach to</label>
+          <select id="captureAthlete" class="large-select"></select>
+
+          <div class="quick-action-grid">
+            <button id="startVoiceBtn" class="poolside-action"><span>🎙</span>Start voice note</button>
+            <button id="stopVoiceBtn" class="poolside-action danger" disabled><span>■</span>Stop recording</button>
+            <label class="file-button poolside-action"><span>📷</span>Take photo<input id="photoInput" type="file" accept="image/*" capture="environment"></label>
+            <label class="file-button poolside-action"><span>🎥</span>Record video<input id="videoInput" type="file" accept="video/*" capture="environment"></label>
+            <button id="pasteClipboardBtn" class="poolside-action secondary"><span>📋</span>Paste from chat</button>
+            <button id="clearCaptureBtn" class="poolside-action secondary"><span>×</span>Clear note</button>
+          </div>
+
+          <audio id="voicePreview" controls hidden></audio>
+
+          <label for="captureCategory">Type</label>
+          <select id="captureCategory" class="large-select">
+            <option>Observation</option>
+            <option>Technique</option>
+            <option>Session change</option>
+            <option>Time / result</option>
+            <option>Follow-up task</option>
+          </select>
+
+          <label for="captureText">Review or add a short note</label>
+          <textarea id="captureText" class="poolside-note" placeholder="Shared or pasted text appears here. Typing is optional."></textarea>
+          <button id="saveTextCaptureBtn" class="full-width poolside-save">Save capture</button>
+
+          <div class="help share-help">
+            On an installed Android app, use Share in ChatGPT, Messages, or another app and choose McLay Swimming.
+            Otherwise tap <strong>Paste from chat</strong>.
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>Finish-session review</h3>
+          <div class="review-grid">
+            <div><label>What went well?</label><textarea id="reviewWentWell"></textarea></div>
+            <div><label>What needs reinforcing?</label><textarea id="reviewReinforce"></textarea></div>
+            <div><label>Athlete-specific notes</label><textarea id="reviewAthletes"></textarea></div>
+            <div><label>What carries into the next session?</label><textarea id="reviewCarry"></textarea></div>
+          </div>
+          <button id="saveReviewBtn">Save review</button>
+        </article>
+
+        <article class="card">
+          <h3>Session captures</h3>
+          <div id="captureList"></div>
+        </article>
+      </section>
+
+      <section id="times" class="view">
+        <div class="view-heading">
+          <div>
+            <h2>Timing</h2>
+            <p>Use the stopwatch, tap in one time at a time, or paste a group of times.</p>
+          </div>
+        </div>
+
+        <article class="card timing-context-card">
+          <h3>Set context</h3>
+          <label>Athlete</label>
+          <select id="timeAthlete" class="large-select"></select>
+          <div class="form-grid">
+            <div>
+              <label>Distance</label>
+              <select id="timeDistance" class="large-select">
+                <option>25</option><option selected>50</option><option>100</option><option>200</option>
+              </select>
+            </div>
+            <div>
+              <label>Stroke</label>
+              <select id="timeStroke" class="large-select">
+                <option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option>
+                <option>Butterfly</option><option>IM</option><option>Kick</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div><label>Set label</label><input id="timeLabel" class="large-input" placeholder="8 x 50 at 100 pace"></div>
+            <div><label>Send-off</label><input id="timeSendoff" class="large-input" inputmode="decimal" placeholder="1:00"></div>
+          </div>
+        </article>
+
+        <div class="two-column timing-columns">
+          <article class="card stopwatch-card">
+            <div class="eyebrow">Poolside stopwatch</div>
+            <div id="stopwatchDisplay" class="stopwatch-display">0:00.0</div>
+            <div class="stopwatch-buttons">
+              <button id="stopwatchStartBtn" class="stopwatch-primary">Start</button>
+              <button id="stopwatchLapBtn" class="stopwatch-primary" disabled>Lap</button>
+              <button id="stopwatchPauseBtn" class="secondary" disabled>Pause</button>
+              <button id="stopwatchResetBtn" class="secondary">Reset</button>
+            </div>
+            <div class="help">Each lap becomes the next repeat time. The display is cumulative, but saved laps are split times.</div>
+            <div id="stopwatchLapList" class="time-chip-list"></div>
+            <button id="saveStopwatchSetBtn" class="full-width" disabled>Save stopwatch laps</button>
+          </article>
+
+          <article class="card manual-time-card">
+            <div class="eyebrow">Large manual entry</div>
+            <label for="manualTimeInput">Next time</label>
+            <input id="manualTimeInput" class="manual-time-input" inputmode="decimal" enterkeyhint="done" placeholder="30.4 or 1:08.2">
+            <button id="addManualTimeBtn" class="full-width poolside-save">Add time</button>
+            <div class="button-row manual-time-actions">
+              <button id="pasteTimesBtn" class="secondary">Paste times</button>
+              <button id="undoManualTimeBtn" class="secondary">Undo last</button>
+              <button id="clearManualTimesBtn" class="secondary">Clear</button>
+            </div>
+            <div id="manualTimeList" class="time-chip-list"></div>
+            <button id="saveManualSetBtn" class="full-width" disabled>Save entered times</button>
+          </article>
+        </div>
+
+        <div class="two-column">
+          <article class="card">
+            <h3>Legacy pace reference</h3>
+            <div id="paceReference"></div>
+          </article>
+          <article class="card">
+            <h3>Result</h3>
+            <div id="timedSetResult" class="help">No set saved yet.</div>
+          </article>
+        </div>
+
+        <article class="card">
+          <h3>Saved timed sets</h3>
+          <div id="timedSetList"></div>
+        </article>
+      </section>
+
+      <section id="sessions" class="view">
+        <div class="view-heading"><div><h2>Sessions</h2><p>Every session label includes the day, AM/PM and date.</p></div><button id="newSessionBtn">New session</button></div>
+        <div class="two-column">
+          <article class="card">
+            <h3>Session list</h3>
+            <div id="sessionList"></div>
+          </article>
+          <article class="card">
+            <h3 id="sessionEditorTitle">Edit session</h3>
+            <input id="editSessionId" type="hidden">
+            <div class="form-grid">
+              <div><label>Date</label><input id="editSessionDate" type="date"></div>
+              <div><label>AM / PM</label><select id="editSessionPart"><option>AM</option><option>PM</option></select></div>
+              <div><label>Venue</label><input id="editSessionVenue"></div>
+              <div><label>Planned distance</label><input id="editSessionDistance" type="number"></div>
+            </div>
+            <label>Title</label><input id="editSessionTitle">
+            <label>Squads — comma separated</label><input id="editSessionSquads">
+            <label>Primary system</label><input id="editSessionSystem">
+            <label>Technical focus</label><input id="editSessionTechnical">
+            <label>Workout</label><textarea id="editSessionWorkout" class="large-textarea"></textarea>
+            <button id="saveSessionBtn" class="full-width">Save session</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="athletes" class="view">
+        <div class="view-heading"><div><h2>Athletes</h2><p>Roster, attendance, pace references, timed work and notes.</p></div><select id="athleteSquadFilter" class="compact-control"></select></div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Athlete</th><th>Squad</th><th>Attendance</th><th>Legacy pace</th><th>Timed sets</th><th>Notes</th></tr></thead>
+            <tbody id="athleteTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="reports" class="view">
+        <div class="view-heading"><div><h2>Reports</h2><p>The beginning of each swimmer’s training picture.</p></div></div>
+        <article class="card">
+          <label for="reportAthlete">Athlete</label>
+          <select id="reportAthlete"></select>
+          <div id="athleteReport"></div>
+        </article>
+      </section>
+
+      <section id="settings" class="view">
+        <div class="view-heading"><div><h2>Connection</h2><p>Cloud connection turns phone and desktop into two views of the same records.</p></div></div>
+        <div class="two-column">
+          <article class="card">
+            <h3>Supabase project</h3>
+            <label>Project URL</label><input id="supabaseUrlInput" placeholder="https://xxxx.supabase.co">
+            <label>Anon key</label><textarea id="supabaseKeyInput" class="key-field"></textarea>
+            <button id="saveCloudConfigBtn">Save connection</button>
+          </article>
+          <article class="card">
+            <h3>Account</h3>
+            <label>Email</label><input id="authEmail" type="email">
+            <label>Password</label><input id="authPassword" type="password">
+            <div class="button-row">
+              <button id="signInBtn">Sign in</button>
+              <button id="signUpBtn" class="secondary">Create account</button>
+              <button id="signOutBtn" class="secondary">Sign out</button>
+            </div>
+            <button id="syncNowBtn" class="full-width">Sync now</button>
+            <div id="connectionResult"></div>
+          </article>
+        </div>
+        <article class="card">
+          <h3>What automatic sync means</h3>
+          <ol>
+            <li>Record attendance, notes, audio, photos, videos or times on the phone.</li>
+            <li>The record saves locally first.</li>
+            <li>When online, it uploads to Supabase automatically.</li>
+            <li>The desktop opens the same app and pulls the same records.</li>
+          </ol>
+          <p class="help"><strong>Until Supabase is configured:</strong> this runs safely in local-only mode, but phone and desktop will not share data.</p>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobile-nav">
+    <button data-view="overview" class="nav-button active"><span>🏊</span>Today</button>
+    <button data-view="attendance" class="nav-button"><span>✓</span>Attendance</button>
+    <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
+    <button data-view="times" class="nav-button"><span>⏱</span>Times</button>
+    <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
+  </nav>
+
+  <script src="config.js"></script>
+  <script src="seed.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

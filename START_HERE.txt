@@ -1,0 +1,17 @@
+McLay Swimming OS Version 1.2 Secure
+
+This replaces the earlier configured package.
+
+Why:
+The earlier static package contained roster and session seed data in public website files.
+This secure version contains no athlete names or workout data in the hosted files.
+
+Setup:
+1. Run mclay_swimming_os_secure_bootstrap.sql in the existing Supabase project.
+2. Host every file in this folder over HTTPS.
+3. Open Connection, create an account, and sign in.
+4. On first sign-in the protected Supabase function creates the organisation data.
+5. Use the same login on phone and desktop.
+
+The public website contains the Supabase project URL and publishable key only.
+That is expected. The secret key must never be included.
