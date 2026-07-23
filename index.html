@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Version 1.2 Secure</title>
+  <title>McLay Swimming OS — Version 1.3 Deck</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -13,7 +13,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 1.2 Secure · secure cloud-first starting point</div>
+      <div class="header-subtitle">Version 1.3 Deck · phone-first poolside update</div>
     </div>
     <div class="status-cluster">
       <span id="dataModeBadge" class="badge warning">Local only</span>
@@ -23,7 +23,8 @@
 
   <div class="app-layout">
     <aside class="sidebar">
-      <button data-view="overview" class="nav-button active">Overview</button>
+      <button data-view="deck" class="nav-button active">Deck</button>
+      <button data-view="overview" class="nav-button">Overview</button>
       <button data-view="attendance" class="nav-button">Attendance</button>
       <button data-view="capture" class="nav-button">Capture</button>
       <button data-view="times" class="nav-button">Timed sets</button>
@@ -34,7 +35,60 @@
     </aside>
 
     <main>
-      <section id="overview" class="view active">
+      <section id="deck" class="view active">
+        <div class="view-heading deck-heading">
+          <div>
+            <h2>Deck brief</h2>
+            <p>Only the cues and actions you need poolside.</p>
+          </div>
+          <select id="deckSessionPicker" class="compact-control"></select>
+        </div>
+
+        <div class="deck-grid">
+          <article class="card deck-hero">
+            <div class="eyebrow">Selected session</div>
+            <h2 id="deckSessionLabel">Sign in to load sessions</h2>
+            <h3 id="deckSessionTitle">McLay Swimming OS</h3>
+            <div id="deckCueChips" class="chip-row"></div>
+            <div class="deck-cue-block">
+              <span>System</span><strong id="deckSystem">—</strong>
+            </div>
+            <div class="deck-cue-block">
+              <span>Technical cue</span><strong id="deckTechnical">—</strong>
+            </div>
+            <div class="deck-action-grid">
+              <button data-view-jump="attendance">Attendance</button>
+              <button data-view-jump="capture" class="secondary">Quick note</button>
+              <button data-view-jump="times" class="secondary">Run live set</button>
+            </div>
+          </article>
+
+          <article class="card deck-workout-card">
+            <div class="card-heading">
+              <div>
+                <div class="eyebrow">Session plan</div>
+                <h3>What is on deck</h3>
+              </div>
+              <button data-view-jump="overview" class="secondary small">Full view</button>
+            </div>
+            <pre id="deckWorkout">No session loaded.</pre>
+          </article>
+
+          <article class="card">
+            <div class="eyebrow">Next planned session</div>
+            <div id="deckNextSession" class="deck-next">No future session entered yet.</div>
+          </article>
+
+          <article class="card">
+            <div class="eyebrow">Poolside quick answer</div>
+            <label for="deckAthlete">Swimmer</label>
+            <select id="deckAthlete" class="large-select"></select>
+            <div id="deckAthleteBrief" class="deck-athlete-brief"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="overview" class="view">
         <div class="view-heading">
           <div>
             <h2>Today</h2>
@@ -163,6 +217,42 @@
             <p>Use the stopwatch, tap in one time at a time, or paste a group of times.</p>
           </div>
         </div>
+
+        <article class="card live-set-card">
+          <div class="card-heading">
+            <div>
+              <div class="eyebrow">Live interval board</div>
+              <h3>Master clock + three timing channels</h3>
+            </div>
+            <span id="liveSetStatus" class="badge deck-status">Ready</span>
+          </div>
+
+          <div class="live-setup-grid">
+            <div><label>Set label</label><input id="liveSetLabel" class="large-input" placeholder="8 x 50 threshold"></div>
+            <div><label>Reps</label><input id="liveReps" class="large-input" type="number" min="1" max="100" value="8"></div>
+            <div><label>Distance</label><select id="liveDistance" class="large-select"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></div>
+            <div><label>Stroke</label><select id="liveStroke" class="large-select"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option></select></div>
+            <div><label>Master cycle</label><input id="liveCycle" class="large-input" inputmode="decimal" value="1:00"></div>
+            <div><label>Wave gap</label><select id="liveWaveGap" class="large-select"><option value="0">No gap</option><option value="5" selected>5 seconds</option><option value="10">10 seconds</option></select></div>
+          </div>
+          <button id="applyWaveGapBtn" class="secondary full-width">Apply wave gap to channels</button>
+
+          <div class="live-master-board">
+            <div><span>Elapsed</span><strong id="liveElapsed">0:00.0</strong></div>
+            <div><span>Master rep</span><strong id="liveRep">1 / 8</strong></div>
+            <div><span>Next departure</span><strong id="liveCountdown">1:00.0</strong></div>
+          </div>
+
+          <div id="liveChannelGrid" class="live-channel-grid"></div>
+
+          <div class="live-master-actions">
+            <button id="liveStartBtn" class="stopwatch-primary">Start set</button>
+            <button id="livePauseBtn" class="secondary" disabled>Pause</button>
+            <button id="liveResetBtn" class="secondary">Reset</button>
+            <button id="liveSaveBtn" disabled>Save results</button>
+          </div>
+          <div class="help">Each channel can use its own cycle and wave offset. Finish times save to the swimmer record. Splits are also saved as a session note.</div>
+        </article>
 
         <article class="card timing-context-card">
           <h3>Set context</h3>
@@ -318,10 +408,10 @@
   </div>
 
   <nav class="mobile-nav">
-    <button data-view="overview" class="nav-button active"><span>🏊</span>Today</button>
-    <button data-view="attendance" class="nav-button"><span>✓</span>Attendance</button>
-    <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
-    <button data-view="times" class="nav-button"><span>⏱</span>Times</button>
+    <button data-view="deck" class="nav-button active"><span>🏊</span>Deck</button>
+    <button data-view="attendance" class="nav-button"><span>✓</span>Roll</button>
+    <button data-view="capture" class="nav-button"><span>＋</span>Note</button>
+    <button data-view="times" class="nav-button"><span>⏱</span>Live</button>
     <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
   </nav>
 

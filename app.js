@@ -150,6 +150,59 @@ function renderOverview(){
   $("kpiDistance").textContent = `${Number(session.planned_distance||0).toLocaleString()}m`;
 }
 
+
+function nextPlannedSession(session){
+  if(!session) return null;
+  return appState.sessions
+    .filter(s=>`${s.session_date}-${s.day_part}` > `${session.session_date}-${session.day_part}`)
+    .sort((a,b)=>a.session_date.localeCompare(b.session_date)||a.day_part.localeCompare(b.day_part))[0] || null;
+}
+function renderDeck(){
+  const session=selectedSession();
+  const deckPicker=$("deckSessionPicker");
+  if(deckPicker){
+    const sessions=appState.sessions.slice().sort((a,b)=>b.session_date.localeCompare(a.session_date)||b.day_part.localeCompare(a.day_part));
+    deckPicker.innerHTML=sessions.map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===session?.id?"selected":""}>${escapeHtml(sessionLabel(s))} — ${escapeHtml(s.title)}</option>`).join("");
+    deckPicker.onchange=()=>setSelectedSession(deckPicker.value);
+  }
+  if(!session){
+    $("deckSessionLabel").textContent="Sign in to load sessions";
+    $("deckSessionTitle").textContent="Your deck brief is protected in Supabase";
+    $("deckSystem").textContent="—";$("deckTechnical").textContent="—";
+    $("deckCueChips").innerHTML="";$("deckWorkout").textContent="No session loaded.";
+    $("deckNextSession").innerHTML=`<div class="help">Sign in, then select a session.</div>`;
+    return;
+  }
+  $("deckSessionLabel").textContent=sessionLabel(session);
+  $("deckSessionTitle").textContent=session.title;
+  $("deckSystem").textContent=session.primary_system||"—";
+  $("deckTechnical").textContent=session.technical_focus||"—";
+  $("deckCueChips").innerHTML=[
+    `<span class="chip">${escapeHtml(session.venue||"")}</span>`,
+    ...session.squads.map(s=>`<span class="chip">${escapeHtml(s)}</span>`),
+    `<span class="chip">${Number(session.planned_distance||0).toLocaleString()}m</span>`
+  ].join("");
+  $("deckWorkout").textContent=session.workout||"No workout entered.";
+  const next=nextPlannedSession(session);
+  $("deckNextSession").innerHTML=next
+    ? `<strong>${escapeHtml(sessionLabel(next))} — ${escapeHtml(next.title)}</strong><div>${escapeHtml(next.primary_system||"")}</div><div class="help">${escapeHtml(next.technical_focus||"")}</div>`
+    : `<div class="warning-box">No later session is entered yet. Add tomorrow's plan on desktop when ready.</div>`;
+}
+function renderDeckAthleteBrief(){
+  const select=$("deckAthlete");
+  const athlete=appState.athletes.find(a=>a.id===select?.value);
+  if(!athlete){$("deckAthleteBrief").innerHTML=`<div class="help">Choose a swimmer.</div>`;return}
+  const recentSet=appState.timed_sets.filter(t=>t.athlete_id===athlete.id).sort(byUpdated)[0];
+  const recentCapture=appState.captures.filter(c=>c.athlete_id===athlete.id&&c.text_content).sort(byUpdated)[0];
+  const pace=athlete.legacy_pace;
+  $("deckAthleteBrief").innerHTML=`
+    <div class="deck-answer-row"><span>Squad</span><strong>${escapeHtml(athlete.squad||"—")}</strong></div>
+    <div class="deck-answer-row"><span>Latest timed set</span><strong>${recentSet?`${escapeHtml(recentSet.set_label||"Timed set")} · best ${formatSeconds(recentSet.best)} · avg ${formatSeconds(recentSet.average)}`:"No timed set saved yet."}</strong></div>
+    <div class="deck-answer-row"><span>Legacy pace reference</span><strong>${pace?`T400 ${escapeHtml(pace.t400)} · AT100 ${escapeHtml(pace.at_100_10)}`:"No confirmed pace reference."}</strong></div>
+    <div class="deck-answer-row"><span>Latest note</span><strong>${recentCapture?escapeHtml(recentCapture.text_content):"No athlete note saved yet."}</strong></div>
+    <div class="help" style="margin-top:10px">Meet entries, PBs, qualifying times and records are not loaded in this version yet.</div>`;
+}
+
 $("copyWorkoutBtn").addEventListener("click", async () => {
   try{
     await navigator.clipboard.writeText(selectedSession()?.workout || "");
@@ -471,6 +524,152 @@ function formatSeconds(value){
 }
 
 let manualTimes=[];
+
+const LIVE_CHANNEL_COUNT=3;
+let liveRunning=false;
+let liveStartedAt=0;
+let liveAccumulated=0;
+let liveAnimation=null;
+let liveChannels=Array.from({length:LIVE_CHANNEL_COUNT},(_,index)=>({
+  index,offset:index*5,cycle:"",finishes:[],splits:{},lastRep:0
+}));
+function liveElapsedMs(){return liveAccumulated+(liveRunning?performance.now()-liveStartedAt:0)}
+function liveMasterCycle(){return parseTime($("liveCycle")?.value||"")||60}
+function liveReps(){return Math.max(1,Number($("liveReps")?.value)||1)}
+function liveChannelCycle(channel){return parseTime(channel.cycle)||liveMasterCycle()}
+function liveChannelState(channel){
+  const elapsed=liveElapsedMs()/1000;
+  const cycle=liveChannelCycle(channel);
+  const since=elapsed-channel.offset;
+  if(since<0) return {started:false,rep:1,time:since,next:-since,cycle};
+  const rep=Math.floor(since/cycle)+1;
+  const time=since-(rep-1)*cycle;
+  return {started:true,rep,time,next:cycle-time,cycle};
+}
+function renderLiveChannels(){
+  const grid=$("liveChannelGrid");if(!grid)return;
+  const roster=selectedRoster();
+  const rosterKey=roster.map(a=>a.id).join("|");
+  const needsBuild=grid.dataset.rosterKey!==rosterKey||grid.children.length!==LIVE_CHANNEL_COUNT;
+  if(needsBuild){
+    const athleteOptions=['<option value="">Choose swimmer</option>',...roster.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.full_name)} · ${escapeHtml(a.squad)}</option>`)].join('');
+    grid.innerHTML=liveChannels.map((channel,index)=>`<article class="live-channel" data-live-channel="${index}">
+      <div class="live-channel-head"><h4>Channel ${index+1}</h4><span class="chip live-rep-chip">Rep 1/${liveReps()}</span></div>
+      <select class="large-select live-athlete" data-field="athlete">${athleteOptions}</select>
+      <div class="live-channel-meta">
+        <div><label>Cycle</label><input class="large-input live-cycle" data-field="cycle" inputmode="decimal" placeholder="Master" value="${escapeHtml(channel.cycle)}"></div>
+        <div><label>Wave offset</label><input class="large-input live-offset" data-field="offset" type="number" min="0" max="59" value="${channel.offset}"></div>
+      </div>
+      <div class="live-channel-clock">0.0</div>
+      <div class="live-channel-actions"><button class="secondary live-split" disabled>Split</button><button class="live-finish" disabled>Finish</button></div>
+      <div class="live-channel-log"><span>No times yet.</span></div>
+    </article>`).join('');
+    grid.dataset.rosterKey=rosterKey;
+    liveChannels.forEach((channel,index)=>{
+      const card=grid.querySelector(`[data-live-channel="${index}"]`);
+      const athlete=card.querySelector('[data-field="athlete"]');
+      athlete.value=channel.athlete_id||'';
+      athlete.onchange=()=>{channel.athlete_id=athlete.value;$("liveSaveBtn").disabled=!liveChannels.some(c=>c.finishes.length&&c.athlete_id)};
+      const cycle=card.querySelector('[data-field="cycle"]');
+      cycle.onchange=()=>{channel.cycle=cycle.value.trim();renderLiveBoard()};
+      const offset=card.querySelector('[data-field="offset"]');
+      offset.onchange=()=>{channel.offset=Math.max(0,Number(offset.value)||0);renderLiveBoard()};
+      card.querySelector('.live-split').onclick=()=>recordLiveSplit(index);
+      card.querySelector('.live-finish').onclick=()=>recordLiveFinish(index);
+    });
+  }
+  liveChannels.forEach((channel,index)=>{
+    const state=liveChannelState(channel);
+    const card=grid.querySelector(`[data-live-channel="${index}"]`);
+    if(!card)return;
+    card.classList.toggle("active",state.started&&state.rep<=liveReps());
+    card.querySelector('.live-rep-chip').textContent=`Rep ${Math.min(state.rep,liveReps())}/${liveReps()}`;
+    card.querySelector('.live-channel-clock').textContent=state.started?formatSeconds(state.time):`-${formatSeconds(-state.time)}`;
+    card.querySelector('.live-split').disabled=!liveRunning||!state.started||state.rep>liveReps();
+    card.querySelector('.live-finish').disabled=!liveRunning||!state.started||state.rep>liveReps();
+    const log=channel.finishes.map(f=>`<div><strong>R${f.rep}</strong> ${formatSeconds(f.time)}${(channel.splits[f.rep]||[]).length?` · splits ${(channel.splits[f.rep]||[]).map(formatSeconds).join(', ')}`:''}</div>`).join('');
+    card.querySelector('.live-channel-log').innerHTML=log||'<span>No times yet.</span>';
+    const athlete=card.querySelector('[data-field="athlete"]');
+    if(document.activeElement!==athlete&&athlete.value!==(channel.athlete_id||''))athlete.value=channel.athlete_id||'';
+    const cycle=card.querySelector('[data-field="cycle"]');
+    if(document.activeElement!==cycle&&cycle.value!==channel.cycle)cycle.value=channel.cycle;
+    const offset=card.querySelector('[data-field="offset"]');
+    if(document.activeElement!==offset&&Number(offset.value)!==channel.offset)offset.value=channel.offset;
+  });
+}
+function renderLiveBoard(){
+  const elapsed=liveElapsedMs()/1000;
+  const cycle=liveMasterCycle();
+  const reps=liveReps();
+  const rep=Math.floor(elapsed/cycle)+1;
+  const inRep=elapsed-(rep-1)*cycle;
+  if($("liveElapsed")) $("liveElapsed").textContent=formatSeconds(elapsed);
+  if($("liveRep")) $("liveRep").textContent=`${Math.min(rep,reps)} / ${reps}`;
+  if($("liveCountdown")) $("liveCountdown").textContent=rep>reps?"Complete":formatSeconds(Math.max(0,cycle-inRep));
+  if($("liveSetStatus")) $("liveSetStatus").textContent=liveRunning?"Running":elapsed>0?"Paused":"Ready";
+  renderLiveChannels();
+  if(liveRunning) liveAnimation=requestAnimationFrame(renderLiveBoard);
+}
+function recordLiveSplit(index){
+  const channel=liveChannels[index],state=liveChannelState(channel);
+  if(!state.started||state.rep>liveReps())return;
+  channel.splits[state.rep]=channel.splits[state.rep]||[];
+  channel.splits[state.rep].push(state.time);
+  renderLiveBoard();
+}
+function recordLiveFinish(index){
+  const channel=liveChannels[index],state=liveChannelState(channel);
+  if(!state.started||state.rep>liveReps())return;
+  const existing=channel.finishes.find(f=>f.rep===state.rep);
+  if(existing) existing.time=state.time; else channel.finishes.push({rep:state.rep,time:state.time});
+  channel.lastRep=state.rep;
+  $("liveSaveBtn").disabled=!liveChannels.some(c=>c.finishes.length&&c.athlete_id);
+  renderLiveBoard();
+}
+function resetLiveSet(){
+  liveRunning=false;liveStartedAt=0;liveAccumulated=0;
+  if(liveAnimation)cancelAnimationFrame(liveAnimation);
+  liveChannels.forEach(c=>{c.finishes=[];c.splits={};c.lastRep=0});
+  $("liveStartBtn").disabled=false;$("livePauseBtn").disabled=true;$("livePauseBtn").textContent="Pause";$("liveSaveBtn").disabled=true;
+  releaseWakeLock();renderLiveBoard();
+}
+async function saveLiveResults(){
+  const session=selectedSession();if(!session)return;
+  let saved=0;
+  const label=$("liveSetLabel").value.trim()||`${liveReps()} x ${$("liveDistance").value}`;
+  for(const channel of liveChannels){
+    if(!channel.athlete_id||!channel.finishes.length)continue;
+    const times=channel.finishes.slice().sort((a,b)=>a.rep-b.rep).map(f=>f.time);
+    const cycle=liveChannelCycle(channel);
+    const timed={
+      id:uid("timed"),session_id:session.id,athlete_id:channel.athlete_id,
+      distance:Number($("liveDistance").value),stroke:$("liveStroke").value,
+      set_label:`${label} · Ch ${channel.index+1}`,
+      send_off:formatSeconds(cycle),times,average:times.reduce((a,b)=>a+b,0)/times.length,
+      best:Math.min(...times),spread:Math.max(...times)-Math.min(...times),created_at:nowIso(),updated_at:nowIso()
+    };
+    upsertLocal("timed_sets",timed);queueRecord("timed_sets",timed.id);
+    const detail=channel.finishes.slice().sort((a,b)=>a.rep-b.rep).map(f=>{
+      const splits=(channel.splits[f.rep]||[]).map(formatSeconds).join(", ");
+      return `Rep ${f.rep}: ${formatSeconds(f.time)}${splits?` | splits ${splits}`:""}`;
+    }).join("\n");
+    const capture={id:uid("capture"),session_id:session.id,athlete_id:channel.athlete_id,capture_type:"Time / result",text_content:`${label} · Channel ${channel.index+1}\nCycle ${formatSeconds(cycle)} · offset ${channel.offset}s\n${detail}`,media_path:"",mime_type:"",created_at:nowIso(),updated_at:nowIso()};
+    upsertLocal("captures",capture);queueRecord("captures",capture.id);saved++;
+  }
+  if(!saved){updateStatus("Choose a swimmer for a channel","error");return}
+  saveState(appState);await syncIfPossible();updateStatus(`${saved} live channel${saved===1?"":"s"} saved`,"good");renderAll();
+}
+function bindLiveSet(){
+  if(!$("liveStartBtn"))return;
+  $("liveStartBtn").onclick=async()=>{if(liveRunning)return;liveRunning=true;liveStartedAt=performance.now();$("liveStartBtn").disabled=true;$("livePauseBtn").disabled=false;await keepScreenAwake();renderLiveBoard()};
+  $("livePauseBtn").onclick=async()=>{if(liveRunning){liveAccumulated+=performance.now()-liveStartedAt;liveRunning=false;if(liveAnimation)cancelAnimationFrame(liveAnimation);$("livePauseBtn").textContent="Resume";await releaseWakeLock();renderLiveBoard()}else{liveRunning=true;liveStartedAt=performance.now();$("livePauseBtn").textContent="Pause";await keepScreenAwake();renderLiveBoard()}};
+  $("liveResetBtn").onclick=resetLiveSet;
+  $("liveSaveBtn").onclick=saveLiveResults;
+  $("applyWaveGapBtn").onclick=()=>{const gap=Number($("liveWaveGap").value)||0;liveChannels.forEach((c,i)=>c.offset=i*gap);renderLiveBoard()};
+  ["liveCycle","liveReps"].forEach(id=>$(id).addEventListener("change",renderLiveBoard));
+  renderLiveBoard();
+}
+
 let stopwatchLaps=[];
 let stopwatchRunning=false;
 let stopwatchStartedAt=0;
@@ -916,14 +1115,17 @@ async function syncIfPossible(){
 window.addEventListener("online",syncIfPossible);
 
 function renderAll(){
-  renderMode();renderSessionPicker();renderOverview();renderAttendance();
-  populateAthleteSelect("captureAthlete",true);populateAthleteSelect("timeAthlete",false);
+  renderMode();renderSessionPicker();renderOverview();renderDeck();renderAttendance();
+  populateAthleteSelect("captureAthlete",true);populateAthleteSelect("timeAthlete",false);populateAthleteSelect("deckAthlete",false);
+  if($("deckAthlete")){ $("deckAthlete").onchange=renderDeckAthleteBrief; renderDeckAthleteBrief(); }
   renderReview();renderCaptures();renderPaceReference();renderTimedSets();renderStopwatchLaps();renderManualTimes();renderSessions();
-  renderAthletes();renderReports();loadSettings();fillSessionEditor(selectedSession());
+  renderAthletes();renderReports();loadSettings();fillSessionEditor(selectedSession());renderLiveBoard();
 }
 const clockSession=currentSessionFromClock();
 if(clockSession){appState.settings.selected_session_id=clockSession.id;saveState(appState)}
+bindLiveSet();
 renderAll();
+if(window.matchMedia("(max-width: 980px)").matches) showView("deck");
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.warn));
