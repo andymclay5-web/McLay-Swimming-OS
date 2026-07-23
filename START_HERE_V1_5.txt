@@ -1,0 +1,17 @@
+McLay Swimming OS Version 1.5 — Workflow & Evidence
+
+This update is built from the recovered morning work list:
+- one continuous chain: season/weekly intention → session plan → Coach Mode → session log → weekly review → next response
+- phone Coach Mode: Board, Roll, Capture, Athletes, Finish
+- unmarked attendance means absent
+- paste a session from chat, detect individual sets, and pull a set straight into the live timing board
+- finish-session four-question review plus planned-versus-actual evidence
+- weekly evidence: actual distance, energy systems, kick/pull/swim, stroke exposure, attendance, modifications and race evidence
+- coach-owned athlete profiles: primary events, current focus, next meet, PBs, qualifying gaps, records and planned adaptations
+- current/previous/next session thread visible poolside
+
+Install order:
+1. Run mclay_swimming_os_v1_5_migration.sql once in the existing McLay Swimming OS Supabase SQL Editor.
+2. Upload the nine website files to the existing GitHub repository, replacing the current files.
+3. Do not upload the SQL file to the public GitHub repository.
+4. Wait for GitHub Pages to redeploy, then fully refresh the phone app.

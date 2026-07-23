@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Version 1.4 Chat Import</title>
+  <title>McLay Swimming OS — Version 1.5 Workflow & Evidence</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -13,7 +13,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 1.4 Chat Import · paste a session from chat · review · run poolside</div>
+      <div class="header-subtitle">Version 1.5 Workflow & Evidence · plan → coach → log → review</div>
     </div>
     <div class="status-cluster">
       <span id="dataModeBadge" class="badge warning">Local only</span>
@@ -27,6 +27,7 @@
       <button data-view="overview" class="nav-button">Overview</button>
       <button data-view="attendance" class="nav-button">Attendance</button>
       <button data-view="capture" class="nav-button">Capture</button>
+      <button data-view="finish" class="nav-button">Finish session</button>
       <button data-view="times" class="nav-button">Timed sets</button>
       <button data-view="sessions" class="nav-button">Sessions</button>
       <button data-view="athletes" class="nav-button">Athletes</button>
@@ -75,10 +76,11 @@
             <div class="deck-cue-block">
               <span>Technical cue</span><strong id="deckTechnical">—</strong>
             </div>
-            <div class="deck-action-grid">
+            <div class="deck-action-grid coach-actions">
               <button data-view-jump="attendance">Attendance</button>
-              <button data-view-jump="capture" class="secondary">Quick note</button>
-              <button data-view-jump="times" class="secondary">Run live set</button>
+              <button data-view-jump="capture" class="secondary">Capture</button>
+              <button data-view-jump="athletes" class="secondary">Athletes</button>
+              <button data-view-jump="finish" class="secondary">Finish session</button>
             </div>
           </article>
 
@@ -91,6 +93,18 @@
               <button data-view-jump="overview" class="secondary small">Full view</button>
             </div>
             <pre id="deckWorkout">No session loaded.</pre>
+          </article>
+
+          <article class="card deck-sets-card">
+            <div class="card-heading">
+              <div><div class="eyebrow">Pull a set live</div><h3>Session sets</h3></div>
+            </div>
+            <div id="deckSetList" class="deck-set-list"><div class="help">No structured sets detected yet.</div></div>
+          </article>
+
+          <article class="card">
+            <div class="eyebrow">Plan thread</div>
+            <div id="deckPlanThread" class="deck-plan-thread"></div>
           </article>
 
           <article class="card">
@@ -164,6 +178,7 @@
           </div>
         </div>
         <div class="card">
+          <div class="help attendance-rule"><strong>Poolside rule:</strong> not marked = absent. Tap Here or Modified only.</div>
           <div id="attendanceList"></div>
           <button id="saveAttendanceBtn" class="full-width">Save attendance</button>
         </div>
@@ -213,19 +228,41 @@
         </article>
 
         <article class="card">
-          <h3>Finish-session review</h3>
+          <h3>Session captures</h3>
+          <div id="captureList"></div>
+        </article>
+      </section>
+
+
+      <section id="finish" class="view">
+        <div class="view-heading">
+          <div><h2>Finish session</h2><p>Four quick coaching questions, then the evidence that makes the week useful.</p></div>
+        </div>
+        <article class="card finish-primary-card">
+          <div id="finishSessionHeading" class="finish-session-heading"></div>
+          <div class="form-grid">
+            <div><label>Actual distance</label><input id="finishActualDistance" type="number" inputmode="numeric" placeholder="metres"></div>
+            <div><label>Actual duration</label><input id="finishActualDuration" type="number" inputmode="numeric" placeholder="minutes"></div>
+          </div>
           <div class="review-grid">
             <div><label>What went well?</label><textarea id="reviewWentWell"></textarea></div>
             <div><label>What needs reinforcing?</label><textarea id="reviewReinforce"></textarea></div>
             <div><label>Athlete-specific notes</label><textarea id="reviewAthletes"></textarea></div>
             <div><label>What carries into the next session?</label><textarea id="reviewCarry"></textarea></div>
           </div>
-          <button id="saveReviewBtn">Save review</button>
-        </article>
-
-        <article class="card">
-          <h3>Session captures</h3>
-          <div id="captureList"></div>
+          <details class="evidence-details">
+            <summary><strong>Add the weekly evidence</strong><span>Optional on deck; important before the week closes</span></summary>
+            <div class="evidence-grid">
+              <div><label>Energy-system split</label><input id="finishEnergySystems" placeholder="e.g. Aerobic 45%, Threshold 35%, Skills 20%"></div>
+              <div><label>Kick / pull / swim</label><input id="finishTrainingModes" placeholder="e.g. Kick 600, Pull 800, Swim 2200"></div>
+              <div><label>Stroke exposure</label><input id="finishStrokeExposure" placeholder="e.g. Free 2200, IM 800, Choice 600"></div>
+              <div><label>Athlete response</label><textarea id="finishAthleteResponse"></textarea></div>
+              <div><label>Modifications made</label><textarea id="finishModifications"></textarea></div>
+              <div><label>Race splits / measured evidence</label><textarea id="finishRaceEvidence"></textarea></div>
+            </div>
+          </details>
+          <button id="finishSessionBtn" class="full-width poolside-save">Save review &amp; mark complete</button>
+          <div id="finishResult" class="help"></div>
         </article>
       </section>
 
@@ -365,6 +402,8 @@
             <label>Squads — comma separated</label><input id="editSessionSquads">
             <label>Primary system</label><input id="editSessionSystem">
             <label>Technical focus</label><input id="editSessionTechnical">
+            <label>Season / weekly-plan cue</label><input id="editSessionPlanCue" placeholder="Why this session sits here in the week">
+            <label>Lead-in to the next session</label><input id="editSessionNextCue" placeholder="What tomorrow should build from today">
             <label>Workout</label><textarea id="editSessionWorkout" class="large-textarea"></textarea>
             <button id="saveSessionBtn" class="full-width">Save session</button>
           </article>
@@ -372,17 +411,49 @@
       </section>
 
       <section id="athletes" class="view">
-        <div class="view-heading"><div><h2>Athletes</h2><p>Roster, attendance, pace references, timed work and notes.</p></div><select id="athleteSquadFilter" class="compact-control"></select></div>
-        <div class="card table-wrap">
-          <table>
-            <thead><tr><th>Athlete</th><th>Squad</th><th>Attendance</th><th>Legacy pace</th><th>Timed sets</th><th>Notes</th></tr></thead>
-            <tbody id="athleteTableBody"></tbody>
-          </table>
+        <div class="view-heading"><div><h2>Athletes</h2><p>Quick poolside answers on phone; full coach-owned profile on desktop.</p></div><select id="athleteSquadFilter" class="compact-control"></select></div>
+        <article class="card athlete-quick-card">
+          <label for="athleteQuickSelect">Swimmer</label>
+          <select id="athleteQuickSelect" class="large-select"></select>
+          <div id="athleteQuickProfile" class="deck-athlete-brief"></div>
+        </article>
+        <div class="athlete-desktop-layout">
+          <div class="card table-wrap athlete-table-card">
+            <table>
+              <thead><tr><th>Athlete</th><th>Squad</th><th>Attendance</th><th>Current focus</th><th>Next meet</th><th>Timed sets</th></tr></thead>
+              <tbody id="athleteTableBody"></tbody>
+            </table>
+          </div>
+          <article class="card athlete-profile-editor">
+            <h3>Coach profile</h3>
+            <input id="profileAthleteId" type="hidden">
+            <div class="form-grid">
+              <div><label>Date of birth</label><input id="profileDob" type="date"></div>
+              <div><label>Primary events</label><input id="profileEvents" placeholder="100 Free, 200 IM"></div>
+            </div>
+            <label>Current plan focus</label><input id="profileCurrentFocus">
+            <label>Technical focus</label><input id="profileTechnicalFocus">
+            <label>Planned adaptations / para version</label><textarea id="profileModifications"></textarea>
+            <div class="form-grid">
+              <div><label>Next meet</label><input id="profileNextMeetName"></div>
+              <div><label>Date</label><input id="profileNextMeetDate" type="date"></div>
+            </div>
+            <label>Venue</label><input id="profileNextMeetVenue">
+            <label>PBs — one per line</label><textarea id="profilePbs" placeholder="100 Free SC — 58.42"></textarea>
+            <label>Qualifying times / gaps — one per line</label><textarea id="profileQualifying" placeholder="100 Free NZSC — needs 0.84"></textarea>
+            <label>Relevant records — one per line</label><textarea id="profileRecords"></textarea>
+            <label>Private coach notes</label><textarea id="profileCoachNotes"></textarea>
+            <button id="saveAthleteProfileBtn" class="full-width">Save coach profile</button>
+          </article>
         </div>
       </section>
 
       <section id="reports" class="view">
-        <div class="view-heading"><div><h2>Reports</h2><p>The beginning of each swimmer’s training picture.</p></div></div>
+        <div class="view-heading"><div><h2>Review &amp; evidence</h2><p>Season direction → weekly intention → session evidence → next response.</p></div></div>
+        <article class="card">
+          <div class="card-heading"><div><div class="eyebrow">Selected week</div><h3 id="weeklyEvidenceHeading">Weekly evidence</h3></div></div>
+          <div id="weeklyEvidence"></div>
+        </article>
         <article class="card">
           <label for="reportAthlete">Athlete</label>
           <select id="reportAthlete"></select>
@@ -427,11 +498,11 @@
   </div>
 
   <nav class="mobile-nav">
-    <button data-view="deck" class="nav-button active"><span>🏊</span>Deck</button>
+    <button data-view="deck" class="nav-button active"><span>▤</span>Board</button>
     <button data-view="attendance" class="nav-button"><span>✓</span>Roll</button>
-    <button data-view="capture" class="nav-button"><span>＋</span>Note</button>
-    <button data-view="times" class="nav-button"><span>⏱</span>Live</button>
-    <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
+    <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
+    <button data-view="athletes" class="nav-button"><span>◎</span>Athletes</button>
+    <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
   </nav>
 
   <script src="config.js"></script>

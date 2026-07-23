@@ -29,6 +29,11 @@ function saveState(next){
   window.appState = next;
 }
 window.appState = loadState();
+for(const key of ["athletes","sessions","attendance","captures","timed_sets","session_reviews","pending"]){
+  if(!Array.isArray(window.appState[key])) window.appState[key]=[];
+}
+if(!window.appState.settings) window.appState.settings={selected_session_id:"",organisation_id:"",user_id:""};
+saveState(window.appState);
 
 function getConfig(){
   const base = window.MCLAY_CONFIG || {};
@@ -156,6 +161,34 @@ function inferLiveSet(text){
   if(!m) return null;
   return {reps:Number(m[1]),distance:Number(m[2]),cycle:parseClockValue(m[3]),label:m[0].trim()};
 }
+
+function inferStrokeFromLine(line){
+  const t=String(line||"").toLowerCase();
+  if(/\b(back|bk)\b/.test(t)) return "Backstroke";
+  if(/\b(breast|br)\b/.test(t)) return "Breaststroke";
+  if(/\b(fly|butterfly)\b/.test(t)) return "Butterfly";
+  if(/\b(im|medley)\b/.test(t)) return "IM";
+  if(/\bkick\b/.test(t)) return "Kick";
+  if(/\bpull\b/.test(t)) return "Pull";
+  return "Freestyle";
+}
+function extractStructuredSets(text){
+  const sets=[];
+  String(text||"").split(/\n/).forEach((raw,index)=>{
+    const line=raw.replace(/^\s*[-•*#]+\s*/,"").trim();
+    if(!line)return;
+    const matches=[...line.matchAll(/\b(\d{1,3})\s*[x×]\s*(\d{2,4})\s*m?\b(?:[^\n]{0,100}?(?:on|@|cycle|off|every)\s*(\d{1,2}:\d{2}|\d{2,3}))?/gi)];
+    matches.forEach((m,part)=>{
+      sets.push({
+        id:`set-${index+1}-${part+1}`,
+        label:line.slice(0,160),
+        reps:Number(m[1]),distance:Number(m[2]),
+        cycle:parseClockValue(m[3]||""),stroke:inferStrokeFromLine(line)
+      });
+    });
+  });
+  return sets.slice(0,30);
+}
 function parseSessionFromChat(raw){
   const text=String(raw||"").replace(/\r/g,"").trim();
   if(!text) throw new Error("Paste a session first.");
@@ -166,7 +199,9 @@ function parseSessionFromChat(raw){
     id:uid("session"),session_date:parseImportDate(text),day_part:part,
     venue:venue||selectedSession()?.venue||"",title:inferTitle(text),squads:inferSquads(text),
     planned_distance:estimateDistance(text),primary_system:inferSystem(text),technical_focus:technical,
-    workout:text,step_number:null,previous_session_id:selectedSession()?.id||null,status:"planned",updated_at:nowIso(),
+    workout:text,sets:extractStructuredSets(text),plan_cue:labelledValue(text,["plan cue","weekly cue","season cue","purpose"]),
+    next_session_cue:labelledValue(text,["next session","tomorrow","carry forward","lead-in"]),
+    step_number:null,previous_session_id:selectedSession()?.id||null,status:"planned",updated_at:nowIso(),
     live_set:inferLiveSet(text)
   };
 }
@@ -185,6 +220,7 @@ function renderSessionImportPreview(){
     <div><span>Distance</span><strong>${d.planned_distance?`${Number(d.planned_distance).toLocaleString()}m`:"Not calculated"}</strong></div>
     <div><span>System</span><strong>${escapeHtml(d.primary_system||"Not found")}</strong></div>
     <div><span>Technical cue</span><strong>${escapeHtml(d.technical_focus||"Not found")}</strong></div>
+    <div><span>Detected sets</span><strong>${(d.sets||[]).length}</strong></div>
     <div><span>Live timing</span><strong>${escapeHtml(live)}</strong></div>
   </div><details><summary>Check full workout</summary><pre class="import-workout-preview">${escapeHtml(d.workout)}</pre></details>`;
 }
@@ -277,6 +313,7 @@ function nextPlannedSession(session){
     .filter(s=>`${s.session_date}-${s.day_part}` > `${session.session_date}-${session.day_part}`)
     .sort((a,b)=>a.session_date.localeCompare(b.session_date)||a.day_part.localeCompare(b.day_part))[0] || null;
 }
+function sessionReview(sessionId){return appState.session_reviews.find(r=>r.session_id===sessionId)||null}
 function renderDeck(){
   const session=selectedSession();
   const deckPicker=$("deckSessionPicker");
@@ -291,6 +328,8 @@ function renderDeck(){
     $("deckSystem").textContent="—";$("deckTechnical").textContent="—";
     $("deckCueChips").innerHTML="";$("deckWorkout").textContent="No session loaded.";
     $("deckNextSession").innerHTML=`<div class="help">Sign in, then select a session.</div>`;
+    $("deckSetList").innerHTML=`<div class="help">No session loaded.</div>`;
+    $("deckPlanThread").innerHTML="";
     return;
   }
   $("deckSessionLabel").textContent=sessionLabel(session);
@@ -300,27 +339,65 @@ function renderDeck(){
   $("deckCueChips").innerHTML=[
     `<span class="chip">${escapeHtml(session.venue||"")}</span>`,
     ...session.squads.map(s=>`<span class="chip">${escapeHtml(s)}</span>`),
-    `<span class="chip">${Number(session.planned_distance||0).toLocaleString()}m</span>`
+    `<span class="chip">${Number(session.planned_distance||0).toLocaleString()}m</span>`,
+    `<span class="chip">${session.status==="completed"?"Completed":"Planned"}</span>`
   ].join("");
   $("deckWorkout").textContent=session.workout||"No workout entered.";
+  const sets=(session.sets&&session.sets.length?session.sets:extractStructuredSets(session.workout));
+  $("deckSetList").innerHTML=sets.length?sets.map((set,index)=>`<div class="deck-set-row">
+    <div><strong>${escapeHtml(set.label||`${set.reps} × ${set.distance}`)}</strong><small>${set.reps} × ${set.distance} · ${escapeHtml(set.stroke||"")}${set.cycle?` · on ${escapeHtml(set.cycle)}`:""}</small></div>
+    <button type="button" data-run-set="${index}">Run live</button>
+  </div>`).join(""):`<div class="help">No repeating sets detected. The full board is still shown above.</div>`;
+  document.querySelectorAll('[data-run-set]').forEach(btn=>btn.onclick=()=>runStructuredSet(sets[Number(btn.dataset.runSet)]));
+  const previous=appState.sessions.find(s=>s.id===session.previous_session_id)||appState.sessions.filter(s=>`${s.session_date}-${s.day_part}`<`${session.session_date}-${session.day_part}`).sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`))[0];
+  const previousReview=previous?sessionReview(previous.id):null;
   const next=nextPlannedSession(session);
+  $("deckPlanThread").innerHTML=`
+    <div class="plan-thread-row"><span>Carry from last session</span><strong>${escapeHtml(previousReview?.carry_forward||session.plan_cue||"No carry-forward logged yet.")}</strong></div>
+    <div class="plan-thread-row"><span>Today’s purpose</span><strong>${escapeHtml(session.primary_system||"—")} · ${escapeHtml(session.technical_focus||"—")}</strong></div>
+    <div class="plan-thread-row"><span>Lead into next session</span><strong>${escapeHtml(session.next_session_cue||next?.technical_focus||next?.title||"Next-session cue not entered yet.")}</strong></div>`;
   $("deckNextSession").innerHTML=next
     ? `<strong>${escapeHtml(sessionLabel(next))} — ${escapeHtml(next.title)}</strong><div>${escapeHtml(next.primary_system||"")}</div><div class="help">${escapeHtml(next.technical_focus||"")}</div>`
     : `<div class="warning-box">No later session is entered yet. Add tomorrow's plan on desktop when ready.</div>`;
 }
-function renderDeckAthleteBrief(){
-  const select=$("deckAthlete");
-  const athlete=appState.athletes.find(a=>a.id===select?.value);
-  if(!athlete){$("deckAthleteBrief").innerHTML=`<div class="help">Choose a swimmer.</div>`;return}
+function profileLines(value){
+  if(Array.isArray(value)) return value.map(v=>typeof v==="string"?v:(v.label||v.event||JSON.stringify(v))).filter(Boolean).join("\n");
+  if(value&&typeof value==="object") return Object.entries(value).map(([k,v])=>`${k}: ${v}`).join("\n");
+  return String(value||"");
+}
+function athleteQuickHtml(athlete){
+  if(!athlete)return `<div class="help">Choose a swimmer.</div>`;
   const recentSet=appState.timed_sets.filter(t=>t.athlete_id===athlete.id).sort(byUpdated)[0];
   const recentCapture=appState.captures.filter(c=>c.athlete_id===athlete.id&&c.text_content).sort(byUpdated)[0];
   const pace=athlete.legacy_pace;
-  $("deckAthleteBrief").innerHTML=`
-    <div class="deck-answer-row"><span>Squad</span><strong>${escapeHtml(athlete.squad||"—")}</strong></div>
+  const nextMeet=athlete.next_meet_name?`${athlete.next_meet_name}${athlete.next_meet_date?` · ${formatDate(athlete.next_meet_date)}`:""}`:"Not loaded";
+  return `
+    <div class="deck-answer-row"><span>Squad / primary events</span><strong>${escapeHtml(athlete.squad||"—")}${(athlete.primary_events||[]).length?` · ${escapeHtml(athlete.primary_events.join(", "))}`:""}</strong></div>
+    <div class="deck-answer-row"><span>Current plan focus</span><strong>${escapeHtml(athlete.current_focus||athlete.technical_focus||"Not entered yet.")}</strong></div>
+    <div class="deck-answer-row"><span>Next meet</span><strong>${escapeHtml(nextMeet)}</strong></div>
+    <div class="deck-answer-row"><span>PBs</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.pb_summary)||"Not loaded")}</strong></div>
+    <div class="deck-answer-row"><span>Qualifying times / gaps</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.qualifying_summary)||"Not loaded")}</strong></div>
+    <div class="deck-answer-row"><span>Relevant records</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.records_summary)||"Not loaded")}</strong></div>
+    <div class="deck-answer-row"><span>Planned adaptations</span><strong>${escapeHtml(athlete.modifications||"None entered")}</strong></div>
     <div class="deck-answer-row"><span>Latest timed set</span><strong>${recentSet?`${escapeHtml(recentSet.set_label||"Timed set")} · best ${formatSeconds(recentSet.best)} · avg ${formatSeconds(recentSet.average)}`:"No timed set saved yet."}</strong></div>
     <div class="deck-answer-row"><span>Legacy pace reference</span><strong>${pace?`T400 ${escapeHtml(pace.t400)} · AT100 ${escapeHtml(pace.at_100_10)}`:"No confirmed pace reference."}</strong></div>
-    <div class="deck-answer-row"><span>Latest note</span><strong>${recentCapture?escapeHtml(recentCapture.text_content):"No athlete note saved yet."}</strong></div>
-    <div class="help" style="margin-top:10px">Meet entries, PBs, qualifying times and records are not loaded in this version yet.</div>`;
+    <div class="deck-answer-row"><span>Latest note</span><strong>${recentCapture?escapeHtml(recentCapture.text_content):"No athlete note saved yet."}</strong></div>`;
+}
+function renderDeckAthleteBrief(){
+  const athlete=appState.athletes.find(a=>a.id===$("deckAthlete")?.value);
+  $("deckAthleteBrief").innerHTML=athleteQuickHtml(athlete);
+}
+function runStructuredSet(set){
+  if(!set)return;
+  showView("times");
+  $("liveSetLabel").value=set.label||`${set.reps} x ${set.distance}`;
+  $("liveReps").value=set.reps||1;
+  $("liveDistance").value=String(set.distance||50);
+  $("liveStroke").value=[...$("liveStroke").options].some(o=>o.value===set.stroke)?set.stroke:"Freestyle";
+  if(set.cycle)$("liveCycle").value=set.cycle;
+  $("timeLabel").value=$("liveSetLabel").value;
+  $("timeSendoff").value=set.cycle||"";
+  resetLiveSet();renderLiveBoard();
 }
 
 
@@ -363,12 +440,12 @@ function renderAttendance(){
   $("attendanceList").innerHTML = groups.map(group => {
     const rows = roster.filter(a=>a.squad===group).map(a=>{
       const value = attendanceFor(session.id,a.id)?.status || "";
-      return `<div class="attendance-row" data-athlete-id="${escapeHtml(a.id)}">
+      return `<div class="attendance-row ${value==="present"||value==="modified"?"":"unmarked"}" data-athlete-id="${escapeHtml(a.id)}">
         <strong>${escapeHtml(a.full_name)}</strong>
         <div class="attendance-buttons" role="group" aria-label="Attendance for ${escapeHtml(a.full_name)}">
           <button type="button" class="attendance-choice ${value==="present"?"active":""}" data-status="present">Here</button>
           <button type="button" class="attendance-choice ${value==="modified"?"active":""}" data-status="modified">Modified</button>
-          <button type="button" class="attendance-choice ${value==="absent"?"active":""}" data-status="absent">Absent</button>
+          <span class="attendance-default">${value==="present"||value==="modified"?"":"Absent"}</span>
         </div>
       </div>`;
     }).join("");
@@ -378,9 +455,12 @@ function renderAttendance(){
   document.querySelectorAll(".attendance-choice").forEach(button=>{
     button.addEventListener("click",()=>{
       const group = button.closest(".attendance-buttons");
+      const row=button.closest(".attendance-row");
       const alreadyActive = button.classList.contains("active");
       group.querySelectorAll(".attendance-choice").forEach(b=>b.classList.remove("active"));
       if(!alreadyActive) button.classList.add("active");
+      row.classList.toggle("unmarked",alreadyActive);
+      const label=group.querySelector(".attendance-default");if(label)label.textContent=alreadyActive?"Absent":"";
     });
   });
 }
@@ -388,10 +468,12 @@ function renderAttendance(){
 $("markAllPresentBtn").addEventListener("click",()=>{
   document.querySelectorAll(".attendance-buttons").forEach(group=>{
     group.querySelectorAll(".attendance-choice").forEach(b=>b.classList.toggle("active",b.dataset.status==="present"));
+    const row=group.closest(".attendance-row");row?.classList.remove("unmarked");const label=group.querySelector(".attendance-default");if(label)label.textContent="";
   });
 });
 $("clearAttendanceBtn").addEventListener("click",()=>{
   document.querySelectorAll(".attendance-choice").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".attendance-row").forEach(row=>{row.classList.add("unmarked");const label=row.querySelector(".attendance-default");if(label)label.textContent="Absent"});
 });
 $("saveAttendanceBtn").addEventListener("click",async()=>{
   const session = selectedSession();
@@ -400,16 +482,8 @@ $("saveAttendanceBtn").addEventListener("click",async()=>{
   document.querySelectorAll(".attendance-row[data-athlete-id]").forEach(row=>{
     const athleteId = row.dataset.athleteId;
     const active = row.querySelector(".attendance-choice.active");
-    const status = active?.dataset.status || "";
+    const status = active?.dataset.status || "absent";
     const existing = attendanceFor(session.id,athleteId);
-
-    if(!status){
-      if(existing){
-        appState.attendance = appState.attendance.filter(a=>a.id!==existing.id);
-        if(typeof queueDelete === "function") queueDelete("attendance",existing.id);
-      }
-      return;
-    }
 
     upsertLocal("attendance",{
       id:existing?.id || attendanceId(session.id,athleteId),
@@ -584,26 +658,38 @@ async function saveFileCapture(file,kind){
 $("photoInput").addEventListener("change",async e=>{await saveFileCapture(e.target.files?.[0],"photo");e.target.value=""});
 $("videoInput").addEventListener("change",async e=>{await saveFileCapture(e.target.files?.[0],"video");e.target.value=""});
 
-$("saveReviewBtn").addEventListener("click",async()=>{
-  const session = selectedSession();
-  const existing = appState.session_reviews.find(r=>r.session_id===session.id);
-  const record = {
-    id:existing?.id||`review-${session.id}`,session_id:session.id,
-    went_well:$("reviewWentWell").value.trim(),
-    reinforce:$("reviewReinforce").value.trim(),
-    athlete_notes:$("reviewAthletes").value.trim(),
-    carry_forward:$("reviewCarry").value.trim(),
-    updated_at:nowIso()
-  };
-  upsertLocal("session_reviews",record);queueRecord("session_reviews",record.id);saveState(appState);
-  await syncIfPossible();updateStatus("Session review saved","good");
-});
+
+function parseEvidenceMap(text){
+  const out={};String(text||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).forEach(part=>{
+    const m=part.match(/^(.+?)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*(%|m|min)?$/i);
+    if(m)out[m[1].trim()]={value:Number(m[2]),unit:m[3]||""};else out[part]={value:null,unit:""};
+  });return out;
+}
+function evidenceMapText(map){
+  if(!map||typeof map!=="object")return "";
+  return Object.entries(map).map(([k,v])=>`${k} ${v&&typeof v==="object"&&v.value!==null?v.value:""}${v?.unit||""}`.trim()).join(", ");
+}
 function renderReview(){
-  const review = appState.session_reviews.find(r=>r.session_id===selectedSession()?.id)||{};
-  $("reviewWentWell").value=review.went_well||"";
-  $("reviewReinforce").value=review.reinforce||"";
-  $("reviewAthletes").value=review.athlete_notes||"";
-  $("reviewCarry").value=review.carry_forward||"";
+  const session=selectedSession();const review=sessionReview(session?.id)||{};
+  if($("finishSessionHeading"))$("finishSessionHeading").innerHTML=session?`<strong>${escapeHtml(sessionLabel(session))} — ${escapeHtml(session.title)}</strong><div class="help">Planned ${Number(session.planned_distance||0).toLocaleString()}m · ${escapeHtml(session.primary_system||"")}</div>`:"";
+  const values={reviewWentWell:review.went_well,reviewReinforce:review.reinforce,reviewAthletes:review.athlete_notes,reviewCarry:review.carry_forward,finishActualDistance:review.actual_distance,finishActualDuration:review.actual_duration,finishEnergySystems:evidenceMapText(review.energy_systems),finishTrainingModes:evidenceMapText(review.training_modes),finishStrokeExposure:evidenceMapText(review.stroke_exposure),finishAthleteResponse:review.athlete_response,finishModifications:review.modifications,finishRaceEvidence:review.race_split_evidence};
+  Object.entries(values).forEach(([id,val])=>{if($(id))$(id).value=val||""});
+  if($("finishResult"))$("finishResult").textContent=review.completed_at?`Completed ${new Date(review.completed_at).toLocaleString("en-NZ")}`:"Not completed yet.";
+}
+async function saveFinishSession(){
+  const session=selectedSession();if(!session)return;
+  const existing=sessionReview(session.id);
+  const record={
+    id:existing?.id||`review-${session.id}`,session_id:session.id,
+    went_well:$("reviewWentWell").value.trim(),reinforce:$("reviewReinforce").value.trim(),athlete_notes:$("reviewAthletes").value.trim(),carry_forward:$("reviewCarry").value.trim(),
+    actual_distance:Number($("finishActualDistance").value||0),actual_duration:Number($("finishActualDuration").value||0),
+    energy_systems:parseEvidenceMap($("finishEnergySystems").value),training_modes:parseEvidenceMap($("finishTrainingModes").value),stroke_exposure:parseEvidenceMap($("finishStrokeExposure").value),
+    athlete_response:$("finishAthleteResponse").value.trim(),modifications:$("finishModifications").value.trim(),race_split_evidence:$("finishRaceEvidence").value.trim(),
+    completed_at:nowIso(),updated_at:nowIso()
+  };
+  upsertLocal("session_reviews",record);queueRecord("session_reviews",record.id);
+  session.status="completed";session.updated_at=nowIso();queueRecord("sessions",session.id);saveState(appState);
+  await syncIfPossible();renderAll();showView("deck");updateStatus("Session completed and synced","good");
 }
 
 async function mediaHtml(capture){
@@ -789,7 +875,7 @@ async function saveLiveResults(){
       const splits=(channel.splits[f.rep]||[]).map(formatSeconds).join(", ");
       return `Rep ${f.rep}: ${formatSeconds(f.time)}${splits?` | splits ${splits}`:""}`;
     }).join("\n");
-    const capture={id:uid("capture"),session_id:session.id,athlete_id:channel.athlete_id,capture_type:"Time / result",text_content:`${label} · Channel ${channel.index+1}\nCycle ${formatSeconds(cycle)} · offset ${channel.offset}s\n${detail}`,media_path:"",mime_type:"",created_at:nowIso(),updated_at:nowIso()};
+    const capture={id:uid("capture"),session_id:session.id,athlete_id:channel.athlete_id,capture_type:"text",text_content:`${label} · Channel ${channel.index+1}\nCycle ${formatSeconds(cycle)} · offset ${channel.offset}s\n${detail}`,media_path:"",mime_type:"",created_at:nowIso(),updated_at:nowIso()};
     upsertLocal("captures",capture);queueRecord("captures",capture.id);saved++;
   }
   if(!saved){updateStatus("Choose a swimmer for a channel","error");return}
@@ -1012,6 +1098,8 @@ function fillSessionEditor(session){
   $("editSessionSquads").value=(session?.squads||[]).join(", ");
   $("editSessionSystem").value=session?.primary_system||"";
   $("editSessionTechnical").value=session?.technical_focus||"";
+  $("editSessionPlanCue").value=session?.plan_cue||"";
+  $("editSessionNextCue").value=session?.next_session_cue||"";
   $("editSessionWorkout").value=session?.workout||"";
 }
 $("newSessionBtn").addEventListener("click",()=>fillSessionEditor(null));
@@ -1022,7 +1110,8 @@ $("saveSessionBtn").addEventListener("click",async()=>{
     venue:$("editSessionVenue").value.trim(),title:$("editSessionTitle").value.trim(),
     squads:$("editSessionSquads").value.split(",").map(x=>x.trim()).filter(Boolean),
     planned_distance:Number($("editSessionDistance").value||0),primary_system:$("editSessionSystem").value.trim(),
-    technical_focus:$("editSessionTechnical").value.trim(),workout:$("editSessionWorkout").value,
+    technical_focus:$("editSessionTechnical").value.trim(),plan_cue:$("editSessionPlanCue").value.trim(),next_session_cue:$("editSessionNextCue").value.trim(),
+    workout:$("editSessionWorkout").value,sets:extractStructuredSets($("editSessionWorkout").value),
     step_number:existing?.step_number||null,previous_session_id:existing?.previous_session_id||null,
     status:existing?.status||"planned",updated_at:nowIso()
   };
@@ -1035,45 +1124,66 @@ function attendanceStats(athleteId){
   const records=appState.attendance.filter(a=>a.athlete_id===athleteId);
   return {marked:records.length,here:records.filter(a=>a.status==="present"||a.status==="modified").length};
 }
+function populateAllAthleteSelect(selectId){
+  const select=$(selectId);if(!select)return;
+  const current=select.value;
+  select.innerHTML=appState.athletes.slice().sort((a,b)=>a.full_name.localeCompare(b.full_name)).map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===current?"selected":""}>${escapeHtml(a.full_name)} — ${escapeHtml(a.squad)}</option>`).join("");
+}
+function fillAthleteProfile(athlete){
+  if(!athlete)return;
+  $("profileAthleteId").value=athlete.id;$("profileDob").value=athlete.date_of_birth||"";$("profileEvents").value=(athlete.primary_events||[]).join(", ");
+  $("profileCurrentFocus").value=athlete.current_focus||"";$("profileTechnicalFocus").value=athlete.technical_focus||"";$("profileModifications").value=athlete.modifications||"";
+  $("profileNextMeetName").value=athlete.next_meet_name||"";$("profileNextMeetDate").value=athlete.next_meet_date||"";$("profileNextMeetVenue").value=athlete.next_meet_venue||"";
+  $("profilePbs").value=profileLines(athlete.pb_summary);$("profileQualifying").value=profileLines(athlete.qualifying_summary);$("profileRecords").value=profileLines(athlete.records_summary);$("profileCoachNotes").value=athlete.coach_notes||"";
+}
+function textLines(value){return String(value||"").split(/\n/).map(x=>x.trim()).filter(Boolean)}
+async function saveAthleteProfile(){
+  const athlete=appState.athletes.find(a=>a.id===$("profileAthleteId").value);if(!athlete)return;
+  Object.assign(athlete,{date_of_birth:$("profileDob").value||null,primary_events:$("profileEvents").value.split(",").map(x=>x.trim()).filter(Boolean),current_focus:$("profileCurrentFocus").value.trim(),technical_focus:$("profileTechnicalFocus").value.trim(),modifications:$("profileModifications").value.trim(),next_meet_name:$("profileNextMeetName").value.trim(),next_meet_date:$("profileNextMeetDate").value||null,next_meet_venue:$("profileNextMeetVenue").value.trim(),pb_summary:textLines($("profilePbs").value),qualifying_summary:textLines($("profileQualifying").value),records_summary:textLines($("profileRecords").value),coach_notes:$("profileCoachNotes").value.trim(),updated_at:nowIso()});
+  queueRecord("athletes",athlete.id);saveState(appState);await syncIfPossible();renderAll();updateStatus("Athlete profile saved","good");
+}
 function renderAthletes(){
   const squads=[...new Set(appState.athletes.map(a=>a.squad))].sort();
   const current=$("athleteSquadFilter").value;
   $("athleteSquadFilter").innerHTML=`<option value="">All squads</option>`+squads.map(s=>`<option ${s===current?"selected":""}>${escapeHtml(s)}</option>`).join("");
+  populateAllAthleteSelect("athleteQuickSelect");
+  const quick=appState.athletes.find(a=>a.id===$("athleteQuickSelect").value)||appState.athletes[0];
+  if(quick){$("athleteQuickSelect").value=quick.id;$("athleteQuickProfile").innerHTML=athleteQuickHtml(quick)}
   const filter=$("athleteSquadFilter").value;
   const rows=appState.athletes.filter(a=>!filter||a.squad===filter).sort((a,b)=>a.squad.localeCompare(b.squad)||a.full_name.localeCompare(b.full_name));
   $("athleteTableBody").innerHTML=rows.map(a=>{
-    const stats=attendanceStats(a.id);
-    const timed=appState.timed_sets.filter(t=>t.athlete_id===a.id).length;
-    const notes=appState.captures.filter(c=>c.athlete_id===a.id).length;
-    const pace=a.legacy_pace?`T400 ${escapeHtml(a.legacy_pace.t400)}<br>AT ${escapeHtml(a.legacy_pace.at_100_10)}`:"Needs current test";
-    return `<tr><td><strong>${escapeHtml(a.full_name)}</strong></td><td>${escapeHtml(a.squad)}</td><td>${stats.marked?`${stats.here}/${stats.marked}`:"—"}</td><td>${pace}</td><td>${timed}</td><td>${notes}</td></tr>`;
+    const stats=attendanceStats(a.id);const timed=appState.timed_sets.filter(t=>t.athlete_id===a.id).length;
+    return `<tr data-edit-athlete="${escapeHtml(a.id)}"><td><button class="link-button" data-edit-athlete="${escapeHtml(a.id)}"><strong>${escapeHtml(a.full_name)}</strong></button></td><td>${escapeHtml(a.squad)}</td><td>${stats.marked?`${stats.here}/${stats.marked}`:"—"}</td><td>${escapeHtml(a.current_focus||"Not entered")}</td><td>${escapeHtml(a.next_meet_name||"Not entered")}</td><td>${timed}</td></tr>`;
   }).join("");
+  document.querySelectorAll('[data-edit-athlete]').forEach(el=>el.onclick=()=>fillAthleteProfile(appState.athletes.find(a=>a.id===el.dataset.editAthlete)));
+  const editorAthlete=appState.athletes.find(a=>a.id===$("profileAthleteId").value)||quick;if(editorAthlete)fillAthleteProfile(editorAthlete);
 }
-$("athleteSquadFilter").addEventListener("change",renderAthletes);
-
+function weekBounds(dateString){
+  const d=new Date(`${dateString}T12:00:00`);const day=(d.getDay()+6)%7;const start=new Date(d);start.setDate(d.getDate()-day);const end=new Date(start);end.setDate(start.getDate()+6);return {start:localIsoDate(start),end:localIsoDate(end)};
+}
+function renderWeeklyEvidence(){
+  const session=selectedSession();if(!session||!$("weeklyEvidence"))return;
+  const bounds=weekBounds(session.session_date);const sessions=appState.sessions.filter(s=>s.session_date>=bounds.start&&s.session_date<=bounds.end).sort((a,b)=>`${a.session_date}-${a.day_part}`.localeCompare(`${b.session_date}-${b.day_part}`));
+  const reviews=sessions.map(s=>sessionReview(s.id)).filter(Boolean);const planned=sessions.reduce((n,s)=>n+Number(s.planned_distance||0),0);const actual=reviews.reduce((n,r)=>n+Number(r.actual_distance||0),0);
+  const completed=sessions.filter(s=>s.status==="completed"||sessionReview(s.id)?.completed_at).length;
+  const attendance=appState.attendance.filter(a=>sessions.some(s=>s.id===a.session_id));const here=attendance.filter(a=>a.status==="present"||a.status==="modified").length;
+  $("weeklyEvidenceHeading").textContent=`${formatDate(bounds.start)}–${formatDate(bounds.end)}`;
+  $("weeklyEvidence").innerHTML=`<div class="weekly-kpis">
+    <div><strong>${sessions.length}</strong><span>planned sessions</span></div><div><strong>${completed}</strong><span>completed</span></div><div><strong>${planned.toLocaleString()}m</strong><span>planned distance</span></div><div><strong>${actual.toLocaleString()}m</strong><span>actual distance</span></div><div><strong>${here}/${attendance.length||0}</strong><span>marked here</span></div>
+  </div>${sessions.map(s=>{const r=sessionReview(s.id);const gaps=[];if(!r?.actual_distance)gaps.push("actual distance");if(!r?.energy_systems||!Object.keys(r.energy_systems).length)gaps.push("system split");if(!r?.training_modes||!Object.keys(r.training_modes).length)gaps.push("kick/pull/swim");if(!r?.stroke_exposure||!Object.keys(r.stroke_exposure).length)gaps.push("stroke exposure");if(!appState.attendance.some(a=>a.session_id===s.id))gaps.push("attendance");return `<div class="weekly-session-row"><strong>${escapeHtml(sessionLabel(s))} · ${escapeHtml(s.title)}</strong><span>${Number(s.planned_distance||0).toLocaleString()}m plan</span><span>${Number(r?.actual_distance||0).toLocaleString()}m actual</span><span class="${gaps.length?"evidence-gap":"evidence-good"}">${gaps.length?`Missing: ${escapeHtml(gaps.join(", "))}`:"Evidence complete"}</span></div>`}).join("")}`;
+}
 function renderReports(){
+  renderWeeklyEvidence();
   const current=$("reportAthlete").value||selectedRoster()[0]?.id||appState.athletes[0]?.id;
   $("reportAthlete").innerHTML=appState.athletes.slice().sort((a,b)=>a.full_name.localeCompare(b.full_name)).map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===current?"selected":""}>${escapeHtml(a.full_name)} — ${escapeHtml(a.squad)}</option>`).join("");
-  const athlete=appState.athletes.find(a=>a.id===$("reportAthlete").value);
-  if(!athlete){$("athleteReport").innerHTML="";return}
-  const attendance=appState.attendance.filter(a=>a.athlete_id===athlete.id);
-  const attended=attendance.filter(a=>a.status==="present"||a.status==="modified");
-  const sessionIds=new Set(attended.map(a=>a.session_id));
-  const distance=appState.sessions.filter(s=>sessionIds.has(s.id)).reduce((sum,s)=>sum+Number(s.planned_distance||0),0);
-  const timed=appState.timed_sets.filter(t=>t.athlete_id===athlete.id).sort(byUpdated);
-  const notes=appState.captures.filter(c=>c.athlete_id===athlete.id).sort(byUpdated);
-  $("athleteReport").innerHTML=`<h3>${escapeHtml(athlete.full_name)}</h3>
-    <div class="report-grid">
-      <div><strong>${attended.length}</strong><span>sessions attended</span></div>
-      <div><strong>${distance.toLocaleString()}m</strong><span>planned volume attended</span></div>
-      <div><strong>${timed.length}</strong><span>timed sets</span></div>
-      <div><strong>${notes.length}</strong><span>athlete notes</span></div>
-    </div>
-    <h3>Latest timed work</h3>
-    ${timed.length?timed.slice(0,5).map(t=>`<div class="list-item">${t.distance} ${escapeHtml(t.stroke)} · avg ${formatSeconds(t.average)} · best ${formatSeconds(t.best)}</div>`).join(""):`<p class="help">No timed work yet.</p>`}
-    <h3>Latest notes</h3>
-    ${notes.length?notes.slice(0,5).map(n=>`<div class="list-item"><p>${escapeHtml(n.text_content)}</p><div class="list-meta">${new Date(n.created_at).toLocaleString("en-NZ")}</div></div>`).join(""):`<p class="help">No athlete notes yet.</p>`}`;
+  const athlete=appState.athletes.find(a=>a.id===$("reportAthlete").value);if(!athlete){$("athleteReport").innerHTML="";return}
+  const attendance=appState.attendance.filter(a=>a.athlete_id===athlete.id);const attended=attendance.filter(a=>a.status==="present"||a.status==="modified");const sessionIds=new Set(attended.map(a=>a.session_id));
+  const distance=appState.sessions.filter(s=>sessionIds.has(s.id)).reduce((sum,s)=>sum+Number(sessionReview(s.id)?.actual_distance||s.planned_distance||0),0);const timed=appState.timed_sets.filter(t=>t.athlete_id===athlete.id).sort(byUpdated);const notes=appState.captures.filter(c=>c.athlete_id===athlete.id).sort(byUpdated);
+  $("athleteReport").innerHTML=`<h3>${escapeHtml(athlete.full_name)}</h3>${athleteQuickHtml(athlete)}<div class="report-grid"><div><strong>${attended.length}</strong><span>sessions attended</span></div><div><strong>${distance.toLocaleString()}m</strong><span>recorded volume attended</span></div><div><strong>${timed.length}</strong><span>timed sets</span></div><div><strong>${notes.length}</strong><span>athlete notes</span></div></div><h3>Latest timed work</h3>${timed.length?timed.slice(0,5).map(t=>`<div class="list-item">${t.distance} ${escapeHtml(t.stroke)} · avg ${formatSeconds(t.average)} · best ${formatSeconds(t.best)}</div>`).join(""):`<p class="help">No timed work yet.</p>`}<h3>Latest notes</h3>${notes.length?notes.slice(0,5).map(n=>`<div class="list-item"><p>${escapeHtml(n.text_content)}</p><div class="list-meta">${new Date(n.created_at).toLocaleString("en-NZ")}</div></div>`).join(""):`<p class="help">No athlete notes yet.</p>`}`;
 }
+$("athleteSquadFilter").addEventListener("change",renderAthletes);
+$("athleteQuickSelect").addEventListener("change",()=>{$("athleteQuickProfile").innerHTML=athleteQuickHtml(appState.athletes.find(a=>a.id===$("athleteQuickSelect").value))});
+$("saveAthleteProfileBtn").addEventListener("click",saveAthleteProfile);
 $("reportAthlete").addEventListener("change",renderReports);
 
 function loadSettings(){
@@ -1165,12 +1275,12 @@ async function ensureOrganisation(){
 function cloudRow(table,record){
   const org=appState.settings.organisation_id,user=getAuth()?.user?.id;
   const base={...record,organisation_id:org,created_by:user};
-  if(table==="athletes") return {id:base.id,organisation_id:org,full_name:base.full_name,squad:base.squad,active:base.active,legacy_pace:base.legacy_pace,updated_at:base.updated_at,created_by:user};
-  if(table==="sessions") return {id:base.id,organisation_id:org,session_date:base.session_date,day_part:base.day_part,venue:base.venue,title:base.title,squads:base.squads,planned_distance:base.planned_distance,primary_system:base.primary_system,technical_focus:base.technical_focus,workout:base.workout,step_number:base.step_number,previous_session_id:base.previous_session_id,status:base.status,updated_at:base.updated_at,created_by:user};
+  if(table==="athletes") return {id:base.id,organisation_id:org,full_name:base.full_name,squad:base.squad,active:base.active,legacy_pace:base.legacy_pace,date_of_birth:base.date_of_birth,primary_events:base.primary_events||[],current_focus:base.current_focus,technical_focus:base.technical_focus,modifications:base.modifications,coach_notes:base.coach_notes,next_meet_name:base.next_meet_name,next_meet_date:base.next_meet_date,next_meet_venue:base.next_meet_venue,pb_summary:base.pb_summary||[],qualifying_summary:base.qualifying_summary||[],records_summary:base.records_summary||[],updated_at:base.updated_at,created_by:user};
+  if(table==="sessions") return {id:base.id,organisation_id:org,session_date:base.session_date,day_part:base.day_part,venue:base.venue,title:base.title,squads:base.squads,planned_distance:base.planned_distance,primary_system:base.primary_system,technical_focus:base.technical_focus,plan_cue:base.plan_cue,next_session_cue:base.next_session_cue,workout:base.workout,sets:base.sets||[],step_number:base.step_number,previous_session_id:base.previous_session_id,status:base.status,updated_at:base.updated_at,created_by:user};
   if(table==="attendance") return {id:base.id,organisation_id:org,session_id:base.session_id,athlete_id:base.athlete_id,status:base.status,note:base.note,updated_at:base.updated_at,created_by:user};
   if(table==="captures") return {id:base.id,organisation_id:org,session_id:base.session_id,athlete_id:base.athlete_id,capture_type:base.capture_type,text_content:base.text_content,media_path:base.media_path,mime_type:base.mime_type,created_at:base.created_at,updated_at:base.updated_at,created_by:user};
   if(table==="timed_sets") return {id:base.id,organisation_id:org,session_id:base.session_id,athlete_id:base.athlete_id,distance:base.distance,stroke:base.stroke,set_label:base.set_label,send_off:base.send_off,times:base.times,average:base.average,best:base.best,spread:base.spread,created_at:base.created_at,updated_at:base.updated_at,created_by:user};
-  if(table==="session_reviews") return {id:base.id,organisation_id:org,session_id:base.session_id,went_well:base.went_well,reinforce:base.reinforce,athlete_notes:base.athlete_notes,carry_forward:base.carry_forward,updated_at:base.updated_at,created_by:user};
+  if(table==="session_reviews") return {id:base.id,organisation_id:org,session_id:base.session_id,went_well:base.went_well,reinforce:base.reinforce,athlete_notes:base.athlete_notes,carry_forward:base.carry_forward,actual_distance:base.actual_distance||0,actual_duration:base.actual_duration||0,energy_systems:base.energy_systems||{},training_modes:base.training_modes||{},stroke_exposure:base.stroke_exposure||{},athlete_response:base.athlete_response,modifications:base.modifications,race_split_evidence:base.race_split_evidence,completed_at:base.completed_at,updated_at:base.updated_at,created_by:user};
   return base;
 }
 async function uploadCaptureMedia(capture){
@@ -1260,6 +1370,7 @@ function renderAll(){
 const clockSession=currentSessionFromClock();
 if(clockSession){appState.settings.selected_session_id=clockSession.id;saveState(appState)}
 bindLiveSet();
+if($("finishSessionBtn"))$("finishSessionBtn").addEventListener("click",saveFinishSession);
 renderAll();
 if(window.matchMedia("(max-width: 980px)").matches) showView("deck");
 readSharedText();

@@ -1,6 +1,6 @@
 {
-  "name": "McLay Swimming OS Version 1.4 Chat Import",
-  "short_name": "McLay Swim",
+  "name": "McLay Swimming OS Version 1.5 Workflow & Evidence",
+  "short_name": "McLay Swim 1.5",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
