@@ -85,6 +85,126 @@ function currentSessionFromClock(){
       || selectedSession();
 }
 
+
+let importedSessionDraft = null;
+function localIsoDate(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+function datePlusDays(days){
+  const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+days);return localIsoDate(d);
+}
+function parseClockValue(value){
+  const raw=String(value||"").trim();
+  if(!raw) return "";
+  if(raw.includes(":")){
+    const [m,sec]=raw.split(":").map(Number);
+    if(Number.isFinite(m)&&Number.isFinite(sec)) return `${m}:${String(Math.round(sec)).padStart(2,"0")}`;
+  }
+  const total=Number(raw);
+  if(!Number.isFinite(total)) return "";
+  return `${Math.floor(total/60)}:${String(Math.round(total%60)).padStart(2,"0")}`;
+}
+function parseImportDate(text){
+  let m=text.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if(m) return `${m[1]}-${String(Number(m[2])).padStart(2,"0")}-${String(Number(m[3])).padStart(2,"0")}`;
+  m=text.match(/\b(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})\b/);
+  if(m){const y=Number(m[3])<100?2000+Number(m[3]):Number(m[3]);return `${y}-${String(Number(m[2])).padStart(2,"0")}-${String(Number(m[1])).padStart(2,"0")}`}
+  if(/\btomorrow\b/i.test(text)) return datePlusDays(1);
+  if(/\btoday\b/i.test(text)) return datePlusDays(0);
+  const names=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const target=names.findIndex(name=>new RegExp(`\\b${name}\\b`,"i").test(text));
+  if(target>=0){const d=new Date();d.setHours(12,0,0,0);let add=(target-d.getDay()+7)%7;if(add===0)add=7;d.setDate(d.getDate()+add);return localIsoDate(d)}
+  return datePlusDays(1);
+}
+function labelledValue(text,labels){
+  const pattern=new RegExp(`(?:^|\\n)\\s*(?:${labels.join("|")})\\s*[:\\-–—]\\s*([^\\n]+)`,`i`);
+  return text.match(pattern)?.[1]?.trim()||"";
+}
+function estimateDistance(text){
+  const explicit=text.match(/(?:total|planned\s*distance|distance)\s*[:=\-–—]?\s*([0-9][0-9,]{2,5})\s*m?\b/i);
+  if(explicit) return Number(explicit[1].replace(/,/g,""));
+  let total=0;
+  for(const line of text.split(/\n/)){
+    const repeats=[...line.matchAll(/\b(\d{1,2})\s*[x×]\s*(\d{2,4})\s*m?\b/gi)];
+    if(repeats.length){for(const m of repeats) total+=Number(m[1])*Number(m[2]);continue}
+    const single=line.match(/^\s*(\d{2,4})\s*m?\b/i);
+    if(single) total+=Number(single[1]);
+  }
+  return total;
+}
+function inferSystem(text){
+  const explicit=labelledValue(text,["primary system","system","energy system"]);
+  if(explicit) return explicit;
+  const systems=["race pace","threshold","aerobic","anaerobic","lactate","vo2","speed","recovery","skills","technique"];
+  return systems.find(x=>new RegExp(`\\b${x}\\b`,"i").test(text))||"";
+}
+function inferTitle(text){
+  const explicit=labelledValue(text,["session title","title","session"]);
+  if(explicit) return explicit;
+  const line=text.split(/\n/).map(x=>x.trim()).find(x=>x && !/^((today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|date\s*:|venue\s*:|squads?\s*:|focus\s*:|technical\s*:|system\s*:|total\s*:)/i.test(x));
+  return (line||"Imported session").replace(/^#+\s*/,"").slice(0,100);
+}
+function inferSquads(text){
+  const explicit=labelledValue(text,["squads?","group"]);
+  if(explicit) return explicit.split(/[,/&+]|\band\b/i).map(x=>x.trim()).filter(Boolean);
+  const known=[...new Set(appState.athletes.map(a=>a.squad).filter(Boolean))];
+  const found=known.filter(s=>text.toLowerCase().includes(s.toLowerCase()));
+  return found.length?found:(selectedSession()?.squads||[]);
+}
+function inferLiveSet(text){
+  const m=text.match(/\b(\d{1,2})\s*[x×]\s*(\d{2,4})\s*m?[^\n]{0,80}?(?:on|@|cycle|off)\s*(\d{1,2}:\d{2}|\d{2,3})\b/i);
+  if(!m) return null;
+  return {reps:Number(m[1]),distance:Number(m[2]),cycle:parseClockValue(m[3]),label:m[0].trim()};
+}
+function parseSessionFromChat(raw){
+  const text=String(raw||"").replace(/\r/g,"").trim();
+  if(!text) throw new Error("Paste a session first.");
+  const part=/\b(pm|afternoon|evening)\b/i.test(text)?"PM":"AM";
+  const venue=labelledValue(text,["venue","pool","location"]);
+  const technical=labelledValue(text,["technical focus","technical","focus","key cue","cue"]);
+  return {
+    id:uid("session"),session_date:parseImportDate(text),day_part:part,
+    venue:venue||selectedSession()?.venue||"",title:inferTitle(text),squads:inferSquads(text),
+    planned_distance:estimateDistance(text),primary_system:inferSystem(text),technical_focus:technical,
+    workout:text,step_number:null,previous_session_id:selectedSession()?.id||null,status:"planned",updated_at:nowIso(),
+    live_set:inferLiveSet(text)
+  };
+}
+function renderSessionImportPreview(){
+  const box=$("sessionImportPreview");
+  if(!box) return;
+  const d=importedSessionDraft;
+  if(!d){box.className="session-import-preview help";box.textContent="Nothing parsed yet.";return}
+  const live=d.live_set?`${d.live_set.reps} × ${d.live_set.distance} on ${d.live_set.cycle}`:"No repeating interval detected";
+  box.className="session-import-preview";
+  box.innerHTML=`<div class="import-preview-grid">
+    <div><span>Date</span><strong>${escapeHtml(sessionLabel(d))}</strong></div>
+    <div><span>Title</span><strong>${escapeHtml(d.title)}</strong></div>
+    <div><span>Squads</span><strong>${escapeHtml(d.squads.join(" + ")||"Check squad")}</strong></div>
+    <div><span>Venue</span><strong>${escapeHtml(d.venue||"Not found")}</strong></div>
+    <div><span>Distance</span><strong>${d.planned_distance?`${Number(d.planned_distance).toLocaleString()}m`:"Not calculated"}</strong></div>
+    <div><span>System</span><strong>${escapeHtml(d.primary_system||"Not found")}</strong></div>
+    <div><span>Technical cue</span><strong>${escapeHtml(d.technical_focus||"Not found")}</strong></div>
+    <div><span>Live timing</span><strong>${escapeHtml(live)}</strong></div>
+  </div><details><summary>Check full workout</summary><pre class="import-workout-preview">${escapeHtml(d.workout)}</pre></details>`;
+}
+async function saveImportedSession(openLive){
+  if(!importedSessionDraft) return;
+  const d=clone(importedSessionDraft);delete d.live_set;
+  upsertLocal("sessions",d);appState.settings.selected_session_id=d.id;queueRecord("sessions",d.id);saveState(appState);
+  await syncIfPossible();renderAll();
+  updateStatus("Session saved","good");
+  if(openLive && importedSessionDraft.live_set){
+    showView("times");
+    $("liveReps").value=importedSessionDraft.live_set.reps;
+    $("liveDistance").value=String(importedSessionDraft.live_set.distance);
+    $("liveCycle").value=importedSessionDraft.live_set.cycle;
+    $("timeLabel").value=importedSessionDraft.live_set.label;
+    $("timeSendoff").value=importedSessionDraft.live_set.cycle;
+    renderLiveBoard();
+  }else showView("deck");
+}
+
 function showView(id){
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === id));
   document.querySelectorAll(".nav-button").forEach(button => button.classList.toggle("active", button.dataset.view === id));
@@ -202,6 +322,22 @@ function renderDeckAthleteBrief(){
     <div class="deck-answer-row"><span>Latest note</span><strong>${recentCapture?escapeHtml(recentCapture.text_content):"No athlete note saved yet."}</strong></div>
     <div class="help" style="margin-top:10px">Meet entries, PBs, qualifying times and records are not loaded in this version yet.</div>`;
 }
+
+
+$("pasteSessionBtn").addEventListener("click",async()=>{
+  try{$("sessionPasteInput").value=await navigator.clipboard.readText();updateStatus("Session pasted","good")}
+  catch{updateStatus("Clipboard blocked — press and hold to paste","error")}
+});
+$("parseSessionBtn").addEventListener("click",()=>{
+  try{
+    importedSessionDraft=parseSessionFromChat($("sessionPasteInput").value);
+    renderSessionImportPreview();
+    $("saveImportedSessionBtn").disabled=false;$("runImportedSessionBtn").disabled=false;
+    updateStatus("Session picked up — check preview","good");
+  }catch(error){updateStatus(error.message,"error")}
+});
+$("saveImportedSessionBtn").addEventListener("click",()=>saveImportedSession(false));
+$("runImportedSessionBtn").addEventListener("click",()=>saveImportedSession(true));
 
 $("copyWorkoutBtn").addEventListener("click", async () => {
   try{
@@ -1115,7 +1251,7 @@ async function syncIfPossible(){
 window.addEventListener("online",syncIfPossible);
 
 function renderAll(){
-  renderMode();renderSessionPicker();renderOverview();renderDeck();renderAttendance();
+  renderMode();renderSessionPicker();renderOverview();renderDeck();renderSessionImportPreview();renderAttendance();
   populateAthleteSelect("captureAthlete",true);populateAthleteSelect("timeAthlete",false);populateAthleteSelect("deckAthlete",false);
   if($("deckAthlete")){ $("deckAthlete").onchange=renderDeckAthleteBrief; renderDeckAthleteBrief(); }
   renderReview();renderCaptures();renderPaceReference();renderTimedSets();renderStopwatchLaps();renderManualTimes();renderSessions();

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Version 1.3 Deck</title>
+  <title>McLay Swimming OS — Version 1.4 Chat Import</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -13,7 +13,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 1.3 Deck · phone-first poolside update</div>
+      <div class="header-subtitle">Version 1.4 Chat Import · paste a session from chat · review · run poolside</div>
     </div>
     <div class="status-cluster">
       <span id="dataModeBadge" class="badge warning">Local only</span>
@@ -43,6 +43,25 @@
           </div>
           <select id="deckSessionPicker" class="compact-control"></select>
         </div>
+
+        <article class="card session-import-card">
+          <details id="sessionImportDetails">
+            <summary><strong>Paste tomorrow’s session from chat</strong><span>Turn a message into a deck-ready session</span></summary>
+            <div class="session-import-body">
+              <textarea id="sessionPasteInput" class="poolside-note session-paste-input" placeholder="Paste the full session message here — date, squad, focus, sets, intervals and cues."></textarea>
+              <div class="button-row">
+                <button id="pasteSessionBtn" class="secondary">Paste from clipboard</button>
+                <button id="parseSessionBtn">Pick up session</button>
+              </div>
+              <div id="sessionImportPreview" class="session-import-preview help">Nothing parsed yet.</div>
+              <div class="button-row import-save-actions">
+                <button id="saveImportedSessionBtn" disabled>Save to dashboard</button>
+                <button id="runImportedSessionBtn" class="secondary" disabled>Save &amp; run live</button>
+              </div>
+              <div class="help">The complete pasted workout is kept. Check the preview before saving; anything uncertain can still be edited under Sessions.</div>
+            </div>
+          </details>
+        </article>
 
         <div class="deck-grid">
           <article class="card deck-hero">
