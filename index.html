@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Coach Workflow Connected</title>
+  <title>McLay Swimming OS — Full Coach Workflow</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260724-coach3">
+  <link rel="stylesheet" href="styles.css?v=20260724-coach32">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -34,15 +34,23 @@
   </style>
 
   <style id="coach-v3-overrides">
-    .pb-complete-table{min-width:900px}.pb-event-cell strong{font-size:1rem;color:#123a5b}.pb-course-block{display:grid;gap:.3rem;min-width:260px}.pb-time-line{display:flex;align-items:baseline;gap:.45rem;flex-wrap:wrap}.pb-time-line strong{font-size:1.05rem}.pb-meta{font-size:.72rem;color:#567}.pathway-compact{display:flex;gap:.3rem;align-items:center;flex-wrap:wrap}.pathway-achieved{font-size:.68rem;background:#e4f5e8;color:#195c2b;border:1px solid #96cda2;border-radius:999px;padding:.16rem .4rem;font-weight:800}.pathway-next{font-size:.73rem;background:#eef5fb;color:#123a5b;border-left:4px solid #123a5b;padding:.3rem .45rem;border-radius:.25rem}.pathway-missing{font-size:.7rem;color:#789}.points-badge{font-weight:900;color:#123a5b}.complete-results-note{padding:.55rem;background:#edf7fb;border-radius:.5rem;margin-bottom:.55rem}.lane-assignment-editor{display:grid;gap:.45rem;margin:.75rem 0}.lane-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.45rem}.lane-editor-athlete{display:grid;grid-template-columns:1fr 72px;gap:.35rem;align-items:center;background:#eef5f9;padding:.45rem;border-radius:.5rem}.lane-editor-athlete strong{font-size:.78rem}.timing-lane-group{position:relative}.timing-lane-group[data-offset]:before{content:attr(data-offset);position:absolute;right:.55rem;top:.45rem;background:#123a5b;color:white;border-radius:999px;padding:.15rem .45rem;font-size:.68rem;font-weight:900}.planning-columns{align-items:start}.planning-list-item,.testset-list-item{padding:.65rem;border:1px solid #c5dbe8;border-radius:.55rem;margin-bottom:.5rem}.planning-list-item.active,.testset-list-item.active{border:2px solid #123a5b;background:#eef6fb}.planning-list-actions,.testset-list-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}.results-import-wrap{max-height:65vh}.match-good{color:#17612d;font-weight:800}.match-hold{color:#9a5b00;font-weight:800}.match-duplicate{color:#8a2424;font-weight:800}.import-match-select{min-width:180px}.test-attempt-row{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(80px,.4fr));gap:.5rem;padding:.5rem 0;border-bottom:1px solid #dbe8ef}.full-history-table{max-height:none!important;overflow:visible!important}.athlete-hub-section.complete-pbs{grid-column:1/-1}.athlete-hub-section .table-wrap{max-height:none;overflow-x:auto}.source-warning{background:#fff4dc;border-left:5px solid #d58b00;padding:.65rem;border-radius:.35rem}
-    @media(max-width:980px){.sidebar [data-view="planning"],.sidebar [data-view="testsets"],.sidebar [data-view="resultsupdate"]{display:none}.pb-complete-table{min-width:760px}.pb-course-block{min-width:220px}.planning-columns{grid-template-columns:1fr}.lane-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.results-import-wrap{max-height:55vh}.athlete-hub-section.complete-pbs{overflow:hidden}}
+    .pb-complete-table{min-width:900px}.pb-event-cell strong{font-size:1rem;color:#123a5b}.pb-course-block{display:grid;gap:.3rem;min-width:260px}.pb-time-line{display:flex;align-items:baseline;gap:.45rem;flex-wrap:wrap}.pb-time-line strong{font-size:1.05rem}.pb-meta{font-size:.72rem;color:#567}.pathway-compact{display:flex;gap:.3rem;align-items:center;flex-wrap:wrap}.pathway-achieved{font-size:.68rem;background:#e4f5e8;color:#195c2b;border:1px solid #96cda2;border-radius:999px;padding:.16rem .4rem;font-weight:800}.pathway-next{font-size:.73rem;background:#eef5fb;color:#123a5b;border-left:4px solid #123a5b;padding:.3rem .45rem;border-radius:.25rem}.pathway-missing{font-size:.7rem;color:#789}.points-badge{font-weight:900;color:#123a5b}.complete-results-note{padding:.55rem;background:#edf7fb;border-radius:.5rem;margin-bottom:.55rem}.lane-assignment-editor{display:grid;gap:.45rem;margin:.75rem 0}.lane-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.45rem}.lane-editor-athlete{display:grid;grid-template-columns:1fr 72px;gap:.35rem;align-items:center;background:#eef5f9;padding:.45rem;border-radius:.5rem}.lane-editor-athlete strong{font-size:.78rem}.timing-lane-group{position:relative}.timing-lane-group[data-offset]:before{content:attr(data-offset);position:absolute;right:.55rem;top:.45rem;background:#123a5b;color:white;border-radius:999px;padding:.15rem .45rem;font-size:.68rem;font-weight:900}.planning-columns{align-items:start}.planning-list-item,.testset-list-item{padding:.65rem;border:1px solid #c5dbe8;border-radius:.55rem;margin-bottom:.5rem}.planning-list-item.active,.testset-list-item.active{border:2px solid #123a5b;background:#eef6fb}.planning-list-actions,.testset-list-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}.results-import-wrap{max-height:65vh}.match-good{color:#17612d;font-weight:800}.match-hold{color:#9a5b00;font-weight:800}.match-duplicate{color:#8a2424;font-weight:800}.import-match-select{min-width:180px}.test-attempt-row{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(80px,.4fr));gap:.5rem;padding:.5rem 0;border-bottom:1px solid #dbe8ef}.full-history-table{max-height:none!important;overflow:visible!important}.athlete-hub-section.complete-pbs{grid-column:1/-1}.athlete-hub-section .table-wrap{max-height:none;overflow-x:auto}.source-warning{background:#fff4dc;border-left:5px solid #d58b00;padding:.65rem;border-radius:.35rem}.pb-mobile-list{display:none}.pb-mobile-card{border:1px solid #c9dce7;border-radius:.7rem;padding:.65rem;margin:.55rem 0;background:#fff}.pb-mobile-event{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding-bottom:.45rem;border-bottom:2px solid #dceaf1}.pb-mobile-event strong{font-size:1.05rem;color:#123a5b}.pb-mobile-course{display:grid;grid-template-columns:34px minmax(0,1fr);gap:.45rem;align-items:start;padding:.55rem 0;border-bottom:1px solid #e2edf2}.pb-mobile-course:last-child{border-bottom:0}.pb-course-label{background:#123a5b;color:#fff;border-radius:.35rem;padding:.25rem .2rem;text-align:center;font-size:.72rem;font-weight:900}.pb-mobile-course .pb-course-block{min-width:0}.pb-mobile-course .pathway-compact{display:grid;grid-template-columns:1fr;align-items:start}.pb-mobile-course .pathway-next{display:block;white-space:normal}.pb-mobile-course .pb-meta{white-space:normal}
+    @media(max-width:980px){.sidebar [data-view="planning"],.sidebar [data-view="testsets"],.sidebar [data-view="resultsupdate"]{display:flex}.pb-desktop-table{display:none!important}.pb-mobile-list{display:block}.pb-complete-table{min-width:0}.pb-course-block{min-width:0}.planning-columns{grid-template-columns:1fr}.lane-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.results-import-wrap{max-height:55vh}.athlete-hub-section.complete-pbs{overflow:visible}}
+  </style>
+
+  <style id="coach-v32-overrides">
+    .mobile-manage-grid,.session-block-grid,.target-meet-grid,.goal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+    .manage-item,.race-result-card,.goal-card,.meet-plan-row,.photo-transcription-card,.complete-set-summary{border:1px solid #c7dae5;border-radius:.7rem;background:#fff;padding:.7rem;margin:.55rem 0;box-shadow:0 1px 3px rgba(18,58,91,.06)}
+    .manage-item-head,.race-result-head,.goal-card-head,.meet-plan-head{display:flex;justify-content:space-between;align-items:flex-start;gap:.65rem}.manage-item strong,.race-result-card strong,.goal-card strong{color:#123a5b}.manage-actions,.inline-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}.manage-actions button,.inline-actions button{min-height:40px}.race-result-head{padding-bottom:.45rem;border-bottom:1px solid #dce8ef}.result-time-stack{display:grid;gap:.15rem;text-align:right}.result-time-stack strong{font-size:1.08rem}.result-place{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:.2rem .45rem;border-radius:999px;background:#eef6fb;color:#123a5b;font-weight:900}.goal-card{border-left:5px solid #123a5b}.meet-plan-row{display:grid;grid-template-columns:minmax(105px,.35fr) minmax(170px,1fr) minmax(80px,.35fr);gap:.55rem;align-items:center}.meet-plan-row.target{border-color:#123a5b;background:#eef6fb}.photo-transcription-card img{width:100%;max-height:260px;object-fit:contain;background:#eef5f9;border-radius:.5rem}.transcript-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f4f8fa;border:1px solid #d5e4ec;border-radius:.45rem;padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem}.complete-set-summary{border-left:6px solid #123a5b;background:#f7fbfd}.complete-set-summary h4{margin:.1rem 0 .45rem}.split-chips span,.split-chip{display:inline-flex;align-items:center;background:#eef5f9;border:1px solid #bfd4e0;border-radius:999px;padding:.18rem .4rem;font-size:.7rem}.data-source-note{font-size:.7rem;color:#567}.compact-result-meta{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-top:.35rem}
+    .session-block-card{border:2px solid #b8cfdd;border-radius:.75rem;background:#f8fbfd;padding:.7rem;margin:.65rem 0}.session-block-card.active{border-color:#123a5b;background:#eef6fb}.session-block-head{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}.session-block-items{margin:.55rem 0;display:grid;gap:.35rem}.session-block-item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:.45rem;align-items:center;padding:.45rem;background:white;border-radius:.45rem;border:1px solid #d5e4ec}.session-block-item .order{font-weight:900;color:#123a5b;text-align:center}.session-block-actions,.record-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}.session-block-actions button,.record-actions button{min-height:38px}.block-editor{border-top:2px solid #d5e4ec;margin-top:.75rem;padding-top:.75rem}.block-line-help{font-size:.72rem;color:#567}.block-runner{border-left:6px solid #123a5b}.block-runner-steps{display:flex;gap:.35rem;overflow-x:auto;padding:.45rem 0}.block-runner-step{min-width:170px;padding:.5rem;border:1px solid #b8cfdd;border-radius:.5rem;background:white}.block-runner-step.active{background:#123a5b;color:white}.photo-transcription-row,.manage-row,.result-manage-row{border:1px solid #c7dae5;border-radius:.6rem;padding:.65rem;margin:.5rem 0;background:#fff}.photo-transcription-row img{width:100%;max-height:260px;object-fit:contain;background:#eef5f9;border-radius:.4rem}.meet-pill{display:inline-block;border:1px solid #7faec9;background:#eef6fb;color:#123a5b;border-radius:999px;padding:.2rem .5rem;font-size:.72rem;font-weight:800;margin:.12rem}.meet-pill.target{background:#123a5b;color:#fff}.last-target-meet{border:3px solid #123a5b}.target-meet-result{display:grid;grid-template-columns:minmax(130px,1fr) repeat(4,minmax(70px,.45fr));gap:.45rem;padding:.45rem 0;border-bottom:1px solid #dce8ef}.target-meet-result:last-child{border-bottom:0}.points-live{font-weight:900;color:#123a5b}.split-chips{display:flex;gap:.3rem;flex-wrap:wrap}.split-chip{background:#eef5f9;border:1px solid #bfd4e0;border-radius:999px;padding:.18rem .4rem;font-size:.7rem}.goal-split-table{display:grid;gap:.35rem}.goal-split-row{display:grid;grid-template-columns:80px 1fr 100px;gap:.45rem;align-items:center}.goal-split-row input{margin:0}.manage-jump-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}.manage-jump-grid button{min-height:52px}.phone-action-bar{position:sticky;bottom:0;z-index:10;background:rgba(255,255,255,.95);padding:.5rem;border-top:1px solid #bdd2df;display:flex;gap:.4rem;flex-wrap:wrap}.record-points{font-size:.72rem;font-weight:900;color:#123a5b}.complete-history-table{max-height:none!important}.complete-history-table table{min-width:980px}.test-segment-preview{display:grid;gap:.3rem}.test-segment{padding:.45rem;border-left:4px solid #123a5b;background:#eef6fb;border-radius:.35rem}.upcoming-meets-card{grid-column:1/-1}
+    @media(max-width:980px){.meet-plan-row{grid-template-columns:1fr}.manage-item-head,.race-result-head,.goal-card-head,.meet-plan-head{align-items:stretch}.result-time-stack{text-align:left}.mobile-manage-grid,.session-block-grid,.target-meet-grid,.goal-grid{grid-template-columns:1fr}.manage-jump-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.session-list-actions,.planning-list-actions,.testset-list-actions,.record-actions{display:flex!important}.session-list-actions button,.planning-list-actions button,.testset-list-actions button,.record-actions button{flex:1;min-width:86px;min-height:44px}.target-meet-result{grid-template-columns:1fr 1fr}.target-meet-result strong{grid-column:1/-1}.goal-split-row{grid-template-columns:65px 1fr 88px}.athlete-desktop-layout{display:block}.athlete-profile-editor{margin-top:.75rem}.complete-history-table{overflow-x:auto}.session-block-item{grid-template-columns:24px minmax(0,1fr)}.session-block-item .record-actions{grid-column:1/-1}.photo-transcription-row img{max-height:200px}}
   </style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · five-second poolside workflow · v3</div>
+      <div class="header-subtitle">Plan → coach → log → review · complete phone management · v3.2</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -65,6 +73,7 @@
       <button data-view="finish" class="nav-button">Finish session</button>
       <button data-view="times" class="nav-button">Timed sets</button>
       <button data-view="sessions" class="nav-button">Sessions</button>
+      <button data-view="manage" class="nav-button">Manage</button>
       <button data-view="planning" class="nav-button">Planning</button>
       <button data-view="testsets" class="nav-button">Test sets</button>
       <button data-view="athletes" class="nav-button">Athletes</button>
@@ -231,6 +240,20 @@
           </div>
         </div>
 
+        <article class="card session-photo-card">
+          <div class="card-heading"><div><div class="eyebrow">Training-session source</div><h3>Photograph and transcribe the session board</h3></div><span class="badge">Plan or actual</span></div>
+          <div class="form-grid"><div><label>Photo purpose</label><select id="sessionPhotoPurpose"><option value="planned">Planned session</option><option value="actual">Actual session completed</option></select></div><div><label>Take or choose photo</label><input id="sessionPhotoInput" type="file" accept="image/*" capture="environment"></div></div>
+          <p class="help">The original photo stays attached as source proof. Automatic transcription uses the optional Supabase function; otherwise paste the transcript below and structure it into complete blocks.</p>
+          <div id="sessionPhotoInbox"></div>
+          <label>Paste/check transcript</label><textarea id="sessionPhotoTranscript" class="large-textarea" placeholder="Warm-up...
+Pre-set...
+Skill block...
+Main set...
+Post-set...
+Warm-down..."></textarea>
+          <div class="button-row"><button id="structurePhotoTranscriptBtn" type="button">Build session blocks</button><button id="transcribeLatestPhotoBtn" type="button" class="secondary">Try automatic transcription</button></div>
+        </article>
+
         <article class="card phone-action-card">
           <h3>Fast poolside capture</h3>
           <label for="captureAthlete">Attach to</label>
@@ -312,6 +335,12 @@
             <p>Use the stopwatch, tap in one time at a time, or paste a group of times.</p>
           </div>
         </div>
+
+        <article id="liveBlockRunnerCard" class="card block-runner" hidden>
+          <div class="card-heading"><div><div class="eyebrow">Whole block runner</div><h3 id="liveBlockRunnerTitle">Session block</h3></div><span id="liveBlockRunnerCounter" class="badge">1 / 1</span></div>
+          <div id="liveBlockRunnerSteps" class="block-runner-steps"></div>
+          <div class="button-row"><button id="liveBlockPrevBtn" class="secondary" type="button">Previous line</button><button id="liveBlockNextBtn" type="button">Next line</button><button id="liveBlockCloseBtn" class="secondary" type="button">Close block</button></div>
+        </article>
 
         <article class="card live-set-card">
           <div class="card-heading">
@@ -439,17 +468,21 @@
         <div class="view-heading"><div><h2>Season &amp; weekly planning</h2><p>The durable chain behind every session: season → week → session → review.</p></div></div>
         <div class="two-column planning-columns">
           <article class="card"><div class="card-heading"><h3>Season plans</h3><button id="newSeasonBtn" type="button">New</button></div><div id="seasonPlanList"></div></article>
-          <article class="card"><h3 id="seasonEditorHeading">Season plan</h3><input id="seasonPlanId" type="hidden"><label>Name</label><input id="seasonPlanName"><div class="form-grid"><div><label>Start</label><input id="seasonPlanStart" type="date"></div><div><label>End</label><input id="seasonPlanEnd" type="date"></div></div><label>Overarching goal</label><textarea id="seasonPlanGoal"></textarea><label>Status</label><select id="seasonPlanStatus"><option value="active">Active</option><option value="completed">Completed</option><option value="archived">Archived</option></select><div class="button-row"><button id="saveSeasonBtn">Save season</button><button id="deleteSeasonBtn" class="danger-button">Delete</button></div></article>
+          <article class="card"><h3 id="seasonEditorHeading">Season plan</h3><input id="seasonPlanId" type="hidden"><label>Name</label><input id="seasonPlanName"><div class="form-grid"><div><label>Start</label><input id="seasonPlanStart" type="date"></div><div><label>End</label><input id="seasonPlanEnd" type="date"></div></div><label>Overarching goal</label><textarea id="seasonPlanGoal"></textarea><label>Season meets — one per line</label><textarea id="seasonPlanMeets" placeholder="2026-07-17 | Canterbury SC Champs | SCM | target | Parakiore
+2026-08-28 | South Island SC Champs | SCM | stepping stone | Moana Pool"></textarea><p class="help">Format: date | meet | course | target/stepping stone | venue. This season-plan list is the source of truth.</p><label>Status</label><select id="seasonPlanStatus"><option value="active">Active</option><option value="completed">Completed</option><option value="archived">Archived</option></select><div class="button-row"><button id="saveSeasonBtn">Save season</button><button id="deleteSeasonBtn" class="danger-button">Delete</button></div></article>
           <article class="card"><div class="card-heading"><h3>Weekly plans</h3><button id="newWeekBtn" type="button">New</button></div><div id="weeklyPlanList"></div></article>
           <article class="card"><h3 id="weekEditorHeading">Weekly plan</h3><input id="weeklyPlanId" type="hidden"><label>Season</label><select id="weeklyPlanSeason"></select><div class="form-grid"><div><label>Week starting</label><input id="weeklyPlanStart" type="date"></div><div><label>Week number</label><input id="weeklyPlanNumber" type="number" min="1"></div></div><label>Phase</label><input id="weeklyPlanPhase"><label>Objective</label><textarea id="weeklyPlanObjective"></textarea><label>Carry forward</label><textarea id="weeklyPlanCarry"></textarea><label>Coach notes</label><textarea id="weeklyPlanNotes"></textarea><div class="button-row"><button id="saveWeekBtn">Save week</button><button id="deleteWeekBtn" class="danger-button">Delete</button></div></article>
         </div>
+        <article class="card upcoming-meets-card"><div class="eyebrow">Season-plan meets</div><h3>Upcoming and recent target meets</h3><div id="seasonUpcomingMeets"></div></article>
       </section>
 
       <section id="testsets" class="view">
         <div class="view-heading"><div><h2>Test sets portal</h2><p>Create once, load into a session, time the squad and compare every attempt.</p></div><button id="newTestSetBtn">New test set</button></div>
         <div class="two-column">
           <article class="card"><h3>Test set library</h3><div id="testSetList"></div></article>
-          <article class="card"><h3 id="testSetEditorHeading">Test set</h3><input id="testSetId" type="hidden"><label>Name</label><input id="testSetName"><div class="form-grid"><div><label>Category</label><input id="testSetCategory" placeholder="Threshold / speed / skills"></div><div><label>Stroke</label><select id="testSetStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option><option>Choice</option></select></div><div><label>Distance</label><input id="testSetDistance" type="number"></div><div><label>Reps</label><input id="testSetReps" type="number"></div><div><label>Interval</label><input id="testSetInterval" placeholder="1:00"></div><div><label>Recovery</label><input id="testSetRecovery" placeholder="2 min between rounds"></div></div><label>Description / protocol</label><textarea id="testSetDescription"></textarea><label>Equipment — comma separated</label><input id="testSetEquipment" placeholder="fins, paddles"><label>Measurements — comma separated</label><input id="testSetMeasurements" placeholder="time, split, stroke count, heart rate"><label>Squad versions — one per line: Squad: version</label><textarea id="testSetSquadVersions"></textarea><label>Adapted versions — one per line: Swimmer/group: version</label><textarea id="testSetAdaptedVersions"></textarea><label><input id="testSetActive" type="checkbox" checked> Active</label><div class="button-row"><button id="saveTestSetBtn">Save</button><button id="duplicateTestSetBtn" class="secondary">Duplicate</button><button id="archiveTestSetBtn" class="danger-button">Archive</button></div></article>
+          <article class="card"><h3 id="testSetEditorHeading">Test set</h3><input id="testSetId" type="hidden"><label>Name</label><input id="testSetName"><div class="form-grid"><div><label>Category</label><input id="testSetCategory" placeholder="Threshold / speed / skills"></div><div><label>Stroke</label><select id="testSetStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option><option>Choice</option></select></div><div><label>Distance</label><input id="testSetDistance" type="number"></div><div><label>Reps</label><input id="testSetReps" type="number"></div><div><label>Interval</label><input id="testSetInterval" placeholder="1:00"></div><div><label>Recovery</label><input id="testSetRecovery" placeholder="2 min between rounds"></div></div><label>Description / protocol</label><textarea id="testSetDescription"></textarea><label>Complete set lines — one per line</label><textarea id="testSetSegments" placeholder="4 x 200 | 3:30 | Freestyle | smooth to threshold
+4 x 100 | 1:40 | Freestyle | hold rhythm
+6 x 50 | :55 | Freestyle | race finish"></textarea><p class="help">A test set can contain the entire multi-part set. Run live moves through each line in order.</p><label>Equipment — comma separated</label><input id="testSetEquipment" placeholder="fins, paddles"><label>Measurements — comma separated</label><input id="testSetMeasurements" placeholder="time, split, stroke count, heart rate"><label>Squad versions — one per line: Squad: version</label><textarea id="testSetSquadVersions"></textarea><label>Adapted versions — one per line: Swimmer/group: version</label><textarea id="testSetAdaptedVersions"></textarea><label><input id="testSetActive" type="checkbox" checked> Active</label><div class="button-row"><button id="saveTestSetBtn">Save</button><button id="duplicateTestSetBtn" class="secondary">Duplicate</button><button id="archiveTestSetBtn" class="secondary">Archive</button><button id="deleteTestSetBtn" class="danger-button">Delete</button></div></article>
         </div>
         <article class="card"><div class="card-heading"><div><div class="eyebrow">Selected test set</div><h3>Attempt history</h3></div><button id="loadTestSetTimingBtn">Load into timing</button></div><div id="testSetAttemptHistory"></div></article>
       </section>
@@ -493,6 +526,21 @@
             </div>
           </article>
         </div>
+        <article class="card">
+          <div class="card-heading"><div><div class="eyebrow">Complete session structure</div><h3>Warm-up → pre-set → skill → main set → post-set → warm-down</h3></div><button id="newSessionBlockBtn" type="button">Add block</button></div>
+          <p class="help">Each block holds all of its lines. Example: one Main Set containing 4×200, 4×100 and 6×50, with one Run entire block button.</p>
+          <div id="sessionBlockList"></div>
+          <div id="sessionBlockEditor" class="block-editor" hidden>
+            <input id="sessionBlockId" type="hidden">
+            <div class="form-grid"><div><label>Block type</label><select id="sessionBlockType"><option value="warm_up">Warm-up</option><option value="pre_set">Pre-set</option><option value="skill">Skill block</option><option value="main_set">Main set</option><option value="post_set">Post-set / reinforcement</option><option value="warm_down">Warm-down</option><option value="other">Other</option></select></div><div><label>Block title</label><input id="sessionBlockTitle" placeholder="Aerobic power progression"></div></div>
+            <label>Set lines — one per line</label><textarea id="sessionBlockItems" class="large-textarea" placeholder="4 x 200 | 3:30 | Freestyle | smooth to threshold
+4 x 100 | 1:40 | Freestyle | race rhythm
+6 x 50 | :55 | Freestyle | fast finish"></textarea>
+            <div class="block-line-help">Format: reps × distance | send-off | stroke/mode | instruction. Plain handwritten-style lines are also preserved.</div>
+            <label>Coach notes</label><textarea id="sessionBlockNotes"></textarea>
+            <div class="button-row"><button id="saveSessionBlockBtn" type="button">Save block</button><button id="duplicateSessionBlockBtn" class="secondary" type="button">Duplicate</button><button id="deleteSessionBlockBtn" class="danger-button" type="button">Delete</button><button id="cancelSessionBlockBtn" class="secondary" type="button">Close</button></div>
+          </div>
+        </article>
       </section>
 
       <section id="athletes" class="view">
@@ -564,18 +612,24 @@
           </article>
         </div>
 
+        <article class="card last-target-meet">
+          <div class="card-heading"><div><div class="eyebrow">Last target meet from the season plan</div><h3 id="lastTargetMeetTitle">No target meet matched</h3></div><span id="lastTargetMeetBadge" class="badge">Target meet</span></div>
+          <div id="lastTargetMeetResults"></div>
+        </article>
+
         <article class="card">
           <div class="card-heading">
             <div><div class="eyebrow">Official personal bests</div><h3>PB board</h3></div>
             <span class="badge">All LC + SC PBs shown</span>
             <select id="resultsCourseFilter" class="quick-hidden-select" aria-hidden="true" tabindex="-1"><option value="">All courses</option></select>
           </div>
-          <div class="table-wrap">
-            <table>
+          <div class="table-wrap pb-desktop-table">
+            <table class="pb-complete-table">
               <thead><tr><th>Event</th><th>Long course PB + next progression</th><th>Short course PB + next progression</th><th>Best points</th></tr></thead>
               <tbody id="resultsPbBody"></tbody>
             </table>
           </div>
+          <div id="resultsPbMobile" class="pb-mobile-list"></div>
         </article>
 
         <div class="two-column">
@@ -598,11 +652,18 @@
         </div>
 
         <article class="card">
+          <div class="card-heading"><div><div class="eyebrow">Race goals and pacing</div><h3>Generate and edit target splits</h3></div><button id="newRaceGoalBtn" type="button">New goal</button></div>
+          <div class="goal-grid"><div><label>Swimmer</label><select id="goalAthlete"></select></div><div><label>Course</label><select id="goalCourse"><option value="LCM">LCM</option><option value="SCM">SCM</option></select></div><div><label>Distance</label><input id="goalDistance" type="number" value="200"></div><div><label>Stroke</label><select id="goalStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option></select></div><div><label>Target time</label><input id="goalTargetTime" placeholder="1:56.00"></div><div><label>Split distance</label><select id="goalSplitDistance"><option value="25">25m</option><option value="50" selected>50m</option><option value="100">100m</option></select></div><div><label>Pacing method</label><select id="goalPaceMethod"><option value="pb_pattern">Use swimmer PB/race pattern</option><option value="coach_default">Coach default profile</option><option value="even">Even pace</option></select></div><div><label>Target basis</label><input id="goalBasis" placeholder="NZSC / Canterbury squad / coach goal"></div></div>
+          <div class="button-row"><button id="generateGoalSplitsBtn" type="button">Generate splits</button><button id="saveRaceGoalBtn" type="button">Save goal</button><button id="deleteRaceGoalBtn" class="danger-button" type="button">Delete goal</button></div>
+          <input id="raceGoalId" type="hidden"><div id="goalSplitEditor" class="goal-split-table"></div><div id="raceGoalList"></div>
+        </article>
+
+        <article class="card">
           <div class="eyebrow">Source history</div>
           <h3>Complete race history</h3>
-          <div class="table-wrap">
+          <div class="table-wrap complete-history-table">
             <table>
-              <thead><tr><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Round</th><th>Time</th><th>Place</th></tr></thead>
+              <thead><tr><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Round</th><th>Time</th><th>Points</th><th>Splits</th><th>Place</th></tr></thead>
               <tbody id="resultsHistoryBody"></tbody>
             </table>
           </div>
@@ -613,12 +674,25 @@
       <section id="resultsupdate" class="view">
         <div class="view-heading"><div><h2>Results update portal</h2><p>Manual entry or Team Manager file → preview → match swimmer → save → PBs and pathway refresh.</p></div></div>
         <div class="two-column">
-          <article class="card"><h3>Manual result</h3><div class="form-grid"><div><label>Swimmer</label><select id="manualResultAthlete"></select></div><div><label>Date</label><input id="manualResultDate" type="date"></div><div><label>Meet</label><input id="manualResultMeet"></div><div><label>Course</label><select id="manualResultCourse"><option value="LCM">LCM</option><option value="SCM">SCM</option></select></div><div><label>Distance</label><input id="manualResultDistance" type="number"></div><div><label>Stroke</label><select id="manualResultStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option></select></div><div><label>Time</label><input id="manualResultTime" placeholder="1:02.34"></div><div><label>Round</label><input id="manualResultRound" placeholder="Final / Heat"></div><div><label>WA points</label><input id="manualResultWa" type="number"></div><div><label>World Para points</label><input id="manualResultPara" type="number"></div></div><button id="saveManualResultBtn" class="full-width">Save result</button><div id="manualResultMessage" class="help"></div></article>
+          <article class="card"><h3>Manual result</h3><input id="manualResultId" type="hidden"><div class="form-grid"><div><label>Swimmer</label><select id="manualResultAthlete"></select></div><div><label>Date</label><input id="manualResultDate" type="date"></div><div><label>Meet</label><input id="manualResultMeet"></div><div><label>Course</label><select id="manualResultCourse"><option value="LCM">LCM</option><option value="SCM">SCM</option></select></div><div><label>Distance</label><input id="manualResultDistance" type="number"></div><div><label>Stroke</label><select id="manualResultStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option></select></div><div><label>Time</label><input id="manualResultTime" placeholder="1:02.34"></div><div><label>Round</label><input id="manualResultRound" placeholder="Final / Heat"></div><div><label>WA points</label><input id="manualResultWa" type="number"></div><div><label>World Para points</label><input id="manualResultPara" type="number"></div><div><label>Place / medal</label><input id="manualResultPlace" placeholder="3 / Bronze"></div><div><label>Split distance</label><select id="manualResultSplitDistance"><option value="25">25m</option><option value="50" selected>50m</option><option value="100">100m</option></select></div></div><label>Splits — comma or line separated</label><textarea id="manualResultSplits" placeholder="27.4, 56.8, 1:26.4, 1:56.0"></textarea><label><input id="manualResultTargetMeet" type="checkbox"> This is a target-meet result</label><div class="button-row"><button id="saveManualResultBtn" class="full-width">Save result</button><button id="cancelManualResultBtn" class="secondary" type="button">Clear editor</button></div><div id="manualResultMessage" class="help"></div></article>
           <article class="card"><h3>Team Manager / results file</h3><label>Meet name fallback</label><input id="importMeetName"><label>Course fallback</label><select id="importCourse"><option value="">Use file</option><option value="LCM">LCM</option><option value="SCM">SCM</option></select><label>Choose CSV, TSV, TXT, SD3, HY3 or ZIP</label><input id="resultsFileInput" type="file" accept=".csv,.tsv,.txt,.sd3,.hy3,.zip"><div class="button-row"><button id="parseResultsFileBtn">Preview file</button><button id="clearResultsPreviewBtn" class="secondary">Clear</button></div><p class="help">CSV/TSV is read directly. ZIP exports are unpacked in the browser and the first CSV/TSV/SD3/HY3 result file is previewed. Fixed-width HY3/SD3 rows must pass swimmer matching before saving.</p><div id="resultImportSummary" class="help">No file loaded.</div></article>
         </div>
         <article class="card"><div class="card-heading"><div><div class="eyebrow">Import review</div><h3>Preview and swimmer matching</h3></div><button id="commitResultsImportBtn" disabled>Save accepted rows</button></div><div class="table-wrap results-import-wrap"><table><thead><tr><th>Use</th><th>Swimmer</th><th>Match</th><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Time</th><th>Points</th><th>Status</th></tr></thead><tbody id="resultsImportBody"></tbody></table></div></article>
-        <article class="card"><h3>Unmatched / held results</h3><div id="heldResultsList"></div></article>
+        <article class="card"><h3>Unmatched / held results</h3><div id="heldResultsList"></div></article><article class="card"><div class="card-heading"><div><div class="eyebrow">Coach-owned data</div><h3>Edit or delete manual/imported results</h3></div></div><div id="coachResultManagementList"></div></article>
       </section>
+      <section id="manage" class="view">
+        <div class="view-heading"><div><h2>Manage on phone</h2><p>Edit and delete sessions, blocks, test sets, attempts, timed data, results and photo transcripts without returning to desktop.</p></div></div>
+        <article class="card"><div class="manage-jump-grid"><button data-view-jump="sessions">Sessions &amp; blocks</button><button data-view-jump="planning">Season / week</button><button data-view-jump="testsets">Test sets</button><button data-view-jump="resultsupdate">Results data</button><button data-view-jump="capture">Session photos</button><button data-view-jump="times">Timed data</button></div></article>
+        <div class="mobile-manage-grid">
+          <article class="card"><h3>Sessions</h3><div id="manageSessionsList"></div></article>
+          <article class="card"><h3>Session blocks</h3><div id="manageBlocksList"></div></article>
+          <article class="card"><h3>Test sets</h3><div id="manageTestSetsList"></div></article>
+          <article class="card"><h3>Test attempts and timed data</h3><div id="manageTestDataList"></div></article>
+          <article class="card"><h3>Manual/imported results</h3><div id="manageResultsList"></div></article>
+          <article class="card"><h3>Session photos/transcripts</h3><div id="managePhotosList"></div></article>
+        </div>
+      </section>
+
       <section id="reports" class="view">
         <div class="view-heading"><div><h2>Review &amp; evidence</h2><p>Season direction → weekly intention → session evidence → next response.</p></div></div>
         <article class="card">
@@ -675,11 +749,12 @@
     <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
     <button data-view="athletes" class="nav-button"><span>◎</span>Swimmers</button>
     <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
+    <button data-view="manage" class="nav-button"><span>⚙</span>Manage</button>
     <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
   </nav>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260724-coach3"></script>
+  <script src="app.js?v=20260724-coach32"></script>
 </body>
 </html>
