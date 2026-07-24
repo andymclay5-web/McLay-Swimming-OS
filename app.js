@@ -7,6 +7,13 @@ const TOKEN_KEY = "mclay_swimming_v1_auth";
 const DB_NAME = "mclay_swimming_v1_media";
 const MEDIA_STORE = "media";
 const CLOUD_TABLES = ["athletes","sessions","attendance","captures","timed_sets","session_reviews"];
+const RESULT_VIEWS = [
+  "results_athlete_overview",
+  "results_pb_board",
+  "results_event_history",
+  "nzsc_2026_gap_matrix",
+  "scwc_target_gap_matrix"
+];
 
 const $ = id => document.getElementById(id);
 const clone = obj => JSON.parse(JSON.stringify(obj));
@@ -29,7 +36,7 @@ function saveState(next){
   window.appState = next;
 }
 window.appState = loadState();
-for(const key of ["athletes","sessions","attendance","captures","timed_sets","session_reviews","pending"]){
+for(const key of ["athletes","sessions","attendance","captures","timed_sets","session_reviews","pending",...RESULT_VIEWS]){
   if(!Array.isArray(window.appState[key])) window.appState[key]=[];
 }
 if(!window.appState.settings) window.appState.settings={selected_session_id:"",organisation_id:"",user_id:""};
@@ -365,18 +372,78 @@ function profileLines(value){
   if(value&&typeof value==="object") return Object.entries(value).map(([k,v])=>`${k}: ${v}`).join("\n");
   return String(value||"");
 }
+function athleteResultOverview(athleteId){
+  return appState.results_athlete_overview.find(row=>row.athlete_id===athleteId)||null;
+}
+function athleteOfficialPbs(athleteId){
+  return appState.results_pb_board
+    .filter(row=>row.athlete_id===athleteId)
+    .sort((a,b)=>String(a.course).localeCompare(String(b.course))||Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke)));
+}
+function athleteNzscRows(athlete){
+  const rows=appState.nzsc_2026_gap_matrix.filter(row=>row.athlete_id===athlete.id);
+  const currentClasses=[athlete.current_s_class,athlete.current_sb_class,athlete.current_sm_class].filter(Boolean);
+  const paraRows=rows.filter(row=>row.para_class&&currentClasses.includes(row.para_class));
+  if(paraRows.length) return paraRows;
+  if(!athlete.date_of_birth) return rows;
+  const dob=new Date(`${athlete.date_of_birth}T12:00:00`);
+  if(Number.isNaN(dob.getTime())) return rows;
+  const now=new Date();
+  let age=now.getFullYear()-dob.getFullYear();
+  const birthdayPassed=(now.getMonth()>dob.getMonth())||(now.getMonth()===dob.getMonth()&&now.getDate()>=dob.getDate());
+  if(!birthdayPassed) age--;
+  const group=age>=17?"17 & Over":String(age);
+  return rows.filter(row=>row.age_group===group);
+}
+function athleteTargetRows(athlete){
+  const rows=appState.scwc_target_gap_matrix.filter(row=>row.athlete_id===athlete.id);
+  if(!athlete.date_of_birth) return rows;
+  const dob=new Date(`${athlete.date_of_birth}T12:00:00`);
+  if(Number.isNaN(dob.getTime())) return rows;
+  const now=new Date();
+  let age=now.getFullYear()-dob.getFullYear();
+  const birthdayPassed=(now.getMonth()>dob.getMonth())||(now.getMonth()===dob.getMonth()&&now.getDate()>=dob.getDate());
+  if(!birthdayPassed) age--;
+  return rows.filter(row=>{
+    if(row.programme==="SCWC Target 2032") return row.age_group===String(Math.min(Math.max(age,13),16));
+    if(age<=16) return row.age_group==="16 & Under";
+    if(age===17) return row.age_group==="17";
+    if(age<=20) return row.age_group==="18-20";
+    return row.age_group==="Open";
+  });
+}
+function formatGap(row,label){
+  const gap=Number(row.gap_seconds);
+  const status=gap<=0?"met":`needs ${gap.toFixed(2)}s`;
+  return `${label} ${row.distance} ${row.stroke} — ${row.pb_time} / ${row.qualifying_time_text||row.target_time_text} (${status})`;
+}
 function athleteQuickHtml(athlete){
   if(!athlete)return `<div class="help">Choose a swimmer.</div>`;
   const recentSet=appState.timed_sets.filter(t=>t.athlete_id===athlete.id).sort(byUpdated)[0];
   const recentCapture=appState.captures.filter(c=>c.athlete_id===athlete.id&&c.text_content).sort(byUpdated)[0];
   const pace=athlete.legacy_pace;
+  const overview=athleteResultOverview(athlete.id);
+  const pbs=athleteOfficialPbs(athlete.id);
+  const nzsc=athleteNzscRows(athlete).sort((a,b)=>Number(a.gap_seconds)-Number(b.gap_seconds));
+  const targets=athleteTargetRows(athlete).sort((a,b)=>Number(a.gap_seconds)-Number(b.gap_seconds));
   const nextMeet=athlete.next_meet_name?`${athlete.next_meet_name}${athlete.next_meet_date?` · ${formatDate(athlete.next_meet_date)}`:""}`:"Not loaded";
+  const pbText=pbs.length
+    ? pbs.slice(0,10).map(row=>`${row.course} ${row.distance} ${row.stroke} — ${row.pb_time}`).join("\n")
+    : profileLines(athlete.pb_summary)||"Not loaded";
+  const gapLines=[
+    ...nzsc.slice(0,5).map(row=>formatGap(row,`NZSC${row.para_class?` ${row.para_class}`:row.age_group?` ${row.age_group}`:""}`)),
+    ...targets.slice(0,3).map(row=>formatGap(row,`${row.programme.replace("SCWC ","")} ${row.age_group||""}`.trim()))
+  ];
+  const gapText=gapLines.length?gapLines.join("\n"):profileLines(athlete.qualifying_summary)||"Not loaded";
+  const classification=[athlete.current_s_class,athlete.current_sb_class,athlete.current_sm_class].filter(Boolean).join(" / ");
   return `
     <div class="deck-answer-row"><span>Squad / primary events</span><strong>${escapeHtml(athlete.squad||"—")}${(athlete.primary_events||[]).length?` · ${escapeHtml(athlete.primary_events.join(", "))}`:""}</strong></div>
+    ${classification?`<div class="deck-answer-row"><span>Current classification</span><strong>${escapeHtml(classification)}</strong></div>`:""}
+    <div class="deck-answer-row"><span>Official results</span><strong>${overview?`${overview.official_result_count||0} races · ${overview.personal_best_count||0} PBs${overview.latest_meet?` · latest ${escapeHtml(overview.latest_meet)}`:""}`:"Not loaded"}</strong></div>
     <div class="deck-answer-row"><span>Current plan focus</span><strong>${escapeHtml(athlete.current_focus||athlete.technical_focus||"Not entered yet.")}</strong></div>
     <div class="deck-answer-row"><span>Next meet</span><strong>${escapeHtml(nextMeet)}</strong></div>
-    <div class="deck-answer-row"><span>PBs</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.pb_summary)||"Not loaded")}</strong></div>
-    <div class="deck-answer-row"><span>Qualifying times / gaps</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.qualifying_summary)||"Not loaded")}</strong></div>
+    <div class="deck-answer-row"><span>Official PBs</span><strong class="profile-lines">${escapeHtml(pbText)}</strong></div>
+    <div class="deck-answer-row"><span>Standards / gaps</span><strong class="profile-lines">${escapeHtml(gapText)}</strong></div>
     <div class="deck-answer-row"><span>Relevant records</span><strong class="profile-lines">${escapeHtml(profileLines(athlete.records_summary)||"Not loaded")}</strong></div>
     <div class="deck-answer-row"><span>Planned adaptations</span><strong>${escapeHtml(athlete.modifications||"None entered")}</strong></div>
     <div class="deck-answer-row"><span>Latest timed set</span><strong>${recentSet?`${escapeHtml(recentSet.set_label||"Timed set")} · best ${formatSeconds(recentSet.best)} · avg ${formatSeconds(recentSet.average)}`:"No timed set saved yet."}</strong></div>
@@ -1152,12 +1219,85 @@ function renderAthletes(){
   const filter=$("athleteSquadFilter").value;
   const rows=appState.athletes.filter(a=>!filter||a.squad===filter).sort((a,b)=>a.squad.localeCompare(b.squad)||a.full_name.localeCompare(b.full_name));
   $("athleteTableBody").innerHTML=rows.map(a=>{
-    const stats=attendanceStats(a.id);const timed=appState.timed_sets.filter(t=>t.athlete_id===a.id).length;
-    return `<tr data-edit-athlete="${escapeHtml(a.id)}"><td><button class="link-button" data-edit-athlete="${escapeHtml(a.id)}"><strong>${escapeHtml(a.full_name)}</strong></button></td><td>${escapeHtml(a.squad)}</td><td>${stats.marked?`${stats.here}/${stats.marked}`:"—"}</td><td>${escapeHtml(a.current_focus||"Not entered")}</td><td>${escapeHtml(a.next_meet_name||"Not entered")}</td><td>${timed}</td></tr>`;
+    const stats=attendanceStats(a.id);
+    const timed=appState.timed_sets.filter(t=>t.athlete_id===a.id).length;
+    const overview=athleteResultOverview(a.id);
+    const latest=overview?.latest_result_date?`${formatDate(overview.latest_result_date)}${overview.latest_meet?` · ${overview.latest_meet}`:""}`:"—";
+    return `<tr data-edit-athlete="${escapeHtml(a.id)}"><td><button class="link-button" data-edit-athlete="${escapeHtml(a.id)}"><strong>${escapeHtml(a.full_name)}</strong></button></td><td>${escapeHtml(a.squad)}</td><td>${stats.marked?`${stats.here}/${stats.marked}`:"—"}</td><td>${overview?.personal_best_count??"—"}</td><td>${escapeHtml(latest)}</td><td>${escapeHtml(a.current_focus||"Not entered")}</td><td>${timed}</td></tr>`;
   }).join("");
   document.querySelectorAll('[data-edit-athlete]').forEach(el=>el.onclick=()=>fillAthleteProfile(appState.athletes.find(a=>a.id===el.dataset.editAthlete)));
   const editorAthlete=appState.athletes.find(a=>a.id===$("profileAthleteId").value)||quick;if(editorAthlete)fillAthleteProfile(editorAthlete);
 }
+
+function resultDateLabel(value){
+  if(!value)return "—";
+  try{return formatDate(value)}catch{return value}
+}
+function selectedResultsAthlete(){
+  const id=$("resultsAthlete")?.value;
+  return appState.athletes.find(a=>a.id===id)||appState.athletes[0]||null;
+}
+function resultRowsHtml(rows,emptyText){
+  return rows.length?rows.map(row=>`<div class="list-item"><strong>${escapeHtml(row.title)}</strong>${row.meta?`<div class="list-meta">${escapeHtml(row.meta)}</div>`:""}</div>`).join(""):`<div class="help">${escapeHtml(emptyText)}</div>`;
+}
+function renderResults(){
+  if(!$("resultsAthlete"))return;
+  const current=$("resultsAthlete").value;
+  const athletes=appState.athletes.slice().sort((a,b)=>a.full_name.localeCompare(b.full_name));
+  $("resultsAthlete").innerHTML=athletes.map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===current?"selected":""}>${escapeHtml(a.full_name)} — ${escapeHtml(a.squad||"Unassigned")}</option>`).join("");
+  const athlete=selectedResultsAthlete();
+  if(!athlete){
+    $("resultsAthleteSummary").innerHTML='<div class="help">No athlete loaded.</div>';
+    return;
+  }
+  $("resultsAthlete").value=athlete.id;
+  const overview=athleteResultOverview(athlete.id);
+  const pbs=athleteOfficialPbs(athlete.id);
+  const course=$("resultsCourseFilter")?.value||"";
+  const shownPbs=pbs.filter(row=>!course||row.course===course);
+  const nzsc=athleteNzscRows(athlete).sort((a,b)=>Number(a.gap_seconds)-Number(b.gap_seconds));
+  const targets=athleteTargetRows(athlete).sort((a,b)=>Number(a.gap_seconds)-Number(b.gap_seconds));
+  const history=appState.results_event_history
+    .filter(row=>row.athlete_id===athlete.id)
+    .sort((a,b)=>String(b.result_date||"").localeCompare(String(a.result_date||""))||String(b.result_id||"").localeCompare(String(a.result_id||"")));
+
+  $("resultsKpiAthletes").textContent=appState.results_athlete_overview.filter(row=>Number(row.official_result_count)>0).length;
+  $("resultsKpiPbs").textContent=appState.results_pb_board.length;
+  $("resultsKpiQualified").textContent=appState.nzsc_2026_gap_matrix.filter(row=>row.qualification_status==="QUALIFIED").length;
+  $("resultsKpiTargets").textContent=appState.scwc_target_gap_matrix.filter(row=>row.target_status==="TARGET MET").length;
+
+  const classes=[athlete.current_s_class,athlete.current_sb_class,athlete.current_sm_class].filter(Boolean).join(" / ");
+  $("resultsAthleteSummary").innerHTML=`
+    <div class="deck-answer-row"><span>Squad</span><strong>${escapeHtml(athlete.squad||"Unassigned")}</strong></div>
+    ${classes?`<div class="deck-answer-row"><span>Classification</span><strong>${escapeHtml(classes)}</strong></div>`:""}
+    <div class="deck-answer-row"><span>Official races</span><strong>${overview?.official_result_count||0}</strong></div>
+    <div class="deck-answer-row"><span>Official PBs</span><strong>${overview?.personal_best_count||pbs.length}</strong></div>
+    <div class="deck-answer-row"><span>Latest meet</span><strong>${escapeHtml(overview?.latest_meet||"No result loaded")}${overview?.latest_result_date?` · ${resultDateLabel(overview.latest_result_date)}`:""}</strong></div>`;
+
+  $("resultsPbBody").innerHTML=shownPbs.length?shownPbs.map(row=>`<tr>
+    <td>${escapeHtml(row.course)}</td><td>${row.distance}</td><td>${escapeHtml(row.stroke)}</td>
+    <td><strong>${escapeHtml(row.pb_time)}</strong></td><td>${resultDateLabel(row.pb_date)}</td>
+    <td>${escapeHtml(row.meet_name||"—")}</td><td>${row.club_rank??"—"}</td>
+  </tr>`).join(""):`<tr><td colspan="7">No official PBs for this filter.</td></tr>`;
+
+  $("resultsNzscGaps").innerHTML=resultRowsHtml(nzsc.slice(0,20).map(row=>({
+    title:`${row.distance} ${row.stroke} · PB ${row.pb_time} · QT ${row.qualifying_time_text}`,
+    meta:`${row.para_class||row.age_group||"Standard"} · ${Number(row.gap_seconds)<=0?`qualified by ${Math.abs(Number(row.gap_seconds)).toFixed(2)}s`:`needs ${Number(row.gap_seconds).toFixed(2)}s`}`
+  })),"No matching NZSC standard rows.");
+
+  $("resultsTargetGaps").innerHTML=resultRowsHtml(targets.slice(0,20).map(row=>({
+    title:`${row.programme.replace("SCWC ","")} · ${row.distance} ${row.stroke}`,
+    meta:`${row.age_group||"Standard"} · PB ${row.pb_time} · target ${row.target_time_text} · ${Number(row.gap_seconds)<=0?`met by ${Math.abs(Number(row.gap_seconds)).toFixed(2)}s`:`needs ${Number(row.gap_seconds).toFixed(2)}s`}`
+  })),"No matching SCWC target rows.");
+
+  $("resultsHistoryBody").innerHTML=history.length?history.slice(0,40).map(row=>`<tr>
+    <td>${resultDateLabel(row.result_date)}</td><td>${escapeHtml(row.meet_name||"—")}</td>
+    <td>${escapeHtml(row.course||"—")}</td><td>${row.distance} ${escapeHtml(row.stroke)}</td>
+    <td>${escapeHtml(row.round||"—")}</td><td><strong>${escapeHtml(row.result_time_text)}</strong></td>
+    <td>${row.official_place??"—"}</td>
+  </tr>`).join(""):`<tr><td colspan="7">No official race history loaded.</td></tr>`;
+}
+
 function weekBounds(dateString){
   const d=new Date(`${dateString}T12:00:00`);const day=(d.getDay()+6)%7;const start=new Date(d);start.setDate(d.getDate()-day);const end=new Date(start);end.setDate(start.getDate()+6);return {start:localIsoDate(start),end:localIsoDate(end)};
 }
@@ -1185,6 +1325,12 @@ $("athleteSquadFilter").addEventListener("change",renderAthletes);
 $("athleteQuickSelect").addEventListener("change",()=>{$("athleteQuickProfile").innerHTML=athleteQuickHtml(appState.athletes.find(a=>a.id===$("athleteQuickSelect").value))});
 $("saveAthleteProfileBtn").addEventListener("click",saveAthleteProfile);
 $("reportAthlete").addEventListener("change",renderReports);
+if($("resultsAthlete"))$("resultsAthlete").addEventListener("change",renderResults);
+if($("resultsCourseFilter"))$("resultsCourseFilter").addEventListener("change",renderResults);
+if($("refreshResultsBtn"))$("refreshResultsBtn").addEventListener("click",async()=>{
+  try{await pullCloud();renderAll();updateStatus("Results refreshed","good")}
+  catch(error){console.error(error);updateStatus("Results refresh failed","error")}
+});
 
 function loadSettings(){
   const config=getConfig();
@@ -1344,6 +1490,10 @@ async function pullCloud(){
     const rows=await cloudFetch(`/rest/v1/${table}?select=*&organisation_id=eq.${encodeURIComponent(org)}`);
     appState[table]=mergeCollection(appState[table],rows);
   }
+  for(const view of RESULT_VIEWS){
+    const rows=await cloudFetch(`/rest/v1/${view}?select=*&organisation_id=eq.${encodeURIComponent(org)}`);
+    appState[view]=rows.map(stripCloudFields);
+  }
   saveState(appState);
 }
 async function syncNow(){
@@ -1365,7 +1515,7 @@ function renderAll(){
   populateAthleteSelect("captureAthlete",true);populateAthleteSelect("timeAthlete",false);populateAthleteSelect("deckAthlete",false);
   if($("deckAthlete")){ $("deckAthlete").onchange=renderDeckAthleteBrief; renderDeckAthleteBrief(); }
   renderReview();renderCaptures();renderPaceReference();renderTimedSets();renderStopwatchLaps();renderManualTimes();renderSessions();
-  renderAthletes();renderReports();loadSettings();fillSessionEditor(selectedSession());renderLiveBoard();
+  renderAthletes();renderResults();renderReports();loadSettings();fillSessionEditor(selectedSession());renderLiveBoard();
 }
 const clockSession=currentSessionFromClock();
 if(clockSession){appState.settings.selected_session_id=clockSession.id;saveState(appState)}

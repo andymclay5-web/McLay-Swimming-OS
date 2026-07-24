@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Version 1.5 Workflow & Evidence</title>
+  <title>McLay Swimming OS — Results Connected</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -13,7 +13,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 1.5 Workflow & Evidence · plan → coach → log → review</div>
+      <div class="header-subtitle">Plan → coach → log → review · official results connected</div>
     </div>
     <div class="status-cluster">
       <span id="dataModeBadge" class="badge warning">Local only</span>
@@ -31,6 +31,7 @@
       <button data-view="times" class="nav-button">Timed sets</button>
       <button data-view="sessions" class="nav-button">Sessions</button>
       <button data-view="athletes" class="nav-button">Athletes</button>
+      <button data-view="results" class="nav-button">Results</button>
       <button data-view="reports" class="nav-button">Reports</button>
       <button data-view="settings" class="nav-button">Connection</button>
     </aside>
@@ -420,7 +421,7 @@
         <div class="athlete-desktop-layout">
           <div class="card table-wrap athlete-table-card">
             <table>
-              <thead><tr><th>Athlete</th><th>Squad</th><th>Attendance</th><th>Current focus</th><th>Next meet</th><th>Timed sets</th></tr></thead>
+              <thead><tr><th>Athlete</th><th>Squad</th><th>Attendance</th><th>Official PBs</th><th>Latest result</th><th>Current focus</th><th>Timed sets</th></tr></thead>
               <tbody id="athleteTableBody"></tbody>
             </table>
           </div>
@@ -439,13 +440,79 @@
               <div><label>Date</label><input id="profileNextMeetDate" type="date"></div>
             </div>
             <label>Venue</label><input id="profileNextMeetVenue">
-            <label>PBs — one per line</label><textarea id="profilePbs" placeholder="100 Free SC — 58.42"></textarea>
-            <label>Qualifying times / gaps — one per line</label><textarea id="profileQualifying" placeholder="100 Free NZSC — needs 0.84"></textarea>
+            <label>Legacy PB notes — optional fallback</label><textarea id="profilePbs" placeholder="Official PBs now load automatically from Supabase"></textarea>
+            <label>Legacy qualifying notes — optional fallback</label><textarea id="profileQualifying" placeholder="Official standards and gaps now load automatically"></textarea>
             <label>Relevant records — one per line</label><textarea id="profileRecords"></textarea>
             <label>Private coach notes</label><textarea id="profileCoachNotes"></textarea>
             <button id="saveAthleteProfileBtn" class="full-width">Save coach profile</button>
           </article>
         </div>
+      </section>
+
+      <section id="results" class="view">
+        <div class="view-heading">
+          <div><h2>Results &amp; standards</h2><p>Official PBs, race history and standards pulled directly from Supabase.</p></div>
+          <button id="refreshResultsBtn" class="secondary">Refresh results</button>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="card">
+            <div class="eyebrow">Live database</div>
+            <div class="kpi-grid">
+              <div><strong id="resultsKpiAthletes">0</strong><span>athletes with results</span></div>
+              <div><strong id="resultsKpiPbs">0</strong><span>official PBs</span></div>
+              <div><strong id="resultsKpiQualified">0</strong><span>NZSC standards met</span></div>
+              <div><strong id="resultsKpiTargets">0</strong><span>target standards met</span></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <label for="resultsAthlete">Swimmer</label>
+            <select id="resultsAthlete" class="large-select"></select>
+            <div id="resultsAthleteSummary" class="deck-athlete-brief"></div>
+          </article>
+        </div>
+
+        <article class="card">
+          <div class="card-heading">
+            <div><div class="eyebrow">Official personal bests</div><h3>PB board</h3></div>
+            <select id="resultsCourseFilter" class="compact-control">
+              <option value="">All courses</option>
+              <option value="SCM">SCM</option>
+              <option value="LCM">LCM</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Course</th><th>Distance</th><th>Stroke</th><th>PB</th><th>Date</th><th>Meet</th><th>Club rank</th></tr></thead>
+              <tbody id="resultsPbBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <div class="two-column">
+          <article class="card">
+            <div class="eyebrow">2026 NZ Short Course</div>
+            <h3>Qualifying gaps</h3>
+            <div id="resultsNzscGaps"></div>
+          </article>
+          <article class="card">
+            <div class="eyebrow">SCWC pathway</div>
+            <h3>Target squad gaps</h3>
+            <div id="resultsTargetGaps"></div>
+          </article>
+        </div>
+
+        <article class="card">
+          <div class="eyebrow">Source history</div>
+          <h3>Recent official races</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Round</th><th>Time</th><th>Place</th></tr></thead>
+              <tbody id="resultsHistoryBody"></tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <section id="reports" class="view">
