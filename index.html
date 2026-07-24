@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Poolside Connected</title>
+  <title>McLay Swimming OS — Coach Workflow Connected</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260724-poolside2">
+  <link rel="stylesheet" href="styles.css?v=20260724-coach3">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -32,12 +32,17 @@
     }
     @media(max-width:430px){.timing-lane-swimmers{grid-template-columns:1fr 1fr}.live-channel-head h4{font-size:.75rem}.live-athlete-name{font-size:.88rem}.live-channel-meta label{font-size:.62rem}.active-context-bar select{font-size:.8rem}}
   </style>
+
+  <style id="coach-v3-overrides">
+    .pb-complete-table{min-width:900px}.pb-event-cell strong{font-size:1rem;color:#123a5b}.pb-course-block{display:grid;gap:.3rem;min-width:260px}.pb-time-line{display:flex;align-items:baseline;gap:.45rem;flex-wrap:wrap}.pb-time-line strong{font-size:1.05rem}.pb-meta{font-size:.72rem;color:#567}.pathway-compact{display:flex;gap:.3rem;align-items:center;flex-wrap:wrap}.pathway-achieved{font-size:.68rem;background:#e4f5e8;color:#195c2b;border:1px solid #96cda2;border-radius:999px;padding:.16rem .4rem;font-weight:800}.pathway-next{font-size:.73rem;background:#eef5fb;color:#123a5b;border-left:4px solid #123a5b;padding:.3rem .45rem;border-radius:.25rem}.pathway-missing{font-size:.7rem;color:#789}.points-badge{font-weight:900;color:#123a5b}.complete-results-note{padding:.55rem;background:#edf7fb;border-radius:.5rem;margin-bottom:.55rem}.lane-assignment-editor{display:grid;gap:.45rem;margin:.75rem 0}.lane-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.45rem}.lane-editor-athlete{display:grid;grid-template-columns:1fr 72px;gap:.35rem;align-items:center;background:#eef5f9;padding:.45rem;border-radius:.5rem}.lane-editor-athlete strong{font-size:.78rem}.timing-lane-group{position:relative}.timing-lane-group[data-offset]:before{content:attr(data-offset);position:absolute;right:.55rem;top:.45rem;background:#123a5b;color:white;border-radius:999px;padding:.15rem .45rem;font-size:.68rem;font-weight:900}.planning-columns{align-items:start}.planning-list-item,.testset-list-item{padding:.65rem;border:1px solid #c5dbe8;border-radius:.55rem;margin-bottom:.5rem}.planning-list-item.active,.testset-list-item.active{border:2px solid #123a5b;background:#eef6fb}.planning-list-actions,.testset-list-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}.results-import-wrap{max-height:65vh}.match-good{color:#17612d;font-weight:800}.match-hold{color:#9a5b00;font-weight:800}.match-duplicate{color:#8a2424;font-weight:800}.import-match-select{min-width:180px}.test-attempt-row{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(80px,.4fr));gap:.5rem;padding:.5rem 0;border-bottom:1px solid #dbe8ef}.full-history-table{max-height:none!important;overflow:visible!important}.athlete-hub-section.complete-pbs{grid-column:1/-1}.athlete-hub-section .table-wrap{max-height:none;overflow-x:auto}.source-warning{background:#fff4dc;border-left:5px solid #d58b00;padding:.65rem;border-radius:.35rem}
+    @media(max-width:980px){.sidebar [data-view="planning"],.sidebar [data-view="testsets"],.sidebar [data-view="resultsupdate"]{display:none}.pb-complete-table{min-width:760px}.pb-course-block{min-width:220px}.planning-columns{grid-template-columns:1fr}.lane-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.results-import-wrap{max-height:55vh}.athlete-hub-section.complete-pbs{overflow:hidden}}
+  </style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · five-second poolside workflow · v2</div>
+      <div class="header-subtitle">Plan → coach → log → review · five-second poolside workflow · v3</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -60,8 +65,11 @@
       <button data-view="finish" class="nav-button">Finish session</button>
       <button data-view="times" class="nav-button">Timed sets</button>
       <button data-view="sessions" class="nav-button">Sessions</button>
+      <button data-view="planning" class="nav-button">Planning</button>
+      <button data-view="testsets" class="nav-button">Test sets</button>
       <button data-view="athletes" class="nav-button">Athletes</button>
       <button data-view="results" class="nav-button">Results</button>
+      <button data-view="resultsupdate" class="nav-button">Results update</button>
       <button data-view="reports" class="nav-button">Reports</button>
       <button data-view="settings" class="nav-button">Connection</button>
     </aside>
@@ -320,7 +328,9 @@
             <div><label>Distance</label><select id="liveDistance" class="large-select"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></div>
             <div><label>Stroke</label><select id="liveStroke" class="large-select"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option></select></div>
             <div><label>Master cycle</label><input id="liveCycle" class="large-input" inputmode="decimal" value="1:00"></div>
-            <div><label>Wave gap</label><select id="liveWaveGap" class="large-select"><option value="0">No gap</option><option value="5" selected>5 seconds</option><option value="10">10 seconds</option></select></div>
+            <div><label>Lane gap</label><select id="liveWaveGap" class="large-select"><option value="0">No gap</option><option value="5" selected>5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20">20 seconds</option></select></div>
+            <div><label>Lanes in use</label><input id="liveLaneCount" class="large-input" type="number" min="1" max="12" value="1"></div>
+            <div><label>Test set</label><select id="liveTestSet" class="large-select"><option value="">Normal timed set</option></select></div>
           </div>
           <div class="button-row timing-roster-row">
             <button id="applyWaveGapBtn" class="secondary">Apply wave gap</button>
@@ -334,6 +344,7 @@
             <div><span>Next departure</span><strong id="liveCountdown">1:00.0</strong></div>
           </div>
 
+          <div id="laneAssignmentEditor" class="lane-assignment-editor"></div>
           <div id="liveChannelGrid" class="live-channel-grid"></div>
 
           <div class="live-master-actions">
@@ -342,7 +353,7 @@
             <button id="liveResetBtn" class="secondary">Reset</button>
             <button id="liveSaveBtn" disabled>Save results</button>
           </div>
-          <div class="help">The active session and squad roster loads automatically. Tap Finish beside each swimmer; no poolside swimmer setup is required.</div>
+          <div class="help">The active session and squad roster loads automatically. Lane 1 starts at 0; each later lane starts by the selected lane gap. Tap Finish beside each swimmer.</div>
         </article>
 
         <details class="manual-timing-tools">
@@ -423,6 +434,25 @@
         </article>
       </section>
 
+
+      <section id="planning" class="view">
+        <div class="view-heading"><div><h2>Season &amp; weekly planning</h2><p>The durable chain behind every session: season → week → session → review.</p></div></div>
+        <div class="two-column planning-columns">
+          <article class="card"><div class="card-heading"><h3>Season plans</h3><button id="newSeasonBtn" type="button">New</button></div><div id="seasonPlanList"></div></article>
+          <article class="card"><h3 id="seasonEditorHeading">Season plan</h3><input id="seasonPlanId" type="hidden"><label>Name</label><input id="seasonPlanName"><div class="form-grid"><div><label>Start</label><input id="seasonPlanStart" type="date"></div><div><label>End</label><input id="seasonPlanEnd" type="date"></div></div><label>Overarching goal</label><textarea id="seasonPlanGoal"></textarea><label>Status</label><select id="seasonPlanStatus"><option value="active">Active</option><option value="completed">Completed</option><option value="archived">Archived</option></select><div class="button-row"><button id="saveSeasonBtn">Save season</button><button id="deleteSeasonBtn" class="danger-button">Delete</button></div></article>
+          <article class="card"><div class="card-heading"><h3>Weekly plans</h3><button id="newWeekBtn" type="button">New</button></div><div id="weeklyPlanList"></div></article>
+          <article class="card"><h3 id="weekEditorHeading">Weekly plan</h3><input id="weeklyPlanId" type="hidden"><label>Season</label><select id="weeklyPlanSeason"></select><div class="form-grid"><div><label>Week starting</label><input id="weeklyPlanStart" type="date"></div><div><label>Week number</label><input id="weeklyPlanNumber" type="number" min="1"></div></div><label>Phase</label><input id="weeklyPlanPhase"><label>Objective</label><textarea id="weeklyPlanObjective"></textarea><label>Carry forward</label><textarea id="weeklyPlanCarry"></textarea><label>Coach notes</label><textarea id="weeklyPlanNotes"></textarea><div class="button-row"><button id="saveWeekBtn">Save week</button><button id="deleteWeekBtn" class="danger-button">Delete</button></div></article>
+        </div>
+      </section>
+
+      <section id="testsets" class="view">
+        <div class="view-heading"><div><h2>Test sets portal</h2><p>Create once, load into a session, time the squad and compare every attempt.</p></div><button id="newTestSetBtn">New test set</button></div>
+        <div class="two-column">
+          <article class="card"><h3>Test set library</h3><div id="testSetList"></div></article>
+          <article class="card"><h3 id="testSetEditorHeading">Test set</h3><input id="testSetId" type="hidden"><label>Name</label><input id="testSetName"><div class="form-grid"><div><label>Category</label><input id="testSetCategory" placeholder="Threshold / speed / skills"></div><div><label>Stroke</label><select id="testSetStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option><option>Choice</option></select></div><div><label>Distance</label><input id="testSetDistance" type="number"></div><div><label>Reps</label><input id="testSetReps" type="number"></div><div><label>Interval</label><input id="testSetInterval" placeholder="1:00"></div><div><label>Recovery</label><input id="testSetRecovery" placeholder="2 min between rounds"></div></div><label>Description / protocol</label><textarea id="testSetDescription"></textarea><label>Equipment — comma separated</label><input id="testSetEquipment" placeholder="fins, paddles"><label>Measurements — comma separated</label><input id="testSetMeasurements" placeholder="time, split, stroke count, heart rate"><label>Squad versions — one per line: Squad: version</label><textarea id="testSetSquadVersions"></textarea><label>Adapted versions — one per line: Swimmer/group: version</label><textarea id="testSetAdaptedVersions"></textarea><label><input id="testSetActive" type="checkbox" checked> Active</label><div class="button-row"><button id="saveTestSetBtn">Save</button><button id="duplicateTestSetBtn" class="secondary">Duplicate</button><button id="archiveTestSetBtn" class="danger-button">Archive</button></div></article>
+        </div>
+        <article class="card"><div class="card-heading"><div><div class="eyebrow">Selected test set</div><h3>Attempt history</h3></div><button id="loadTestSetTimingBtn">Load into timing</button></div><div id="testSetAttemptHistory"></div></article>
+      </section>
       <section id="sessions" class="view">
         <div class="view-heading"><div><h2>Sessions</h2><p>Every session label includes the day, AM/PM and date.</p></div><button id="newSessionBtn">New session</button></div>
         <div class="two-column">
@@ -438,13 +468,17 @@
               <div><label>AM / PM</label><select id="editSessionPart"><option>AM</option><option>PM</option></select></div>
               <div><label>Venue</label><input id="editSessionVenue"></div>
               <div><label>Planned distance</label><input id="editSessionDistance" type="number"></div>
+              <div><label>Lanes in use</label><input id="editSessionLaneCount" type="number" min="1" max="12" value="1"></div>
+              <div><label>Pool course</label><select id="editSessionPoolCourse"><option value="SCM">25m / SCM</option><option value="LCM">50m / LCM</option></select></div>
             </div>
             <label>Title</label><input id="editSessionTitle">
             <label>Squads — comma separated</label><input id="editSessionSquads">
             <label>Primary system</label><input id="editSessionSystem">
             <label>Technical focus</label><input id="editSessionTechnical">
             <div class="form-grid">
-              <div><label>Season</label><input id="editSessionSeason" placeholder="AquaGym Winter 2026"></div>
+              <div><label>Linked season plan</label><select id="editSessionSeasonPlan"></select></div>
+              <div><label>Linked weekly plan</label><select id="editSessionWeeklyPlan"></select></div>
+              <div><label>Season fallback</label><input id="editSessionSeason" placeholder="AquaGym Winter 2026"></div>
               <div><label>Week starting</label><input id="editSessionWeekStart" type="date"></div>
             </div>
             <label>Weekly phase</label><input id="editSessionWeekPhase" placeholder="Dives & turns / power + focus">
@@ -508,7 +542,7 @@
 
       <section id="results" class="view">
         <div class="view-heading">
-          <div><h2>Results &amp; standards</h2><p>Official PBs, race history and standards pulled directly from Supabase.</p></div>
+          <div><h2>Results &amp; standards</h2><p>Complete grouped PBs, full race history and the next progression for every event.</p></div>
           <button id="refreshResultsBtn" class="secondary">Refresh results</button>
         </div>
 
@@ -518,8 +552,8 @@
             <div class="kpi-grid">
               <div><strong id="resultsKpiAthletes">0</strong><span>athletes with results</span></div>
               <div><strong id="resultsKpiPbs">0</strong><span>official PBs</span></div>
-              <div><strong id="resultsKpiQualified">0</strong><span>NZSC standards met</span></div>
-              <div><strong id="resultsKpiTargets">0</strong><span>target standards met</span></div>
+              <div><strong id="resultsKpiQualified">0</strong><span>pathway standards loaded</span></div>
+              <div><strong id="resultsKpiTargets">0</strong><span>record comparisons loaded</span></div>
             </div>
           </article>
 
@@ -533,15 +567,12 @@
         <article class="card">
           <div class="card-heading">
             <div><div class="eyebrow">Official personal bests</div><h3>PB board</h3></div>
-            <select id="resultsCourseFilter" class="compact-control">
-              <option value="">All courses</option>
-              <option value="SCM">SCM</option>
-              <option value="LCM">LCM</option>
-            </select>
+            <span class="badge">All LC + SC PBs shown</span>
+            <select id="resultsCourseFilter" class="quick-hidden-select" aria-hidden="true" tabindex="-1"><option value="">All courses</option></select>
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Course</th><th>Distance</th><th>Stroke</th><th>PB</th><th>Date</th><th>Meet</th><th>Club rank</th></tr></thead>
+              <thead><tr><th>Event</th><th>Long course PB + next progression</th><th>Short course PB + next progression</th><th>Best points</th></tr></thead>
               <tbody id="resultsPbBody"></tbody>
             </table>
           </div>
@@ -568,7 +599,7 @@
 
         <article class="card">
           <div class="eyebrow">Source history</div>
-          <h3>Recent official races</h3>
+          <h3>Complete race history</h3>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Round</th><th>Time</th><th>Place</th></tr></thead>
@@ -578,6 +609,16 @@
         </article>
       </section>
 
+
+      <section id="resultsupdate" class="view">
+        <div class="view-heading"><div><h2>Results update portal</h2><p>Manual entry or Team Manager file → preview → match swimmer → save → PBs and pathway refresh.</p></div></div>
+        <div class="two-column">
+          <article class="card"><h3>Manual result</h3><div class="form-grid"><div><label>Swimmer</label><select id="manualResultAthlete"></select></div><div><label>Date</label><input id="manualResultDate" type="date"></div><div><label>Meet</label><input id="manualResultMeet"></div><div><label>Course</label><select id="manualResultCourse"><option value="LCM">LCM</option><option value="SCM">SCM</option></select></div><div><label>Distance</label><input id="manualResultDistance" type="number"></div><div><label>Stroke</label><select id="manualResultStroke"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option></select></div><div><label>Time</label><input id="manualResultTime" placeholder="1:02.34"></div><div><label>Round</label><input id="manualResultRound" placeholder="Final / Heat"></div><div><label>WA points</label><input id="manualResultWa" type="number"></div><div><label>World Para points</label><input id="manualResultPara" type="number"></div></div><button id="saveManualResultBtn" class="full-width">Save result</button><div id="manualResultMessage" class="help"></div></article>
+          <article class="card"><h3>Team Manager / results file</h3><label>Meet name fallback</label><input id="importMeetName"><label>Course fallback</label><select id="importCourse"><option value="">Use file</option><option value="LCM">LCM</option><option value="SCM">SCM</option></select><label>Choose CSV, TSV, TXT, SD3, HY3 or ZIP</label><input id="resultsFileInput" type="file" accept=".csv,.tsv,.txt,.sd3,.hy3,.zip"><div class="button-row"><button id="parseResultsFileBtn">Preview file</button><button id="clearResultsPreviewBtn" class="secondary">Clear</button></div><p class="help">CSV/TSV is read directly. ZIP exports are unpacked in the browser and the first CSV/TSV/SD3/HY3 result file is previewed. Fixed-width HY3/SD3 rows must pass swimmer matching before saving.</p><div id="resultImportSummary" class="help">No file loaded.</div></article>
+        </div>
+        <article class="card"><div class="card-heading"><div><div class="eyebrow">Import review</div><h3>Preview and swimmer matching</h3></div><button id="commitResultsImportBtn" disabled>Save accepted rows</button></div><div class="table-wrap results-import-wrap"><table><thead><tr><th>Use</th><th>Swimmer</th><th>Match</th><th>Date</th><th>Meet</th><th>Course</th><th>Event</th><th>Time</th><th>Points</th><th>Status</th></tr></thead><tbody id="resultsImportBody"></tbody></table></div></article>
+        <article class="card"><h3>Unmatched / held results</h3><div id="heldResultsList"></div></article>
+      </section>
       <section id="reports" class="view">
         <div class="view-heading"><div><h2>Review &amp; evidence</h2><p>Season direction → weekly intention → session evidence → next response.</p></div></div>
         <article class="card">
@@ -639,6 +680,6 @@
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260724-poolside2"></script>
+  <script src="app.js?v=20260724-coach3"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 "use strict";
 
-const CACHE_NAME = "mclay-swimming-os-poolside-v2-20260724";
+const CACHE_NAME = "mclay-swimming-os-coach-v3-20260724";
 const CORE = [
   "./",
   "./index.html",
-  "./styles.css?v=20260724-poolside2",
+  "./styles.css?v=20260724-coach3",
   "./config.js",
   "./seed.js",
-  "./app.js?v=20260724-poolside2",
+  "./app.js?v=20260724-coach3",
   "./manifest.webmanifest"
 ];
 
