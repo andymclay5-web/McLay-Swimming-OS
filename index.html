@@ -4,22 +4,52 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Results Connected</title>
+  <title>McLay Swimming OS — Poolside Connected</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260724-poolside2">
+
+  <style id="poolside-v2-overrides">
+    :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
+    .header-sync-button{display:none;background:#fff;color:var(--poolside-navy);border:2px solid #fff;padding:.55rem .8rem;font-weight:800;border-radius:.65rem}
+    .active-context-bar{position:sticky;top:0;z-index:35;display:flex;align-items:center;gap:1rem;padding:.55rem 1rem;background:#dfeef7;border-bottom:2px solid #98bdd4;box-shadow:0 2px 8px rgba(18,58,91,.12)}
+    .context-session,.context-squad{display:flex;align-items:center;gap:.55rem;min-width:0}.context-session{flex:1}.context-session select{width:100%;max-width:700px}.context-session>span,.context-squad>span{font-size:.72rem;font-weight:900;text-transform:uppercase;color:var(--poolside-navy)}
+    .context-squad-buttons,.quick-swimmer-buttons{display:flex;gap:.4rem;flex-wrap:wrap}
+    .context-squad-buttons button,.quick-swimmer-buttons button{min-height:38px;padding:.5rem .7rem;background:#fff;color:var(--poolside-navy);border:2px solid #7faec9;border-radius:.65rem;font-weight:800}
+    .context-squad-buttons button.active,.quick-swimmer-buttons button.active{background:var(--poolside-navy);color:#fff;border-color:var(--poolside-navy)}
+    #deckCueChips .chip,#sessionChips .chip,.deck-hero .chip{background:var(--poolside-navy)!important;color:#fff!important;border-color:var(--poolside-navy)!important;font-weight:800!important}
+    .quick-hidden-select{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
+    .plan-thread-row strong{white-space:normal}.plan-chain{display:grid;gap:.45rem;margin-bottom:.7rem}.plan-chain-row{padding:.55rem .7rem;background:#f0f6fa;border-left:5px solid var(--poolside-navy);border-radius:.35rem}.plan-chain-row span{display:block;font-size:.7rem;font-weight:900;text-transform:uppercase;color:#456}.plan-chain-row strong{display:block;color:#102f48}
+    .session-list-item{cursor:default}.session-list-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}.session-list-actions button{padding:.38rem .6rem}.danger-button{background:var(--poolside-danger)!important;color:#fff!important;border-color:var(--poolside-danger)!important}
+    .live-channel-grid{display:grid;gap:.7rem}.timing-lane-group{border:2px solid #9ebfd2;border-radius:.8rem;background:#f3f8fb;padding:.55rem}.timing-lane-head{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.45rem;color:var(--poolside-navy)}.timing-lane-head strong{font-size:1rem}.timing-lane-swimmers{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.45rem}.live-channel{min-width:0}.live-athlete-name{font-weight:900;font-size:1rem;color:var(--poolside-navy);line-height:1.15}.live-athlete-sub{font-size:.72rem;color:#567}.timing-roster-row{align-items:center}.timing-roster-row .help{margin:0}
+    .manual-timing-tools{margin:1rem 0;border:1px solid #bdd2df;border-radius:.7rem;background:#f8fbfd}.manual-timing-tools>summary{cursor:pointer;padding:.8rem 1rem;display:flex;justify-content:space-between;gap:.6rem}.manual-timing-tools>summary span{font-size:.78rem;color:#567}.manual-timing-tools-body{padding:.2rem .7rem .7rem}.manual-timing-tools-body>.card{margin-top:.55rem}.athlete-results-hub-card{margin-top:1rem}.athlete-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.athlete-hub-section{background:#f6fafc;border:1px solid #c5dbe8;border-radius:.65rem;padding:.75rem}.athlete-hub-section h4{margin:.1rem 0 .5rem}.mini-result{padding:.4rem 0;border-bottom:1px solid #dbe8ef}.mini-result:last-child{border-bottom:0}.mini-result strong,.mini-result span{display:block}.mini-result span{font-size:.78rem;color:#456}.results-pathway-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+    @media(max-width:980px){
+      .header-sync-button{display:inline-flex}.status-cluster #dataModeBadge{display:none}.active-context-bar{top:0;padding:.4rem .55rem;display:block}.context-session{margin-bottom:.4rem}.context-session>span,.context-squad>span{min-width:48px}.context-squad{align-items:flex-start}.context-squad-buttons{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.15rem}.context-squad-buttons button{white-space:nowrap;min-height:42px}
+      .mobile-nav{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(76px,1fr);overflow-x:auto;overscroll-behavior-inline:contain}.mobile-nav .nav-button{min-width:76px}
+      .quick-swimmer-buttons{flex-wrap:nowrap;overflow-x:auto;padding:.2rem 0 .5rem}.quick-swimmer-buttons button{white-space:nowrap;min-height:44px}
+      .timing-lane-swimmers{grid-template-columns:repeat(2,minmax(0,1fr));gap:.4rem}.live-channel{padding:.55rem}.live-channel-clock{font-size:1.8rem}.live-channel-meta{grid-template-columns:1fr 1fr}.live-channel-actions button{min-height:50px}
+      .athlete-hub-grid,.results-pathway-grid{grid-template-columns:1fr}.session-import-card{display:none}.manual-timing-tools:not([open]) .manual-timing-tools-body{display:none}.timing-context-card h3{font-size:1rem}
+    }
+    @media(max-width:430px){.timing-lane-swimmers{grid-template-columns:1fr 1fr}.live-channel-head h4{font-size:.75rem}.live-athlete-name{font-size:.88rem}.live-channel-meta label{font-size:.62rem}.active-context-bar select{font-size:.8rem}}
+  </style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · official results connected</div>
+      <div class="header-subtitle">Plan → coach → log → review · five-second poolside workflow · v2</div>
     </div>
     <div class="status-cluster">
+      <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
       <span id="dataModeBadge" class="badge warning">Local only</span>
       <span id="syncBadge" class="badge">Ready</span>
     </div>
   </header>
+
+  <div id="activeContextBar" class="active-context-bar">
+    <div class="context-session"><span>Session</span><select id="contextSessionPicker" class="compact-control"></select></div>
+    <div class="context-squad"><span>Squad</span><div id="contextSquadButtons" class="context-squad-buttons"></div></div>
+  </div>
 
   <div class="app-layout">
     <aside class="sidebar">
@@ -115,8 +145,8 @@
 
           <article class="card">
             <div class="eyebrow">Poolside quick answer</div>
-            <label for="deckAthlete">Swimmer</label>
-            <select id="deckAthlete" class="large-select"></select>
+            <div id="deckAthleteButtons" class="quick-swimmer-buttons"></div>
+            <select id="deckAthlete" class="large-select quick-hidden-select" aria-label="Selected swimmer"></select>
             <div id="deckAthleteBrief" class="deck-athlete-brief"></div>
           </article>
         </div>
@@ -181,7 +211,7 @@
         <div class="card">
           <div class="help attendance-rule"><strong>Poolside rule:</strong> not marked = absent. Tap Here or Modified only.</div>
           <div id="attendanceList"></div>
-          <button id="saveAttendanceBtn" class="full-width">Save attendance</button>
+          <button id="saveAttendanceBtn" class="full-width secondary" type="button" disabled>Saved automatically as you tap</button>
         </div>
       </section>
 
@@ -279,7 +309,7 @@
           <div class="card-heading">
             <div>
               <div class="eyebrow">Live interval board</div>
-              <h3>Master clock + three timing channels</h3>
+              <h3>Master clock + active squad timing board</h3>
             </div>
             <span id="liveSetStatus" class="badge deck-status">Ready</span>
           </div>
@@ -292,7 +322,11 @@
             <div><label>Master cycle</label><input id="liveCycle" class="large-input" inputmode="decimal" value="1:00"></div>
             <div><label>Wave gap</label><select id="liveWaveGap" class="large-select"><option value="0">No gap</option><option value="5" selected>5 seconds</option><option value="10">10 seconds</option></select></div>
           </div>
-          <button id="applyWaveGapBtn" class="secondary full-width">Apply wave gap to channels</button>
+          <div class="button-row timing-roster-row">
+            <button id="applyWaveGapBtn" class="secondary">Apply wave gap</button>
+            <button id="reloadTimingRosterBtn" class="secondary" type="button">Reload active roster</button>
+            <span id="timingRosterSummary" class="help"></span>
+          </div>
 
           <div class="live-master-board">
             <div><span>Elapsed</span><strong id="liveElapsed">0:00.0</strong></div>
@@ -308,9 +342,12 @@
             <button id="liveResetBtn" class="secondary">Reset</button>
             <button id="liveSaveBtn" disabled>Save results</button>
           </div>
-          <div class="help">Each channel can use its own cycle and wave offset. Finish times save to the swimmer record. Splits are also saved as a session note.</div>
+          <div class="help">The active session and squad roster loads automatically. Tap Finish beside each swimmer; no poolside swimmer setup is required.</div>
         </article>
 
+        <details class="manual-timing-tools">
+          <summary><strong>Manual / single-swimmer timing tools</strong><span>Fallback only — active squad timing is above</span></summary>
+          <div class="manual-timing-tools-body">
         <article class="card timing-context-card">
           <h3>Set context</h3>
           <label>Athlete</label>
@@ -377,6 +414,9 @@
           </article>
         </div>
 
+          </div>
+        </details>
+
         <article class="card">
           <h3>Saved timed sets</h3>
           <div id="timedSetList"></div>
@@ -403,10 +443,20 @@
             <label>Squads — comma separated</label><input id="editSessionSquads">
             <label>Primary system</label><input id="editSessionSystem">
             <label>Technical focus</label><input id="editSessionTechnical">
-            <label>Season / weekly-plan cue</label><input id="editSessionPlanCue" placeholder="Why this session sits here in the week">
+            <div class="form-grid">
+              <div><label>Season</label><input id="editSessionSeason" placeholder="AquaGym Winter 2026"></div>
+              <div><label>Week starting</label><input id="editSessionWeekStart" type="date"></div>
+            </div>
+            <label>Weekly phase</label><input id="editSessionWeekPhase" placeholder="Dives & turns / power + focus">
+            <label>Weekly objective</label><textarea id="editSessionWeekObjective" placeholder="What this week is building"></textarea>
+            <label>Carry-forward from last week</label><textarea id="editSessionWeekCarry" placeholder="What must continue from the previous week"></textarea>
+            <label>Session role in the week</label><input id="editSessionPlanCue" placeholder="Why this session sits here in the week">
             <label>Lead-in to the next session</label><input id="editSessionNextCue" placeholder="What tomorrow should build from today">
             <label>Workout</label><textarea id="editSessionWorkout" class="large-textarea"></textarea>
-            <button id="saveSessionBtn" class="full-width">Save session</button>
+            <div class="button-row">
+              <button id="saveSessionBtn" class="full-width">Save session</button>
+              <button id="deleteSessionBtn" class="danger-button" type="button">Delete session</button>
+            </div>
           </article>
         </div>
       </section>
@@ -431,6 +481,9 @@
             <div class="form-grid">
               <div><label>Date of birth</label><input id="profileDob" type="date"></div>
               <div><label>Primary events</label><input id="profileEvents" placeholder="100 Free, 200 IM"></div>
+              <div><label>Training lane / group</label><input id="profileTrainingLane" placeholder="1, 2, A, B"></div>
+              <div><label>Timing order</label><input id="profileTimingOrder" type="number" min="1" placeholder="1"></div>
+              <div><label>Sex for standards / records</label><select id="profileSex"><option value="">Not set</option><option value="F">Female</option><option value="M">Male</option></select></div>
             </div>
             <label>Current plan focus</label><input id="profileCurrentFocus">
             <label>Technical focus</label><input id="profileTechnicalFocus">
@@ -447,6 +500,10 @@
             <button id="saveAthleteProfileBtn" class="full-width">Save coach profile</button>
           </article>
         </div>
+        <article class="card athlete-results-hub-card">
+          <div class="card-heading"><div><div class="eyebrow">Connected swimmer page</div><h3 id="athleteResultsHubTitle">Results, pathway and records</h3></div><button id="openFullResultsBtn" class="secondary small" type="button">Open full results</button></div>
+          <div id="athleteResultsHub"></div>
+        </article>
       </section>
 
       <section id="results" class="view">
@@ -501,6 +558,12 @@
             <h3>Target squad gaps</h3>
             <div id="resultsTargetGaps"></div>
           </article>
+        </div>
+
+        <div class="three-column results-pathway-grid">
+          <article class="card"><div class="eyebrow">CWSC</div><h3>Regional championship</h3><div id="resultsCwscSummary"></div></article>
+          <article class="card"><div class="eyebrow">Nationals</div><h3>National pathway</h3><div id="resultsNationalsSummary"></div></article>
+          <article class="card"><div class="eyebrow">Records</div><h3>Relevant records</h3><div id="resultsRecordsSummary"></div></article>
         </div>
 
         <article class="card">
@@ -567,13 +630,15 @@
   <nav class="mobile-nav">
     <button data-view="deck" class="nav-button active"><span>▤</span>Board</button>
     <button data-view="attendance" class="nav-button"><span>✓</span>Roll</button>
+    <button data-view="times" class="nav-button"><span>◷</span>Times</button>
     <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
-    <button data-view="athletes" class="nav-button"><span>◎</span>Athletes</button>
+    <button data-view="athletes" class="nav-button"><span>◎</span>Swimmers</button>
     <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
+    <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
   </nav>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260724-poolside2"></script>
 </body>
 </html>
