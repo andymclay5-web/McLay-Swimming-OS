@@ -686,7 +686,7 @@ $("saveTextCaptureBtn").addEventListener("click",async()=>{
     session_id:selectedSession().id,
     athlete_id:$("captureAthlete").value || null,
     capture_type:"text",
-    text_content:`[${$("captureCategory").value}] ${text}`,
+    text_content:`[${$("captureCategory").value}]${v33CaptureBlockPrefix()} ${text}`,
     media_path:null,
     media_local_id:null,
     mime_type:null,
@@ -771,7 +771,7 @@ $("startVoiceBtn").addEventListener("click",async()=>{
       const record = {
         id:uid("capture"),session_id:selectedSession().id,
         athlete_id:$("captureAthlete").value||null,capture_type:"voice",
-        text_content:"Voice note",media_path:null,media_local_id:localId,
+        text_content:`Voice note${v33CaptureBlockPrefix()}`,media_path:null,media_local_id:localId,
         mime_type:blob.type,created_at:nowIso(),updated_at:nowIso()
       };
       upsertLocal("captures",record);queueRecord("captures",record.id);saveState(appState);
@@ -798,7 +798,7 @@ async function saveFileCapture(file,kind){
   const record = {
     id:uid("capture"),session_id:selectedSession().id,
     athlete_id:$("captureAthlete").value||null,capture_type:kind,
-    text_content:kind==="photo"?"Poolside photo":"Poolside video",
+    text_content:`${kind==="photo"?"Poolside photo":"Poolside video"}${v33CaptureBlockPrefix()}`,
     media_path:null,media_local_id:localId,mime_type:file.type,
     created_at:nowIso(),updated_at:nowIso()
   };
@@ -1232,7 +1232,7 @@ function fillSessionEditor(session){
   $("editSessionWorkout").value=session?.workout||"";
 }
 async function deleteSession(id){const session=appState.sessions.find(s=>s.id===id);if(!session||!confirm(`Delete ${sessionLabel(session)} — ${session.title}?`))return;appState.sessions=appState.sessions.filter(s=>s.id!==id);for(const table of ["attendance","captures","timed_sets","session_reviews","session_lane_assignments","test_set_attempts"])appState[table]=appState[table].filter(r=>r.session_id!==id);queueDelete("sessions",id);if(appState.settings.selected_session_id===id){const next=appState.sessions.slice().sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`))[0];appState.settings.selected_session_id=next?.id||"";appState.settings.selected_squad=sessionSquads(next)[0]||""}saveState(appState);await syncIfPossible();fillSessionEditor(selectedSession());renderAll();updateStatus("Session deleted","good")}
-$("newSessionBtn").addEventListener("click",()=>fillSessionEditor(null));
+$("newSessionBtn").addEventListener("click",()=>{if(window.matchMedia("(max-width: 980px)").matches)v33OpenSessionComposer();else fillSessionEditor(null)});
 if($("deleteSessionBtn"))$("deleteSessionBtn").addEventListener("click",()=>{const id=$("editSessionId").value;if(id)deleteSession(id)});
 $("saveSessionBtn").addEventListener("click",async()=>{
   const existing=appState.sessions.find(s=>s.id===$("editSessionId").value);
@@ -1749,7 +1749,7 @@ function renderDeck(){const session=selectedSession();const deckPicker=$("deckSe
 function renderAll(){renderMode();renderSessionPicker();renderActiveContext();renderOverview();renderDeck();renderSessionImportPreview();renderAttendance();populateAthleteSelect("captureAthlete",true);populateAthleteSelect("timeAthlete",false);populateAthleteSelect("deckAthlete",false);if($("deckAthlete")){$("deckAthlete").onchange=renderDeckAthleteBrief;renderDeckAthleteBrief()}renderReview();renderCaptures();renderPaceReference();renderTimedSets();renderStopwatchLaps();renderManualTimes();renderSessions();renderPlanning();renderTestSets();renderAthletes();renderResults();renderResultsUpdate();renderReports();loadSettings();v3PopulatePlanSelects();v3PopulateTestSetSelect();if($("liveLaneCount"))$("liveLaneCount").value=selectedSession()?.lane_count||1;renderLiveBoard()}
 
 // =============================================================================
-// McLay Swimming OS v3.2 — complete phone management, whole session blocks,
+// McLay Swimming OS v3.2 base — complete phone management, whole session blocks,
 // target-meet results, points, splits, goals and session-photo transcription.
 // =============================================================================
 const V32_BLOCK_ORDER={warm_up:10,pre_set:20,skill:30,main_set:40,post_set:50,warm_down:60,other:70};
@@ -1794,7 +1794,7 @@ function v32ParseWorkoutBlocks(text){
 async function v32ImportWorkoutBlocks(session){
   if(!session)return;const existing=v32SessionBlocks(session.id);if(existing.length&&!confirm("Replace the current structured blocks with blocks rebuilt from the workout text?"))return;
   for(const b of existing){appState.session_blocks=appState.session_blocks.filter(x=>x.id!==b.id);queueDelete("session_blocks",b.id)}
-  const parsed=v32ParseWorkoutBlocks(session.workout||"");
+  const parsed=v32ParseWorkoutBlocks(v33WorkoutForBlocks(session.workout||""));
   parsed.forEach((b,i)=>{const record={id:uid("block"),session_id:session.id,block_type:b.block_type,title:b.title,sort_order:V32_BLOCK_ORDER[b.block_type]||70+i,items:b.items,notes:"Built from workout text",status:"planned",updated_at:nowIso()};upsertLocal("session_blocks",record);queueRecord("session_blocks",record.id)});
   saveState(appState);await syncIfPossible();renderAll();updateStatus(`${parsed.length} session blocks built`,"good")
 }
@@ -1958,6 +1958,415 @@ if($("newSeasonBtn"))$("newSeasonBtn").addEventListener("click",()=>fillSeasonEd
 if($("liveLaneCount"))$("liveLaneCount").addEventListener("change",()=>{const s=selectedSession();if(!s)return;s.lane_count=Math.max(1,Math.min(12,Number($("liveLaneCount").value)||1));queueRecord("sessions",s.id);saveState(appState);resetLiveRoster();renderLiveBoard()});if($("liveWaveGap"))$("liveWaveGap").addEventListener("change",()=>{applyLaneOffsets(Number($("liveWaveGap").value)||0);if($("liveChannelGrid"))$("liveChannelGrid").dataset.rosterKey="";renderLiveBoard()});
 if($("newTestSetBtn"))$("newTestSetBtn").addEventListener("click",()=>fillTestSetEditor(null));if($("saveTestSetBtn"))$("saveTestSetBtn").addEventListener("click",v3SaveTestSet);if($("duplicateTestSetBtn"))$("duplicateTestSetBtn").addEventListener("click",v3DuplicateTestSet);if($("archiveTestSetBtn"))$("archiveTestSetBtn").addEventListener("click",async()=>{const t=appState.test_sets.find(x=>x.id===$("testSetId").value);if(!t)return;t.active=false;t.updated_at=nowIso();queueRecord("test_sets",t.id);saveState(appState);await syncIfPossible();renderAll()});if($("loadTestSetTimingBtn"))$("loadTestSetTimingBtn").addEventListener("click",()=>v3LoadTestSet());if($("liveTestSet"))$("liveTestSet").addEventListener("change",()=>{const t=appState.test_sets.find(x=>x.id===$("liveTestSet").value);if(t)v3LoadTestSet(t)});
 if($("saveManualResultBtn"))$("saveManualResultBtn").addEventListener("click",v3SaveManualResult);if($("parseResultsFileBtn"))$("parseResultsFileBtn").addEventListener("click",v3ParseResultsFile);if($("clearResultsPreviewBtn"))$("clearResultsPreviewBtn").addEventListener("click",()=>{resultImportPreview=[];resultImportFileName="";renderResultImportPreview()});if($("commitResultsImportBtn"))$("commitResultsImportBtn").addEventListener("click",v3CommitImport);
+
+
+// =============================================================================
+// McLay Swimming OS v3.3 — phone-first session entry and reliable session use.
+// Keeps the v3.2 tables, Supabase sync, planning, athletes, results and test sets.
+// =============================================================================
+let v33PendingSessionPhoto=null;
+let v33PendingPhotoSaved=false;
+let v33QuickPhotoUrl="";
+let v33PhotoPreviousSessionId="";
+let v33PhotoPreviousSquad="";
+if(!Array.isArray(appState.settings.deleted_session_ids))appState.settings.deleted_session_ids=[];
+
+function v33DeletedSet(){return new Set(appState.settings.deleted_session_ids||[])}
+function v33FilterDeletedSessions(){
+  const deleted=v33DeletedSet();
+  for(const p of (appState.pending||[]))if(p.table==="sessions"&&p.action==="delete")deleted.add(p.id);
+  if(!deleted.size)return;
+  appState.sessions=(appState.sessions||[]).filter(s=>!deleted.has(s.id));
+  for(const table of ["attendance","captures","timed_sets","session_reviews","session_lane_assignments","session_blocks","session_transcriptions","test_set_attempts"]){
+    if(Array.isArray(appState[table]))appState[table]=appState[table].filter(r=>!deleted.has(r.session_id));
+  }
+  if(deleted.has(appState.settings.selected_session_id)){
+    const next=appState.sessions.slice().sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`))[0];
+    appState.settings.selected_session_id=next?.id||"";
+    appState.settings.selected_squad=sessionSquads(next)[0]||"";
+  }
+}
+v33FilterDeletedSessions();
+saveState(appState);
+
+function v33LooksLikeSessionText(text){
+  const t=String(text||"");
+  const setCount=(t.match(/\b\d{1,3}\s*[x×]\s*\d{2,4}\b/gi)||[]).length;
+  return setCount>=2||/\b(warm.?up|pre.?set|main set|warm.?down|skill block)\b/i.test(t);
+}
+function v33PartNow(){return new Date().getHours()<12?"AM":"PM"}
+function v33DefaultSquads(){
+  const session=selectedSession();
+  const squads=sessionSquads(session);
+  return squads.length?squads.join(", "):(activeSquad()||"");
+}
+function v33SetImportMessage(text,mode=""){
+  const box=$("sessionImportResult");if(!box)return;
+  box.textContent=text;box.className=`session-import-result ${mode}`.trim();
+}
+function v33ResetSessionImport({keepText=false}={}){
+  importedSessionDraft=null;
+  if(!keepText)$("sessionPasteInput").value="";
+  $("quickSessionDate").value=localIsoDate(new Date());
+  $("quickSessionPart").value=v33PartNow();
+  $("quickSessionTitle").value="";
+  $("quickSessionSquads").value=v33DefaultSquads();
+  $("quickSessionLanes").value=selectedSession()?.lane_count||6;
+  $("quickSessionCourse").value=selectedSession()?.pool_course||"SCM";
+  $("saveImportedSessionBtn").disabled=true;
+  $("runImportedSessionBtn").disabled=true;
+  $("sessionImportPreview").className="session-import-preview help";
+  $("sessionImportPreview").textContent="Nothing previewed yet.";
+  v33PendingSessionPhoto=null;v33PendingPhotoSaved=false;
+  if(v33QuickPhotoUrl)URL.revokeObjectURL(v33QuickPhotoUrl);
+  v33QuickPhotoUrl="";
+  $("quickSessionPhotoInput").value="";
+  $("quickSessionPhotoPreview").hidden=true;
+  $("quickSessionPhotoPreview").removeAttribute("src");
+  $("quickSessionPhotoTranscribeBtn").disabled=true;
+  v33SetImportMessage("Set the date and squad, paste or type the session, then preview it.");
+}
+function v33OpenSessionComposer({text="",reset=true}={}){
+  showView("deck");
+  const details=$("sessionImportDetails");if(details)details.open=true;
+  if(reset)v33ResetSessionImport({keepText:false});
+  if(text){
+    $("sessionPasteInput").value=text;
+    try{
+      importedSessionDraft=parseSessionFromChat(text);
+      renderSessionImportPreview();
+      $("saveImportedSessionBtn").disabled=false;$("runImportedSessionBtn").disabled=false;
+      v33SetImportMessage("Shared session picked up. Check the editable details, then Save & Use Now.","good");
+    }catch(error){v33SetImportMessage(error.message||"Check the shared session text.","warning")}
+  }
+  setTimeout(()=>details?.scrollIntoView({block:"start",behavior:"smooth"}),50);
+}
+function v33QuickSquads(){
+  return $("quickSessionSquads").value.split(/[,/+&]|\band\b/i).map(x=>x.trim()).filter(Boolean).map(resolveSquadName);
+}
+function v33PlanForDate(date){
+  const seasons=(appState.season_plans||[]).filter(s=>(!s.start_date||s.start_date<=date)&&(!s.end_date||s.end_date>=date));
+  const season=seasons.find(s=>s.status==="active")||appState.season_plans.find(s=>s.id===appState.settings.selected_season_plan_id)||seasons[0]||null;
+  const weeks=(appState.weekly_plans||[]).filter(w=>{
+    if(!w.week_start)return false;
+    const start=new Date(`${w.week_start}T12:00:00`),end=new Date(start);end.setDate(end.getDate()+6);
+    const d=new Date(`${date}T12:00:00`);
+    return d>=start&&d<=end&&(!season||!w.season_plan_id||w.season_plan_id===season.id);
+  });
+  const week=weeks[0]||null;
+  return {season,week};
+}
+
+function v33WorkoutForBlocks(text){
+  const lines=String(text||"").split(/\r?\n/);
+  const firstHeading=lines.findIndex(raw=>{
+    const heading=raw.trim().replace(/[:\-–—]+$/g,"").trim();
+    const type=v32NormaliseBlockType(heading);
+    return type!=="other"&&heading.length<45&&!/\d+\s*[x×]\s*\d+/.test(heading);
+  });
+  if(firstHeading<=0)return String(text||"");
+  const usefulPrefix=lines.slice(0,firstHeading).filter(raw=>{
+    const line=raw.trim();
+    return /\b\d{1,3}\s*[x×]\s*\d{2,4}\b/i.test(line)||/^\d{2,4}\s*m?\b/i.test(line);
+  });
+  return [...usefulPrefix,...lines.slice(firstHeading)].join("\n");
+}
+
+function v33ApplyQuickFields(draft){
+  const d={...draft};
+  d.session_date=$("quickSessionDate").value||d.session_date||localIsoDate(new Date());
+  d.day_part=$("quickSessionPart").value||d.day_part||v33PartNow();
+  d.title=$("quickSessionTitle").value.trim()||d.title||"Imported session";
+  d.squads=v33QuickSquads().length?v33QuickSquads():(d.squads||[]);
+  d.lane_count=Math.max(1,Math.min(12,Number($("quickSessionLanes").value)||selectedSession()?.lane_count||6));
+  d.pool_course=$("quickSessionCourse").value||"SCM";
+  d.workout=$("sessionPasteInput").value.trim()||d.workout||"";
+  d.planned_distance=estimateDistance(d.workout)||Number(d.planned_distance||0);
+  d.sets=extractStructuredSets(d.workout);
+  const {season,week}=v33PlanForDate(d.session_date);
+  if(season){
+    d.season_plan_id=season.id;d.season_name=season.name;
+  }
+  if(week){
+    d.weekly_plan_id=week.id;d.week_start=week.week_start||null;d.week_phase=week.phase||"";
+    d.week_objective=week.objective||"";d.week_carry_forward=week.carry_forward||"";
+  }
+  d.updated_at=nowIso();
+  return d;
+}
+const v33BaseParseSessionFromChat=parseSessionFromChat;
+parseSessionFromChat=function(raw){
+  const d=v33BaseParseSessionFromChat(raw);
+  return v33ApplyQuickFields(d);
+};
+renderSessionImportPreview=function(){
+  const box=$("sessionImportPreview");if(!box)return;
+  if(!importedSessionDraft){box.className="session-import-preview help";box.textContent="Nothing previewed yet.";return}
+  importedSessionDraft=v33ApplyQuickFields(importedSessionDraft);
+  const d=importedSessionDraft,blocks=v32ParseWorkoutBlocks(v33WorkoutForBlocks(d.workout||""));
+  $("quickSessionDate").value=d.session_date||localIsoDate(new Date());
+  $("quickSessionPart").value=d.day_part||v33PartNow();
+  $("quickSessionTitle").value=d.title||"";
+  $("quickSessionSquads").value=(d.squads||[]).join(", ");
+  $("quickSessionLanes").value=d.lane_count||6;
+  $("quickSessionCourse").value=d.pool_course||"SCM";
+  box.className="session-import-preview";
+  box.innerHTML=`<div class="import-preview-grid">
+    <div><span>Date</span><strong>${escapeHtml(sessionLabel(d))}</strong></div>
+    <div><span>Title</span><strong>${escapeHtml(d.title)}</strong></div>
+    <div><span>Squads</span><strong>${escapeHtml((d.squads||[]).join(" + ")||"Check squad")}</strong></div>
+    <div><span>Distance</span><strong>${d.planned_distance?`${Number(d.planned_distance).toLocaleString()}m`:"Check total"}</strong></div>
+    <div><span>Lanes / pool</span><strong>${d.lane_count} · ${escapeHtml(d.pool_course)}</strong></div>
+    <div><span>Complete blocks</span><strong>${blocks.length}</strong></div>
+  </div>
+  <div class="deck-block-list">${blocks.map((b,i)=>`<div class="deck-block-card"><div class="block-title-row"><strong>${i+1}. ${escapeHtml(b.title)}</strong><span class="badge">${escapeHtml(v32BlockSummary(b))}</span></div><div class="deck-block-lines">${escapeHtml(v32BlockItemsText(b.items))}</div></div>`).join("")||'<div class="warning-box">No block headings found. The complete workout will still be saved.</div>'}</div>
+  <details><summary>Check complete original workout</summary><pre class="import-workout-preview">${escapeHtml(d.workout)}</pre></details>`;
+};
+async function v33AttachPendingPhoto(session){
+  if(!v33PendingSessionPhoto||v33PendingPhotoSaved)return null;
+  const file=v33PendingSessionPhoto;
+  const localId=await saveMediaBlob(file,"photo",file.name||"session-board.jpg");
+  const capture={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"photo",text_content:"Planned session source photo",media_path:null,media_local_id:localId,mime_type:file.type||"image/jpeg",created_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("captures",capture);queueRecord("captures",capture.id);
+  const tr={id:uid("transcript"),session_id:session.id,capture_id:capture.id,purpose:"planned",status:"photo_saved",raw_text:session.workout||"",structured_blocks:v32ParseWorkoutBlocks(session.workout||""),created_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);
+  v32CurrentTranscriptionId=tr.id;v33PendingPhotoSaved=true;
+  return tr;
+}
+function v33ReplaceImportedBlocks(session){
+  const existing=(appState.session_blocks||[]).filter(b=>b.session_id===session.id&&b.source_import==="phone_v33");
+  for(const b of existing){appState.session_blocks=appState.session_blocks.filter(x=>x.id!==b.id);queueDelete("session_blocks",b.id)}
+  const parsed=v32ParseWorkoutBlocks(v33WorkoutForBlocks(session.workout||""));
+  parsed.forEach((b,i)=>{
+    const r={id:uid("block"),session_id:session.id,block_type:b.block_type,title:b.title,sort_order:(V32_BLOCK_ORDER[b.block_type]||70)+(i/100),items:b.items,notes:"Built from phone session import",status:"planned",source_import:"phone_v33",updated_at:nowIso()};
+    upsertLocal("session_blocks",r);queueRecord("session_blocks",r.id);
+  });
+  return parsed.length;
+}
+saveImportedSession=async function(openNow){
+  try{
+    if(!importedSessionDraft)importedSessionDraft=parseSessionFromChat($("sessionPasteInput").value);
+    const d=v33ApplyQuickFields(clone(importedSessionDraft));
+    if(!d.session_date||!d.title)throw new Error("Date and title are required.");
+    if(!d.workout)throw new Error("Paste, type or transcribe the session first.");
+    delete d.live_set;
+    const previousSelectedId=appState.settings.selected_session_id;
+    const previousSelectedSquad=appState.settings.selected_squad;
+    upsertLocal("sessions",d);queueRecord("sessions",d.id);
+    if(openNow){
+      appState.settings.selected_session_id=d.id;
+      appState.settings.selected_squad=sessionSquads(d)[0]||"";
+    }else if(previousSelectedId&&appState.sessions.some(s=>s.id===previousSelectedId)){
+      appState.settings.selected_session_id=previousSelectedId;
+      appState.settings.selected_squad=previousSelectedSquad||sessionSquads(appState.sessions.find(s=>s.id===previousSelectedId))[0]||"";
+    }
+    const blockCount=v33ReplaceImportedBlocks(d);
+    await v33AttachPendingPhoto(d);
+    saveState(appState);
+    renderAll();
+    v33SetImportMessage(`Saved ${sessionLabel(d)} — ${d.title}. ${blockCount} complete block${blockCount===1?"":"s"} ready on Deck.`,"good");
+    await syncIfPossible();
+    importedSessionDraft=d;
+    renderAll();
+    if(openNow){
+      $("sessionImportDetails").open=false;
+      showView("deck");
+      window.scrollTo({top:0,behavior:"smooth"});
+      updateStatus("Session saved, selected and open on Deck","good");
+    }else{
+      showView("sessions");fillSessionEditor(d);updateStatus("Session saved for later","good");
+    }
+  }catch(error){
+    console.error(error);v33SetImportMessage(error.message||"Could not save the session.","warning");updateStatus("Session needs checking","error");
+  }
+};
+async function v33QuickPhotoTranscribe(){
+  const file=v33PendingSessionPhoto;if(!file)return;
+  try{
+    let draft=importedSessionDraft;
+    if(!draft){
+      const seed=$("sessionPasteInput").value.trim()||`Session title: ${$("quickSessionTitle").value.trim()||"Session photo import"}\nDate: ${$("quickSessionDate").value}\nSquads: ${$("quickSessionSquads").value}`;
+      draft=parseSessionFromChat(seed);
+    }
+    draft=v33ApplyQuickFields(draft);
+    if(!draft.title)draft.title="Session photo import";
+    if(!draft.workout)draft.workout="Session photo attached — transcription pending";
+    importedSessionDraft=draft;
+    v33PhotoPreviousSessionId=appState.settings.selected_session_id||"";
+    v33PhotoPreviousSquad=appState.settings.selected_squad||"";
+    upsertLocal("sessions",draft);queueRecord("sessions",draft.id);
+    // The existing transcription function works from the selected session, so select
+    // the draft only while the photo is saved/transcribed, then restore the session
+    // the coach was using until Save & Use Now is pressed.
+    appState.settings.selected_session_id=draft.id;appState.settings.selected_squad=sessionSquads(draft)[0]||"";
+    saveState(appState);
+    await v33AttachPendingPhoto(draft);
+    await syncIfPossible();
+    if(!cloudReady()){
+      if(v33PhotoPreviousSessionId&&appState.sessions.some(s=>s.id===v33PhotoPreviousSessionId)){
+        appState.settings.selected_session_id=v33PhotoPreviousSessionId;
+        appState.settings.selected_squad=v33PhotoPreviousSquad||sessionSquads(appState.sessions.find(s=>s.id===v33PhotoPreviousSessionId))[0]||"";
+        saveState(appState);
+      }
+      renderAll();$("sessionImportDetails").open=true;
+      v33SetImportMessage("Photo is attached to the draft. Connect Supabase to transcribe automatically, or type/paste the session here now.","warning");
+      return;
+    }
+    await v32AutomaticTranscribe();
+    const tr=appState.session_transcriptions.find(x=>x.id===v32CurrentTranscriptionId);
+    if(v33PhotoPreviousSessionId&&appState.sessions.some(s=>s.id===v33PhotoPreviousSessionId)){
+      appState.settings.selected_session_id=v33PhotoPreviousSessionId;
+      appState.settings.selected_squad=v33PhotoPreviousSquad||sessionSquads(appState.sessions.find(s=>s.id===v33PhotoPreviousSessionId))[0]||"";
+      saveState(appState);
+    }
+    if(tr?.raw_text){
+      $("sessionPasteInput").value=tr.raw_text;
+      importedSessionDraft={...draft,...parseSessionFromChat(tr.raw_text),id:draft.id};
+      renderSessionImportPreview();
+      $("saveImportedSessionBtn").disabled=false;$("runImportedSessionBtn").disabled=false;
+      $("sessionImportDetails").open=true;
+      v33SetImportMessage("Photo transcribed. Correct anything needed, then Save & Use Now.","good");
+    }
+  }catch(error){
+    console.error(error);$("sessionImportDetails").open=true;
+    v33SetImportMessage(`${error.message||"Automatic transcription was unavailable."} The photo remains attached; type or paste the session instead.`,"warning");
+  }
+}
+function v33RenderDeckBlocks(){
+  const host=$("deckBlockList");if(!host)return;
+  const session=selectedSession();
+  if(!session){host.innerHTML='<div class="help">Choose or create a session first.</div>';return}
+  let blocks=v32SessionBlocks(session.id);
+  if(!blocks.length&&session.workout)blocks=v32ParseWorkoutBlocks(session.workout).map((b,i)=>({...b,id:"",sort_order:i}));
+  host.innerHTML=blocks.length?blocks.map((b,i)=>`<article class="deck-block-card">
+    <div class="block-title-row"><div><div class="eyebrow">${escapeHtml(v32BlockLabel(b.block_type))}</div><strong>${escapeHtml(b.title||v32BlockLabel(b.block_type))}</strong></div><span class="badge">${i+1}</span></div>
+    <div class="deck-block-lines">${escapeHtml(v32BlockItemsText(b.items)||"No set lines entered.")}</div>
+    ${b.notes?`<div class="help"><strong>Coach note:</strong> ${escapeHtml(b.notes)}</div>`:""}
+    <div class="button-row">${b.id?`<button type="button" data-deck-run-block="${escapeHtml(b.id)}">Run entire block</button>`:""}<button type="button" class="secondary" data-deck-edit-current>View / edit</button></div>
+  </article>`).join(""):'<div class="warning-box">The full workout is shown above, but no blocks have been built yet.</div>';
+  host.querySelectorAll("[data-deck-run-block]").forEach(b=>b.onclick=()=>v32RunBlock(b.dataset.deckRunBlock));
+  host.querySelectorAll("[data-deck-edit-current]").forEach(b=>b.onclick=v33EditCurrentSession);
+}
+function v33EditCurrentSession(){
+  const s=selectedSession();if(!s)return v33OpenSessionComposer();
+  showView("sessions");fillSessionEditor(s);v32RenderSessionBlocks();setTimeout(()=>$("sessionEditorTitle")?.scrollIntoView({block:"start",behavior:"smooth"}),40);
+}
+const v33BaseRenderDeck=renderDeck;
+renderDeck=function(){v33BaseRenderDeck();v33RenderDeckBlocks()};
+function v33CaptureBlockPrefix(){
+  const id=$("captureBlock")?.value;if(!id)return "";
+  const block=appState.session_blocks.find(b=>b.id===id);
+  return block?` [Block: ${block.title||v32BlockLabel(block.block_type)}]`:"";
+}
+function v33PopulateCaptureBlocks(){
+  const select=$("captureBlock");if(!select)return;
+  const current=select.value,blocks=v32SessionBlocks(selectedSession()?.id);
+  select.innerHTML='<option value="">Whole session</option>'+blocks.map(b=>`<option value="${escapeHtml(b.id)}" ${b.id===current?"selected":""}>${escapeHtml(b.title||v32BlockLabel(b.block_type))}</option>`).join("");
+}
+async function v33DeleteMediaLocal(id){
+  if(!id)return;
+  try{const db=await openMediaDb();await new Promise((resolve,reject)=>{const tx=db.transaction(MEDIA_STORE,"readwrite");tx.objectStore(MEDIA_STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}catch(error){console.warn(error)}
+}
+async function v33DeleteCapture(id){
+  const c=appState.captures.find(x=>x.id===id);if(!c||!confirm("Delete this session capture?"))return;
+  if(c.media_local_id)await v33DeleteMediaLocal(c.media_local_id);
+  appState.captures=appState.captures.filter(x=>x.id!==id);queueDelete("captures",id);saveState(appState);await syncIfPossible();renderAll();updateStatus("Capture deleted","good");
+}
+async function v33EditCapture(id){
+  const c=appState.captures.find(x=>x.id===id);if(!c)return;
+  const next=prompt("Edit the capture note",c.text_content||"");if(next===null)return;
+  c.text_content=next.trim();c.updated_at=nowIso();queueRecord("captures",c.id);saveState(appState);await syncIfPossible();renderAll();updateStatus("Capture updated","good");
+}
+renderCaptures=async function(){
+  const session=selectedSession(),host=$("captureList");if(!host)return;
+  const items=(appState.captures||[]).filter(c=>c.session_id===session?.id).sort(byUpdated);
+  if(!items.length){host.innerHTML='<div class="help">No captures for this session yet.</div>';return}
+  const rows=[];
+  for(const item of items){
+    const athlete=appState.athletes.find(a=>a.id===item.athlete_id);
+    const media=item.capture_type==="text"?"":`<div class="media-preview">${await mediaHtml(item)}</div>`;
+    rows.push(`<div class="list-item"><strong>${escapeHtml(athlete?.full_name||"Whole session / group")}</strong><p>${escapeHtml(item.text_content||item.capture_type)}</p>${media}<div class="list-meta">${new Date(item.created_at).toLocaleString("en-NZ")}</div><div class="capture-manage-actions"><button type="button" class="secondary" data-capture-edit="${escapeHtml(item.id)}">Edit note</button><button type="button" class="danger-button" data-capture-delete="${escapeHtml(item.id)}">Delete</button></div></div>`);
+  }
+  host.innerHTML=rows.join("");
+  host.querySelectorAll("[data-capture-edit]").forEach(b=>b.onclick=()=>v33EditCapture(b.dataset.captureEdit));
+  host.querySelectorAll("[data-capture-delete]").forEach(b=>b.onclick=()=>v33DeleteCapture(b.dataset.captureDelete));
+};
+async function v33SaveEditorAndUse(){
+  const existing=appState.sessions.find(s=>s.id===$("editSessionId").value);
+  const linkedSeason=appState.season_plans.find(s=>s.id===$("editSessionSeasonPlan")?.value);
+  const linkedWeek=appState.weekly_plans.find(w=>w.id===$("editSessionWeeklyPlan")?.value);
+  const record={
+    id:existing?.id||uid("session"),session_date:$("editSessionDate").value,day_part:$("editSessionPart").value,
+    venue:$("editSessionVenue").value.trim(),title:$("editSessionTitle").value.trim(),
+    squads:$("editSessionSquads").value.split(",").map(x=>x.trim()).filter(Boolean),
+    planned_distance:Number($("editSessionDistance").value||0),primary_system:$("editSessionSystem").value.trim(),
+    technical_focus:$("editSessionTechnical").value.trim(),season_plan_id:$("editSessionSeasonPlan")?.value||null,weekly_plan_id:$("editSessionWeeklyPlan")?.value||null,
+    lane_count:Math.max(1,Math.min(12,Number($("editSessionLaneCount")?.value||1))),pool_course:$("editSessionPoolCourse")?.value||"SCM",
+    season_name:linkedSeason?.name||$("editSessionSeason").value.trim(),week_start:linkedWeek?.week_start||$("editSessionWeekStart").value||null,
+    week_phase:linkedWeek?.phase||$("editSessionWeekPhase").value.trim(),week_objective:linkedWeek?.objective||$("editSessionWeekObjective").value.trim(),
+    week_carry_forward:linkedWeek?.carry_forward||$("editSessionWeekCarry").value.trim(),plan_cue:$("editSessionPlanCue").value.trim(),
+    next_session_cue:$("editSessionNextCue").value.trim(),workout:$("editSessionWorkout").value,sets:extractStructuredSets($("editSessionWorkout").value),
+    step_number:existing?.step_number||null,previous_session_id:existing?.previous_session_id||null,status:existing?.status||"planned",updated_at:nowIso()
+  };
+  if(!record.session_date||!record.title)return alert("Date and title are required.");
+  upsertLocal("sessions",record);queueRecord("sessions",record.id);appState.settings.selected_session_id=record.id;appState.settings.selected_squad=sessionSquads(record)[0]||"";
+  if(!v32SessionBlocks(record.id).length&&record.workout)v33ReplaceImportedBlocks(record);
+  saveState(appState);await syncIfPossible();renderAll();showView("deck");window.scrollTo({top:0,behavior:"smooth"});updateStatus("Session saved and open on Deck","good");
+}
+deleteSession=async function(id){
+  const session=appState.sessions.find(s=>s.id===id);if(!session)return;
+  if(!confirm(`Delete ${sessionLabel(session)} — ${session.title}? This also deletes its blocks, photos/transcripts and session data.`))return;
+  if(!appState.settings.deleted_session_ids.includes(id))appState.settings.deleted_session_ids.push(id);
+  const linkedTables=["session_blocks","session_transcriptions","attendance","captures","timed_sets","session_reviews","session_lane_assignments","test_set_attempts"];
+  for(const table of linkedTables){
+    for(const r of (appState[table]||[]).filter(x=>x.session_id===id))queueDelete(table,r.id);
+    appState[table]=(appState[table]||[]).filter(x=>x.session_id!==id);
+  }
+  appState.sessions=appState.sessions.filter(s=>s.id!==id);queueDelete("sessions",id);
+  if(appState.settings.selected_session_id===id){
+    const next=appState.sessions.slice().sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`))[0];
+    appState.settings.selected_session_id=next?.id||"";appState.settings.selected_squad=sessionSquads(next)[0]||"";
+  }
+  saveState(appState);renderAll();await syncIfPossible();v33FilterDeletedSessions();saveState(appState);fillSessionEditor(selectedSession());renderAll();updateStatus("Session deleted and blocked from returning","good");
+};
+const v33BasePullCloud=pullCloud;
+pullCloud=async function(){await v33BasePullCloud();v33FilterDeletedSessions();saveState(appState)};
+readSharedText=function(){
+  const params=new URLSearchParams(location.search);
+  const parts=[params.get("share-title"),params.get("share-text"),params.get("share-url")].filter(Boolean);
+  if(!parts.length)return false;
+  const text=parts.join("\n");history.replaceState({},document.title,location.pathname);
+  if(v33LooksLikeSessionText(text)){v33OpenSessionComposer({text});updateStatus("Shared session ready to check","good")}
+  else{$("captureText").value=text;showView("capture");updateStatus("Shared text ready to save","good")}
+  return true;
+};
+
+if($("contextAddSessionBtn"))$("contextAddSessionBtn").addEventListener("click",()=>v33OpenSessionComposer());
+if($("deckAddSessionBtn"))$("deckAddSessionBtn").addEventListener("click",()=>v33OpenSessionComposer());
+if($("deckEditSessionBtn"))$("deckEditSessionBtn").addEventListener("click",v33EditCurrentSession);
+if($("manageAddSessionBtn"))$("manageAddSessionBtn").addEventListener("click",()=>v33OpenSessionComposer());
+if($("resetSessionImportBtn"))$("resetSessionImportBtn").addEventListener("click",()=>v33ResetSessionImport());
+if($("openChatGptBtn"))$("openChatGptBtn").addEventListener("click",()=>window.open("https://chatgpt.com/","_blank","noopener"));
+if($("quickSessionPhotoInput"))$("quickSessionPhotoInput").addEventListener("change",e=>{
+  v33PendingSessionPhoto=e.target.files?.[0]||null;v33PendingPhotoSaved=false;
+  if(v33QuickPhotoUrl)URL.revokeObjectURL(v33QuickPhotoUrl);
+  if(v33PendingSessionPhoto){
+    v33QuickPhotoUrl=URL.createObjectURL(v33PendingSessionPhoto);
+    $("quickSessionPhotoPreview").src=v33QuickPhotoUrl;$("quickSessionPhotoPreview").hidden=false;
+    $("quickSessionPhotoTranscribeBtn").disabled=false;
+    v33SetImportMessage("Photo selected. Paste/type the session, or create a draft and try automatic transcription.","good");
+  }
+});
+if($("quickSessionPhotoTranscribeBtn"))$("quickSessionPhotoTranscribeBtn").addEventListener("click",v33QuickPhotoTranscribe);
+if($("saveSessionAndUseBtn"))$("saveSessionAndUseBtn").addEventListener("click",v33SaveEditorAndUse);
+for(const id of ["quickSessionDate","quickSessionPart","quickSessionTitle","quickSessionSquads","quickSessionLanes","quickSessionCourse"]){
+  if($(id))$(id).addEventListener("change",()=>{if(importedSessionDraft){importedSessionDraft=v33ApplyQuickFields(importedSessionDraft);renderSessionImportPreview()}});
+}
+const v33BaseRenderView=renderView;
+renderView=function(id){v33BaseRenderView(id);if(id==="capture")v33PopulateCaptureBlocks();if(id==="deck")v33RenderDeckBlocks()};
+const v33BaseRenderAll=renderAll;
+renderAll=function(){v33BaseRenderAll();v33PopulateCaptureBlocks();v33RenderDeckBlocks()};
+v33ResetSessionImport();
 
 const savedSession=appState.sessions.find(s=>s.id===appState.settings.selected_session_id);if(!savedSession&&appState.sessions.length){const today=localIsoDate(new Date()),fallback=appState.sessions.slice().sort((a,b)=>Math.abs(new Date(`${a.session_date}T12:00:00`)-new Date(`${today}T12:00:00`))-Math.abs(new Date(`${b.session_date}T12:00:00`)-new Date(`${today}T12:00:00`))||String(b.updated_at||"").localeCompare(String(a.updated_at||"")))[0];appState.settings.selected_session_id=fallback.id;appState.settings.selected_squad=sessionSquads(fallback)[0]||"";saveState(appState)}else if(savedSession&&!sessionSquads(savedSession).some(s=>squadKey(s)===squadKey(appState.settings.selected_squad))){appState.settings.selected_squad=sessionSquads(savedSession)[0]||"";saveState(appState)}
 bindLiveSet();

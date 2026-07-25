@@ -7,7 +7,7 @@
   <title>McLay Swimming OS — Full Coach Workflow</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260724-coach32">
+  <link rel="stylesheet" href="styles.css?v=20260725-coach33">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -45,12 +45,56 @@
     .session-block-card{border:2px solid #b8cfdd;border-radius:.75rem;background:#f8fbfd;padding:.7rem;margin:.65rem 0}.session-block-card.active{border-color:#123a5b;background:#eef6fb}.session-block-head{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}.session-block-items{margin:.55rem 0;display:grid;gap:.35rem}.session-block-item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:.45rem;align-items:center;padding:.45rem;background:white;border-radius:.45rem;border:1px solid #d5e4ec}.session-block-item .order{font-weight:900;color:#123a5b;text-align:center}.session-block-actions,.record-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}.session-block-actions button,.record-actions button{min-height:38px}.block-editor{border-top:2px solid #d5e4ec;margin-top:.75rem;padding-top:.75rem}.block-line-help{font-size:.72rem;color:#567}.block-runner{border-left:6px solid #123a5b}.block-runner-steps{display:flex;gap:.35rem;overflow-x:auto;padding:.45rem 0}.block-runner-step{min-width:170px;padding:.5rem;border:1px solid #b8cfdd;border-radius:.5rem;background:white}.block-runner-step.active{background:#123a5b;color:white}.photo-transcription-row,.manage-row,.result-manage-row{border:1px solid #c7dae5;border-radius:.6rem;padding:.65rem;margin:.5rem 0;background:#fff}.photo-transcription-row img{width:100%;max-height:260px;object-fit:contain;background:#eef5f9;border-radius:.4rem}.meet-pill{display:inline-block;border:1px solid #7faec9;background:#eef6fb;color:#123a5b;border-radius:999px;padding:.2rem .5rem;font-size:.72rem;font-weight:800;margin:.12rem}.meet-pill.target{background:#123a5b;color:#fff}.last-target-meet{border:3px solid #123a5b}.target-meet-result{display:grid;grid-template-columns:minmax(130px,1fr) repeat(4,minmax(70px,.45fr));gap:.45rem;padding:.45rem 0;border-bottom:1px solid #dce8ef}.target-meet-result:last-child{border-bottom:0}.points-live{font-weight:900;color:#123a5b}.split-chips{display:flex;gap:.3rem;flex-wrap:wrap}.split-chip{background:#eef5f9;border:1px solid #bfd4e0;border-radius:999px;padding:.18rem .4rem;font-size:.7rem}.goal-split-table{display:grid;gap:.35rem}.goal-split-row{display:grid;grid-template-columns:80px 1fr 100px;gap:.45rem;align-items:center}.goal-split-row input{margin:0}.manage-jump-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}.manage-jump-grid button{min-height:52px}.phone-action-bar{position:sticky;bottom:0;z-index:10;background:rgba(255,255,255,.95);padding:.5rem;border-top:1px solid #bdd2df;display:flex;gap:.4rem;flex-wrap:wrap}.record-points{font-size:.72rem;font-weight:900;color:#123a5b}.complete-history-table{max-height:none!important}.complete-history-table table{min-width:980px}.test-segment-preview{display:grid;gap:.3rem}.test-segment{padding:.45rem;border-left:4px solid #123a5b;background:#eef6fb;border-radius:.35rem}.upcoming-meets-card{grid-column:1/-1}
     @media(max-width:980px){.meet-plan-row{grid-template-columns:1fr}.manage-item-head,.race-result-head,.goal-card-head,.meet-plan-head{align-items:stretch}.result-time-stack{text-align:left}.mobile-manage-grid,.session-block-grid,.target-meet-grid,.goal-grid{grid-template-columns:1fr}.manage-jump-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.session-list-actions,.planning-list-actions,.testset-list-actions,.record-actions{display:flex!important}.session-list-actions button,.planning-list-actions button,.testset-list-actions button,.record-actions button{flex:1;min-width:86px;min-height:44px}.target-meet-result{grid-template-columns:1fr 1fr}.target-meet-result strong{grid-column:1/-1}.goal-split-row{grid-template-columns:65px 1fr 88px}.athlete-desktop-layout{display:block}.athlete-profile-editor{margin-top:.75rem}.complete-history-table{overflow-x:auto}.session-block-item{grid-template-columns:24px minmax(0,1fr)}.session-block-item .record-actions{grid-column:1/-1}.photo-transcription-row img{max-height:200px}}
   </style>
+
+  <style id="coach-v33-session-flow">
+    .context-add-session{flex:0 0 auto;min-width:44px;min-height:42px;padding:.45rem .65rem;border-radius:.65rem;background:#123a5b;color:#fff;border:2px solid #123a5b;font-weight:900}
+    .session-import-card{border:3px solid #123a5b;background:#f8fbfd}
+    .session-import-card details>summary{display:flex;justify-content:space-between;align-items:center;gap:.8rem;cursor:pointer}
+    .session-import-card details>summary span{font-size:.78rem;color:#567;text-align:right}
+    .quick-session-source-row{display:flex;gap:.45rem;flex-wrap:wrap;margin:.65rem 0}
+    .quick-session-meta{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.5rem;margin:.65rem 0}
+    .quick-session-meta .wide{grid-column:span 2}
+    .quick-session-meta label{margin:0}
+    .quick-photo-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;align-items:end;margin:.65rem 0}
+    .quick-photo-preview{width:100%;max-height:260px;object-fit:contain;border:1px solid #bdd2df;border-radius:.6rem;background:#eef5f9;margin:.5rem 0}
+    .session-import-result{padding:.55rem .7rem;border-radius:.5rem;background:#edf7fb;border-left:5px solid #123a5b;margin:.55rem 0}
+    .session-import-result.good{background:#e7f6eb;border-color:#23713a}
+    .session-import-result.warning{background:#fff4dc;border-color:#d58b00}
+    .deck-block-list{display:grid;gap:.65rem}
+    .deck-block-card{border:2px solid #b8cfdd;border-radius:.75rem;background:#f8fbfd;padding:.75rem}
+    .deck-block-card .block-title-row{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}
+    .deck-block-lines{white-space:pre-wrap;line-height:1.5;margin:.55rem 0}
+    .deck-session-tools{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}
+    .capture-manage-actions{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}
+    .current-session-confirmation{font-weight:900;color:#123a5b}
+    @media(max-width:980px){
+      .session-import-card{display:block!important;margin-top:.15rem}
+      .session-import-card details>summary{min-height:54px}
+      .session-import-card details>summary strong{font-size:1.02rem}
+      .session-import-card details>summary span{font-size:.7rem;max-width:48%}
+      .quick-session-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .quick-session-meta .wide{grid-column:1/-1}
+      .quick-photo-row{grid-template-columns:1fr}
+      .context-session{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;gap:.4rem!important}
+      .context-session>span{align-self:center}
+      .context-add-session{display:inline-flex;align-items:center;justify-content:center}
+      .deck-workout-card pre{font-size:.9rem;line-height:1.45;white-space:pre-wrap}
+      .deck-session-tools button{flex:1;min-width:125px;min-height:44px}
+      .import-save-actions{position:sticky;bottom:68px;background:rgba(248,251,253,.97);padding:.55rem 0;border-top:1px solid #bdd2df;z-index:12}
+      .import-save-actions button{flex:1;min-height:48px}
+    }
+    @media(max-width:430px){
+      .quick-session-meta{grid-template-columns:1fr 1fr}
+      .quick-session-meta .wide{grid-column:1/-1}
+    }
+  </style>
+
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · complete phone management · v3.2</div>
+      <div class="header-subtitle">Plan → coach → log → review · complete phone management · v3.3</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -60,7 +104,7 @@
   </header>
 
   <div id="activeContextBar" class="active-context-bar">
-    <div class="context-session"><span>Session</span><select id="contextSessionPicker" class="compact-control"></select></div>
+    <div class="context-session"><span>Session</span><select id="contextSessionPicker" class="compact-control"></select><button id="contextAddSessionBtn" type="button" class="context-add-session" aria-label="Add or import session">＋</button></div>
     <div class="context-squad"><span>Squad</span><div id="contextSquadButtons" class="context-squad-buttons"></div></div>
   </div>
 
@@ -95,19 +139,45 @@
 
         <article class="card session-import-card">
           <details id="sessionImportDetails">
-            <summary><strong>Paste tomorrow’s session from chat</strong><span>Turn a message into a deck-ready session</span></summary>
+            <summary><strong>Add or import a session</strong><span>Paste from ChatGPT, type it, or start from a photo</span></summary>
             <div class="session-import-body">
-              <textarea id="sessionPasteInput" class="poolside-note session-paste-input" placeholder="Paste the full session message here — date, squad, focus, sets, intervals and cues."></textarea>
+              <div class="quick-session-source-row">
+                <button id="openChatGptBtn" type="button" class="secondary">Open ChatGPT</button>
+                <button id="pasteSessionBtn" type="button" class="secondary">Paste from clipboard</button>
+                <button id="resetSessionImportBtn" type="button" class="secondary">Clear / new</button>
+              </div>
+
+              <div class="quick-session-meta">
+                <label>Date<input id="quickSessionDate" type="date"></label>
+                <label>AM / PM<select id="quickSessionPart"><option>AM</option><option>PM</option></select></label>
+                <label class="wide">Title<input id="quickSessionTitle" placeholder="Saturday AM — National / Development"></label>
+                <label class="wide">Squads<input id="quickSessionSquads" placeholder="National, Development"></label>
+                <label>Lanes<input id="quickSessionLanes" type="number" min="1" max="12" value="6"></label>
+                <label>Pool<select id="quickSessionCourse"><option value="SCM">25m / SCM</option><option value="LCM">50m / LCM</option></select></label>
+              </div>
+
+              <label>Complete session from ChatGPT or your notes</label>
+              <textarea id="sessionPasteInput" class="poolside-note session-paste-input" placeholder="Paste the full session here. Headings such as Warm-up, Pre-set, Skill, Main set, Post-set and Warm-down will become complete editable blocks."></textarea>
               <div class="button-row">
-                <button id="pasteSessionBtn" class="secondary">Paste from clipboard</button>
-                <button id="parseSessionBtn">Pick up session</button>
+                <button id="parseSessionBtn" type="button">Preview complete session</button>
               </div>
-              <div id="sessionImportPreview" class="session-import-preview help">Nothing parsed yet.</div>
+
+              <div class="quick-photo-row">
+                <label>Session photo
+                  <input id="quickSessionPhotoInput" type="file" accept="image/*" capture="environment">
+                </label>
+                <button id="quickSessionPhotoTranscribeBtn" type="button" class="secondary" disabled>Save draft &amp; transcribe photo</button>
+              </div>
+              <img id="quickSessionPhotoPreview" class="quick-photo-preview" alt="Selected session photo" hidden>
+              <div class="help">A selected photo stays attached to this exact session. Automatic transcription uses the existing Supabase transcription function; paste or type remains available when it is offline.</div>
+
+              <div id="sessionImportPreview" class="session-import-preview help">Nothing previewed yet.</div>
+              <div id="sessionImportResult" class="session-import-result">Set the date and squad, paste or type the session, then preview it.</div>
               <div class="button-row import-save-actions">
-                <button id="saveImportedSessionBtn" disabled>Save to dashboard</button>
-                <button id="runImportedSessionBtn" class="secondary" disabled>Save &amp; run live</button>
+                <button id="saveImportedSessionBtn" type="button" class="secondary" disabled>Save for later</button>
+                <button id="runImportedSessionBtn" type="button" disabled>Save &amp; Use Now</button>
               </div>
-              <div class="help">The complete pasted workout is kept. Check the preview before saving; anything uncertain can still be edited under Sessions.</div>
+              <div class="help">Save &amp; Use Now makes this the selected session, opens the complete Deck immediately, and keeps it selected through attendance, captures, timing and Finish Session.</div>
             </div>
           </details>
         </article>
@@ -130,6 +200,10 @@
               <button data-view-jump="athletes" class="secondary">Athletes</button>
               <button data-view-jump="finish" class="secondary">Finish session</button>
             </div>
+            <div class="deck-session-tools">
+              <button id="deckEditSessionBtn" type="button" class="secondary">View / edit full session</button>
+              <button id="deckAddSessionBtn" type="button" class="secondary">＋ Add another session</button>
+            </div>
           </article>
 
           <article class="card deck-workout-card">
@@ -141,6 +215,13 @@
               <button data-view-jump="overview" class="secondary small">Full view</button>
             </div>
             <pre id="deckWorkout">No session loaded.</pre>
+          </article>
+
+          <article class="card deck-blocks-card">
+            <div class="card-heading">
+              <div><div class="eyebrow">Complete session</div><h3>Run or review each block</h3></div>
+            </div>
+            <div id="deckBlockList" class="deck-block-list"><div class="help">No complete blocks saved yet.</div></div>
           </article>
 
           <article class="card deck-sets-card">
@@ -256,8 +337,10 @@ Warm-down..."></textarea>
 
         <article class="card phone-action-card">
           <h3>Fast poolside capture</h3>
-          <label for="captureAthlete">Attach to</label>
-          <select id="captureAthlete" class="large-select"></select>
+          <div class="form-grid">
+            <div><label for="captureAthlete">Attach to swimmer</label><select id="captureAthlete" class="large-select"></select></div>
+            <div><label for="captureBlock">Attach to session block</label><select id="captureBlock" class="large-select"><option value="">Whole session</option></select></div>
+          </div>
 
           <div class="quick-action-grid">
             <button id="startVoiceBtn" class="poolside-action"><span>🎙</span>Start voice note</button>
@@ -521,7 +604,8 @@ Warm-down..."></textarea>
             <label>Lead-in to the next session</label><input id="editSessionNextCue" placeholder="What tomorrow should build from today">
             <label>Workout</label><textarea id="editSessionWorkout" class="large-textarea"></textarea>
             <div class="button-row">
-              <button id="saveSessionBtn" class="full-width">Save session</button>
+              <button id="saveSessionBtn">Save session</button>
+              <button id="saveSessionAndUseBtn" type="button">Save &amp; use on Deck</button>
               <button id="deleteSessionBtn" class="danger-button" type="button">Delete session</button>
             </div>
           </article>
@@ -682,7 +766,7 @@ Warm-down..."></textarea>
       </section>
       <section id="manage" class="view">
         <div class="view-heading"><div><h2>Manage on phone</h2><p>Edit and delete sessions, blocks, test sets, attempts, timed data, results and photo transcripts without returning to desktop.</p></div></div>
-        <article class="card"><div class="manage-jump-grid"><button data-view-jump="sessions">Sessions &amp; blocks</button><button data-view-jump="planning">Season / week</button><button data-view-jump="testsets">Test sets</button><button data-view-jump="resultsupdate">Results data</button><button data-view-jump="capture">Session photos</button><button data-view-jump="times">Timed data</button></div></article>
+        <article class="card"><div class="manage-jump-grid"><button id="manageAddSessionBtn" type="button">＋ Add session now</button><button data-view-jump="sessions">Sessions &amp; blocks</button><button data-view-jump="planning">Season / week</button><button data-view-jump="testsets">Test sets</button><button data-view-jump="resultsupdate">Results data</button><button data-view-jump="capture">Session photos</button><button data-view-jump="times">Timed data</button></div></article>
         <div class="mobile-manage-grid">
           <article class="card"><h3>Sessions</h3><div id="manageSessionsList"></div></article>
           <article class="card"><h3>Session blocks</h3><div id="manageBlocksList"></div></article>
@@ -749,12 +833,13 @@ Warm-down..."></textarea>
     <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
     <button data-view="athletes" class="nav-button"><span>◎</span>Swimmers</button>
     <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
+    <button data-view="sessions" class="nav-button"><span>▦</span>Sessions</button>
     <button data-view="manage" class="nav-button"><span>⚙</span>Manage</button>
     <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
   </nav>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260724-coach32"></script>
+  <script src="app.js?v=20260725-coach33"></script>
 </body>
 </html>
