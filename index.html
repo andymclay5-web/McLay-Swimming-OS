@@ -7,7 +7,7 @@
   <title>McLay Swimming OS — Full Coach Workflow</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260725-coach33">
+  <link rel="stylesheet" href="styles.css?v=20260725-coach34">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -89,12 +89,27 @@
     }
   </style>
 
+
+  <style id="coach-v34-transcription">
+    .voice-mode-row{align-items:end}.voice-mode-help{align-self:center;padding:.5rem 0}
+    .voice-transcription-panel{border:2px solid #9ebfd2;border-radius:.75rem;background:#f7fbfd;padding:.75rem;margin:.8rem 0}
+    .voice-transcription-panel h4{margin:.1rem 0}.voice-transcription-inbox{display:grid;gap:.4rem;margin:.55rem 0}
+    .voice-transcript-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;align-items:center;border:1px solid #c7dae5;border-radius:.55rem;background:#fff;padding:.55rem}
+    .voice-transcript-row.active{border:2px solid #123a5b;background:#eef6fb}.voice-transcript-actions{display:flex;gap:.35rem;flex-wrap:wrap}
+    .voice-structured-preview{border:1px solid #c7dae5;border-radius:.6rem;background:#fff;padding:.65rem;margin:.6rem 0}
+    .voice-structured-section{padding:.45rem 0;border-bottom:1px solid #dce8ef}.voice-structured-section:last-child{border-bottom:0}
+    .voice-structured-section strong{display:block;color:#123a5b;margin-bottom:.25rem}.voice-structured-section ul{margin:.25rem 0 .1rem 1.15rem;padding:0}
+    .voice-time-chip{display:inline-flex;border:1px solid #7faec9;background:#eef6fb;color:#123a5b;border-radius:999px;padding:.2rem .45rem;margin:.15rem;font-size:.75rem;font-weight:800}
+    .voice-apply-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem;margin:.65rem 0}.voice-apply-grid label{display:flex;gap:.45rem;align-items:flex-start;background:#fff;border:1px solid #c7dae5;border-radius:.55rem;padding:.55rem;margin:0}.voice-apply-grid input{width:auto;margin-top:.15rem}
+    .transcript-error{background:#fff0f0;border-left:5px solid #a32626;padding:.55rem;border-radius:.4rem;color:#6e1f1f}
+    @media(max-width:980px){.voice-apply-grid{grid-template-columns:1fr}.voice-transcript-row{grid-template-columns:1fr}.voice-transcript-actions button{flex:1;min-height:42px}}
+  </style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · complete phone management · v3.3</div>
+      <div class="header-subtitle">Plan → coach → log → review · complete phone management · photo + voice AI · v3.4</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -324,7 +339,7 @@
         <article class="card session-photo-card">
           <div class="card-heading"><div><div class="eyebrow">Training-session source</div><h3>Photograph and transcribe the session board</h3></div><span class="badge">Plan or actual</span></div>
           <div class="form-grid"><div><label>Photo purpose</label><select id="sessionPhotoPurpose"><option value="planned">Planned session</option><option value="actual">Actual session completed</option></select></div><div><label>Take or choose photo</label><input id="sessionPhotoInput" type="file" accept="image/*" capture="environment"></div></div>
-          <p class="help">The original photo stays attached as source proof. Automatic transcription uses the optional Supabase function; otherwise paste the transcript below and structure it into complete blocks.</p>
+          <p class="help">The original photo stays attached as source proof. Automatic transcription reads the photo into editable text and complete session blocks. The original photo remains attached as source proof.</p>
           <div id="sessionPhotoInbox"></div>
           <label>Paste/check transcript</label><textarea id="sessionPhotoTranscript" class="large-textarea" placeholder="Warm-up...
 Pre-set...
@@ -342,9 +357,14 @@ Warm-down..."></textarea>
             <div><label for="captureBlock">Attach to session block</label><select id="captureBlock" class="large-select"><option value="">Whole session</option></select></div>
           </div>
 
+          <div class="form-grid voice-mode-row">
+            <div><label for="voiceNoteMode">Voice-note mode</label><select id="voiceNoteMode" class="large-select"><option value="quick_note">Quick poolside note</option><option value="session_debrief">Session debrief</option></select></div>
+            <div class="help voice-mode-help">Quick note structures a swimmer/block observation. Session debrief prepares Finish Session and weekly-review evidence.</div>
+          </div>
+
           <div class="quick-action-grid">
             <button id="startVoiceBtn" class="poolside-action"><span>🎙</span>Start voice note</button>
-            <button id="stopVoiceBtn" class="poolside-action danger" disabled><span>■</span>Stop recording</button>
+            <button id="stopVoiceBtn" class="poolside-action danger" disabled><span>■</span>Stop &amp; transcribe</button>
             <label class="file-button poolside-action"><span>📷</span>Take photo<input id="photoInput" type="file" accept="image/*" capture="environment"></label>
             <label class="file-button poolside-action"><span>🎥</span>Record video<input id="videoInput" type="file" accept="video/*" capture="environment"></label>
             <button id="pasteClipboardBtn" class="poolside-action secondary"><span>📋</span>Paste from chat</button>
@@ -352,6 +372,30 @@ Warm-down..."></textarea>
           </div>
 
           <audio id="voicePreview" controls hidden></audio>
+
+          <section id="voiceTranscriptionPanel" class="voice-transcription-panel">
+            <div class="card-heading"><div><div class="eyebrow">Voice intelligence</div><h4>Transcript and coaching interpretation</h4></div><span id="voiceTranscriptStatus" class="badge">No voice note selected</span></div>
+            <div id="voiceTranscriptionInbox" class="voice-transcription-inbox"></div>
+            <label for="voiceTranscriptText">Editable transcript</label>
+            <textarea id="voiceTranscriptText" class="large-textarea" placeholder="Stop a voice note and the editable transcript will appear here."></textarea>
+            <div class="button-row">
+              <button id="saveVoiceTranscriptBtn" type="button" class="secondary" disabled>Save edited transcript</button>
+              <button id="reanalyzeVoiceTranscriptBtn" type="button" class="secondary" disabled>Re-analyse edited transcript</button>
+              <button id="retryVoiceTranscriptBtn" type="button" disabled>Transcribe / retry</button>
+            </div>
+            <div id="voiceStructuredPreview" class="voice-structured-preview help">The app will pull out session changes, athlete response, cues, follow-ups and any spoken times.</div>
+            <div class="voice-apply-grid">
+              <label><input id="voiceApplyCapture" type="checkbox" checked> Put the structured summary on the capture</label>
+              <label><input id="voiceApplyFinish" type="checkbox"> Add appropriate parts to Finish Session</label>
+              <label><input id="voiceApplyAthlete" type="checkbox"> Add to the selected swimmer’s coach notes</label>
+              <label><input id="voiceApplyTimes" type="checkbox"> Save clearly detected swimmer times</label>
+            </div>
+            <div class="button-row">
+              <button id="applyVoiceTranscriptBtn" type="button" disabled>Apply checked items</button>
+              <button id="deleteVoiceTranscriptBtn" type="button" class="danger-button" disabled>Delete transcript only</button>
+            </div>
+            <p class="help"><strong>Nothing is applied silently.</strong> Check the transcript and interpretation first, then choose what becomes part of the coaching record.</p>
+          </section>
 
           <label for="captureCategory">Type</label>
           <select id="captureCategory" class="large-select">
@@ -840,6 +884,6 @@ Warm-down..."></textarea>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260725-coach33"></script>
+  <script src="app.js?v=20260725-coach34"></script>
 </body>
 </html>
