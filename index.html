@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — Full Coach Workflow</title>
+  <title>McLay Swimming OS — v3.6.1 Verified</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260725-coach34">
+  <link rel="stylesheet" href="styles.css?v=20260726-coach361">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -104,12 +104,38 @@
     .transcript-error{background:#fff0f0;border-left:5px solid #a32626;padding:.55rem;border-radius:.4rem;color:#6e1f1f}
     @media(max-width:980px){.voice-apply-grid{grid-template-columns:1fr}.voice-transcript-row{grid-template-columns:1fr}.voice-transcript-actions button{flex:1;min-height:42px}}
   </style>
+
+  <style id="coach-v35-overrides">
+    .v35-hidden-repeated-sets{display:none!important}
+    .v35-original-session{border:1px solid #c5dbe8;border-radius:.7rem;background:#f7fafc}
+    .v35-original-session>summary{cursor:pointer;display:flex;justify-content:space-between;gap:.75rem;padding:.85rem 1rem;align-items:center}
+    .v35-original-session>summary span{font-size:.75rem;color:#567}.v35-original-session pre{margin:0;padding:1rem;max-height:55vh;overflow:auto;white-space:pre-wrap}
+    .v35-deck-block{border:2px solid #b8d1df;border-radius:.8rem;background:#fff;margin:.55rem 0;overflow:hidden}
+    .v35-deck-block[open]{border-color:#123a5b;box-shadow:0 4px 14px rgba(18,58,91,.12)}
+    .v35-deck-block>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.8rem .9rem;background:#eef6fb}
+    .v35-deck-block>summary::-webkit-details-marker{display:none}.v35-deck-block>summary span{display:block;font-size:.68rem;text-transform:uppercase;font-weight:900;color:#567}.v35-deck-block>summary strong{display:block;color:#123a5b;font-size:1rem}.v35-deck-block>summary b{white-space:nowrap;color:#123a5b}
+    .v35-deck-block-body{padding:.8rem}.v35-deck-block-body pre{white-space:pre-wrap;margin:0 0 .75rem;font:inherit;line-height:1.45;background:#fff}
+    .v35-block-review{display:grid;gap:.75rem;margin-top:.8rem}.v35-block-review-card{border:1px solid #b9d1df;border-radius:.7rem;padding:.7rem;background:#f8fbfd}.v35-block-review-head{display:flex;justify-content:space-between;align-items:center;gap:.5rem}.v35-block-review-card input,.v35-block-review-card textarea,.v35-block-review-card select{width:100%;margin-top:.45rem}
+    .v35-adaptation-panel textarea{min-height:360px;white-space:pre-wrap}.v35-adaptation-panel details{margin-top:.8rem;border-top:1px solid #d7e5ed;padding-top:.7rem}.v35-adaptation-panel details>summary{cursor:pointer;display:flex;justify-content:space-between;gap:.5rem}.v35-adaptation-panel details>summary span{font-size:.72rem;color:#567}
+    .v35-finish-voice{border:2px solid #8eb8cf;background:#eef7fb;border-radius:.8rem;padding:.8rem;margin:.7rem 0 1rem}.v35-question-mic{display:block;margin:.3rem 0 .45rem;padding:.4rem .55rem;min-height:36px}.v35-lane-badge{display:inline-flex;margin-left:.55rem;background:#123a5b;color:#fff;border-radius:999px;padding:.15rem .45rem;font-size:.68rem;font-weight:900}
+    #deck .deck-grid{display:block}#deck .deck-grid>article{margin-bottom:.75rem}.deck-workout-card{padding:0!important}.deck-session-tools{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.65rem}
+    @media(max-width:980px){
+      .session-import-card{display:block!important}.session-import-card details:not([open]) .session-import-body{display:none}
+      .deck-hero .deck-cue-block{display:grid;grid-template-columns:95px 1fr;gap:.45rem;padding:.35rem 0}.deck-action-grid.coach-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.deck-action-grid.coach-actions button{padding:.55rem .25rem;font-size:.75rem}
+      .v35-adaptation-panel textarea{min-height:300px}.v35-block-review-card textarea{min-height:170px}
+      #deck .card{padding:.75rem}.v35-deck-block-body{padding:.65rem}.v35-deck-block>summary{padding:.72rem}.v35-deck-block-body .button-row{display:grid;grid-template-columns:1fr 1fr}.v35-deck-block-body .button-row button:last-child{grid-column:1/-1}
+    }
+  
+    /* v3.6 corrected */
+    .v36-sync-grid,.v36-finish-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem}.v36-sync-grid>div,.v36-finish-grid>div{background:#eef5f8;border:1px solid #c6dce7;border-radius:.65rem;padding:.65rem;display:flex;flex-direction:column;gap:.2rem}.v36-sync-grid span,.v36-finish-grid span{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#486373}.v36-pending-list{display:grid;gap:.35rem;margin-top:.65rem}.v36-pending-list>div,.v36-rule-row{display:flex;justify-content:space-between;gap:.75rem;align-items:center;border-top:1px solid #d5e3e9;padding:.45rem 0}.v36-pending-list span{font-size:.8rem;color:#526a77}.v36-evidence-line{display:grid;grid-template-columns:minmax(105px,.32fr) 1fr;gap:.55rem;border-top:1px solid #dbe6eb;padding:.45rem 0}.v36-evidence-line b{font-size:.78rem;color:#123a5b}.v36-evidence-line span{font-size:.86rem;line-height:1.35}.v36-finish-evidence{border:2px solid #b7d0dc;background:#f7fbfd;border-radius:.8rem;padding:.85rem;margin:.7rem 0 1rem}.v36-rule-list{margin-top:.65rem}.v36-rule-row>div{display:flex;flex-direction:column;gap:.2rem}.v36-rule-row span{font-size:.82rem;line-height:1.35}.v36-ephemeral-note{border-left:4px solid #2b7a78;padding-left:.65rem}.v36-cloud-required{border:1px solid #d8a34b;background:#fff8e7;border-radius:.55rem;padding:.6rem}.results-import-wrap{overscroll-behavior:contain}
+    @media(max-width:720px){.v36-sync-grid,.v36-finish-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v36-evidence-line{grid-template-columns:1fr}.v36-rule-row{align-items:flex-start}.v36-rule-row button{flex:0 0 auto}.results-import-wrap table{min-width:980px}}
+</style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Plan → coach → log → review · complete phone management · photo + voice AI · v3.4</div>
+      <div class="header-subtitle">Enter → coach → capture → learn → review → progress · v3.7.1</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -481,7 +507,7 @@ Warm-down..."></textarea>
           <div class="live-setup-grid">
             <div><label>Set label</label><input id="liveSetLabel" class="large-input" placeholder="8 x 50 threshold"></div>
             <div><label>Reps</label><input id="liveReps" class="large-input" type="number" min="1" max="100" value="8"></div>
-            <div><label>Distance</label><select id="liveDistance" class="large-select"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></div>
+            <div><label>Distance</label><select id="liveDistance" class="large-select"><option>25</option><option selected>50</option><option>75</option><option>100</option><option>150</option><option>200</option><option>300</option><option>400</option></select></div>
             <div><label>Stroke</label><select id="liveStroke" class="large-select"><option>Freestyle</option><option>Backstroke</option><option>Breaststroke</option><option>Butterfly</option><option>IM</option><option>Kick</option></select></div>
             <div><label>Master cycle</label><input id="liveCycle" class="large-input" inputmode="decimal" value="1:00"></div>
             <div><label>Lane gap</label><select id="liveWaveGap" class="large-select"><option value="0">No gap</option><option value="5" selected>5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="20">20 seconds</option></select></div>
@@ -523,7 +549,7 @@ Warm-down..."></textarea>
             <div>
               <label>Distance</label>
               <select id="timeDistance" class="large-select">
-                <option>25</option><option selected>50</option><option>100</option><option>200</option>
+                <option>25</option><option selected>50</option><option>75</option><option>100</option><option>150</option><option>200</option><option>300</option><option>400</option>
               </select>
             </div>
             <div>
@@ -879,11 +905,12 @@ Warm-down..."></textarea>
     <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
     <button data-view="sessions" class="nav-button"><span>▦</span>Sessions</button>
     <button data-view="manage" class="nav-button"><span>⚙</span>Manage</button>
+    <button data-view="reports" class="nav-button"><span>▧</span>Report</button>
     <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
   </nav>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260725-coach34"></script>
+  <script src="app.js?v=20260726-coach371"></script>
 </body>
 </html>
