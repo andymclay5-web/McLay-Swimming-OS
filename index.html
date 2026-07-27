@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.7.4 Pool-Deck Stability</title>
+  <title>McLay Swimming OS — v3.10.1 Transcription Complete</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260726-coach361">
+  <link rel="stylesheet" href="styles.css?v=20260728-transcription3101">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -188,7 +188,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Enter → coach → capture → learn → review → progress · v3.7.3</div>
+      <div class="header-subtitle">Version 3.10.1 · trusted results · individual delivery · complete photo and voice transcription</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -774,6 +774,11 @@ Warm-down..."></textarea>
               <div><label>Timing order</label><input id="profileTimingOrder" type="number" min="1" placeholder="1"></div>
               <div><label>Sex for standards / records</label><select id="profileSex"><option value="">Not set</option><option value="F">Female</option><option value="M">Male</option></select></div>
             </div>
+            <div class="form-grid">
+              <div><label>Swimmer email</label><input id="profileSwimmerEmail" type="email" autocomplete="off" placeholder="swimmer@example.com"></div>
+              <div><label>Parent / guardian email</label><input id="profileGuardianEmail" type="email" autocomplete="off" placeholder="parent@example.com"></div>
+              <div><label>Communication preference</label><select id="profileCommunicationPreference"><option value="coach_review">Coach review only</option><option value="swimmer">Swimmer</option><option value="guardian">Parent / guardian</option><option value="both">Both</option><option value="none">Do not email</option></select></div>
+            </div>
             <label>Current plan focus</label><input id="profileCurrentFocus">
             <label>Technical focus</label><input id="profileTechnicalFocus">
             <label>Planned adaptations / para version</label><textarea id="profileModifications"></textarea>
@@ -953,6 +958,7 @@ Warm-down..."></textarea>
     <button data-view="deck" class="nav-button active"><span>▤</span>Board</button>
     <button data-view="attendance" class="nav-button"><span>✓</span>Roll</button>
     <button data-view="times" class="nav-button"><span>◷</span>Times</button>
+    <button data-view="testsets" class="nav-button"><span>◎</span>Tests</button>
     <button data-view="capture" class="nav-button"><span>＋</span>Capture</button>
     <button data-view="athletes" class="nav-button"><span>◎</span>Swimmers</button>
     <button data-view="finish" class="nav-button"><span>■</span>Finish</button>
@@ -964,6 +970,6 @@ Warm-down..."></textarea>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260727-coach374"></script>
+  <script src="app.js?v=20260728-transcription3101"></script>
 </body>
 </html>

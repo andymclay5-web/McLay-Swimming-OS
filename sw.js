@@ -1,19 +1,19 @@
 "use strict";
 
-const CACHE_NAME = "mclay-swimming-os-coach-v3-7-4-20260727";
+const CACHE_NAME = "mclay-swimming-os-transcription-complete-v3-10-1-20260728";
 const CORE = [
   "./",
   "./index.html",
-  "./styles.css?v=20260726-coach361",
+  "./styles.css?v=20260728-transcription3101",
   "./config.js",
   "./seed.js",
-  "./app.js?v=20260727-coach374",
+  "./app.js?v=20260728-transcription3101",
   "./manifest.webmanifest"
 ];
 
 // Source result files are processed in memory and are never written to the PWA
 // cache. Only accepted rows are committed to Supabase.
-const EPHEMERAL_RESULT_FILE = /\.(csv|tsv|txt|sd3|hy3|zip)$/i;
+const EPHEMERAL_RESULT_FILE = /\.(csv|tsv|txt|sd3|hy3|zip|pdf)$/i;
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
