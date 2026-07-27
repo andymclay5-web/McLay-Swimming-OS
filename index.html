@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.10.1 Transcription Complete</title>
+  <title>McLay Swimming OS — v3.10.2 Performance + Capture Repair</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260728-transcription3101">
+  <link rel="stylesheet" href="styles.css?v=20260728-performance3102">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -257,8 +257,11 @@
               </div>
 
               <div class="quick-photo-row">
-                <label>Session photo
-                  <input id="quickSessionPhotoInput" type="file" accept="image/*" capture="environment">
+                <label class="file-button secondary">Take session photo
+                  <input id="quickSessionPhotoCameraInput" type="file" accept="image/*" capture="environment">
+                </label>
+                <label class="file-button secondary">Choose existing photo
+                  <input id="quickSessionPhotoInput" type="file" accept="image/*">
                 </label>
                 <button id="quickSessionPhotoTranscribeBtn" type="button" class="secondary" disabled>Save draft &amp; transcribe photo</button>
               </div>
@@ -417,7 +420,7 @@
 
         <article class="card session-photo-card">
           <div class="card-heading"><div><div class="eyebrow">Training-session source</div><h3>Photograph and transcribe the session board</h3></div><span class="badge">Plan or actual</span></div>
-          <div class="form-grid"><div><label>Photo purpose</label><select id="sessionPhotoPurpose"><option value="planned">Planned session</option><option value="actual">Actual session completed</option></select></div><div><label>Take or choose photo</label><input id="sessionPhotoInput" type="file" accept="image/*" capture="environment"></div></div>
+          <div class="form-grid"><div><label>Photo purpose</label><select id="sessionPhotoPurpose"><option value="planned">Planned session</option><option value="actual">Actual session completed</option></select></div><div><label>Session-board photo</label><div class="button-row"><label class="file-button secondary">Take photo<input id="sessionPhotoCameraInput" type="file" accept="image/*" capture="environment"></label><label class="file-button secondary">Choose existing photo<input id="sessionPhotoInput" type="file" accept="image/*"></label></div></div></div>
           <p class="help">The original photo stays attached as source proof. Automatic transcription reads the photo into editable text and complete session blocks. The original photo remains attached as source proof.</p>
           <div id="sessionPhotoInbox"></div>
           <label>Paste/check transcript</label><textarea id="sessionPhotoTranscript" class="large-textarea" placeholder="Warm-up...
@@ -445,6 +448,7 @@ Warm-down..."></textarea>
             <button id="startVoiceBtn" class="poolside-action"><span>🎙</span>Start voice note</button>
             <button id="stopVoiceBtn" class="poolside-action danger" disabled><span>■</span>Stop &amp; transcribe</button>
             <label class="file-button poolside-action"><span>📷</span>Take photo<input id="photoInput" type="file" accept="image/*" capture="environment"></label>
+            <label class="file-button poolside-action secondary"><span>🖼</span>Choose photo<input id="galleryPhotoInput" type="file" accept="image/*"></label>
             <label class="file-button poolside-action"><span>🎥</span>Record video<input id="videoInput" type="file" accept="video/*" capture="environment"></label>
             <button id="pasteClipboardBtn" class="poolside-action secondary"><span>📋</span>Paste from chat</button>
             <button id="clearCaptureBtn" class="poolside-action secondary"><span>×</span>Clear note</button>
@@ -970,6 +974,6 @@ Warm-down..."></textarea>
 
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260728-transcription3101"></script>
+  <script src="app.js?v=20260728-performance3102"></script>
 </body>
 </html>

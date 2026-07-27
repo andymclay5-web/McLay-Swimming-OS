@@ -57,12 +57,15 @@ function saveState(next){
   window.appState = next;
   v374PendingPersist = v374PersistableState(next);
   if(v374StateWriteTimer===null){
-    v374StateWriteTimer=setTimeout(()=>{
+    const writeSnapshot=()=>{
       const snapshot=v374PendingPersist;
       v374PendingPersist=null;
       v374StateWriteTimer=null;
       if(snapshot){try{localStorage.setItem(STATE_KEY,JSON.stringify(snapshot))}catch(error){console.warn("Lightweight local save unavailable",error)}}
-    },0);
+    };
+    v374StateWriteTimer=typeof requestIdleCallback==="function"
+      ? requestIdleCallback(writeSnapshot,{timeout:450})
+      : setTimeout(writeSnapshot,80);
   }
   if(typeof window.v374ScheduleHeavyCache==="function") window.v374ScheduleHeavyCache(next);
 }
@@ -2434,7 +2437,7 @@ readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.warn));
 }
-if(cloudReady()) syncIfPossible();
+/* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
 // =============================================================================
 // McLay Swimming OS v3.3.1 base — non-blocking optional-table sync repair.
@@ -2555,7 +2558,7 @@ window.addEventListener("online",()=>syncIfPossible());
 
 // Retry immediately with the safe sync path. This clears the stuck "Syncing…"
 // state shown by v3.3 without requiring the user to sign out or clear the app.
-if(cloudReady())syncIfPossible();
+/* v3.10.2: duplicate startup cloud pull removed. */
 
 
 // =============================================================================
@@ -2585,7 +2588,7 @@ async function v34TranscribeCapture(tr,capture,{rawTextOverride=""}={}){
   if(!cloudReady())throw new Error("Cloud connection is required for AI transcription.");
   if(typeof v331ClearOptionalTableWarnings==="function")v331ClearOptionalTableWarnings();
   if(!capture.media_path&&!rawTextOverride){
-    await syncIfPossible();
+    await v3102FlushPendingNow();
   }
   if(!capture.media_path&&!rawTextOverride)throw new Error("The media is still waiting to upload. Press Sync and retry.");
   tr.source_type=tr.source_type||capture.capture_type||"photo";
@@ -2593,19 +2596,19 @@ async function v34TranscribeCapture(tr,capture,{rawTextOverride=""}={}){
   tr.session_block_id=tr.session_block_id||capture.session_block_id||null;
   tr.status="transcribing";tr.error_message="";tr.updated_at=nowIso();
   upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);
-  await syncIfPossible();
+  await v3102FlushPendingNow();
   const config=getConfig(),auth=getAuth();
   const res=await fetch(`${config.supabaseUrl}/functions/v1/transcribe-capture`,{
     method:"POST",headers:{apikey:config.supabaseAnonKey,Authorization:`Bearer ${auth.access_token}`,"Content-Type":"application/json"},
     body:JSON.stringify({transcription_id:tr.id,capture_id:capture.id,session_id:tr.session_id,media_path:capture.media_path,source_type:tr.source_type,purpose:tr.purpose,athlete_id:tr.athlete_id,session_block_id:tr.session_block_id,raw_text_override:rawTextOverride||null})
   });
   const data=await res.json();
-  if(!res.ok){tr.status="error";tr.error_message=data.error||"Transcription failed";tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);await syncIfPossible();throw new Error(tr.error_message)}
+  if(!res.ok){tr.status="error";tr.error_message=data.error||"Transcription failed";tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);await v3102FlushPendingNow();throw new Error(tr.error_message)}
   tr.raw_text=data.raw_text||rawTextOverride||"";
   tr.structured_blocks=data.structured_blocks||[];
   tr.structured_data=data.structured_data||{};
   tr.status="review";tr.error_message="";tr.updated_at=nowIso();
-  upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);await syncIfPossible();
+  upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);await v3102FlushPendingNow();
   return tr;
 }
 
@@ -6188,7 +6191,7 @@ v310Interface();renderAll();
 // Adds the missing Supabase/OpenAI health check, preserves transcription status
 // in cloud sync, and allows a coach to dictate a new session before it exists.
 // -----------------------------------------------------------------------------
-const V3101_BUILD="20260728-transcription-complete-3101";
+const V3101_BUILD="20260728-performance-capture-3102";
 let v3101SessionRecorder=null;
 let v3101SessionVoiceChunks=[];
 let v3101PendingSessionVoice=null;
@@ -6235,10 +6238,161 @@ saveImportedSession=async function(openNow){const pending=v3101PendingSessionVoi
 function v3101InjectStyles(){if($("v3101Styles"))return;const style=document.createElement("style");style.id="v3101Styles";style.textContent=`
 .v3101-health-card{border-left:6px solid #123a5b}.v3101-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.45rem;margin-top:.65rem}.v3101-health-row{display:grid;grid-template-columns:28px 1fr;gap:.4rem;align-items:start;border:1px solid #d3e1e8;border-radius:.55rem;padding:.55rem;background:#fff}.v3101-health-row>span{display:flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:999px;font-weight:900}.v3101-health-row.ok>span{background:#ddf4e3;color:#175b2b}.v3101-health-row.bad>span{background:#fbe0e0;color:#8d2020}.v3101-health-row small{display:block;color:#657985;margin-top:.15rem;overflow-wrap:anywhere}.v3101-dictation{border:1px solid #bdd2df;border-radius:.65rem;background:#f4f9fb;padding:.7rem;margin:.65rem 0}.v3101-dictation>div:first-child{display:grid;gap:.15rem}.v3101-dictation>div:first-child span{font-size:.75rem;color:#567}.v3101-dictation audio{width:100%;margin-top:.5rem}.help.good{color:#17602f}.help.error{color:#9a2525}@media(max-width:760px){.v3101-health-grid{grid-template-columns:1fr}.v3101-dictation .button-row button{flex:1}}
 `;document.head.appendChild(style)}
-function v3101Interface(){v3101InjectStyles();v3101InjectHealth();v3101InjectSessionDictation();document.title="McLay Swimming OS — v3.10.1 Transcription Complete";const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent="Version 3.10.1 · trusted results · individual delivery · complete photo and voice transcription"}
+function v3101Interface(){v3101InjectStyles();v3101InjectHealth();v3101InjectSessionDictation();document.title="McLay Swimming OS — v3.10.2 Performance + Capture Repair";const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent="Version 3.10.2 · fast local actions · repaired photo and voice transcription"}
 const v3101PriorRenderAll=renderAll;
 renderAll=function(){v3101PriorRenderAll();v3101InjectHealth();v3101InjectSessionDictation();v3101RenderHealth()};
 const v3101PriorShowView=showView;
 showView=function(id){v3101PriorShowView(id);if(id==="capture"){v3101InjectHealth();v3101RenderHealth()}if(id==="deck")v3101InjectSessionDictation()};
 
 v3101Interface();renderAll();
+
+
+// =============================================================================
+// McLay Swimming OS v3.10.2 — performance and capture repair.
+// Ordinary taps stay local and responsive. Background sync pushes queued changes
+// without re-downloading the entire club/result model after every interaction.
+// Manual Sync remains the explicit full push + pull operation.
+// =============================================================================
+let v3102SyncTimer=null;
+let v3102SyncRun=null;
+let v3102QueuedPull=false;
+let v3102LastInteraction=0;
+
+function v3102SetBusy(label=""){
+  document.body.classList.toggle("v3102-cloud-busy",Boolean(label));
+  const badge=$("syncBadge");
+  if(badge&&label&&!/error/i.test(badge.textContent||"")) badge.dataset.background=label;
+}
+async function v3102RunSync({pull=false,render=false,manual=false}={}){
+  if(!cloudReady()){renderMode();return false}
+  if(v3102SyncRun){
+    if(pull){await v3102SyncRun;return v3102RunSync({pull:true,render,manual})}
+    return v3102SyncRun;
+  }
+  v3102SyncRun=(async()=>{
+    try{
+      v3102SetBusy(pull?"Refreshing":"Saving");
+      await pushPending();
+      if(pull) await pullCloud();
+      updateStatus(v331SyncStatusText(),v331UnavailableTables().size?"normal":"good");
+      if(render) renderAll();
+      return true;
+    }catch(error){
+      console.error(error);
+      updateStatus("Waiting to sync","error");
+      return false;
+    }finally{
+      v3102SetBusy("");
+      v3102SyncRun=null;
+    }
+  })();
+  return v3102SyncRun;
+}
+function v3102ScheduleSync(delay=1000){
+  clearTimeout(v3102SyncTimer);
+  v3102SyncTimer=setTimeout(()=>{v3102SyncTimer=null;v3102RunSync({pull:false,render:false})},delay);
+}
+async function v3102FlushPendingNow(){
+  clearTimeout(v3102SyncTimer);v3102SyncTimer=null;
+  if(v3102SyncRun)await v3102SyncRun;
+  return v3102RunSync({pull:false,render:false});
+}
+
+// Existing save handlers await this function. Returning immediately keeps the
+// phone responsive while the queued cloud write happens shortly afterward.
+syncIfPossible=async function(){v3102ScheduleSync(850);return true};
+scheduleFastSync=function(){v3102ScheduleSync(650)};
+syncNow=async function(){
+  if(!getAuth()?.access_token)throw new Error("Sign in first.");
+  if(!appState.settings.organisation_id)await ensureOrganisation();
+  v331ClearOptionalTableWarnings();
+  updateStatus("Syncing…");
+  clearTimeout(v3102SyncTimer);v3102SyncTimer=null;
+  return v3102RunSync({pull:true,render:true,manual:true});
+};
+window.addEventListener("online",()=>v3102ScheduleSync(400));
+for(const eventName of ["pointerdown","keydown","touchstart"]){window.addEventListener(eventName,()=>{v3102LastInteraction=Date.now()},{passive:true})}
+
+function v3102AdoptQuickPhoto(file){
+  v33PendingSessionPhoto=file||null;v33PendingPhotoSaved=false;
+  if(v33QuickPhotoUrl)URL.revokeObjectURL(v33QuickPhotoUrl);
+  if(!v33PendingSessionPhoto)return;
+  v33QuickPhotoUrl=URL.createObjectURL(v33PendingSessionPhoto);
+  $("quickSessionPhotoPreview").src=v33QuickPhotoUrl;$("quickSessionPhotoPreview").hidden=false;
+  $("quickSessionPhotoTranscribeBtn").disabled=false;
+  v33SetImportMessage("Photo selected. Transcribe it, or type/paste the session while it uploads.","good");
+}
+function v3102BindCaptureChoices(){
+  const quickCamera=$("quickSessionPhotoCameraInput");
+  if(quickCamera&&!quickCamera.dataset.bound3102){quickCamera.dataset.bound3102="1";quickCamera.addEventListener("change",e=>{v3102AdoptQuickPhoto(e.target.files?.[0]);e.target.value=""})}
+  const sessionCamera=$("sessionPhotoCameraInput");
+  if(sessionCamera&&!sessionCamera.dataset.bound3102){sessionCamera.dataset.bound3102="1";sessionCamera.addEventListener("change",async e=>{await v32SaveSessionPhoto(e.target.files?.[0]);e.target.value=""})}
+  const gallery=$("galleryPhotoInput");
+  if(gallery&&!gallery.dataset.bound3102){gallery.dataset.bound3102="1";gallery.addEventListener("change",async e=>{await saveFileCapture(e.target.files?.[0],"photo");e.target.value=""})}
+}
+function v3102PlaceDictation(){
+  const box=$("v3101SessionDictation"),textarea=$("sessionPasteInput");if(!box||!textarea)return;
+  box.querySelector("strong").textContent="Dictate a new session";
+  const span=box.querySelector("span");if(span)span.textContent="Record the workout here. It will return to the editable session box below.";
+  const label=textarea.previousElementSibling;
+  if(label&&box.nextElementSibling!==label) label.insertAdjacentElement("beforebegin",box);
+}
+function v3102HumanTranscriptionError(message){
+  const text=String(message||"");
+  if(/quota|billing|exceeded your current/i.test(text))return "OpenAI API billing or quota needs attention.";
+  if(/schema|response_format|structured_blocks/i.test(text))return "The transcription response format was rejected. Deploy the repaired v3.10.2 Edge Function.";
+  if(/timed out|abort/i.test(text))return "Transcription timed out. The source is saved and can be retried.";
+  if(/media|upload/i.test(text))return "The photo or audio is still uploading. Wait for Cloud synced, then retry.";
+  return text||"Transcription failed. The source remains saved for retry.";
+}
+const v3102PriorVoicePreview=v34VoicePreviewHtml;
+v34VoicePreviewHtml=function(tr){
+  if(tr?.status==="error")return `<div class="transcript-error"><strong>Transcription needs retry</strong><div>${escapeHtml(v3102HumanTranscriptionError(tr.error_message))}</div></div>`;
+  return v3102PriorVoicePreview(tr);
+};
+
+const v3102PriorRenderAll=renderAll;
+renderAll=function(){v3102PriorRenderAll();v3102BindCaptureChoices();v3102PlaceDictation()};
+const v3102PriorShowView=showView;
+showView=function(id){v3102PriorShowView(id);v3102BindCaptureChoices();if(id==="deck")v3102PlaceDictation()};
+
+function v3102InjectStyles(){if($("v3102Styles"))return;const style=document.createElement("style");style.id="v3102Styles";style.textContent=`
+.v3102-cloud-busy #syncBadge::after{content:" · saving";font-weight:600}.quick-photo-row{display:flex;flex-wrap:wrap;gap:.55rem;align-items:end}.quick-photo-row .file-button{min-width:150px}.file-button{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;border:2px solid #87abc0;border-radius:.55rem;padding:.58rem .72rem;background:#fff;color:#123a5b;font-weight:800;cursor:pointer}.file-button:hover{background:#edf6fa}.file-button input{position:absolute;inline-size:1px;block-size:1px;opacity:0;pointer-events:none}.v3101-dictation{position:relative}.v3101-dictation .button-row{margin-top:.5rem}@media(max-width:760px){.quick-photo-row>*{flex:1 1 100%}.quick-photo-row .file-button{display:flex;justify-content:center}.button-row .file-button{flex:1 1 140px}}
+`;document.head.appendChild(style)}
+
+// Batch queue acknowledgements so a large pending queue does not rewrite local
+// storage after every individual cloud row.
+pushPending=async function(){
+  if(!cloudReady())return;
+  const priority={athletes:1,season_plans:2,weekly_plans:3,sessions:4,session_lane_assignments:5,session_blocks:6,test_sets:7,attendance:8,captures:9,timed_sets:10,test_set_attempts:11,coach_result_imports:12,coach_results:13,coach_result_aliases:14,session_reviews:15,session_transcriptions:16};
+  const pending=[...appState.pending].sort((a,b)=>(priority[a.table]||99)-(priority[b.table]||99));
+  let completed=0;
+  const acknowledge=item=>{appState.pending=appState.pending.filter(p=>!(p.table===item.table&&p.id===item.id));completed++;if(completed%10===0)saveState(appState)};
+  for(const item of pending){
+    if(V331_OPTIONAL_CLOUD_TABLES.has(item.table)&&v331UnavailableTables().has(item.table))continue;
+    try{
+      if(item.action==="delete"){
+        await cloudFetch(`/rest/v1/${item.table}?id=eq.${encodeURIComponent(item.id)}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+        acknowledge(item);continue;
+      }
+      const record=appState[item.table]?.find(r=>r.id===item.id);
+      if(!record){acknowledge(item);continue}
+      if(item.table==="captures")await uploadCaptureMedia(record);
+      const row=cloudRow(item.table,record);
+      await cloudFetch(`/rest/v1/${item.table}?on_conflict=id`,{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(row)});
+      acknowledge(item);
+    }catch(error){
+      const missing=v331MissingRelationTable(error);
+      if(missing===item.table&&v331MarkTableUnavailable(item.table,error))continue;
+      if(completed)saveState(appState);
+      throw error;
+    }
+  }
+  if(completed)saveState(appState);
+};
+
+v3102InjectStyles();v3102BindCaptureChoices();v3102PlaceDictation();
+document.title="McLay Swimming OS — v3.10.2 Performance + Capture Repair";
+const v3102Subtitle=document.querySelector(".header-subtitle");if(v3102Subtitle)v3102Subtitle.textContent="Version 3.10.2 · fast local actions · repaired photo and voice transcription";
+// Only push unsent local changes after startup. A full data refresh is manual.
+setTimeout(()=>v3102ScheduleSync(250),1200);
