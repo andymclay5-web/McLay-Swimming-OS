@@ -1,35 +1,12 @@
 "use strict";
-
-const CACHE_NAME = "mclay-swimming-os-performance-capture-v3-10-2-20260728";
-const CORE = [
-  "./",
-  "./index.html",
-  "./styles.css?v=20260728-performance3102",
-  "./config.js",
-  "./seed.js",
-  "./app.js?v=20260728-performance3102",
-  "./manifest.webmanifest"
-];
-
-// Source result files are processed in memory and are never written to the PWA
-// cache. Only accepted rows are committed to Supabase.
-const EPHEMERAL_RESULT_FILE = /\.(csv|tsv|txt|sd3|hy3|zip|pdf)$/i;
-
-self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
-});
-self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("mclay-swimming-os-") && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
-});
-self.addEventListener("fetch", event => {
-  const request=event.request,url=new URL(request.url);
-  if(request.method!=="GET"||url.origin!==self.location.origin)return;
-  if(EPHEMERAL_RESULT_FILE.test(url.pathname)){
-    event.respondWith(fetch(request,{cache:"no-store"}));
-    return;
-  }
-  event.respondWith(fetch(request).then(response=>{
-    if(response&&response.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(request.mode==="navigate"?"./index.html":request,copy))}
-    return response;
-  }).catch(()=>request.mode==="navigate"?caches.match("./index.html"):caches.match(request)));
-});
+const CACHE_NAME="mclay-swimming-os-v3-10-3-recovery-20260728";
+const CORE=["./","./index.html","./styles.css?v=20260728-recovery3103","./app.js?v=20260728-recovery3103","./config.js","./seed.js","./manifest.webmanifest"];
+self.addEventListener("install",event=>event.waitUntil((async()=>{
+  for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);
+  const cache=await caches.open(CACHE_NAME);
+  for(const url of CORE){try{const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(response.ok)await cache.put(request,response.clone())}catch(error){console.warn("Optional install cache skipped",url,error)}}
+  await self.skipWaiting();
+})()));
+self.addEventListener("activate",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
+self.addEventListener("message",event=>{if(event.data==="SKIP_WAITING")self.skipWaiting()});
+self.addEventListener("fetch",event=>{const req=event.request,url=new URL(req.url);if(req.method!=="GET"||url.origin!==self.location.origin)return;if(/\/(rest|auth|storage|functions)\/v1\//.test(url.pathname))return;event.respondWith((async()=>{try{const response=await fetch(req,{cache:"no-store"});if(response&&response.ok){const cache=await caches.open(CACHE_NAME);const key=req.mode==="navigate"?new Request("./index.html"):req;await cache.put(key,response.clone())}return response}catch(error){const cache=await caches.open(CACHE_NAME);return (req.mode==="navigate"?await cache.match("./index.html"):await cache.match(req))||Response.error()}})())});

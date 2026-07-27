@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.10.2 Performance + Capture Repair</title>
+  <title>McLay Swimming OS — v3.10.3 Recovery Audit</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260728-performance3102">
+  <link rel="stylesheet" href="styles.css?v=20260728-recovery3103">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -188,7 +188,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 3.10.1 · trusted results · individual delivery · complete photo and voice transcription</div>
+      <div class="header-subtitle">Version 3.10.3 · stable startup · automatic cloud · photo + voice · HR / SR / energy reference</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -338,12 +338,14 @@
             <div id="deckNextSession" class="deck-next">No future session entered yet.</div>
           </article>
 
-          <article class="card">
-            <div class="eyebrow">Poolside quick answer</div>
-            <div id="deckAthleteButtons" class="quick-swimmer-buttons"></div>
-            <select id="deckAthlete" class="large-select quick-hidden-select" aria-label="Selected swimmer"></select>
-            <div id="deckAthleteBrief" class="deck-athlete-brief"></div>
-          </article>
+          <details class="card v3103-deck-disclosure" id="deckAthleteQuickDetails">
+            <summary><span><span class="eyebrow">Poolside swimmer info</span><strong>Open a swimmer only when needed</strong></span></summary>
+            <div class="v3103-disclosure-body">
+              <div id="deckAthleteButtons" class="quick-swimmer-buttons"></div>
+              <select id="deckAthlete" class="large-select quick-hidden-select" aria-label="Selected swimmer"></select>
+              <div id="deckAthleteBrief" class="deck-athlete-brief"></div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -969,11 +971,27 @@ Warm-down..."></textarea>
     <button data-view="sessions" class="nav-button"><span>▦</span>Sessions</button>
     <button data-view="manage" class="nav-button"><span>⚙</span>Manage</button>
     <button data-view="reports" class="nav-button"><span>▧</span>Report</button>
-    <button data-view="settings" class="nav-button"><span>☁</span>Sync</button>
+    <button data-view="settings" class="nav-button"><span>☁</span>Cloud</button>
   </nav>
 
+  <script>
+  // One-time recovery from old installed-app caches. The page reloads once,
+  // then v3.10.3 registers the current worker with updateViaCache disabled.
+  window.MCLAY_APP_BUILD="3.10.3-recovery-20260728";
+  (async()=>{
+    try{
+      const key="mclay_last_installed_build";
+      if(location.protocol.startsWith("http")&&localStorage.getItem(key)!==window.MCLAY_APP_BUILD){
+        localStorage.setItem(key,window.MCLAY_APP_BUILD);
+        if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}
+        if(window.caches){const names=await caches.keys();await Promise.all(names.filter(n=>n.startsWith("mclay-swimming-os-")).map(n=>caches.delete(n)))}
+        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3103"){u.searchParams.set("recovered","3103");location.replace(u.toString());return}
+      }
+    }catch(error){console.warn("Cache recovery",error)}
+  })();
+  </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260728-performance3102"></script>
+  <script src="app.js?v=20260728-recovery3103"></script>
 </body>
 </html>

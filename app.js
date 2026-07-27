@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 if(window.matchMedia("(max-width: 980px)").matches) showView("deck");
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.warn));
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260728-recovery3103",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -5175,7 +5175,8 @@ function v374Interface(){
 
 // Preserve the current full result/reference pack before future lightweight reloads.
 v374SaveHeavyCache(appState);
-v374Interface();renderAll();v374HydrateHeavyCache();saveState(appState);
+v374Interface();renderAll();saveState(appState);
+// v3.10.3: heavy result/reference data is restored lazily, never during poolside startup.
 
 // -----------------------------------------------------------------------------
 // v3.8.0 — T400 foundation + simplified Deck
@@ -5544,7 +5545,7 @@ function v381RosterCard(row,index){
 async function v381RenderCoachPortal(refresh=true){
   const host=$("v381CoachPortal");if(!host)return;
   if(!v381IsOwner()){host.innerHTML='<div class="v381-access-denied"><strong>Owner access only.</strong><br>Assistant coaches cannot manage other accounts.</div>';return}
-  if(!cloudReady()){host.innerHTML='<div class="warning-box">Sign in and sync before inviting another coach.</div>';return}
+  if(!cloudReady()){host.innerHTML='<div class="warning-box">Sign in before inviting another coach.</div>';return}
   const defaults=v381DefaultPermissions();
   host.innerHTML=`<article class="card" id="v381InviteForm"><div class="eyebrow">New assistant coach</div><h3>Create a separate sign-in</h3><p>The coach receives a link, signs in with their own email and sees only the squads and tools selected here.</p><div class="form-grid"><div><label>Name</label><input id="v381InviteName" placeholder="Jordan"></div><div><label>Email</label><input id="v381InviteEmail" type="email" placeholder="coach@example.com"></div></div><fieldset><legend>Assigned squads</legend><div class="v381-check-grid">${v381SquadInputs("invite",[])}</div></fieldset><details open><summary><strong>Permissions</strong><span>Safe poolside defaults</span></summary><div class="v381-permission-grid">${v381PermissionInputs("invite",defaults)}</div></details><button id="v381CreateInviteBtn" type="button">Create assistant-coach invitation</button><div id="v381InviteResult"></div></article><div class="view-heading v381-team-heading"><div><h2>Coach access</h2><p>Changes take effect on the coach's next sync.</p></div><button id="v381RefreshCoaches" class="secondary" type="button">Refresh</button></div><div id="v381CoachRoster"><div class="help">Loading coach access…</div></div>`;
   $("v381CreateInviteBtn").onclick=v381CreateInvite;
@@ -5611,7 +5612,7 @@ function v381Interface(){
 $("signOutBtn")?.addEventListener("click",()=>{appState.settings.membership_role="";appState.settings.membership_display_name="";appState.settings.membership_email="";appState.settings.membership_permissions={};appState.settings.assigned_squads=[];saveState(appState);v381Interface()});
 
 v381Interface();renderAll();
-if(getAuth()?.access_token&&getConfig().supabaseUrl&&getConfig().supabaseAnonKey){setTimeout(async()=>{try{await ensureOrganisation();await syncNow()}catch(error){console.warn("v3.8.1 startup sync",error);updateStatus(error.message||"Coach access needs attention","error")}},250)}
+if(getAuth()?.access_token&&getConfig().supabaseUrl&&getConfig().supabaseAnonKey){setTimeout(async()=>{try{await ensureOrganisation();if(typeof v3103ScheduleBackgroundSync==="function")v3103ScheduleBackgroundSync(900)}catch(error){console.warn("v3.10.3 startup account check",error);updateStatus(error.message||"Cloud account needs attention","error")}},450)}
 
 // -----------------------------------------------------------------------------
 // v3.8.2 — full-spectrum training-zone and race-pace engine
@@ -6342,7 +6343,7 @@ function v3102HumanTranscriptionError(message){
   if(/quota|billing|exceeded your current/i.test(text))return "OpenAI API billing or quota needs attention.";
   if(/schema|response_format|structured_blocks/i.test(text))return "The transcription response format was rejected. Deploy the repaired v3.10.2 Edge Function.";
   if(/timed out|abort/i.test(text))return "Transcription timed out. The source is saved and can be retried.";
-  if(/media|upload/i.test(text))return "The photo or audio is still uploading. Wait for Cloud synced, then retry.";
+  if(/media|upload/i.test(text))return "The photo or audio could not upload. Check the connection and retry.";
   return text||"Transcription failed. The source remains saved for retry.";
 }
 const v3102PriorVoicePreview=v34VoicePreviewHtml;
@@ -6396,3 +6397,272 @@ document.title="McLay Swimming OS — v3.10.2 Performance + Capture Repair";
 const v3102Subtitle=document.querySelector(".header-subtitle");if(v3102Subtitle)v3102Subtitle.textContent="Version 3.10.2 · fast local actions · repaired photo and voice transcription";
 // Only push unsent local changes after startup. A full data refresh is manual.
 setTimeout(()=>v3102ScheduleSync(250),1200);
+
+
+// =============================================================================
+// McLay Swimming OS v3.10.3 — recovery audit.
+// Fixes stale-version rollback, persistent auth, automatic lightweight sync,
+// lazy result hydration, direct transcription uploads and the complete
+// Clive Rushton HR / freestyle stroke-rate reference in McLay terminology.
+// =============================================================================
+const V3103_VERSION="3.10.3";
+const V3103_BUILD="20260728-recovery-audit-3103";
+const V3103_CORE_RESULT_KEYS=["coach_results","results_pb_board","results_event_history","results_athlete_overview"];
+const V3103_STARTUP_TABLES=["athletes","sessions","session_blocks","attendance","season_plans","weekly_plans","session_lane_assignments","coaching_profiles"];
+const V3103_OPERATIONAL_TABLES=[
+  "athletes","sessions","session_blocks","attendance","captures","session_transcriptions",
+  "season_plans","weekly_plans","session_lane_assignments","training_test_types",
+  "training_test_results","training_pace_models","race_goals","athlete_adaptation_rules",
+  "athlete_modification_rules","athlete_individual_plans","session_adaptations","session_participants",
+  "swim_meets","swim_meet_entries","swim_meet_feedback","coaching_profiles","squad_programmes",
+  "squad_timetable_slots","session_zone_classifications","session_zone_summaries",
+  "coach_classification_challenges","coach_communications"
+];
+const V3103_RUSHTON_REFERENCE={
+  "Regeneration":{heart_rate:{max:140,label:"Below 140 bpm"},stroke_rates:{freestyle:{max:30,label:"30 cycles/min or lower"}},notes:"Recovery, warm-up/down, feel, alignment, controlled drill and minimum-stroke-count work."},
+  "Development":{heart_rate:{max:140,label:"Below 140 bpm"},stroke_rates:{freestyle:{max:30,upper_context:31,label:"About 30 cycles/min or lower"}},notes:"Aerobic development anchored to the swimmer's T400 pace."},
+  "Overload":{heart_rate:{typical:150,label:"About 150 bpm"},stroke_rates:{freestyle:{min:31,max:33,label:"31–33 cycles/min"}},notes:"Aerobic overload anchored to T400 pace; increasing fast-twitch-a recruitment while remaining highly aerobic."},
+  "Threshold":{heart_rate:{min:160,max:165,label:"160–165 bpm"},stroke_rates:{freestyle:{min:33,max:35,label:"33–35 cycles/min"}},notes:"Threshold anchored to T400 pace; all fibre types recruited at the aerobic/glycolytic transition."},
+  "Clearance":{heart_rate:{min:165,max:185,label:"165–185 bpm"},stroke_rates:{freestyle:{min:35,max:45,label:"35–45 cycles/min"}},notes:"Lactate-clearance work anchored to T400 pace with rising mixed aerobic/anaerobic contribution."},
+  "Speed":{heart_rate:{label:"Not a primary guide"},stroke_rates:{freestyle:{min_exclusive:60,label:"Can exceed 60 cycles/min"}},notes:"Very short maximum-speed work, usually about 1–10 seconds, with enough recovery to protect speed quality."},
+  "Anaerobic power":{heart_rate:{label:"Not a primary discriminator"},stroke_rates:{freestyle:{min:45,max:60,label:"Typically 45–60 cycles/min"}},notes:"Maximum-quality race-specific work with long recovery, classified from PB/goal pace, duration and recovery."},
+  "Anaerobic capacity":{heart_rate:{label:"High/maximal; set design is more useful"},stroke_rates:{freestyle:{min:45,max:60,label:"Typically 45–60 cycles/min"}},notes:"Repeated high-intensity work with incomplete recovery, classified from race pace, work duration and recovery."},
+  "Lactate tolerance":{heart_rate:{label:"Not a primary discriminator"},stroke_rates:{freestyle:{min:45,max:60,label:"45–60 cycles/min"}},notes:"Repeated maximal or near-maximal work with short/incomplete recovery and substantial chemical disturbance."},
+  "Race pace":{heart_rate:{label:"Depends on event and set design"},stroke_rates:{freestyle:{label:"Use the swimmer's race-specific stroke-rate target when known"}},notes:"PB or goal race pace is the anchor; repetition duration, range and recovery determine the likely response."}
+};
+
+function v3103ApplyBrand(){
+  document.title=`McLay Swimming OS — v${V3103_VERSION} Recovery Audit`;
+  const subtitle=document.querySelector('.header-subtitle');
+  if(subtitle)subtitle.textContent=`Version ${V3103_VERSION} · stable phone startup · automatic cloud · photo + voice · HR / SR / energy reference`;
+  const button=$("mobileConnectionBtn");if(button){button.textContent="Cloud";button.setAttribute("aria-label","Open cloud account and status")}
+  const nav=document.querySelector('.mobile-nav [data-view="settings"]');if(nav)nav.innerHTML='<span>☁</span>Cloud';
+  const sync=$("syncNowBtn");if(sync)sync.textContent="Refresh cloud data";
+}
+const v3103PriorV381Interface=typeof v381Interface==="function"?v381Interface:null;
+if(v3103PriorV381Interface){v381Interface=function(){v3103PriorV381Interface();v3103ApplyBrand()}}
+
+// Keep PB/history and reference rows outside the ordinary poolside save payload.
+// They remain in IndexedDB and are hydrated lazily when a result-aware screen opens.
+let v3103CoreHydrated=false,v3103AllHeavyHydrated=false,v3103HydrateRun=null;
+async function v3103ReadHeavyCache(){
+  const db=await v374OpenCache();
+  return new Promise((resolve,reject)=>{const r=db.transaction(V374_CACHE_STORE).objectStore(V374_CACHE_STORE).get("latest");r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error)});
+}
+async function v3103HydrateResults({all=false,render=true}={}){
+  if((all&&v3103AllHeavyHydrated)||(!all&&v3103CoreHydrated))return true;
+  if(v3103HydrateRun)return v3103HydrateRun;
+  v3103HydrateRun=(async()=>{try{
+    const cached=await v3103ReadHeavyCache();if(!cached?.payload)return false;
+    const keys=all?[...V374_HEAVY_STATE_KEYS,...V3103_CORE_RESULT_KEYS]:V3103_CORE_RESULT_KEYS;
+    for(const key of new Set(keys)){
+      const incoming=Array.isArray(cached.payload[key])?cached.payload[key]:[];if(!incoming.length)continue;
+      const current=Array.isArray(appState[key])?appState[key]:[];
+      const map=new Map(incoming.map(row=>[row.id||JSON.stringify(row),row]));for(const row of current)map.set(row.id||JSON.stringify(row),row);
+      appState[key]=[...map.values()];
+    }
+    v3103CoreHydrated=true;if(all)v3103AllHeavyHydrated=true;
+    if(render){const id=document.querySelector('.view.active')?.id||"deck";renderView(id);if(id==="deck"){v390DeckPanel?.();v382RenderPacePanel?.()}}
+    return true;
+  }catch(error){console.warn("Result cache restore deferred",error);return false}finally{v3103HydrateRun=null}})();
+  return v3103HydrateRun;
+}
+// Core PBs become available after the initial screen is interactive, without
+// restoring the much larger standards/reference model or forcing renderAll.
+setTimeout(()=>v3103HydrateResults({all:false,render:true}),900);
+
+let v3103AuthRefreshRun=null;
+function v3103AuthExpiresSoon(auth=getAuth()){const expires=Number(auth?.expires_at||0);return !expires||Date.now()>=(expires*1000-120000)}
+async function v3103RefreshAuth(force=false){
+  const auth=getAuth();if(!auth?.refresh_token){if(auth?.access_token)return auth;throw new Error("Sign in once to connect this device.")}
+  if(!force&&!v3103AuthExpiresSoon(auth))return auth;
+  if(v3103AuthRefreshRun)return v3103AuthRefreshRun;
+  v3103AuthRefreshRun=(async()=>{const config=getConfig();const response=await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:{apikey:config.supabaseAnonKey,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:auth.refresh_token})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error_description||data.msg||data.message||"Your saved login could not be refreshed.");saveAuth({...auth,...data,user:data.user||auth.user});return getAuth()})().finally(()=>{v3103AuthRefreshRun=null});
+  return v3103AuthRefreshRun;
+}
+async function v3103EnsureCloudSession(){
+  const config=getConfig();if(!config.supabaseUrl||!config.supabaseAnonKey)throw new Error("Supabase connection details are missing.");
+  await v3103RefreshAuth(false);
+  if(!appState.settings.organisation_id)await ensureOrganisation();
+  return true;
+}
+
+const v3103RawCloudFetch=cloudFetch;
+cloudFetch=async function(path,options={}){
+  await v3103RefreshAuth(false);
+  try{return await v3103RawCloudFetch(path,options)}catch(error){
+    if(/jwt|token|expired|401|not signed in/i.test(String(error?.message||error))){await v3103RefreshAuth(true);return v3103RawCloudFetch(path,options)}
+    throw error;
+  }
+};
+
+const v3103PriorEnsureOrganisation=ensureOrganisation;
+ensureOrganisation=async function(){
+  const auth=await v3103RefreshAuth(false);
+  const checked=Number(appState.settings.v3103_membership_checked_at||0);
+  if(appState.settings.organisation_id&&appState.settings.membership_role&&Date.now()-checked<12*60*60*1000){v3103ApplyBrand();return appState.settings.organisation_id}
+  const org=await v3103PriorEnsureOrganisation();appState.settings.v3103_membership_checked_at=Date.now();saveState(appState);v3103ApplyBrand();return org;
+};
+
+function v3103OperationalQuery(table,org){
+  const base=`/rest/v1/${table}?select=*&organisation_id=eq.${encodeURIComponent(org)}`;
+  if(table==="sessions")return `${base}&order=session_date.desc&limit=180`;
+  if(["captures","session_transcriptions","coach_communications","coach_classification_challenges","swim_meet_feedback"].includes(table))return `${base}&order=updated_at.desc&limit=250`;
+  return base;
+}
+async function v3103PullOperational({full=false}={}){
+  await v3103EnsureCloudSession();const org=appState.settings.organisation_id;
+  const tables=full?V3103_OPERATIONAL_TABLES:V3103_STARTUP_TABLES;
+  for(const table of tables){if(!CLOUD_TABLES.includes(table)||v331UnavailableTables?.().has(table))continue;try{const rows=await cloudFetch(v3103OperationalQuery(table,org));appState[table]=mergeCollection(appState[table]||[],(rows||[]).map(stripCloudFields))}catch(error){const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):null;if(missing===table&&v331MarkTableUnavailable?.(table,error))continue;console.warn(`Operational refresh skipped ${table}`,error)}}
+  saveState(appState);return true;
+}
+let v3103SyncTimer=null,v3103SyncRun=null,v3103LastError="";
+function v3103SyncText(){const pending=(appState.pending||[]).length;if(v3103LastError)return pending?`${pending} saved · cloud retrying`:"Cloud retrying";return pending?`${pending} saving`:"Cloud up to date"}
+function v3103RenderCloudStatus(){renderMode();if(cloudReady())updateStatus(v3103SyncText(),v3103LastError?"error":"good")}
+async function v3103BackgroundSync({pull=false}={}){
+  if(v3103SyncRun)return v3103SyncRun;
+  v3103SyncRun=(async()=>{try{await v3103EnsureCloudSession();await pushPending();if(pull)await v3103PullOperational({full:pull==="full"});v3103LastError="";v3103RenderCloudStatus();return true}catch(error){v3103LastError=String(error?.message||error);console.warn("Background cloud sync",error);v3103RenderCloudStatus();return false}finally{v3103SyncRun=null}})();return v3103SyncRun;
+}
+function v3103ScheduleBackgroundSync(delay=900,pull=false){clearTimeout(v3103SyncTimer);v3103SyncTimer=setTimeout(()=>{v3103SyncTimer=null;v3103BackgroundSync({pull})},delay)}
+window.v3103ScheduleBackgroundSync=v3103ScheduleBackgroundSync;
+syncIfPossible=async function(){v3103ScheduleBackgroundSync(500,false);return true};
+scheduleFastSync=function(){v3103ScheduleBackgroundSync(350,false)};
+syncNow=async function(){await v3103BackgroundSync({pull:"full"});renderView(document.querySelector('.view.active')?.id||"deck");return true};
+window.addEventListener("online",()=>v3103ScheduleBackgroundSync(250,true));
+setInterval(()=>{if(document.visibilityState==="visible"&&navigator.onLine)v3103ScheduleBackgroundSync(100,false)},60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")v3103ScheduleBackgroundSync(350,false)});
+setTimeout(()=>v3103ScheduleBackgroundSync(1800,true),1400);
+
+function v3103HeartRateText(zone){const ref=V3103_RUSHTON_REFERENCE[zone];return ref?.heart_rate?.label||"Context-dependent"}
+function v3103StrokeRateText(zone){const ref=V3103_RUSHTON_REFERENCE[zone];return ref?.stroke_rates?.freestyle?.label||"Race-specific / not fixed"}
+function v3103ReferenceHtml(zone){const ref=V3103_RUSHTON_REFERENCE[zone];if(!ref)return "";return `<div class="v3103-reference"><span><b>HR</b> ${escapeHtml(v3103HeartRateText(zone))}</span><span><b>Freestyle SR</b> ${escapeHtml(v3103StrokeRateText(zone))}</span><small>${escapeHtml(ref.notes)}</small></div>`}
+const v3103PriorProfile=v390Profile;
+v390Profile=function(){
+  const profile=v3103PriorProfile();const defs={...(profile.zone_definitions||{})};
+  for(const [zone,ref] of Object.entries(V3103_RUSHTON_REFERENCE))defs[zone]={...(defs[zone]||{}),heart_rate:ref.heart_rate,stroke_rates:ref.stroke_rates,stroke_rate_guide:ref.stroke_rates?.freestyle?.label||"",notes:ref.notes,reference_source:"Clive Rushton Swimformation reference"};
+  return {...profile,version:"1.2",source_credit:"Training-intensity references adapted from Clive Rushton's Swimformation work. McLay T400 and race-pace calculations remain the pace anchors.",zone_definitions:defs,inference_rules:{...(profile.inference_rules||{}),numeric_guides_require_coach_confirmation:false,reference_source:"Clive Rushton Swimformation",colour_bands:false,numbered_zones:false}};
+};
+v390ZoneCards=function(summary){return V310_ZONE_ORDER.filter(z=>summary.totals[z]).map(z=>`<div class="v390-zone-card v3103-zone-card"><span>${escapeHtml(z)}</span><strong>${Number(summary.totals[z]).toLocaleString()}m</strong>${v3103ReferenceHtml(z)}</div>`).join("")||'<div class="help">No classifiable set volume yet.</div>'};
+v390ProfileTab=function(){const profile=v390Profile();return `<article class="card"><div class="eyebrow">McLay coaching reference</div><h3>Heart rate, freestyle stroke rate and energy-system intent</h3><p>${escapeHtml(profile.source_credit)}</p><p class="help">Session entry accepts Reg, Dev, OL, AT and CL. The app expands them to full words. These references are supplied automatically; you are not required to type them in.</p><div class="v3103-reference-table">${V310_ZONE_ORDER.filter(z=>z!=="Unclassified").map(z=>`<article><h4>${escapeHtml(z)}</h4>${v3103ReferenceHtml(z)}</article>`).join("")}</div></article>`};
+function v3103InjectActiveReference(){const host=document.querySelector('.v390-active-classification');if(!host||host.querySelector('.v3103-reference'))return;const zone=host.querySelector('strong')?.textContent?.trim();if(zone&&V3103_RUSHTON_REFERENCE[zone])host.insertAdjacentHTML('beforeend',v3103ReferenceHtml(zone))}
+const v3103PriorDeckPanel=v390DeckPanel;
+v390DeckPanel=function(){v3103PriorDeckPanel();v3103InjectActiveReference()};
+
+async function v3103FunctionFetch(body,{form=false,timeout=145000}={}){
+  await v3103EnsureCloudSession();const config=getConfig(),auth=getAuth();const headers={apikey:config.supabaseAnonKey,Authorization:`Bearer ${auth.access_token}`};if(!form)headers["Content-Type"]="application/json";
+  let response=await v3101Fetch(v3101FunctionUrl(),{method:"POST",headers,body:form?body:JSON.stringify(body)},timeout);
+  if(response.status===401){await v3103RefreshAuth(true);const fresh=getAuth();headers.Authorization=`Bearer ${fresh.access_token}`;response=await v3101Fetch(v3101FunctionUrl(),{method:"POST",headers,body:form?body:JSON.stringify(body)},timeout)}
+  return response;
+}
+async function v3103UploadCaptureDirect(capture){
+  await v3103EnsureCloudSession();await uploadCaptureMedia(capture);if(!capture.media_path)throw new Error("The photo or audio could not be uploaded.");
+  const row=cloudRow("captures",capture);await cloudFetch(`/rest/v1/captures?on_conflict=id`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(row)});
+  appState.pending=appState.pending.filter(p=>!(p.table==="captures"&&p.id===capture.id));saveState(appState);return capture;
+}
+
+v34TranscribeCapture=async function(tr,capture,{rawTextOverride=""}={}){
+  if(!tr||!capture)throw new Error("The transcription or linked capture is missing.");
+  await v3103EnsureCloudSession();if(!rawTextOverride)await v3103UploadCaptureDirect(capture);
+  tr.source_type=tr.source_type||capture.capture_type||"photo";tr.athlete_id=tr.athlete_id||capture.athlete_id||null;tr.session_block_id=tr.session_block_id||capture.session_block_id||null;tr.status="transcribing";tr.error_message="";tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);saveState(appState);
+  const res=await v3103FunctionFetch({transcription_id:tr.id,capture_id:capture.id,session_id:tr.session_id,media_path:capture.media_path,source_type:tr.source_type,purpose:tr.purpose,athlete_id:tr.athlete_id,session_block_id:tr.session_block_id,raw_text_override:rawTextOverride||null});const data=await res.json().catch(()=>({}));
+  if(!res.ok){tr.status="error";tr.error_message=data.error||`Transcription failed (${res.status})`;tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);throw new Error(tr.error_message)}
+  Object.assign(tr,{raw_text:data.raw_text||rawTextOverride||"",structured_blocks:data.structured_blocks||[],structured_data:data.structured_data||{},status:"review",error_message:"",provider:data.provider||"openai",provider_model:data.model||"",provider_request_id:data.request_id||"",updated_at:nowIso()});upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState);v3103ScheduleBackgroundSync(200,false);return tr;
+};
+
+v3101RunHealth=async function(){const button=$("v3101HealthBtn");if(button){button.disabled=true;button.textContent="Checking…"}try{const response=await v3103FunctionFetch({action:"health"},{timeout:45000}),data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Health check failed (${response.status})`);v3101Health=data;v3101RenderHealth();updateStatus(data.ok?"Transcription ready":"Transcription setup needs attention",data.ok?"good":"error")}catch(error){v3101Health={function_deployed:false,transcription_table:{ok:false,error:error.message},media_bucket:{ok:false},openai:{configured:false,connected:false},checked_at:nowIso()};v3101RenderHealth();updateStatus("Transcription health check failed","error")}finally{if(button){button.disabled=false;button.textContent="Run transcription health check"}}};
+v3101StartSessionVoice=async function(){try{await v3103EnsureCloudSession();const stream=await navigator.mediaDevices.getUserMedia({audio:true}),recorder=new MediaRecorder(stream,v3101RecorderOptions());v3101SessionVoiceChunks=[];v3101SessionRecorder=recorder;recorder.ondataavailable=e=>{if(e.data?.size)v3101SessionVoiceChunks.push(e.data)};recorder.onstop=async()=>{const mime=recorder.mimeType||"audio/webm",blob=new Blob(v3101SessionVoiceChunks,{type:mime});stream.getTracks().forEach(track=>track.stop());const localId=await saveMediaBlob(blob,"session_voice","dictated-session.webm");v3101PendingSessionVoice={blob,localId,mime,raw_text:"",structured_blocks:[],structured_data:{}};const preview=$("v3101SessionVoicePreview");preview.src=URL.createObjectURL(blob);preview.hidden=false;await v3101TranscribeDirectSession(blob)};recorder.start();$("v3101StartSessionVoice").disabled=true;$("v3101StopSessionVoice").disabled=false;v3101VoiceStatus("Recording… call the session exactly as you coach it.","good")}catch(error){v3101VoiceStatus(error.message||"Voice dictation unavailable.","error")}};
+v3101TranscribeDirectSession=async function(blob){try{const form=new FormData();form.append("action","transcribe_direct");form.append("source_type","voice");form.append("purpose","planned_session");form.append("file",blob,"dictated-session.webm");const response=await v3103FunctionFetch(form,{form:true}),data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Voice transcription failed (${response.status})`);const raw=String(data.raw_text||"").trim();if(!raw)throw new Error("No transcript came back from the recording.");Object.assign(v3101PendingSessionVoice,{raw_text:raw,structured_blocks:data.structured_blocks||[],structured_data:data.structured_data||{},provider:data.provider||"openai",provider_model:data.model||"",provider_request_id:data.request_id||""});$("sessionPasteInput").value=raw;importedSessionDraft=parseSessionFromChat(raw);renderSessionImportPreview();$("saveImportedSessionBtn").disabled=false;$("runImportedSessionBtn").disabled=false;$("sessionImportDetails").open=true;v3101VoiceStatus("Transcribed. Check the wording, then save the session.","good");v33SetImportMessage("Voice session transcribed. Correct anything needed, then Save & Use Now.","good")}catch(error){v3101VoiceStatus(`${v3102HumanTranscriptionError(error.message)} The recording remains on this device and can be tried again.`,"error");updateStatus("Voice transcription needs retry","error")}};
+
+v33QuickPhotoTranscribe=async function(){
+  const file=v33PendingSessionPhoto;if(!file)return;try{await v3103EnsureCloudSession();let draft=importedSessionDraft;if(!draft){const seed=$("sessionPasteInput").value.trim()||`Session title: ${$("quickSessionTitle").value.trim()||"Session photo import"}\nDate: ${$("quickSessionDate").value}\nSquads: ${$("quickSessionSquads").value}`;draft=parseSessionFromChat(seed)}draft=v33ApplyQuickFields(draft);if(!draft.title)draft.title="Session photo import";if(!draft.workout)draft.workout="Session photo attached — transcription pending";importedSessionDraft=draft;upsertLocal("sessions",draft);queueRecord("sessions",draft.id);const priorId=appState.settings.selected_session_id,priorSquad=appState.settings.selected_squad;appState.settings.selected_session_id=draft.id;appState.settings.selected_squad=sessionSquads(draft)[0]||"";saveState(appState);await v33AttachPendingPhoto(draft);const capture=(appState.captures||[]).filter(c=>c.session_id===draft.id&&c.capture_type==="photo").sort(byUpdated)[0];if(!capture)throw new Error("The selected photo could not be saved.");await v3103UploadCaptureDirect(capture);const tr=(appState.session_transcriptions||[]).find(t=>t.capture_id===capture.id)||{id:uid("transcript"),session_id:draft.id,capture_id:capture.id,source_type:"photo",purpose:"planned",status:"saved",raw_text:"",structured_blocks:[],structured_data:{},created_at:nowIso(),updated_at:nowIso()};upsertLocal("session_transcriptions",tr);await v34TranscribeCapture(tr,capture);if(priorId&&appState.sessions.some(s=>s.id===priorId)){appState.settings.selected_session_id=priorId;appState.settings.selected_squad=priorSquad||""}saveState(appState);if(tr.raw_text){$("sessionPasteInput").value=tr.raw_text;importedSessionDraft={...draft,...parseSessionFromChat(tr.raw_text),id:draft.id};renderSessionImportPreview();$("saveImportedSessionBtn").disabled=false;$("runImportedSessionBtn").disabled=false;$("sessionImportDetails").open=true;v33SetImportMessage("Photo transcribed. Correct anything needed, then Save & Use Now.","good")}}catch(error){console.error(error);$("sessionImportDetails").open=true;v33SetImportMessage(`${v3102HumanTranscriptionError(error.message)} The photo remains saved for retry.`,"warning")}
+};
+// Existing click listener resolves the function through this binding only after
+// a fresh replacement, so rebind the photo button explicitly.
+if($("quickSessionPhotoTranscribeBtn")){const old=$("quickSessionPhotoTranscribeBtn"),fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener("click",v33QuickPhotoTranscribe)}
+
+const v3103PriorRenderAll=renderAll;
+renderAll=function(){v3103PriorRenderAll();v3103ApplyBrand();v3103RenderCloudStatus();v3103InjectActiveReference()};
+const v3103PriorShowView=showView;
+showView=function(id){v3103PriorShowView(id);v3103ApplyBrand();if(["results","resultsupdate","athletes"].includes(id))v3103HydrateResults({all:id!=="athletes",render:true});v3103InjectActiveReference()};
+
+function v3103InjectStyles(){if($("v3103Styles"))return;const style=document.createElement("style");style.id="v3103Styles";style.textContent=`
+.v3103-reference{display:grid;gap:.18rem;margin-top:.4rem;padding:.45rem .55rem;border-radius:.5rem;background:#f2f7f9;color:#294653;font-size:.72rem}.v3103-reference span{display:block!important;font-size:.72rem!important;text-transform:none!important;letter-spacing:normal!important;color:#294653!important}.v3103-reference small{display:block;color:#60737d;line-height:1.35}.v3103-zone-card{min-width:190px}.v3103-reference-table{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:.6rem}.v3103-reference-table article{border:1px solid #c9dce4;border-radius:.65rem;padding:.65rem;background:#fff}.v3103-reference-table h4{margin:0;color:#123a5b}.v3102-cloud-busy #syncBadge::after{content:""}.v3103-loading{opacity:.65;pointer-events:none}@media(max-width:760px){.v3103-reference-table{grid-template-columns:1fr}.v3103-zone-card{min-width:0}}
+`;document.head.appendChild(style)}
+v3103InjectStyles();v3103ApplyBrand();v3103RenderCloudStatus();
+
+// v3.10.3: sign-in establishes a persistent cloud session, then the app saves
+// automatically. It no longer blocks the user behind a complete manual Sync.
+function v3103BindPersistentAuth(){
+  const signIn=$("signInBtn");
+  if(signIn&&!signIn.dataset.bound3103){
+    const fresh=signIn.cloneNode(true);signIn.replaceWith(fresh);fresh.dataset.bound3103="1";
+    fresh.addEventListener("click",async()=>{fresh.disabled=true;try{
+      const data=await authRequest("token?grant_type=password",{email:$("authEmail").value.trim(),password:$("authPassword").value});
+      saveAuth(data);appState.settings.user_id=data.user.id;saveState(appState);await ensureOrganisation();
+      $("connectionResult").innerHTML='<div class="result">Signed in. Cloud saving and refresh now happen automatically.</div>';
+      v3103ScheduleBackgroundSync(100,true);v3103RenderCloudStatus();
+    }catch(error){$("connectionResult").innerHTML=`<div class="warning-box">${escapeHtml(error.message)}</div>`}finally{fresh.disabled=false}})
+  }
+  const signUp=$("signUpBtn");
+  if(signUp&&!signUp.dataset.bound3103){
+    const fresh=signUp.cloneNode(true);signUp.replaceWith(fresh);fresh.dataset.bound3103="1";
+    fresh.addEventListener("click",async()=>{fresh.disabled=true;try{
+      const data=await authRequest("signup",{email:$("authEmail").value.trim(),password:$("authPassword").value});
+      if(data.access_token){saveAuth(data);appState.settings.user_id=data.user.id;saveState(appState);await ensureOrganisation();v3103ScheduleBackgroundSync(100,true)}
+      $("connectionResult").innerHTML=`<div class="result">${data.access_token?"Account connected. Cloud saving is automatic.":"Account created. Confirm the email if requested, then sign in once."}</div>`;
+    }catch(error){$("connectionResult").innerHTML=`<div class="warning-box">${escapeHtml(error.message)}</div>`}finally{fresh.disabled=false}})
+  }
+}
+const v3103PriorRenderAllAuth=renderAll;
+renderAll=function(){v3103PriorRenderAllAuth();v3103BindPersistentAuth()};
+v3103BindPersistentAuth();
+
+// Corrupt or partial legacy result rows must never print the word "undefined"
+// on deck. They remain auditable in Results Update, while poolside output uses —.
+const v3103PriorAthleteQuickHtml=athleteQuickHtml;
+athleteQuickHtml=function(athlete){return String(v3103PriorAthleteQuickHtml(athlete)).replace(/\bundefined\b/g,"—")};
+
+// Keep Deck calm: individual modifications and swimmer detail are available
+// on demand instead of occupying the full phone screen all session.
+function v3103CompactDeck(){
+  const panel=$("adaptationPanel");
+  if(panel&&!panel.dataset.compact3103){
+    panel.dataset.compact3103="1";panel.classList.add("v3103-adaptation-collapsed");
+    const heading=panel.querySelector(".card-heading");
+    if(heading){const toggle=document.createElement("button");toggle.type="button";toggle.className="secondary v3103-adaptation-toggle";toggle.textContent="Open modified swimmers";toggle.onclick=()=>{const collapsed=panel.classList.toggle("v3103-adaptation-collapsed");toggle.textContent=collapsed?"Open modified swimmers":"Close modified swimmers"};heading.appendChild(toggle)}
+  }
+}
+document.addEventListener("click",event=>{if(event.target.closest("[data-v35-show-adaptations],[data-v361-show-adaptations]")){const panel=$("adaptationPanel");panel?.classList.remove("v3103-adaptation-collapsed");const toggle=panel?.querySelector(".v3103-adaptation-toggle");if(toggle)toggle.textContent="Close modified swimmers"}},true);
+const v3103PriorRenderAllCompact=renderAll;
+renderAll=function(){v3103PriorRenderAllCompact();v3103CompactDeck()};
+const v3103PriorShowViewCompact=showView;
+showView=function(id){v3103PriorShowViewCompact(id);if(id==="deck")v3103CompactDeck()};
+v3103CompactDeck();
+
+// PB/result repair: fetch only the swimmer being opened. This closes holes such
+// as an empty Archie profile without downloading the whole result chain on Deck.
+const v3103AthleteResultRuns=new Map();
+async function v3103EnsureAthleteResults(athleteId,{force=false}={}){
+  if(!athleteId)return false;
+  await v3103HydrateResults({all:false,render:false});
+  const stamp=Number(appState.settings[`v3103_results_${athleteId}`]||0);
+  const hasRows=(appState.coach_results||[]).some(r=>r.athlete_id===athleteId)||(appState.results_event_history||[]).some(r=>r.athlete_id===athleteId);
+  if(!force&&hasRows&&Date.now()-stamp<6*60*60*1000)return true;
+  if(!cloudReady())return hasRows;
+  if(v3103AthleteResultRuns.has(athleteId))return v3103AthleteResultRuns.get(athleteId);
+  const run=(async()=>{try{
+    await v3103EnsureCloudSession();const org=appState.settings.organisation_id,encodedOrg=encodeURIComponent(org),encodedAthlete=encodeURIComponent(athleteId);
+    const specs=[
+      ["coach_results",`/rest/v1/coach_results?select=*&organisation_id=eq.${encodedOrg}&athlete_id=eq.${encodedAthlete}&order=result_date.desc`],
+      ["results_event_history",`/rest/v1/results_event_history?select=*&organisation_id=eq.${encodedOrg}&athlete_id=eq.${encodedAthlete}&order=result_date.desc`],
+      ["results_pb_board",`/rest/v1/results_pb_board?select=*&organisation_id=eq.${encodedOrg}&athlete_id=eq.${encodedAthlete}`],
+      ["results_athlete_overview",`/rest/v1/results_athlete_overview?select=*&organisation_id=eq.${encodedOrg}&athlete_id=eq.${encodedAthlete}`]
+    ];
+    for(const [key,path] of specs){try{const rows=(await cloudFetch(path)||[]).map(stripCloudFields);appState[key]=[...(appState[key]||[]).filter(r=>r.athlete_id!==athleteId),...rows]}catch(error){console.warn(`Swimmer result refresh skipped ${key}`,error)}}
+    appState.settings[`v3103_results_${athleteId}`]=Date.now();saveState(appState);v374SaveHeavyCache(appState);
+    return (appState.coach_results||[]).some(r=>r.athlete_id===athleteId)||(appState.results_event_history||[]).some(r=>r.athlete_id===athleteId);
+  }finally{v3103AthleteResultRuns.delete(athleteId)}})();v3103AthleteResultRuns.set(athleteId,run);return run;
+}
+const v3103PriorSelectAthleteEverywhere=selectAthleteEverywhere;
+selectAthleteEverywhere=function(id){v3103PriorSelectAthleteEverywhere(id);v3103EnsureAthleteResults(id).then(changed=>{if(changed&&appState.settings.selected_athlete_id===id)v3103PriorSelectAthleteEverywhere(id)}).catch(error=>console.warn("Swimmer results unavailable",error))};
+const quickDetails=$("deckAthleteQuickDetails");if(quickDetails)quickDetails.addEventListener("toggle",()=>{if(quickDetails.open)v3103EnsureAthleteResults(appState.settings.selected_athlete_id).then(()=>renderDeckAthleteBrief())});
