@@ -1,6 +1,6 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-10-4-phone-recovery-20260728";
-const CORE=["./","./index.html","./styles.css?v=20260728-phone3104","./app.js?v=20260728-phone3104","./config.js","./seed.js","./manifest.webmanifest"];
+const CACHE_NAME="mclay-swimming-os-v3-10-6-expected-coaching-engine-20260728";
+const CORE=["./","./index.html","./styles.css?v=20260728-engine3106","./app.js?v=20260728-engine3106","./config.js","./seed.js","./manifest.webmanifest"];
 self.addEventListener("install",event=>event.waitUntil((async()=>{
   for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);
   const cache=await caches.open(CACHE_NAME);
