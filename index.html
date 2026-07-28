@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.10.3 Recovery Audit</title>
+  <title>McLay Swimming OS — v3.10.4 Phone Recovery</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260728-recovery3103">
+  <link rel="stylesheet" href="styles.css?v=20260728-phone3104">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -188,7 +188,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 3.10.3 · stable startup · automatic cloud · photo + voice · HR / SR / energy reference</div>
+      <div class="header-subtitle">Version 3.10.4 · fast Board · automatic cloud · verified voice · roster + PB recovery</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -976,8 +976,8 @@ Warm-down..."></textarea>
 
   <script>
   // One-time recovery from old installed-app caches. The page reloads once,
-  // then v3.10.3 registers the current worker with updateViaCache disabled.
-  window.MCLAY_APP_BUILD="3.10.3-recovery-20260728";
+  // then v3.10.4 registers the current worker with updateViaCache disabled.
+  window.MCLAY_APP_BUILD="3.10.4-phone-recovery-20260728";
   (async()=>{
     try{
       const key="mclay_last_installed_build";
@@ -985,13 +985,13 @@ Warm-down..."></textarea>
         localStorage.setItem(key,window.MCLAY_APP_BUILD);
         if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}
         if(window.caches){const names=await caches.keys();await Promise.all(names.filter(n=>n.startsWith("mclay-swimming-os-")).map(n=>caches.delete(n)))}
-        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3103"){u.searchParams.set("recovered","3103");location.replace(u.toString());return}
+        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3104"){u.searchParams.set("recovered","3104");location.replace(u.toString());return}
       }
     }catch(error){console.warn("Cache recovery",error)}
   })();
   </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260728-recovery3103"></script>
+  <script src="app.js?v=20260728-phone3104"></script>
 </body>
 </html>

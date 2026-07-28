@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 if(window.matchMedia("(max-width: 980px)").matches) showView("deck");
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260728-recovery3103",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260728-phone3104",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -6666,3 +6666,156 @@ async function v3103EnsureAthleteResults(athleteId,{force=false}={}){
 const v3103PriorSelectAthleteEverywhere=selectAthleteEverywhere;
 selectAthleteEverywhere=function(id){v3103PriorSelectAthleteEverywhere(id);v3103EnsureAthleteResults(id).then(changed=>{if(changed&&appState.settings.selected_athlete_id===id)v3103PriorSelectAthleteEverywhere(id)}).catch(error=>console.warn("Swimmer results unavailable",error))};
 const quickDetails=$("deckAthleteQuickDetails");if(quickDetails)quickDetails.addEventListener("toggle",()=>{if(quickDetails.open)v3103EnsureAthleteResults(appState.settings.selected_athlete_id).then(()=>renderDeckAthleteBrief())});
+
+
+// =============================================================================
+// McLay Swimming OS v3.10.4 — real-phone recovery, roster/result eligibility,
+// and non-blocking Deck navigation. This is the final runtime layer.
+// =============================================================================
+const V3104_VERSION="3.10.4";
+const V3104_BUILD="20260728-phone-recovery-tm-audit";
+
+function v3104StandardsEligible(athlete){
+  if(!athlete)return false;
+  const status=String(athlete.competitive_status||athlete.membership_type||"").toLowerCase();
+  const squad=String(athlete.squad||"").toLowerCase();
+  if(/non.?competitive|staff|coach|official|volunteer|transition/.test(status))return false;
+  if(/fitness/.test(squad))return false;
+  return /competitive/.test(status)||/national|development|intermediate|junior|para/.test(squad);
+}
+function v3104DemographicMessage(athlete){
+  if(!v3104StandardsEligible(athlete))return '<div class="result">Competitive standards are not required for this member. T400 and coaching notes still remain available.</div>';
+  if(!athlete?.sex||!athlete?.date_of_birth)return '<div class="source-warning">A verified sex and exact date of birth are still required for age-group standards. Results and T400 remain usable.</div>';
+  if(athlete.date_of_birth_precision==="year")return '<div class="source-warning">Only the birth year is verified. Add the exact date before relying on age-group standards.</div>';
+  return "";
+}
+
+// Prevent the scheduled 900 ms heavy-result restore from running while the coach
+// is on Deck, Roll, Capture or Finish. Heavy data loads only on a result-aware view.
+const v3104HydrateResultsBase=v3103HydrateResults;
+v3103HydrateResults=async function(options={}){
+  const active=document.querySelector('.view.active')?.id||"deck";
+  const allowed=["results","resultsupdate","athletes"].includes(active)||options.force===true;
+  if(!allowed)return false;
+  return v3104HydrateResultsBase(options);
+};
+
+function v3104AfterPaint(fn){
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(typeof requestIdleCallback==="function")requestIdleCallback(fn,{timeout:700});else setTimeout(fn,30);
+  }));
+}
+
+function v3104RenderDeckEssential(){
+  const session=selectedSession();
+  const deckPicker=$("deckSessionPicker");
+  if(deckPicker){
+    const sessions=appState.sessions.slice().sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`));
+    deckPicker.innerHTML=sessions.map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===session?.id?"selected":""}>${escapeHtml(sessionLabel(s))} — ${escapeHtml(s.title)}</option>`).join("");
+    deckPicker.onchange=()=>setSelectedSession(deckPicker.value);
+  }
+  if(!session){
+    if($("deckSessionLabel"))$("deckSessionLabel").textContent="No session selected";
+    if($("deckSessionTitle"))$("deckSessionTitle").textContent="Choose or create the actual session";
+    if($("deckWorkout"))$("deckWorkout").textContent="No session loaded.";
+    return;
+  }
+  if($("deckSessionLabel"))$("deckSessionLabel").textContent=sessionLabel(session);
+  if($("deckSessionTitle"))$("deckSessionTitle").textContent=session.title;
+  if($("deckSystem"))$("deckSystem").textContent=session.primary_system||"—";
+  if($("deckTechnical"))$("deckTechnical").textContent=session.technical_focus||"—";
+  if($("deckCueChips"))$("deckCueChips").innerHTML=[`<span class="chip">${escapeHtml(session.venue||"")}</span>`,...sessionSquads(session).map(s=>`<span class="chip">${escapeHtml(s)}</span>`),`<span class="chip">${Number(session.planned_distance||0).toLocaleString()}m</span>`].join("");
+  if($("deckWorkout"))$("deckWorkout").textContent=session.workout||"No workout entered.";
+  v361RenderDeckBlocksFinal?.();
+  v371RenderComposerProgress?.();
+  v310EnsureAttendancePanel?.();
+  v310RenderSessionAttendance?.();
+  v3101InjectSessionDictation?.();
+  v3102PlaceDictation?.();
+  v3103CompactDeck?.();
+
+  // Swimmer PB/adaptation/reference work is deliberately deferred until after the
+  // Board is visible. Hidden adaptation panels are not rebuilt during navigation.
+  v3104AfterPaint(()=>{
+    try{
+      populateAthleteSelect("deckAthlete",false);
+      const details=$("deckAthleteQuickDetails");if(details?.open)renderDeckAthleteBrief();
+      v390EnsureDeckPanel?.();v390DeckPanel?.();v3103InjectActiveReference?.();
+      const panel=$("adaptationPanel");
+      if(panel&&!panel.classList.contains("v3103-adaptation-collapsed")){v37RenderAdaptationPanel?.();v371RenderLearningSupport?.()}
+    }catch(error){console.warn("Deferred Deck details",error)}
+  });
+}
+
+// Replace the many accumulated navigation wrappers with one targeted dispatcher.
+// This avoids rebuilding every hidden panel whenever the coach taps Board.
+renderView=function(id){
+  renderMode();renderActiveContext();
+  if(id==="deck"){v3104RenderDeckEssential();return}
+  if(id==="overview"){renderSessionPicker();renderOverview();return}
+  if(id==="attendance"){renderAttendance();return}
+  if(id==="capture"){populateAthleteSelect("captureAthlete",true);renderCaptures();v3101InjectHealth?.();v3101RenderHealth?.();v3102BindCaptureChoices?.();return}
+  if(id==="finish"){renderReview();return}
+  if(id==="times"){populateAthleteSelect("timeAthlete",false);renderPaceReference();renderTimedSets();renderStopwatchLaps();renderManualTimes();renderLiveBoard();return}
+  if(id==="sessions"){renderSessions();v3PopulatePlanSelects?.();return}
+  if(id==="planning"){renderPlanning();return}
+  if(id==="testsets"){renderTestSets();return}
+  if(id==="athletes"){renderAthletes();v3104AfterPaint(()=>v3103HydrateResults({all:false,render:false,force:true}).then(()=>{if(document.querySelector('.view.active')?.id==="athletes")renderAthletes()}));return}
+  if(id==="results"){renderResults();v3104AfterPaint(()=>v3103HydrateResults({all:true,render:false,force:true}).then(()=>{if(document.querySelector('.view.active')?.id==="results")renderResults()}));return}
+  if(id==="resultsupdate"){renderResultsUpdate();v3104AfterPaint(()=>v3103HydrateResults({all:true,render:false,force:true}).then(()=>{if(document.querySelector('.view.active')?.id==="resultsupdate")renderResultsUpdate()}));return}
+  if(id==="reports"){renderReports();return}
+  if(id==="settings"){loadSettings();return}
+  if(id==="coaches"){v381RenderCoachPortal?.();return}
+  if(id==="coachhub"){v390RenderCoachHub?.();return}
+};
+showView=function(id){
+  if(typeof v381AllowedView==="function"&&!v381AllowedView(id))id=v381AllowedView("deck")?"deck":"settings";
+  document.querySelectorAll(".view").forEach(view=>view.classList.toggle("active",view.id===id));
+  document.querySelectorAll(".nav-button").forEach(button=>button.classList.toggle("active",button.dataset.view===id));
+  window.scrollTo({top:0,behavior:"auto"});
+  const started=performance.now();renderView(id);
+  v3103ApplyBrand?.();v3103RenderCloudStatus?.();v381ApplyAccess?.();
+  const elapsed=performance.now()-started;if(elapsed>700)console.warn(`Slow view render ${id}: ${elapsed.toFixed(0)} ms`);
+};
+renderAll=function(){renderView(document.querySelector('.view.active')?.id||"deck");v3103ApplyBrand?.();v3103RenderCloudStatus?.();v381ApplyAccess?.()};
+
+// Hidden modified-swimmer content is rendered only when deliberately opened.
+document.addEventListener("click",event=>{
+  const toggle=event.target.closest(".v3103-adaptation-toggle");if(!toggle)return;
+  const panel=$("adaptationPanel");if(!panel||panel.classList.contains("v3103-adaptation-collapsed"))return;
+  toggle.disabled=true;toggle.textContent="Loading modified swimmers…";
+  v3104AfterPaint(()=>{try{v37RenderAdaptationPanel?.();v371RenderLearningSupport?.()}finally{toggle.disabled=false;toggle.textContent="Close modified swimmers"}});
+},true);
+
+// Non-competitive/Fitness members do not receive false standards warnings.
+const v3104RenderResultsBase=renderResults;
+renderResults=function(){
+  v3104RenderResultsBase();
+  const athlete=appState.athletes.find(a=>a.id===(appState.settings.selected_athlete_id||$("resultsAthlete")?.value));
+  const summary=$("resultsAthleteSummary");if(summary&&athlete){summary.querySelectorAll('.source-warning').forEach(n=>n.remove());summary.insertAdjacentHTML('afterbegin',v3104DemographicMessage(athlete))}
+  if(athlete&&!v3104StandardsEligible(athlete)){
+    if($("resultsNzscGaps"))$("resultsNzscGaps").innerHTML='<div class="result">No competitive standard target required for this member.</div>';
+    if($("resultsTargetGaps"))$("resultsTargetGaps").innerHTML='<div class="result">T400 and coaching progress remain available without competition targets.</div>';
+  }
+};
+
+// Correctly map the new what_changed structured field while retaining verbatim
+// raw text as the fallback for a single Finish question.
+const v3104ApplyFinishBase=v35ApplyFinishTranscript;
+v35ApplyFinishTranscript=function(tr){
+  v3104ApplyFinishBase(tr);
+  const value=tr?.structured_data?.finish_session?.what_changed;
+  if(value&&$("reviewWhatChanged"))$("reviewWhatChanged").value=v34AppendText($("reviewWhatChanged").value,value);
+};
+
+// Cloud work remains automatic, but never forces a screen render.
+syncIfPossible=async function(){v3103ScheduleBackgroundSync(650,false);return true};
+syncNow=async function(){await v3103BackgroundSync({pull:"full"});return true};
+
+function v3104ApplyBrand(){
+  document.title=`McLay Swimming OS — v${V3104_VERSION} Phone Recovery`;
+  const subtitle=document.querySelector('.header-subtitle');if(subtitle)subtitle.textContent=`Version ${V3104_VERSION} · fast Board · automatic cloud · verified voice transcript · roster + PB recovery`;
+}
+const v3104BrandBase=v3103ApplyBrand;
+v3103ApplyBrand=function(){v3104BrandBase();v3104ApplyBrand()};
+v3104ApplyBrand();
