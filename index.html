@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.10.6 Expected Coaching Engine</title>
+  <title>McLay Swimming OS — v3.10.7 Poolside Capture Fix</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260728-engine3106">
+  <link rel="stylesheet" href="styles.css?v=20260729-poolside3107">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -188,7 +188,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 3.10.6 · plan-led Roll · complete coaching workflow · SCM-default T400</div>
+      <div class="header-subtitle">Version 3.10.7 · complete session capture · live screen awake · compact poolside information</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -233,11 +233,11 @@
 
         <article class="card session-import-card">
           <details id="sessionImportDetails">
-            <summary><strong>Add or import a session</strong><span>Paste from ChatGPT, type it, or start from a photo</span></summary>
+            <summary><strong>Add or import a session</strong><span>Paste session, dictate it, or photograph it</span></summary>
             <div class="session-import-body">
               <div class="quick-session-source-row">
                 <button id="openChatGptBtn" type="button" class="secondary">Open ChatGPT</button>
-                <button id="pasteSessionBtn" type="button" class="secondary">Paste from clipboard</button>
+                <button id="pasteSessionBtn" type="button" class="secondary">Paste session</button>
                 <button id="resetSessionImportBtn" type="button" class="secondary">Clear / new</button>
               </div>
 
@@ -250,7 +250,7 @@
                 <label>Pool<select id="quickSessionCourse"><option value="SCM">25m / SCM</option><option value="LCM">50m / LCM</option></select></label>
               </div>
 
-              <label>Complete session from ChatGPT or your notes</label>
+              <label>Complete session</label>
               <textarea id="sessionPasteInput" class="poolside-note session-paste-input" placeholder="Paste the full session here. Headings such as Warm-up, Pre-set, Skill, Main set, Post-set and Warm-down will become complete editable blocks."></textarea>
               <div class="button-row">
                 <button id="parseSessionBtn" type="button">Preview complete session</button>
@@ -496,8 +496,8 @@ Warm-down..."></textarea>
           <button id="saveTextCaptureBtn" class="full-width poolside-save">Save capture</button>
 
           <div class="help share-help">
-            On an installed Android app, use Share in ChatGPT, Messages, or another app and choose McLay Swimming.
-            Otherwise tap <strong>Paste from chat</strong>.
+            On Android, use Share in any app and choose McLay Swimming.
+            Otherwise tap <strong>Paste session</strong>.
           </div>
         </article>
 
@@ -976,8 +976,8 @@ Warm-down..."></textarea>
 
   <script>
   // One-time recovery from old installed-app caches. The page reloads once,
-  // then v3.10.6 registers the current worker with updateViaCache disabled.
-  window.MCLAY_APP_BUILD="3.10.6-expected-coaching-engine-20260728";
+  // then v3.10.7 registers the current worker with updateViaCache disabled.
+  window.MCLAY_APP_BUILD="3.10.7-poolside-capture-fix-20260729";
   (async()=>{
     try{
       const key="mclay_last_installed_build";
@@ -985,13 +985,13 @@ Warm-down..."></textarea>
         localStorage.setItem(key,window.MCLAY_APP_BUILD);
         if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}
         if(window.caches){const names=await caches.keys();await Promise.all(names.filter(n=>n.startsWith("mclay-swimming-os-")).map(n=>caches.delete(n)))}
-        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3106"){u.searchParams.set("recovered","3106");location.replace(u.toString());return}
+        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3107"){u.searchParams.set("recovered","3107");location.replace(u.toString());return}
       }
     }catch(error){console.warn("Cache recovery",error)}
   })();
   </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260728-engine3106"></script>
+  <script src="app.js?v=20260729-poolside3107"></script>
 </body>
 </html>
