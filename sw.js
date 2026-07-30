@@ -1,6 +1,6 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-11-0-core-coaching-loop-20260730";
-const CORE=["./","./index.html","./styles.css?v=20260730-coreloop3110","./app.js?v=20260730-coreloop3110","./config.js","./seed.js","./manifest.webmanifest"];
+const CACHE_NAME="mclay-swimming-os-v3-12-0-monthly-calendar-20260731";
+const CORE=["./","./index.html","./styles.css?v=20260731-monthly3120","./app.js?v=20260731-monthly3120","./config.js","./seed.js","./manifest.webmanifest","./monthly_calendar.json"];
 self.addEventListener("install",event=>event.waitUntil((async()=>{
   for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);
   const cache=await caches.open(CACHE_NAME);
