@@ -10864,3 +10864,140 @@ const v3129RenderAllBase=renderAll;
 renderAll=function(){v3129RenderAllBase();const active=document.querySelector(".view.active")?.id||"deck";if(active==="deck")v3121RenderBoardState();if(active==="times")requestAnimationFrame(v3129TimingBanner);v3129Brand()};
 function v3129Brand(){document.title=`McLay Swimming OS — v${V3129_VERSION} Poolside Board`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3129_VERSION} · structured blocks · attendance-first lane plan · Lee T400 targets · complete timing only`}
 requestAnimationFrame(()=>{v3129Brand();renderAll();});
+
+
+// McLay Swimming OS v3.12.10 — TRANSCRIPTION QUEUE REPAIR
+// The live v3.4 schema accepts only photo/voice in session_transcriptions.source_type.
+// Typed and pasted sources retain their real input method inside structured_data,
+// while the compatibility column uses photo so they can sync without a schema error.
+const V3130_VERSION="3.12.10";
+const V3130_TRANSCRIPTION_SOURCE_TYPES=new Set(["photo","voice"]);
+function v3130SourceType(value){
+  const raw=String(value||"").trim().toLowerCase();
+  return /voice|audio|dictat|speech/.test(raw)?"voice":"photo";
+}
+function v3130NormaliseTranscription(record){
+  if(!record||typeof record!=="object")return false;
+  const original=String(record.source_type||"").trim().toLowerCase();
+  const canonical=v3130SourceType(original);
+  const data=(record.structured_data&&typeof record.structured_data==="object"&&!Array.isArray(record.structured_data))?{...record.structured_data}:{};
+  let changed=false;
+  if(!V3130_TRANSCRIPTION_SOURCE_TYPES.has(original)){
+    data.input_method=data.input_method||original||"text";
+    data.compatibility_source_type=canonical;
+    data.source_type_original=original||"blank";
+    record.source_type=canonical;
+    changed=true;
+  }
+  if(record.source_type!==canonical){record.source_type=canonical;changed=true}
+  if(JSON.stringify(record.structured_data||{})!==JSON.stringify(data)){record.structured_data=data;changed=true}
+  if(changed)record.updated_at=nowIso();
+  return changed;
+}
+function v3130SourceConstraintError(error){
+  const message=String(error?.message||error||"");
+  return /session_transcriptions_source_type_check|source_type.*check constraint/i.test(message);
+}
+function v3130DeterministicError(error){
+  const message=String(error?.message||error||"");
+  return /violates check constraint|violates not-null constraint|invalid input syntax|foreign key constraint|duplicate key value/i.test(message);
+}
+function v3130RepairTranscriptionQueue(){
+  let repaired=0;
+  for(const record of appState.session_transcriptions||[]){
+    if(v3130NormaliseTranscription(record)){
+      repaired++;
+      if(!(appState.pending||[]).some(item=>item.table==="session_transcriptions"&&item.id===record.id))appState.pending.push({table:"session_transcriptions",id:record.id,action:"upsert"});
+    }
+  }
+  const repairedIds=new Set((appState.session_transcriptions||[]).filter(row=>V3130_TRANSCRIPTION_SOURCE_TYPES.has(String(row.source_type||"").toLowerCase())).map(row=>row.id));
+  appState.settings.v3111_sync_failures=(appState.settings.v3111_sync_failures||[]).filter(failure=>!(failure.table==="session_transcriptions"&&repairedIds.has(failure.id)&&v3130SourceConstraintError(failure.message)));
+  for(const item of appState.pending||[]){
+    if(item.table==="session_transcriptions"&&repairedIds.has(item.id)){
+      delete item.sync_blocked;delete item.blocked_error;delete item.blocked_at;delete item.next_retry_at;
+    }
+  }
+  if(repaired)saveState(appState);
+  return repaired;
+}
+window.v3130RepairTranscriptionQueue=v3130RepairTranscriptionQueue;
+
+// Future typed/pasted sources use a valid compatibility value while preserving
+// their actual route in structured_data.input_method.
+v3126RetainSource=function(session,raw,blocks,kind){
+  const inputMethod=String(kind||"text").trim().toLowerCase()||"text",canonical=v3130SourceType(inputMethod);
+  const same=(appState.session_transcriptions||[]).find(row=>row.session_id===session.id&&String(row.raw_text||"").trim()===String(raw||"").trim());
+  if(same){
+    same.status="applied";same.structured_blocks=clone(blocks);same.structured_data={...(same.structured_data||{}),applied_directly:true,input_method:inputMethod};same.source_type=canonical;same.updated_at=nowIso();queueRecord("session_transcriptions",same.id);return same;
+  }
+  const record={id:uid("transcript"),session_id:session.id,capture_id:null,purpose:"planned_source",source_type:canonical,athlete_id:null,session_block_id:null,status:"applied",raw_text:String(raw||""),structured_blocks:clone(blocks),structured_data:{applied_directly:true,input_method:inputMethod},created_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("session_transcriptions",record);queueRecord("session_transcriptions",record.id);return record;
+};
+
+const v3130CloudRowBase=cloudRow;
+cloudRow=function(table,record){
+  if(table!=="session_transcriptions")return v3130CloudRowBase(table,record);
+  const safe={...record,structured_data:{...(record.structured_data||{})}};v3130NormaliseTranscription(safe);return v3130CloudRowBase(table,safe);
+};
+
+// A deterministic bad row is repaired once or paused. It is never hammered
+// dozens of times and it never blocks the remaining queue.
+v3111PushPending=async function(){
+  if(!cloudReady())return {successes:0,failures:0};
+  v3130RepairTranscriptionQueue();
+  if(typeof v3123DedupeLaneAssignments==="function")v3123DedupeLaneAssignments();
+  const priority={athletes:1,season_plans:2,weekly_plans:3,squad_programmes:4,squad_timetable_slots:5,sessions:6,session_lane_assignments:7,session_blocks:8,test_sets:9,attendance:10,captures:11,timed_sets:12,test_set_attempts:13,session_reviews:14,session_transcriptions:15};
+  let successes=0,failures=0;
+  for(const item of [...(appState.pending||[])].sort((a,b)=>(priority[a.table]||99)-(priority[b.table]||99))){
+    if(item.sync_blocked){failures++;continue}
+    if(typeof V331_OPTIONAL_CLOUD_TABLES!=="undefined"&&V331_OPTIONAL_CLOUD_TABLES.has(item.table)&&v331UnavailableTables().has(item.table)){v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error:new Error("Optional cloud table is unavailable; record is safely retained on this device.")});failures++;continue}
+    const send=async()=>{
+      if(item.action==="delete")return cloudFetch(`/rest/v1/${item.table}?id=eq.${encodeURIComponent(item.id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+      const record=appState[item.table]?.find(row=>row.id===item.id);if(!record){v3111Acknowledge(item);return "missing-local"}
+      if(item.table==="captures")await uploadCaptureMedia(record);
+      if(item.table==="session_transcriptions")v3130NormaliseTranscription(record);
+      const conflict=item.table==="session_lane_assignments"?"session_id,athlete_id":"id";
+      return cloudFetch(`/rest/v1/${item.table}?on_conflict=${conflict}`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(cloudRow(item.table,record))});
+    };
+    try{
+      await send();v3111Acknowledge(item);successes++;
+    }catch(error){
+      // Repair the exact live failure and retry only once.
+      if(item.table==="session_transcriptions"&&v3130SourceConstraintError(error)){
+        const record=appState.session_transcriptions?.find(row=>row.id===item.id);
+        if(record){record.source_type=v3130SourceType(record.source_type);record.structured_data={...(record.structured_data||{}),input_method:record.structured_data?.input_method||record.structured_data?.source_type_original||"text",repaired_by:"v3.12.10"};record.updated_at=nowIso()}
+        try{await send();v3111Acknowledge(item);successes++;continue}catch(retryError){error=retryError}
+      }
+      const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):"";if(missing===item.table&&typeof v331MarkTableUnavailable==="function"&&v331MarkTableUnavailable(item.table,error)){}
+      if(v3130DeterministicError(error)){item.sync_blocked=true;item.blocked_error=String(error?.message||error);item.blocked_at=nowIso()}
+      v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error});failures++;console.warn("Sync row retained",item,error);
+    }
+  }
+  saveState(appState);return {successes,failures};
+};
+pushPending=v3111PushPending;
+
+function v3130SyncOutcome(){
+  const pending=(appState.pending||[]).length,failures=(appState.settings.v3111_sync_failures||[]).length;
+  return {ok:pending===0&&failures===0,pending,failures};
+}
+function v3130BindSyncButton(){
+  const old=$("syncNowBtn");if(!old||old.dataset.v3130Bound)return;
+  const button=old.cloneNode(true);button.dataset.v3130Bound="1";old.replaceWith(button);
+  button.addEventListener("click",async()=>{
+    const box=$("connectionResult");try{await syncNow();const outcome=v3130SyncOutcome();if(box)box.innerHTML=outcome.ok?`<div class="result">Sync complete.</div>`:`<div class="warning-box">${outcome.pending} item${outcome.pending===1?"":"s"} remain safely on this device. Open Sync details.</div>`}catch(error){if(box)box.innerHTML=`<div class="warning-box">${escapeHtml(error.message)}</div>`}
+  });
+}
+const v3130RenderSyncDetailsBase=v3111RenderSyncDetails;
+v3111RenderSyncDetails=function(){
+  v3130RenderSyncDetailsBase();v3130BindSyncButton();
+  const host=$("v3111SyncDetails"),failures=appState.settings.v3111_sync_failures||[],invalid=(appState.session_transcriptions||[]).filter(row=>!V3130_TRANSCRIPTION_SOURCE_TYPES.has(String(row.source_type||"").toLowerCase()));
+  const retry=$("v3111RetrySync");if(retry){retry.textContent=invalid.length?"Repair & sync":"Retry failed";retry.onclick=async()=>{const repaired=v3130RepairTranscriptionQueue();if(repaired)updateStatus(`${repaired} transcription source repaired locally`,"good");await syncNow();v3111RenderSyncDetails()}}
+  if(host&&failures.some(f=>f.table==="session_transcriptions"&&v3130SourceConstraintError(f.message))){let note=$("v3130RepairNote");if(!note){note=document.createElement("div");note.id="v3130RepairNote";note.className="good-box";host.querySelector(".v3111-sync-grid")?.insertAdjacentElement("afterend",note)}note.textContent="The old transcription source value has been repaired. Sync once to clear the saved item."}
+};
+
+function v3130Brand(){document.title=`McLay Swimming OS — v${V3130_VERSION} Sync Repair`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3130_VERSION} · transcription source repair · bounded retries · local work stays safe`}
+const v3130Repaired=v3130RepairTranscriptionQueue();
+v3130BindSyncButton();v3130Brand();
+if(v3130Repaired&&cloudReady())setTimeout(()=>{v3103ScheduleBackgroundSync(0,false)},250);
+requestAnimationFrame(()=>{v3130BindSyncButton();v3130Brand();const active=document.querySelector(".view.active")?.id;if(active==="settings")v3111RenderSyncDetails()});
