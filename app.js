@@ -8963,3 +8963,233 @@ function v3123Init(){
   requestAnimationFrame(()=>{renderActiveContext();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()});
 }
 v3123Init();
+
+// =============================================================================
+// v3.12.4 — PLAN CONTINUITY + QUICK WRAP-UP
+// - every session starts from the season and weekly plan resolved by date/squad
+// - National and Development share the same programme context and prior evidence
+// - morning planning distinguishes the pool booking from the coached 07:00 finish
+// - deviations are recorded lightly at Finish and carried into the next brief
+// =============================================================================
+const V3124_VERSION="3.12.4";
+
+function v3124ProgrammeFamily(sessionOrSquads){
+  const squads=Array.isArray(sessionOrSquads)?sessionOrSquads:v3111ExplicitSquads(sessionOrSquads||{});
+  const keys=squads.map(squadKey);
+  const shared=keys.some(key=>key==="national"||key==="development");
+  return shared?["national","development"]:[...new Set(keys.filter(Boolean))];
+}
+function v3124SameProgramme(a,b){
+  const aKeys=v3124ProgrammeFamily(a),bKeys=new Set(v3124ProgrammeFamily(b));
+  return aKeys.some(key=>bKeys.has(key));
+}
+function v3124DateInWeek(date,weekStart){
+  if(!date||!weekStart)return false;
+  const start=new Date(`${weekStart}T12:00:00`),target=new Date(`${date}T12:00:00`);
+  if(Number.isNaN(start.getTime())||Number.isNaN(target.getTime()))return false;
+  const diff=Math.floor((target-start)/86400000);return diff>=0&&diff<=6;
+}
+function v3124DateInSeason(date,season){
+  if(!season||!date)return false;
+  return (!season.start_date||season.start_date<=date)&&(!season.end_date||season.end_date>=date)&&!['closed','archived'].includes(String(season.status||'').toLowerCase());
+}
+
+const v3124PriorPlanContext=v3105PlanContext;
+v3105PlanContext=function(session){
+  const base=v3124PriorPlanContext(session);if(!session)return base;
+  const family=v3124ProgrammeFamily(session),programmes=(appState.squad_programmes||[]).filter(p=>p.active!==false&&family.includes(squadKey(p.squad_name)));
+  const linkedWeekIds=new Set([session.weekly_plan_id,...programmes.map(p=>p.weekly_plan_id)].filter(Boolean));
+  const weeks=(appState.weekly_plans||[]).slice();
+  let week=base.week||weeks.find(w=>linkedWeekIds.has(w.id))||weeks.filter(w=>v3124DateInWeek(session.session_date,w.week_start)).sort((a,b)=>String(b.week_start||'').localeCompare(String(a.week_start||'')))[0]||weeks.filter(w=>w.week_start&&w.week_start<=session.session_date).sort((a,b)=>String(b.week_start).localeCompare(String(a.week_start)))[0]||null;
+  const linkedSeasonIds=new Set([session.season_plan_id,week?.season_plan_id,...programmes.map(p=>p.season_plan_id)].filter(Boolean));
+  const seasons=(appState.season_plans||[]).slice();
+  let season=base.season||seasons.find(s=>linkedSeasonIds.has(s.id))||seasons.filter(s=>v3124DateInSeason(session.session_date,s)).sort((a,b)=>String(b.start_date||'').localeCompare(String(a.start_date||'')))[0]||null;
+  if(!week&&season)week=weeks.filter(w=>(!w.season_plan_id||w.season_plan_id===season.id)&&w.week_start&&w.week_start<=session.session_date).sort((a,b)=>String(b.week_start).localeCompare(String(a.week_start)))[0]||null;
+  return {week,season};
+};
+
+// National and Development are one programme thread when looking backwards.
+v3122SameSquad=function(a,b){return v3124SameProgramme(a,b)};
+
+function v3124Minutes(value){
+  const match=String(value||'').match(/^(\d{1,2}):(\d{2})/);return match?Number(match[1])*60+Number(match[2]):null;
+}
+function v3124Clock(minutes){
+  if(minutes===null||!Number.isFinite(minutes))return '';
+  const h=Math.floor(minutes/60)%24,m=minutes%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function v3124Timing(session){
+  const slot=v3111SlotForSession(session)||{},start=String(slot.start_time||session.timetable_start_time||'').slice(0,5),bookingEnd=String(slot.end_time||session.timetable_end_time||'').slice(0,5);
+  const startMin=v3124Minutes(start),bookingEndMin=v3124Minutes(bookingEnd),morning=String(session.day_part||'').toUpperCase()==='AM';
+  const coachedEndMin=morning&&bookingEndMin!==null?Math.min(bookingEndMin,7*60):bookingEndMin;
+  const coachedEnd=v3124Clock(coachedEndMin),minutes=startMin!==null&&coachedEndMin!==null?Math.max(0,coachedEndMin-startMin):null;
+  return {start,bookingEnd,coachedEnd,minutes,morning};
+}
+function v3124SharedDelivery(session){
+  const squads=v3111ExplicitSquads(session),keys=squads.map(squadKey),shared=keys.some(k=>k==='national'||k==='development');if(!shared)return null;
+  const timing=v3124Timing(session),isDevelopment=keys.includes('development');
+  const sameDay=(appState.sessions||[]).filter(s=>s.id!==session.id&&s.session_date===session.session_date&&String(s.day_part).toUpperCase()===String(session.day_part).toUpperCase());
+  const peer=sameDay.find(s=>v3111ExplicitSquads(s).some(name=>squadKey(name)===(isDevelopment?'national':'development')));
+  const peerTiming=peer?v3124Timing(peer):null;
+  const startGap=timing.start&&peerTiming?.start?Math.abs((v3124Minutes(timing.start)||0)-(v3124Minutes(peerTiming.start)||0)):null;
+  let delivery='Write one base National + Development session. Preserve the same system, technical purpose and main work.';
+  if(timing.morning){
+    if(isDevelopment)delivery=`Development starts ${startGap||10} minutes after National. Use a shorter warm-up, then join at the pre-set or main set without losing the core work.`;
+    else delivery='Use the full warm-up for National. Development joins later through a shortened warm-up, then shares the pre-set or main set.';
+  }
+  return {label:'National + Development shared programme',delivery};
+}
+function v3124SuggestedShape(objective,carry){
+  const text=`${objective||''} ${carry||''}`.toLowerCase();
+  if(/threshold|css|aerobic power/.test(text))return 'Warm-up → technical rhythm → progressive pre-set → threshold main work → short reinforcement → easy finish.';
+  if(/speed|race pace|anaerobic|lactate/.test(text))return 'Warm-up → skills and speed preparation → quality main work with full intent → controlled recovery → easy finish.';
+  if(/skill|turn|start|underwater|stroke/.test(text))return 'Warm-up → focused skill rehearsal → apply the skill under increasing pressure → reinforce it in the main work → easy finish.';
+  if(/recovery|regeneration|easy/.test(text))return 'Progressive warm-up → low-load technical work → aerobic recovery → mobility or easy skills → relaxed finish.';
+  return 'Warm-up → purposeful pre-set → main work that delivers the weekly objective → short reinforcement → warm-down.';
+}
+function v3124OutcomeFromReview(review){
+  const match=String(review?.what_changed||'').match(/^\[Plan outcome:\s*(Hit|Mostly|Not yet)\]\s*/i);
+  if(!match)return review?.completed_at?'hit':'';
+  const key=match[1].toLowerCase();return key==='not yet'?'not_yet':key;
+}
+function v3124CleanWhatChanged(value){return String(value||'').replace(/^\[Plan outcome:\s*(?:Hit|Mostly|Not yet)\]\s*/i,'').trim()}
+function v3124OutcomeLabel(value){return value==='mostly'?'Mostly achieved':value==='not_yet'?'Not achieved yet':'Achieved'}
+
+const v3124PriorPlanningData=v3122PlanningData;
+v3122PlanningData=function(session){
+  const data=v3124PriorPlanningData(session),review=data.review,outcome=v3124OutcomeFromReview(review),changed=v3124CleanWhatChanged(review?.what_changed),carry=v3122CleanText(review?.carry_forward||review?.reinforce||'');
+  const priority=[];
+  if(outcome&&outcome!=='hit')priority.push(`Previous planned objective: ${v3124OutcomeLabel(outcome)}.`);
+  if(carry)priority.push(`Carry forward: ${carry}`);
+  if(changed)priority.push(`What changed: ${changed}`);
+  const carryKey=carry.toLowerCase(),changedKey=changed.toLowerCase();
+  const remaining=(data.priorDirection||[]).filter(item=>{const key=v3122CleanText(item).toLowerCase();return key&&key!==carryKey&&key!==changedKey&&key!==`carry forward: ${carryKey}`&&key!==`what changed: ${changedKey}`});
+  data.priorDirection=v3122Unique([...priority,...remaining]);
+  data.planOutcome=outcome;return data;
+};
+
+function v3124PlanBriefData(session){
+  const data=v3122PlanningData(session),{season,week,schedule}=data,timing=v3124Timing(session),shared=v3124SharedDelivery(session);
+  const seasonGoal=v3122CleanText(season?.overarching_goal||season?.plan_document_text||session.season_name||'');
+  const weekObjective=v3122CleanText(session.week_objective||week?.objective||'');
+  const weekCarry=v3122CleanText(session.week_carry_forward||week?.carry_forward||'');
+  const role=v3122CleanText(!/^Published monthly calendar:/i.test(String(session.plan_cue||''))?session.plan_cue:'');
+  return {...data,timing,shared,seasonGoal,weekObjective,weekCarry,role,schedule};
+}
+function v3124PlanStatus(data){
+  if(data.season&&data.week)return {label:'Plan sources found',className:'good'};
+  const missing=[!data.season?'season plan':'',!data.week?'weekly plan':''].filter(Boolean).join(' and ');
+  return {label:`Planning source missing: ${missing}`,className:'warning'};
+}
+function v3124PlanningBriefHtml(session){
+  const data=v3124PlanBriefData(session),status=v3124PlanStatus(data),next=v3121NextDistinctBooking(session),nextMeet=v3122NextMeetText(session,data.season),scheduleExtra=v3122Unique([data.schedule.events.length?`Scheduled event: ${data.schedule.events.join(' · ')}`:'',...data.schedule.publishedNotes]);
+  const planLines=[
+    data.seasonGoal&&`Season: ${data.seasonGoal}`,
+    data.weekObjective&&`This week: ${data.weekObjective}`,
+    data.weekCarry&&`Carry from the weekly plan: ${data.weekCarry}`,
+    data.role&&`Today’s role: ${data.role}`
+  ].filter(Boolean);
+  const coached=data.timing.start&&data.timing.coachedEnd?`${data.timing.start}–${data.timing.coachedEnd}${data.timing.minutes!==null?` · ${data.timing.minutes} coached minutes`:''}`:'Coached time not entered';
+  const booking=data.timing.start&&data.timing.bookingEnd?`${data.timing.start}–${data.timing.bookingEnd}`:'Booking time not entered';
+  const carry=data.priorDirection.length?data.priorDirection:['No unfinished work or carry-forward has been logged.'];
+  return `<div class="v3124-planning-brief">
+    <section class="v3124-plan-contract ${status.className}">
+      <div class="v3124-contract-head"><div><span>Plan for today</span><strong>${escapeHtml(status.label)}</strong></div><b>Default brief — changes are captured in Quick wrap-up</b></div>
+      ${v3122TextList(planLines,'The session cannot yet be grounded because the planning source for this date is missing.')}
+    </section>
+    <section class="v3124-time-card">
+      <div><span>Pool booking</span><strong>${escapeHtml(booking)}</strong></div>
+      <div><span>Planned coached session</span><strong>${escapeHtml(coached)}</strong></div>
+      <div><span>Scheduled</span><strong>${escapeHtml(data.schedule.detailLine||'Squad / venue not entered')}</strong></div>
+      ${scheduleExtra.length?v3122TextList(scheduleExtra):''}
+    </section>
+    ${data.shared?`<section class="v3124-shared-card"><span>${escapeHtml(data.shared.label)}</span><strong>${escapeHtml(data.shared.delivery)}</strong></section>`:''}
+    <section class="v3124-build-cues">
+      <div class="v3124-cue"><span>What must be achieved</span><strong>${escapeHtml(data.weekObjective||data.seasonGoal||'Use the weekly plan as the primary objective.')}</strong></div>
+      <div class="v3124-cue"><span>Carry from the last relevant session</span>${v3122TextList(carry)}</div>
+      <div class="v3124-cue"><span>Suggested session shape</span><strong>${escapeHtml(v3124SuggestedShape(data.weekObjective,data.weekCarry||data.priorDirection.join(' ')))}</strong></div>
+      ${data.currentNotes.length?`<div class="v3124-cue"><span>Notes already attached</span>${v3122TextList(data.currentNotes)}</div>`:''}
+    </section>
+    <section class="v3122-next-target">
+      <div><span>Next meet</span><strong>${escapeHtml(nextMeet)}</strong></div>
+      <div><span>Lead into</span><strong>${escapeHtml(next?`${v3121BookingLabel(next)} — ${v3111ExplicitSquads(next)[0]||next.title}`:'No later booking entered')}</strong></div>
+    </section>
+  </div>`;
+}
+v3122PlanningBriefHtml=v3124PlanningBriefHtml;
+
+v3105DeckContextHtml=function(session){
+  const attendance=v3121AttendanceSnapshot(session),purpose=[session.primary_system,session.technical_focus].filter(Boolean).join(' · ')||'Not entered',open=!v3111SessionReady(session)?' open':'';
+  return `<div class="v3121-context-primary"><div><span>Roll</span><strong>${escapeHtml(v3121RollText(attendance,{compact:true}))}</strong></div><div><span>Session purpose</span><strong>${escapeHtml(purpose)}</strong></div></div><details class="v3121-context-more v3122-context-more v3124-context"${open}><summary><strong>Plan for today</strong><span>Season · week · last session · coached time</span></summary>${v3124PlanningBriefHtml(session)}</details>`;
+};
+
+v3121EmptyPlanCard=function(session){
+  let host=$("v3121MissingPlan");if(v3111SessionReady(session)){host?.remove();return null}
+  if(!host){host=document.createElement('article');host.id='v3121MissingPlan';host.className='card v3121-missing-plan v3122-missing-plan v3124-missing-plan'}
+  const squad=v3111ExplicitSquads(session)[0]||sessionSquads(session)[0]||'this squad';
+  host.innerHTML=`<div><span class="eyebrow">Ready to build</span><h3>Write the ${escapeHtml(squad)} session from the plan above.</h3><p>The season objective, weekly direction, unfinished work and coached time are the starting point. A coach can adjust naturally; Quick wrap-up records what changed and what must carry forward.</p></div><button type="button" data-v3121-compose>Write / paste / dictate session</button>`;
+  host.querySelector('[data-v3121-compose]').onclick=()=>{if(typeof v33OpenSessionComposer==='function')v33OpenSessionComposer();else{$('sessionImportDetails')?.setAttribute('open','');$('sessionImportDetails')?.scrollIntoView({behavior:'smooth',block:'start'})}};return host;
+};
+
+function v3124PlanSummaryHtml(session){
+  const data=v3124PlanBriefData(session);return `<div class="v3124-wrap-plan"><span>Today’s planned objective</span><strong>${escapeHtml(data.weekObjective||data.seasonGoal||'Planning objective missing for this date.')}</strong>${data.role?`<small>${escapeHtml(data.role)}</small>`:''}</div>`;
+}
+function v3124SetOutcome(value){
+  const host=$("v3124QuickWrap");if(!host)return;host.dataset.outcome=value;
+  host.querySelectorAll('[data-v3124-outcome]').forEach(button=>button.classList.toggle('active',button.dataset.v3124Outcome===value));
+  const needsCarry=value==='mostly'||value==='not_yet';host.classList.toggle('needs-carry',needsCarry);
+  const prompt=$("v3124CarryPrompt");if(prompt)prompt.textContent=needsCarry?'Add one carry-forward line so the next coach knows what still needs doing.':'No extra explanation is required unless something useful changed.';
+}
+function v3124InjectQuickWrap(){
+  const card=document.querySelector('#finish .finish-primary-card'),grid=card?.querySelector('.review-grid');if(!card||!grid)return;
+  if(!$('reviewWhatChanged'))grid.insertAdjacentHTML('afterbegin','<div><label>What changed?</label><textarea id="reviewWhatChanged"></textarea></div>');
+  let host=$("v3124QuickWrap");
+  if(!host){
+    host=document.createElement('section');host.id='v3124QuickWrap';host.className='v3124-quick-wrap';host.innerHTML=`<div class="v3124-wrap-head"><div><span class="eyebrow">Quick wrap-up</span><h3>Did the session hit today’s objective?</h3></div></div><div id="v3124WrapPlan"></div><div class="v3124-outcomes"><button type="button" data-v3124-outcome="hit">Yes</button><button type="button" data-v3124-outcome="mostly">Mostly</button><button type="button" data-v3124-outcome="not_yet">Not yet</button></div><div id="v3124QuickFields" class="v3124-quick-fields"></div><p id="v3124CarryPrompt" class="help"></p><div id="v3124WrapMessage" class="help"></div>`;
+    card.querySelector('#finishSessionHeading')?.insertAdjacentElement('afterend',host);
+  }
+  const quickFields=$('v3124QuickFields'),changed=$('reviewWhatChanged')?.closest('div'),carry=$('reviewCarry')?.closest('div');
+  if(changed&&changed.parentElement!==quickFields){changed.querySelector('label').textContent='What changed? One line is enough.';quickFields.appendChild(changed)}
+  if(carry&&carry.parentElement!==quickFields){carry.querySelector('label').textContent='What needs carrying into the next session?';quickFields.appendChild(carry)}
+  let more=$('v3124MoreReview');if(!more){more=document.createElement('details');more.id='v3124MoreReview';more.className='evidence-details v3124-more-review';more.innerHTML='<summary><strong>Add more coaching detail</strong><span>Optional: what worked, reinforcement and swimmer notes</span></summary><div class="v3124-more-grid"></div>';grid.insertAdjacentElement('beforebegin',more)}
+  const moreGrid=more.querySelector('.v3124-more-grid');["reviewWentWell","reviewReinforce","reviewAthletes"].forEach(id=>{const node=$(id)?.closest('div');if(node&&node.parentElement!==moreGrid)moreGrid.appendChild(node)});
+  grid.hidden=true;
+  host.querySelectorAll('[data-v3124-outcome]').forEach(button=>button.onclick=()=>v3124SetOutcome(button.dataset.v3124Outcome));
+  const session=selectedSession();if($('v3124WrapPlan'))$('v3124WrapPlan').innerHTML=session?v3124PlanSummaryHtml(session):'';
+}
+function v3124RenderQuickWrap(){
+  v3124InjectQuickWrap();const session=selectedSession(),review=sessionReview(session?.id)||{};if(!session)return;
+  if($('reviewWhatChanged'))$('reviewWhatChanged').value=v3124CleanWhatChanged(review.what_changed);
+  v3124SetOutcome(v3124OutcomeFromReview(review)||'hit');
+  if($('v3124WrapPlan'))$('v3124WrapPlan').innerHTML=v3124PlanSummaryHtml(session);
+  const result=$('finishResult');if(result&&review.completed_at)result.textContent=`Quick wrap-up saved ${new Date(review.completed_at).toLocaleString('en-NZ')}`;
+}
+
+async function v3124SaveQuickWrap(){
+  const session=selectedSession();if(!session)return;const host=$('v3124QuickWrap'),outcome=host?.dataset.outcome||'hit',changed=$('reviewWhatChanged')?.value.trim()||'',carry=$('reviewCarry')?.value.trim()||'',message=$('v3124WrapMessage');
+  if((outcome==='mostly'||outcome==='not_yet')&&!carry){if(message){message.className='source-warning';message.textContent='Add one carry-forward line for the next coach. That is the only required extra step.'}$('reviewCarry')?.focus();return}
+  if(message){message.className='help';message.textContent=''}
+  const existing=sessionReview(session.id),label=outcome==='mostly'?'Mostly':outcome==='not_yet'?'Not yet':'Hit';
+  const record={id:existing?.id||`review-${session.id}`,session_id:session.id,what_changed:`[Plan outcome: ${label}]${changed?`\n${changed}`:''}`,went_well:$('reviewWentWell')?.value.trim()||'',reinforce:$('reviewReinforce')?.value.trim()||'',athlete_notes:$('reviewAthletes')?.value.trim()||'',carry_forward:carry,actual_distance:Number($('finishActualDistance')?.value||0),actual_duration:Number($('finishActualDuration')?.value||0),energy_systems:parseEvidenceMap($('finishEnergySystems')?.value||''),training_modes:parseEvidenceMap($('finishTrainingModes')?.value||''),stroke_exposure:parseEvidenceMap($('finishStrokeExposure')?.value||''),athlete_response:$('finishAthleteResponse')?.value.trim()||'',modifications:$('finishModifications')?.value.trim()||'',race_split_evidence:$('finishRaceEvidence')?.value.trim()||'',completed_at:nowIso(),updated_at:nowIso()};
+  upsertLocal('session_reviews',record);queueRecord('session_reviews',record.id);session.status='completed';session.updated_at=nowIso();queueRecord('sessions',session.id);saveState(appState);await syncIfPossible();renderAll();showView('deck');updateStatus(outcome==='hit'?'Session completed — objective achieved':`Session completed — carry-forward saved for the next coach`,'good');
+}
+function v3124BindQuickWrapSave(){const old=$('finishSessionBtn');if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.textContent='Save quick wrap-up & mark complete';fresh.addEventListener('click',v3124SaveQuickWrap)}
+
+const v3124PriorRenderReview=renderReview;
+renderReview=function(){v3124PriorRenderReview();v3124RenderQuickWrap()};
+const v3124PriorRenderView=renderView;
+renderView=function(id){v3124PriorRenderView(id);if(id==='finish'){v3124InjectQuickWrap();v3124BindQuickWrapSave();v3124RenderQuickWrap()}v3124Brand()};
+const v3124PriorRenderAll=renderAll;
+renderAll=function(){v3124PriorRenderAll();v3124InjectQuickWrap();v3124BindQuickWrapSave();if((document.querySelector('.view.active')?.id||'deck')==='finish')v3124RenderQuickWrap();if((document.querySelector('.view.active')?.id||'deck')==='deck')v3121RenderBoardState();v3124Brand()};
+
+function v3124RelabelFinishActions(){
+  document.querySelectorAll('[data-view-jump="finish"],.nav-button[data-view="finish"]').forEach(button=>{if(button.classList.contains('nav-button'))button.innerHTML='<span>■</span>Wrap-up';else button.textContent='Quick wrap-up'});
+}
+function v3124Brand(){
+  document.title=`McLay Swimming OS — v${V3124_VERSION} Plan Continuity`;
+  const subtitle=document.querySelector('.header-subtitle');if(subtitle)subtitle.textContent=`Version ${V3124_VERSION} · plan-led session building · shared National/Development context · quick carry-forward`;
+  v3124RelabelFinishActions();
+}
+
+v3124InjectQuickWrap();v3124BindQuickWrapSave();v3124Brand();
+requestAnimationFrame(()=>{renderAll();if((document.querySelector('.view.active')?.id||'deck')==='deck')v3121RenderBoardState()});
