@@ -8170,9 +8170,9 @@ v3111SelectOperational=function({now=new Date(),force=false}={}){
 v3111Styles();v3111Brand();
 
 // ================================================================
-// v3.12.0 — PUBLISHED MONTHLY OPERATIONAL CALENDAR
+// v3.12.1 — PUBLISHED MONTHLY CALENDAR + BOARD CONTEXT FIX
 // ================================================================
-const V312_VERSION="3.12.0";
+const V312_VERSION="3.12.1";
 const V312_CALENDAR_URL="./monthly_calendar.json";
 const V312_GENERATION_DAYS=42;
 let v312CalendarLoadPromise=null;
@@ -8314,3 +8314,652 @@ v3111GroupOccurrences=function(now=new Date()){
   }
   return [...groups.values()].sort((a,b)=>a.start-b.start);
 };
+
+
+// =============================================================================
+// v3.12.1 — PHONE BOARD CONTEXT + ROLL TRUTH FIX
+// - selected session always owns the visible planning context
+// - an untouched roll is never reported as everybody attending
+// - "After this" skips simultaneous squad shells in the same pool booking
+// - the working set is placed before planning/attendance detail on phone
+// =============================================================================
+const V3121_VERSION="3.12.1";
+
+function v3121AttendanceSnapshot(session){
+  if(!session)return {roster:[],rows:[],present:[],absent:[],unmarked:[],marked:false,started:false,complete:false};
+  const roster=(typeof v310AllSessionRoster==="function"?v310AllSessionRoster(session):selectedRoster()).slice().sort(rosterSort);
+  const rosterIds=new Set(roster.map(a=>a.id));
+  const rows=(appState.attendance||[]).filter(row=>row.session_id===session.id&&rosterIds.has(row.athlete_id)&&["present","modified","absent"].includes(row.status));
+  const statusById=new Map();
+  for(const row of rows)statusById.set(row.athlete_id,row.status);
+  const present=roster.filter(a=>["present","modified"].includes(statusById.get(a.id)));
+  const absent=roster.filter(a=>statusById.get(a.id)==="absent");
+  const unmarked=roster.filter(a=>!statusById.has(a.id));
+  const started=statusById.size>0;
+  const complete=roster.length>0&&unmarked.length===0;
+  return {roster,rows,present,absent,unmarked,marked:started,started,complete};
+}
+v3105AttendanceSnapshot=v3121AttendanceSnapshot;
+v311Attendance=v3121AttendanceSnapshot;
+v382PresentRoster=function(){
+  const session=selectedSession();
+  return session?v3121AttendanceSnapshot(session).present.slice().sort(rosterSort):[];
+};
+
+function v3121RollText(snapshot,{compact=false}={}){
+  if(!snapshot.roster.length)return "No roster linked";
+  if(!snapshot.started)return compact?`${snapshot.roster.length} expected · roll not taken`:`Roll not taken · ${snapshot.roster.length} expected`;
+  if(!snapshot.complete)return `${snapshot.present.length} attending · ${snapshot.unmarked.length} unmarked`;
+  return `${snapshot.present.length} attending · roll saved`;
+}
+
+v3105DeckContextHtml=function(session){
+  const {week,season}=v3105PlanContext(session),attendance=v3121AttendanceSnapshot(session);
+  const weeklyObjective=session.week_objective||week?.objective||"No linked weekly objective";
+  const phase=[session.season_name||season?.name,session.week_phase||week?.phase].filter(Boolean).join(" · ")||"No linked season plan";
+  const purpose=[session.primary_system,session.technical_focus].filter(Boolean).join(" · ")||"Not entered";
+  const scheduleNote=String(session.plan_cue||"").trim();
+  return `<div class="v3121-context-primary">
+    <div><span>Roll</span><strong>${escapeHtml(v3121RollText(attendance,{compact:true}))}</strong></div>
+    <div><span>Session purpose</span><strong>${escapeHtml(purpose)}</strong></div>
+  </div>
+  <details class="v3121-context-more"><summary><strong>Planning context</strong><span>Week, season and next meet</span></summary>
+    <div class="v3121-context-secondary">
+      <div><span>Weekly objective</span><strong>${escapeHtml(weeklyObjective)}</strong></div>
+      <div><span>Season phase</span><strong>${escapeHtml(phase)}</strong></div>
+      <div><span>Next meet</span><strong>${escapeHtml(v3105NextMeetForSession(session)||"No upcoming meet linked")}</strong></div>
+      ${scheduleNote?`<div><span>Published schedule note</span><strong>${escapeHtml(scheduleNote)}</strong></div>`:""}
+    </div>
+  </details>`;
+};
+
+function v3121BindAttendancePanel(host,session){
+  host.querySelectorAll("[data-v310-status]").forEach(btn=>btn.onclick=()=>{
+    const athleteId=btn.closest("[data-v310-athlete]")?.dataset.v310Athlete;if(!athleteId)return;
+    attendanceRecord(session,athleteId,btn.dataset.v310Status);
+    v310RenderSessionAttendance();
+    v3105InjectDeckWorkflow?.();
+    v390DeckPanel?.();
+    renderAttendance?.();
+    v3121RenderBoardState();
+  });
+  $("v310AddExisting")?.addEventListener("click",async()=>{
+    const athleteId=$("v310ExtraAthlete")?.value;if(!athleteId)return;
+    const athlete=appState.athletes.find(a=>a.id===athleteId),record={id:`participant-${session.id}-${athleteId}`,session_id:session.id,athlete_id:athleteId,participant_type:"extra",source_squad:athlete?.squad||"",notes:"Added by arrangement",created_at:nowIso(),updated_at:nowIso()};
+    upsertLocal("session_participants",record);queueRecord("session_participants",record.id);attendanceRecord(session,athleteId,"present");saveState(appState);await syncIfPossible();renderAll();
+  });
+  $("v310AddVisitor")?.addEventListener("click",async()=>{
+    const name=$("v310VisitorName")?.value.trim();if(!name)return alert("Enter the visitor's name.");
+    let athlete=(appState.athletes||[]).find(a=>v3NameKey(a.full_name)===v3NameKey(name));
+    if(!athlete){athlete={id:uid("athlete"),full_name:name,squad:$("v310VisitorSquad")?.value||"Visitor",active:true,is_visitor:true,visitor_home_club:$("v310VisitorClub")?.value.trim()||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("athletes",athlete);queueRecord("athletes",athlete.id)}
+    const record={id:`participant-${session.id}-${athlete.id}`,session_id:session.id,athlete_id:athlete.id,participant_type:"visitor",source_squad:athlete.squad||"Visitor",notes:athlete.visitor_home_club?`Visiting from ${athlete.visitor_home_club}`:"Visitor",created_at:nowIso(),updated_at:nowIso()};
+    upsertLocal("session_participants",record);queueRecord("session_participants",record.id);attendanceRecord(session,athlete.id,"present");saveState(appState);await syncIfPossible();renderAll();
+  });
+}
+
+v310RenderSessionAttendance=function(){
+  const host=$("v310SessionAttendance"),session=selectedSession();if(!host)return;
+  if(!session){host.innerHTML="";return}
+  const snap=v3121AttendanceSnapshot(session),roster=snap.roster,outside=(appState.athletes||[]).filter(a=>a.active!==false&&!roster.some(r=>r.id===a.id)&&v310AllowedAthlete(a)).sort((a,b)=>a.full_name.localeCompare(b.full_name));
+  host.innerHTML=`<details ${window.innerWidth>=900?"open":""}><summary><div><span>Session attendance</span><strong>${escapeHtml(v3121RollText(snap))}</strong></div><b>Drives pacing and modifications</b></summary><div class="v310-attendance-body">${roster.map(a=>v310AttendanceRow(session,a)).join("")||'<div class="help">No roster linked to this session.</div>'}<div class="v310-add-participant"><label>Add an existing swimmer<select id="v310ExtraAthlete"><option value="">Choose swimmer</option>${outside.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.full_name)} — ${escapeHtml(a.squad||"Unassigned")}</option>`).join("")}</select></label><button id="v310AddExisting" type="button" class="secondary">Add to session</button></div>${typeof v381Can!=="function"||v381Can("add_session_participants")?`<details><summary><strong>Add visitor / trial swimmer</strong><span>Creates a real swimmer record and adds them only to this session</span></summary><div class="form-grid"><label>Name<input id="v310VisitorName"></label><label>Session squad<select id="v310VisitorSquad">${sessionSquads(session).map(s=>`<option>${escapeHtml(s)}</option>`).join("")}<option>Visitor</option></select></label><label>Home club<input id="v310VisitorClub"></label></div><button id="v310AddVisitor" type="button">Add visitor as present</button></details>`:""}</div></details>`;
+  v3121BindAttendancePanel(host,session);
+};
+
+function v3121GroupStart(group){return Number(group?.start instanceof Date?group.start.getTime():new Date(group?.start||`${group?.date||"1970-01-01"}T${group?.display_start||"00:00"}:00`).getTime())||0}
+function v3121CurrentBooking(session){return session?v3111GroupForSession(session):null}
+function v3121ChooseGroupSession(group,preferredSquad=""){
+  const order={national:1,development:2,intermediate:3,junior:4,fitness:5};
+  const rows=v3111GroupSessions(group).map(x=>x.session).filter(v312SessionAvailable);
+  return rows.find(s=>v3111ExplicitSquads(s).some(q=>squadKey(q)===squadKey(preferredSquad)))||rows.sort((a,b)=>(order[squadKey(v3111ExplicitSquads(a)[0])]||20)-(order[squadKey(v3111ExplicitSquads(b)[0])]||20))[0]||null;
+}
+function v3121NextDistinctBooking(session){
+  if(!session)return null;v3111EnsureUpcomingSessions();
+  const current=v3121CurrentBooking(session),groups=v3111GroupOccurrences(new Date()),preferred=v3111ExplicitSquads(session)[0]||"";
+  const currentStart=current?v3121GroupStart(current):new Date(`${session.session_date}T${String(session.day_part).toUpperCase()==="AM"?"05:00":"12:00"}:00`).getTime();
+  const later=groups.filter(g=>g.key!==current?.key&&v3121GroupStart(g)>currentStart).sort((a,b)=>v3121GroupStart(a)-v3121GroupStart(b));
+  for(const group of later){const choice=v3121ChooseGroupSession(group,preferred);if(choice)return choice}
+  const currentBookingKey=`${session.session_date}|${String(session.day_part||"").toUpperCase()}|${String(session.venue||"").trim().toLowerCase()}`;
+  return (appState.sessions||[]).filter(s=>v312SessionAvailable(s)&&v3108SessionKey(s)>v3108SessionKey(session)&&`${s.session_date}|${String(s.day_part||"").toUpperCase()}|${String(s.venue||"").trim().toLowerCase()}`!==currentBookingKey).sort((a,b)=>v3108SessionKey(a).localeCompare(v3108SessionKey(b)))[0]||null;
+}
+v3108NextSessionAfter=v3121NextDistinctBooking;
+
+function v3121BookingPeers(session){
+  const group=v3121CurrentBooking(session);if(!group)return [];
+  return v3111GroupSessions(group).map(x=>x.session).filter(s=>s.id!==session.id&&v312SessionAvailable(s));
+}
+function v3121BookingLabel(session){
+  const group=v3121CurrentBooking(session),slot=v3111SlotForSession(session);
+  if(!group&&!slot)return sessionLabel(session);
+  const start=String(slot?.start_time||group?.display_start||"").slice(0,5),end=String(slot?.end_time||group?.display_end||"").slice(0,5);
+  return `${weekday(session.session_date)} ${session.day_part}${start&&end?` · ${start}–${end}`:""}`;
+}
+
+// The old plan anchor was derived by an earlier layer and could survive a session switch.
+v374PlanAnchor=function(){document.querySelectorAll("#v374PlanAnchor").forEach(node=>node.remove())};
+
+function v3121EmptyPlanCard(session){
+  let host=$("v3121MissingPlan");
+  if(v3111SessionReady(session)){host?.remove();return null}
+  if(!host){host=document.createElement("article");host.id="v3121MissingPlan";host.className="card v3121-missing-plan"}
+  const squad=v3111ExplicitSquads(session)[0]||sessionSquads(session)[0]||"This squad";
+  host.innerHTML=`<div><span class="eyebrow">Session plan not entered</span><h3>${escapeHtml(squad)} is selected, but the set is still empty.</h3><p>Add the actual session before training so Board can show the working block, distance, pacing and modifications.</p></div><button type="button" data-v3121-compose>Write / paste / dictate session</button>`;
+  host.querySelector("[data-v3121-compose]").onclick=()=>{if(typeof v33OpenSessionComposer==="function")v33OpenSessionComposer();else{$("sessionImportDetails")?.setAttribute("open","");$("sessionImportDetails")?.scrollIntoView({behavior:"smooth",block:"start"})}};
+  return host;
+}
+
+function v3121RenderBoardState(){
+  const deck=$("deck"),session=selectedSession();if(!deck||!session)return;
+  document.querySelectorAll("#v374PlanAnchor").forEach(node=>node.remove());
+  v3105InjectDeckWorkflow?.();
+  v310EnsureAttendancePanel?.();
+  v310RenderSessionAttendance();
+  const snap=v3121AttendanceSnapshot(session),next=v3121NextDistinctBooking(session),peers=v3121BookingPeers(session),complete=v3108SessionCompleted(session);
+  const hero=deck.querySelector(".deck-hero"),actions=hero?.querySelector(".deck-action-grid.coach-actions");
+  const eyebrow=hero?.querySelector(".eyebrow");if(eyebrow)eyebrow.textContent=complete?"Completed session":"Current / next session";
+  let status=$("v3108OperationalStatus");if(!status&&actions){status=document.createElement("div");status.id="v3108OperationalStatus";status.className="v3108-operational-status";actions.insertAdjacentElement("beforebegin",status)}
+  if(status)status.innerHTML=`<div><span>${complete?"Completed":"On deck"}</span><strong>${escapeHtml(v3121RollText(snap))}</strong></div><div><span>Next booking</span><strong>${escapeHtml(next?`${v3121BookingLabel(next)} — ${v3111ExplicitSquads(next)[0]||next.title}`:"No later booking entered")}</strong></div>${peers.length?`<div class="v3121-booking-peers"><span>Also in this booking</span><strong>${peers.map(s=>escapeHtml(v3111ExplicitSquads(s)[0]||s.title)).join(" · ")}</strong></div>`:""}`;
+  if(actions){const rollButton=actions.querySelector('[data-view-jump="attendance"]');if(rollButton)rollButton.textContent=snap.started?`Roll · ${snap.present.length}`:"Take roll"}
+  const context=$("v3105DeckContext");if(context){const heading=context.querySelector("h3");if(heading)heading.textContent="Session overview";const cue=context.querySelector(".eyebrow");if(cue)cue.textContent="Selected-session context"}
+  const core=$("v311BoardCore"),ready=v3111SessionReady(session),missing=v3121EmptyPlanCard(session),attendance=$("v310SessionAttendance");
+  if(core)core.hidden=!ready;
+  let anchor=hero;
+  const ordered=ready?[core,context,attendance]:[missing,context,attendance];
+  for(const node of ordered)if(node&&anchor){anchor.insertAdjacentElement("afterend",node);anchor=node}
+  const capture=$("v3105DeckCapture");if(capture)capture.classList.add("v3121-secondary-mobile");
+  const runCount=$("v3105RunSet")?.querySelector("summary b");if(runCount)runCount.textContent=snap.started?`${snap.present.length} attending`:"Roll not taken";
+  v3121Brand();
+}
+
+function v3121Brand(){
+  document.title=`McLay Swimming OS — v${V3121_VERSION} Board Context Fix`;
+  const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3121_VERSION} · accurate selected-session context · truthful roll · monthly calendar`;
+}
+
+const v3121BaseRenderView=renderView;
+renderView=function(id){v3121BaseRenderView(id);if(id==="deck")v3121RenderBoardState();v3121Brand()};
+const v3121BaseRenderAll=renderAll;
+renderAll=function(){v3121BaseRenderAll();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState();v3121Brand()};
+
+v3121Brand();
+requestAnimationFrame(()=>{if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()});
+
+// Short, complete labels prevent the phone session selector hiding the squad name.
+function v3121ShortSessionLabel(session){
+  const date=new Date(`${session.session_date}T12:00:00`),day=date.toLocaleDateString("en-NZ",{weekday:"short"}),shortDate=date.toLocaleDateString("en-NZ",{day:"numeric",month:"short"}),squad=v3111ExplicitSquads(session)[0]||sessionSquads(session)[0]||session.title||"Session";
+  return `${day} ${String(session.day_part||"").toUpperCase()} · ${shortDate} · ${squad}`;
+}
+renderActiveContext=function(){
+  const session=selectedSession(),picker=$("contextSessionPicker"),mobile=window.innerWidth<=700;
+  if(picker){const sessions=appState.sessions.slice().filter(s=>s.status!=="cancelled").sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`));picker.innerHTML=sessions.map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===session?.id?"selected":""}>${escapeHtml(mobile?v3121ShortSessionLabel(s):`${sessionLabel(s)} — ${s.title}`)}</option>`).join("");picker.onchange=()=>setSelectedSession(picker.value)}
+  const buttons=$("contextSquadButtons");if(buttons){buttons.innerHTML=sessionSquads(session).map(s=>`<button type="button" class="${s===activeSquad()?"active":""}" data-context-squad="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")||'<span class="help">No squad on session</span>';buttons.querySelectorAll("[data-context-squad]").forEach(b=>b.onclick=()=>setActiveSquad(b.dataset.contextSquad))}
+};
+window.addEventListener("resize",()=>{renderActiveContext();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()});
+renderActiveContext();
+
+
+const v3121BaseTimingContext=v311TimingContext;
+v311TimingContext=function(){
+  v3121BaseTimingContext();const session=selectedSession(),host=$("v311TimingContext");if(!session||!host)return;const snap=v3121AttendanceSnapshot(session),p=host.querySelector("p");if(p)p.textContent=`${snap.started?`${snap.present.length} attending`:`Roll not taken · ${snap.roster.length} expected`} · ${sessionLabel(session)}`;
+};
+
+// All later view changes retain the patched release identity.
+v312Brand=v3121Brand;
+v3121Brand();
+
+// =============================================================================
+// v3.12.2 — BOARD PLANNING BRIEF
+// - shows the exact scheduled booking before a session is written
+// - brings season direction, weekly objective/carry/notes and next meet together
+// - finds the latest meaningful session for the same squad, not the previous
+//   session shell from another squad
+// - surfaces completed-session review notes and captured deck notes as writing cues
+// - keeps unknown information honest rather than inventing a session purpose
+// =============================================================================
+const V3122_VERSION="3.12.2";
+
+function v3122CleanText(value,max=320){
+  const text=String(value||"").replace(/\s+/g," ").trim();
+  if(!text)return "";
+  return text.length>max?`${text.slice(0,max-1).trim()}…`:text;
+}
+function v3122Unique(values){
+  const seen=new Set(),out=[];
+  for(const raw of values||[]){const text=v3122CleanText(raw);const key=text.toLowerCase();if(text&&!seen.has(key)){seen.add(key);out.push(text)}}
+  return out;
+}
+function v3122TextList(values,emptyText="Nothing logged."){
+  const rows=v3122Unique(values);
+  return rows.length?`<ul class="v3122-note-list">${rows.map(text=>`<li>${escapeHtml(text)}</li>`).join("")}</ul>`:`<div class="v3122-empty">${escapeHtml(emptyText)}</div>`;
+}
+function v3122SameSquad(a,b){
+  const aKeys=new Set(v3111ExplicitSquads(a).map(squadKey));
+  return v3111ExplicitSquads(b).some(name=>aKeys.has(squadKey(name)));
+}
+function v3122MeaningfulSession(session){
+  return Boolean(session&&(v3108SessionCompleted(session)||sessionReview(session.id)||String(session.workout||"").trim()||v32SessionBlocks(session.id).length||(appState.captures||[]).some(c=>c.session_id===session.id)));
+}
+function v3122PreviousSquadSession(session){
+  if(!session)return null;
+  const prior=(appState.sessions||[]).filter(candidate=>candidate.id!==session.id&&candidate.status!=="cancelled"&&v3108SessionKey(candidate)<v3108SessionKey(session)&&v3122SameSquad(session,candidate)).sort((a,b)=>v3108SessionKey(b).localeCompare(v3108SessionKey(a)));
+  return prior.find(v3122MeaningfulSession)||prior[0]||null;
+}
+function v3122CapturedNotes(sessionId){
+  return (appState.captures||[]).filter(c=>c.session_id===sessionId&&String(c.text_content||"").trim()&&!/^Finish Session voice/i.test(String(c.text_content||""))).sort((a,b)=>String(b.updated_at||b.created_at||"").localeCompare(String(a.updated_at||a.created_at||""))).slice(0,5).map(c=>c.text_content);
+}
+function v3122ScheduleData(session){
+  const slot=v3111SlotForSession(session),entry=typeof v312DateEntry==="function"?v312DateEntry(session.session_date):null;
+  const start=String(slot?.start_time||session.timetable_start_time||"").slice(0,5),end=String(slot?.end_time||session.timetable_end_time||"").slice(0,5);
+  const squads=v3111ExplicitSquads(session).join(" + ")||sessionSquads(session).join(" + ")||"Squad not linked";
+  const events=(entry?.events||slot?.calendar_events||[]).map(event=>event?.name||event).filter(Boolean);
+  const publishedNotes=v3122Unique([slot?.calendar_note,...(entry?.notes||[]),/^Published monthly calendar:/i.test(String(session.plan_cue||""))?session.plan_cue:""]);
+  return {
+    slotLine:[`${weekday(session.session_date)} ${String(session.day_part||"").toUpperCase()}`.trim(),start&&end?`${start}–${end}`:"Time not entered"].filter(Boolean).join(" · "),
+    detailLine:[squads,slot?.venue||session.venue,slot?.pool_course||session.pool_course].filter(Boolean).join(" · "),
+    status:entry?.status||slot?.calendar_status||"scheduled",
+    events,
+    publishedNotes
+  };
+}
+function v3122PlanningData(session){
+  const context=v3105PlanContext(session),season=context.season,week=context.week,previous=v3122PreviousSquadSession(session),review=previous?sessionReview(previous.id):null,schedule=v3122ScheduleData(session);
+  const seasonDirection=v3122Unique([season?.overarching_goal,season?.plan_document_text]);
+  const weeklyDirection=v3122Unique([session.week_objective||week?.objective,session.week_carry_forward||week?.carry_forward,week?.notes]);
+  const priorDirection=previous?v3122Unique([
+    previous.next_session_cue,
+    review?.carry_forward,
+    review?.reinforce&&`Reinforce: ${review.reinforce}`,
+    review?.went_well&&`Worked well: ${review.went_well}`,
+    review?.athlete_response&&`Athlete response: ${review.athlete_response}`,
+    review?.athlete_notes&&`Athlete notes: ${review.athlete_notes}`,
+    review?.modifications&&`Modifications: ${review.modifications}`,
+    ...v3122CapturedNotes(previous.id)
+  ]):[];
+  const currentNotes=v3122Unique([
+    !/^Published monthly calendar:/i.test(String(session.plan_cue||""))?session.plan_cue:"",
+    session.next_session_cue,
+    ...v3122CapturedNotes(session.id)
+  ]);
+  return {context,season,week,previous,review,schedule,seasonDirection,weeklyDirection,priorDirection,currentNotes};
+}
+function v3122NextMeetText(session,season){
+  const existing=v3105NextMeetForSession(session);
+  if(existing&&!/^No upcoming meet linked$/i.test(existing))return existing;
+  const meet=(season?.meet_plan||[]).filter(item=>!item.date||item.date>=session.session_date).sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")))[0];
+  return meet?[meet.name,meet.date?formatDate(meet.date):"",meet.course].filter(Boolean).join(" · "):"No upcoming meet linked";
+}
+function v3122PlanningBriefHtml(session){
+  const data=v3122PlanningData(session),{season,week,previous,schedule}=data,next=v3121NextDistinctBooking(session),phase=[session.week_phase||week?.phase,season?.name||session.season_name].filter(Boolean).join(" · "),nextMeet=v3122NextMeetText(session,season);
+  const scheduleExtra=v3122Unique([
+    schedule.events.length?`Event: ${schedule.events.join(" · ")}`:"",
+    ...schedule.publishedNotes
+  ]);
+  return `<div class="v3122-planning-brief">
+    <section class="v3122-scheduled">
+      <span>Scheduled</span>
+      <strong>${escapeHtml(schedule.slotLine)}</strong>
+      <b>${escapeHtml(schedule.detailLine)}</b>
+      <small>${escapeHtml(`Calendar: ${schedule.status}`)}</small>
+      ${scheduleExtra.length?v3122TextList(scheduleExtra):""}
+    </section>
+    <section class="v3122-brief-block">
+      <div class="v3122-brief-heading"><span>Season direction</span><b>${escapeHtml(phase||"No linked season plan")}</b></div>
+      ${v3122TextList(data.seasonDirection,"No season-plan goal or coaching cue has been entered.")}
+    </section>
+    <section class="v3122-brief-block">
+      <div class="v3122-brief-heading"><span>This week</span><b>${escapeHtml(week?.week_start?`Week of ${formatDate(week.week_start)}`:"Weekly plan")}</b></div>
+      ${v3122TextList(data.weeklyDirection,"No weekly objective, carry-forward or weekly notes are linked.")}
+    </section>
+    <section class="v3122-brief-block">
+      <div class="v3122-brief-heading"><span>Carry from the last ${escapeHtml(v3111ExplicitSquads(session)[0]||"squad")} session</span><b>${escapeHtml(previous?`${sessionLabel(previous)} · ${previous.title}`:"No prior session found")}</b></div>
+      ${v3122TextList(data.priorDirection,previous?"The previous session exists, but no review/carry-forward/deck notes were saved.":"No earlier same-squad session is available.")}
+    </section>
+    <section class="v3122-brief-block">
+      <div class="v3122-brief-heading"><span>Notes already attached to this session</span><b>${data.currentNotes.length} cue${data.currentNotes.length===1?"":"s"}</b></div>
+      ${v3122TextList(data.currentNotes,"No extra session notes have been entered yet.")}
+    </section>
+    <section class="v3122-next-target">
+      <div><span>Next meet</span><strong>${escapeHtml(nextMeet)}</strong></div>
+      <div><span>Lead into</span><strong>${escapeHtml(next?`${v3121BookingLabel(next)} — ${v3111ExplicitSquads(next)[0]||next.title}`:"No later booking entered")}</strong></div>
+    </section>
+  </div>`;
+}
+
+v3105DeckContextHtml=function(session){
+  const attendance=v3121AttendanceSnapshot(session),purpose=[session.primary_system,session.technical_focus].filter(Boolean).join(" · ")||"Not entered",open=!v3111SessionReady(session)?" open":"";
+  return `<div class="v3121-context-primary">
+    <div><span>Roll</span><strong>${escapeHtml(v3121RollText(attendance,{compact:true}))}</strong></div>
+    <div><span>Session purpose</span><strong>${escapeHtml(purpose)}</strong></div>
+  </div>
+  <details class="v3121-context-more v3122-context-more"${open}><summary><strong>Session planning brief</strong><span>Schedule · season · week · last session · notes</span></summary>${v3122PlanningBriefHtml(session)}</details>`;
+};
+
+v3121EmptyPlanCard=function(session){
+  let host=$("v3121MissingPlan");
+  if(v3111SessionReady(session)){host?.remove();return null}
+  if(!host){host=document.createElement("article");host.id="v3121MissingPlan";host.className="card v3121-missing-plan v3122-missing-plan"}
+  const squad=v3111ExplicitSquads(session)[0]||sessionSquads(session)[0]||"This squad";
+  host.innerHTML=`<div><span class="eyebrow">Ready to write</span><h3>Build the ${escapeHtml(squad)} session from the planning brief above.</h3><p>The scheduled booking, season direction, weekly cues, previous-session review and saved notes stay attached to this session.</p></div><button type="button" data-v3121-compose>Write / paste / dictate session</button>`;
+  host.querySelector("[data-v3121-compose]").onclick=()=>{if(typeof v33OpenSessionComposer==="function")v33OpenSessionComposer();else{$("sessionImportDetails")?.setAttribute("open","");$("sessionImportDetails")?.scrollIntoView({behavior:"smooth",block:"start"})}};
+  return host;
+};
+
+const v3122BaseRenderBoardState=v3121RenderBoardState;
+v3121RenderBoardState=function(){
+  v3122BaseRenderBoardState();
+  const session=selectedSession(),deck=$("deck");if(!session||!deck)return;
+  const hero=deck.querySelector(".deck-hero"),context=$("v3105DeckContext"),missing=$("v3121MissingPlan"),core=$("v311BoardCore"),attendance=$("v310SessionAttendance"),ready=v3111SessionReady(session);
+  let anchor=hero;
+  const ordered=ready?[core,context,attendance]:[context,missing,attendance];
+  for(const node of ordered)if(node&&anchor){anchor.insertAdjacentElement("afterend",node);anchor=node}
+  const heading=context?.querySelector("h3");if(heading)heading.textContent=ready?"Session overview":"What this session needs to follow";
+  const cue=context?.querySelector(".eyebrow");if(cue)cue.textContent=ready?"Selected-session context":"Planning information already linked";
+  v3122Brand();
+};
+
+function v3122Brand(){
+  document.title=`McLay Swimming OS — v${V3122_VERSION} Planning Brief`;
+  const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3122_VERSION} · scheduled session + season/week/previous-session writing cues`;
+}
+
+const v3122BaseRenderView=renderView;
+renderView=function(id){v3122BaseRenderView(id);if(id==="deck")v3121RenderBoardState();v3122Brand()};
+const v3122BaseRenderAll=renderAll;
+renderAll=function(){v3122BaseRenderAll();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState();v3122Brand()};
+v312Brand=v3122Brand;
+v3122Brand();
+requestAnimationFrame(()=>{if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()});
+
+// =============================================================================
+// v3.12.3 — BOARD SESSION FLOW + CLOUD LANE REPAIR
+// - Dictation fills the selected published-calendar squad shell instead of
+//   creating a detached duplicate session.
+// - Existing detached dictated sessions are repaired back into their shell.
+// - Published calendar notes no longer masquerade as weekly/session cues.
+// - Board shows the complete session and the original dictated source.
+// - Roll taps keep the coach's scroll position and create lanes only for
+//   swimmers actually marked here/modified.
+// - Lane assignment sync uses the table's real session+athlete uniqueness.
+// =============================================================================
+const V3123_VERSION="3.12.3";
+
+const v3123BaseInferSystem=inferSystem;
+inferSystem=function(text){return v3123BaseInferSystem(text)||v382DetectedZone(String(text||""))||""};
+
+function v3123CleanSetLine(value){return String(value||"").replace(/\s*·\s*·\s*/g," · ").replace(/\s{2,}/g," ").trim()}
+
+function v3123CalendarCue(value){
+  return /^Published monthly calendar:/i.test(String(value||"").trim());
+}
+function v3123SessionHasWork(session){
+  return Boolean(session&&(String(session.workout||"").trim()||v32SessionBlocks(session.id).length));
+}
+function v3123SameScheduledSlot(a,b){
+  if(!a||!b)return false;
+  const aSquads=new Set(v3111ExplicitSquads(a).map(squadKey));
+  return a.session_date===b.session_date&&String(a.day_part||"").toUpperCase()===String(b.day_part||"").toUpperCase()&&v3111ExplicitSquads(b).some(name=>aSquads.has(squadKey(name)));
+}
+function v3123WritableSelectedShell(draft){
+  const target=selectedSession();
+  if(!target||v3108SessionCompleted(target)||v3123SessionHasWork(target))return null;
+  const directlyLinked=String(draft?.previous_session_id||"")===String(target.id);
+  const sameSlot=draft&&v3123SameScheduledSlot(target,draft);
+  return directlyLinked||sameSlot?target:null;
+}
+function v3123MergeDraftIntoShell(shell,draft){
+  const plannedSquads=v3111ExplicitSquads(shell).length?v3111ExplicitSquads(shell):sessionSquads(shell);
+  const squad=plannedSquads[0]||sessionSquads(draft)[0]||"Session";
+  const meaningfulShellCue=v3123CalendarCue(shell.plan_cue)?"":String(shell.plan_cue||"").trim();
+  const meaningfulDraftCue=v3123CalendarCue(draft.plan_cue)?"":String(draft.plan_cue||"").trim();
+  return {
+    ...shell,
+    ...draft,
+    id:shell.id,
+    session_date:shell.session_date,
+    day_part:shell.day_part,
+    venue:shell.venue||draft.venue||"",
+    title:shell.title||`${squad} session`,
+    squads:plannedSquads.length?plannedSquads:(draft.squads||[]),
+    lane_count:Number(shell.lane_count||draft.lane_count||1),
+    pool_course:shell.pool_course||draft.pool_course||"SCM",
+    season_plan_id:shell.season_plan_id||draft.season_plan_id||null,
+    weekly_plan_id:shell.weekly_plan_id||draft.weekly_plan_id||null,
+    season_name:shell.season_name||draft.season_name||"",
+    week_start:shell.week_start||draft.week_start||null,
+    week_phase:shell.week_phase||draft.week_phase||"",
+    week_objective:shell.week_objective||draft.week_objective||"",
+    week_carry_forward:shell.week_carry_forward||draft.week_carry_forward||"",
+    plan_cue:meaningfulDraftCue||meaningfulShellCue,
+    previous_session_id:shell.previous_session_id||null,
+    status:shell.status==="cancelled"?"planned":(shell.status||draft.status||"planned"),
+    updated_at:nowIso()
+  };
+}
+
+const v3123BaseCreateShell=v3111CreateShell;
+v3111CreateShell=function(date,slot){
+  const shell=v3123BaseCreateShell(date,slot);
+  if(slot?.source==="monthly_calendar"&&v3123CalendarCue(shell.plan_cue))shell.plan_cue="";
+  return shell;
+};
+
+const v3123BaseSaveImportedSession=saveImportedSession;
+saveImportedSession=async function(openNow){
+  const shell=importedSessionDraft?v3123WritableSelectedShell(importedSessionDraft):null;
+  if(shell)importedSessionDraft=v3123MergeDraftIntoShell(shell,importedSessionDraft);
+  const result=await v3123BaseSaveImportedSession(openNow);
+  if(shell){
+    const saved=appState.sessions.find(s=>s.id===shell.id);
+    if(saved){saved.title=shell.title||saved.title;saved.plan_cue=v3123CalendarCue(saved.plan_cue)?"":saved.plan_cue;saved.updated_at=nowIso();queueRecord("sessions",saved.id);saveState(appState)}
+    updateStatus("Session saved into the scheduled squad booking","good");
+    renderAll();
+  }
+  return result;
+};
+
+function v3123MoveLinkedRows(fromId,toId){
+  const tables=["session_blocks","session_transcriptions","captures","timed_sets","session_reviews","test_set_attempts","session_participants"];
+  for(const table of tables){
+    for(const row of (appState[table]||[]).filter(r=>r.session_id===fromId)){
+      row.session_id=toId;row.updated_at=nowIso();queueRecord(table,row.id);
+    }
+  }
+  for(const table of ["attendance","session_lane_assignments"]){
+    const rows=(appState[table]||[]).filter(r=>r.session_id===fromId);
+    for(const row of rows){
+      const existing=(appState[table]||[]).find(r=>r.session_id===toId&&r.athlete_id===row.athlete_id&&r.id!==row.id);
+      if(existing){
+        const keep=String(existing.updated_at||"")>=String(row.updated_at||"")?existing:row;
+        const drop=keep===existing?row:existing;
+        if(keep===row){row.session_id=toId;row.updated_at=nowIso();queueRecord(table,row.id)}
+        appState[table]=appState[table].filter(r=>r.id!==drop.id);queueDelete(table,drop.id);
+      }else{row.session_id=toId;row.updated_at=nowIso();queueRecord(table,row.id)}
+    }
+  }
+}
+function v3123RepairDetachedImports(){
+  let repaired=0;
+  const sessions=[...(appState.sessions||[])];
+  for(const orphan of sessions){
+    const shell=(appState.sessions||[]).find(candidate=>candidate.id!==orphan.id&&String(orphan.previous_session_id||"")===String(candidate.id)&&!v3123SessionHasWork(candidate)&&v3123SessionHasWork(orphan)&&v3123SameScheduledSlot(candidate,orphan));
+    if(!shell)continue;
+    const merged=v3123MergeDraftIntoShell(shell,orphan);
+    Object.assign(shell,merged);v3123MoveLinkedRows(orphan.id,shell.id);
+    appState.sessions=appState.sessions.filter(s=>s.id!==orphan.id);
+    appState.pending=(appState.pending||[]).filter(p=>!(p.table==="sessions"&&p.id===orphan.id&&p.action!=="delete"));
+    queueDelete("sessions",orphan.id);queueRecord("sessions",shell.id);
+    if(appState.settings.selected_session_id===orphan.id)appState.settings.selected_session_id=shell.id;
+    repaired++;
+  }
+  return repaired;
+}
+function v3123MigrateCalendarCues(){
+  let changed=0;
+  for(const session of appState.sessions||[]){
+    // Empty timetable shells can keep their generated source note locally; the
+    // Board filters it out. Only a real written session needs its coaching cue
+    // cleaned and synced, which avoids queuing the entire monthly calendar.
+    if(v3123SessionHasWork(session)&&v3123CalendarCue(session.plan_cue)){session.plan_cue="";session.updated_at=nowIso();queueRecord("sessions",session.id);changed++}
+  }
+  return changed;
+}
+
+function v3123SessionBlocks(session){
+  let blocks=v311SessionBlocksFor(session);
+  if(!blocks.length&&session.workout)blocks=v3107BlocksFromRaw(session.workout).map((block,index)=>({...block,id:"",sort_order:index+1}));
+  return blocks.map(v374SanitiseBlock);
+}
+function v3123SourceText(session){
+  const tr=(appState.session_transcriptions||[]).filter(t=>t.session_id===session.id&&String(t.raw_text||"").trim()).sort(byUpdated)[0];
+  return String(tr?.raw_text||session.workout||"").trim();
+}
+function v3123FullSessionHtml(session){
+  const blocks=v3123SessionBlocks(session),parsed=blocks.reduce((sum,block)=>sum+v35BlockDistance(block),0),source=v3123SourceText(session),delivery=v3122Unique(blocks.map(block=>block.cues));
+  const purpose=[session.primary_system,session.technical_focus].filter(Boolean);
+  return `<div class="card-heading v3123-whole-heading"><div><span class="eyebrow">Whole session</span><h3>${escapeHtml(session.title||"Scheduled session")}</h3><small>Every parsed block is shown below. The dictated source remains available for anything the parser missed.</small></div><b>${parsed?`${parsed.toLocaleString()}m parsed`:"Total needs checking"}</b></div>
+  ${(purpose.length||delivery.length)?`<div class="v3123-session-cues"><div><span>Session purpose</span><strong>${escapeHtml(purpose.join(" · ")||"Taken from the set below")}</strong></div>${delivery.length?`<div><span>Delivery cues from the set</span><strong>${escapeHtml(delivery.join(" · "))}</strong></div>`:""}</div>`:""}
+  <div class="v3123-whole-blocks">${blocks.map((block,index)=>{
+    const lines=v34Array(block.items).map(item=>`<div class="v3123-whole-line ${item.runnable===false?"cue":""}"><span>${escapeHtml(v3123CleanSetLine(item.raw||item.instruction||""))}</span>${item.runnable!==false&&Number(item.reps)&&Number(item.distance)?`<b>${(Number(item.reps)*Number(item.distance)).toLocaleString()}m</b>`:""}</div>`).join("");
+    return `<section><div class="v3123-block-head"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><strong>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</strong><b>${v35BlockDistance(block)?`${v35BlockDistance(block).toLocaleString()}m`:""}</b></div>${block.purpose?`<small>${escapeHtml(block.purpose)}</small>`:""}${block.cues?`<small class="v3123-block-cue"><strong>Cue:</strong> ${escapeHtml(block.cues)}</small>`:""}<div>${lines||`<pre>${escapeHtml(block.raw_text||"No parsed lines")}</pre>`}</div></section>`
+  }).join("")||'<div class="warning-box">No structured blocks were recognised. Open the original dictated session below and edit the set before running it.</div>'}</div>
+  ${source?`<details class="v3123-source"><summary><strong>Original dictated session</strong><span>Use this to check missing lines or the total distance</span></summary><pre>${escapeHtml(source)}</pre></details>`:""}
+  <div class="v3123-whole-actions"><button type="button" data-v3123-edit>Edit / check session</button></div>`;
+}
+function v3123RenderWholeSession(){
+  const session=selectedSession(),deck=$("deck");if(!session||!deck)return;
+  let host=$("v3123WholeSession");
+  if(!v3111SessionReady(session)){host?.remove();return}
+  if(!host){host=document.createElement("article");host.id="v3123WholeSession";host.className="card v3123-whole-session"}
+  host.innerHTML=v3123FullSessionHtml(session);
+  host.querySelector("[data-v3123-edit]")?.addEventListener("click",v33EditCurrentSession);
+  const core=$("v311BoardCore"),context=$("v3105DeckContext");
+  if(core)core.insertAdjacentElement("afterend",host);else if(context)context.insertAdjacentElement("beforebegin",host);
+}
+
+function v3123RefreshRollSummaries(session){
+  const snap=v3121AttendanceSnapshot(session),short=v3121RollText(snap,{compact:true}),long=v3121RollText(snap);
+  const attendanceStrong=$("v310SessionAttendance")?.querySelector("summary strong");if(attendanceStrong)attendanceStrong.textContent=long;
+  const boardRoll=$("v311BoardCore")?.querySelector('[data-view-jump="attendance"]');if(boardRoll)boardRoll.textContent=snap.started?`Roll · ${snap.present.length}`:`Take roll · ${snap.roster.length}`;
+  const heroRoll=document.querySelector('#deck .deck-hero [data-view-jump="attendance"]');if(heroRoll)heroRoll.textContent=snap.started?`Roll · ${snap.present.length}`:"Take roll";
+  const currentLine=$("v311BoardCore")?.querySelector(".v311-now pre");if(currentLine)currentLine.textContent=v3123CleanSetLine(currentLine.textContent);
+  const contextRoll=$("v3105DeckContext")?.querySelector(".v3121-context-primary>div:first-child strong");if(contextRoll)contextRoll.textContent=short;
+  const statusRoll=$("v3108OperationalStatus")?.querySelector("div:first-child strong");if(statusRoll)statusRoll.textContent=long;
+  const runCount=$("v3105RunSet")?.querySelector("summary b");if(runCount)runCount.textContent=snap.started?`${snap.present.length} attending`:"Roll not taken";
+}
+
+v3121BindAttendancePanel=function(host,session){
+  host.querySelectorAll("[data-v310-status]").forEach(btn=>btn.onclick=()=>{
+    const row=btn.closest("[data-v310-athlete]"),athleteId=row?.dataset.v310Athlete;if(!athleteId)return;
+    const before=row.getBoundingClientRect().top,open=host.querySelector("details")?.open;
+    attendanceRecord(session,athleteId,btn.dataset.v310Status);
+    v310RenderSessionAttendance();
+    const details=host.querySelector("details");if(details&&open)details.open=true;
+    v3123RefreshRollSummaries(session);
+    requestAnimationFrame(()=>{const replacement=host.querySelector(`[data-v310-athlete="${CSS.escape(athleteId)}"]`);if(replacement){const delta=replacement.getBoundingClientRect().top-before;if(Math.abs(delta)>1)window.scrollBy({top:delta,behavior:"auto"})}});
+  });
+  $("v310AddExisting")?.addEventListener("click",async()=>{
+    const athleteId=$("v310ExtraAthlete")?.value;if(!athleteId)return;
+    const athlete=appState.athletes.find(a=>a.id===athleteId),record={id:`participant-${session.id}-${athleteId}`,session_id:session.id,athlete_id:athleteId,participant_type:"extra",source_squad:athlete?.squad||"",notes:"Added by arrangement",created_at:nowIso(),updated_at:nowIso()};
+    upsertLocal("session_participants",record);queueRecord("session_participants",record.id);attendanceRecord(session,athleteId,"present");saveState(appState);await syncIfPossible();v310RenderSessionAttendance();v3123RefreshRollSummaries(session);
+  });
+  $("v310AddVisitor")?.addEventListener("click",async()=>{
+    const name=$("v310VisitorName")?.value.trim();if(!name)return alert("Enter the visitor's name.");
+    let athlete=(appState.athletes||[]).find(a=>v3NameKey(a.full_name)===v3NameKey(name));
+    if(!athlete){athlete={id:uid("athlete"),full_name:name,squad:$("v310VisitorSquad")?.value||"Visitor",active:true,is_visitor:true,visitor_home_club:$("v310VisitorClub")?.value.trim()||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("athletes",athlete);queueRecord("athletes",athlete.id)}
+    const record={id:`participant-${session.id}-${athlete.id}`,session_id:session.id,athlete_id:athlete.id,participant_type:"visitor",source_squad:athlete.squad||"Visitor",notes:athlete.visitor_home_club?`Visiting from ${athlete.visitor_home_club}`:"Visitor",created_at:nowIso(),updated_at:nowIso()};
+    upsertLocal("session_participants",record);queueRecord("session_participants",record.id);attendanceRecord(session,athlete.id,"present");saveState(appState);await syncIfPossible();v310RenderSessionAttendance();v3123RefreshRollSummaries(session);
+  });
+};
+
+// Do not create eighteen cloud lane records merely because the roll screen opened.
+v35EnsureLaneAssignments=function(session,roster=selectedRoster()){
+  if(!session||!roster.length)return;
+  const presentIds=new Set((appState.attendance||[]).filter(r=>r.session_id===session.id&&["present","modified"].includes(r.status)).map(r=>r.athlete_id));
+  const candidates=roster.filter(athlete=>presentIds.has(athlete.id));
+  if(!candidates.length)return;
+  const count=Math.max(1,Math.min(12,Number(session.lane_count||6)));
+  candidates.slice().sort(rosterSort).forEach((athlete,index)=>{
+    let lane=Number(athlete.training_lane);if(!Number.isFinite(lane)||lane<1||lane>count)lane=(index%count)+1;
+    const existing=(appState.session_lane_assignments||[]).find(x=>x.session_id===session.id&&x.athlete_id===athlete.id);
+    if(existing&&Number(existing.lane_number)>=1&&Number(existing.lane_number)<=count)return;
+    const record={id:existing?.id||uid("lane"),session_id:session.id,athlete_id:athlete.id,lane_number:lane,lane_order:athlete.timing_order||index+1,updated_at:nowIso()};
+    upsertLocal("session_lane_assignments",record);queueRecord("session_lane_assignments",record.id);
+  });
+  saveState(appState);scheduleFastSync();
+};
+
+function v3123DedupeLaneAssignments(){
+  const winners=new Map(),removed=[];
+  for(const row of appState.session_lane_assignments||[]){
+    const key=`${row.session_id}|${row.athlete_id}`,existing=winners.get(key);
+    if(!existing||String(row.updated_at||"")>=String(existing.updated_at||"")){if(existing)removed.push(existing);winners.set(key,row)}else removed.push(row);
+  }
+  if(!removed.length)return 0;
+  const removedIds=new Set(removed.map(r=>r.id));
+  appState.session_lane_assignments=[...winners.values()];
+  appState.pending=(appState.pending||[]).filter(p=>!(p.table==="session_lane_assignments"&&removedIds.has(p.id)));
+  return removed.length;
+}
+v3111PushPending=async function(){
+  if(!cloudReady())return {successes:0,failures:0};
+  v3123DedupeLaneAssignments();
+  const priority={athletes:1,season_plans:2,weekly_plans:3,squad_programmes:4,squad_timetable_slots:5,sessions:6,session_lane_assignments:7,session_blocks:8,test_sets:9,attendance:10,captures:11,timed_sets:12,test_set_attempts:13,session_reviews:14,session_transcriptions:15};
+  let successes=0,failures=0;
+  for(const item of [...(appState.pending||[])].sort((a,b)=>(priority[a.table]||99)-(priority[b.table]||99))){
+    if(typeof V331_OPTIONAL_CLOUD_TABLES!=="undefined"&&V331_OPTIONAL_CLOUD_TABLES.has(item.table)&&v331UnavailableTables().has(item.table)){v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error:new Error("Optional cloud table is unavailable; record is safely retained on this device.")});failures++;continue}
+    try{
+      if(item.action==="delete")await cloudFetch(`/rest/v1/${item.table}?id=eq.${encodeURIComponent(item.id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+      else{
+        const record=appState[item.table]?.find(r=>r.id===item.id);if(!record){v3111Acknowledge(item);successes++;continue}
+        if(item.table==="captures")await uploadCaptureMedia(record);
+        const conflict=item.table==="session_lane_assignments"?"session_id,athlete_id":"id";
+        await cloudFetch(`/rest/v1/${item.table}?on_conflict=${conflict}`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(cloudRow(item.table,record))});
+      }
+      v3111Acknowledge(item);successes++;
+    }catch(error){
+      const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):"";if(missing===item.table&&typeof v331MarkTableUnavailable==="function"&&v331MarkTableUnavailable(item.table,error)){}
+      v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error});failures++;console.warn("Sync row retained",item,error);
+    }
+  }
+  saveState(appState);return {successes,failures};
+};
+pushPending=v3111PushPending;
+const v3123BasePullOperational=v3111PullOperational;
+v3111PullOperational=async function(options){const result=await v3123BasePullOperational(options);v3123DedupeLaneAssignments();saveState(appState);return result};
+v3103PullOperational=v3111PullOperational;
+
+const v3123BaseRenderBoardState=v3121RenderBoardState;
+v3121RenderBoardState=function(){
+  v3123BaseRenderBoardState();
+  const session=selectedSession();if(!session)return;
+  $("v3105DeckContext")?.querySelector('.card-heading [data-view-jump="attendance"]')?.remove();
+  v3123RenderWholeSession();
+  const core=$("v311BoardCore"),whole=$("v3123WholeSession"),context=$("v3105DeckContext"),attendance=$("v310SessionAttendance");
+  let anchor=core;
+  for(const node of [whole,context,attendance])if(node&&anchor){anchor.insertAdjacentElement("afterend",node);anchor=node}
+  v3123RefreshRollSummaries(session);
+  v3123Brand();
+};
+
+function v3123Brand(){
+  document.title=`McLay Swimming OS — v${V3123_VERSION} Board Session Flow`;
+  const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3123_VERSION} · dictated session stays in its scheduled squad · complete set on Board · repaired lane sync`;
+}
+
+const v3123BaseRenderView=renderView;
+renderView=function(id){v3123BaseRenderView(id);if(id==="deck")v3121RenderBoardState();v3123Brand()};
+const v3123BaseRenderAll=renderAll;
+renderAll=function(){v3123BaseRenderAll();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState();v3123Brand()};
+
+function v3123MigrateSessionIntent(){
+  let changed=0;for(const session of appState.sessions||[]){if(v3123SessionHasWork(session)&&!String(session.primary_system||"").trim()){const detected=inferSystem(session.workout||"");if(detected){session.primary_system=detected;session.updated_at=nowIso();queueRecord("sessions",session.id);changed++}}}return changed
+}
+function v3123Init(){
+  const repaired=v3123RepairDetachedImports(),migrated=v3123MigrateCalendarCues(),intent=v3123MigrateSessionIntent(),deduped=v3123DedupeLaneAssignments();
+  if(repaired||migrated||intent||deduped){
+    appState.settings.v3111_sync_failures=(appState.settings.v3111_sync_failures||[]).filter(f=>!(f.table==="session_lane_assignments"&&/duplicate key value violates unique constraint/i.test(f.message||"")));
+    saveState(appState);
+  }
+  v3123Brand();
+  requestAnimationFrame(()=>{renderActiveContext();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()});
+}
+v3123Init();
