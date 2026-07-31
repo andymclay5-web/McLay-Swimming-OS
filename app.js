@@ -9193,3 +9193,124 @@ function v3124Brand(){
 
 v3124InjectQuickWrap();v3124BindQuickWrapSave();v3124Brand();
 requestAnimationFrame(()=>{renderAll();if((document.querySelector('.view.active')?.id||'deck')==='deck')v3121RenderBoardState()});
+
+// -----------------------------------------------------------------------------
+// McLay Swimming OS v3.12.5 — COMPLETE DICTATION BOARD
+// Keeps every dictated word visible, refuses to present a fragmentary parse as
+// a complete workout, and rebuilds weak saved blocks from the retained source.
+// -----------------------------------------------------------------------------
+const V3125_VERSION="3.12.5";
+
+function v3125CountRunnable(blocks){
+  return v34Array(blocks).reduce((sum,block)=>sum+v34Array(block.items).filter(item=>item&&item.runnable!==false&&Number(item.reps)>0&&Number(item.distance)>0).length,0);
+}
+function v3125Distance(blocks){
+  return v34Array(blocks).reduce((sum,block)=>sum+v35BlockDistance(block),0);
+}
+function v3125LooksFragmentary(blocks,source){
+  const rows=v34Array(blocks).flatMap(block=>v34Array(block.items));
+  const raw=String(source||"").trim();
+  const incomplete=rows.some(item=>v3107TranscriptLooksCut(item.raw||item.instruction||""))||v3107TranscriptLooksCut(raw);
+  const suspicious=rows.some(item=>{
+    const text=String(item.raw||item.instruction||"");
+    return /\b(?:we(?:'|’)re going to|we will|going to)\s+(?:go|do|repeat|start|finish)?\s*(?:a|the)?\s*$/i.test(text)
+      || /\b(?:of|at|into)\s+\d{2,4}\s*$/i.test(text);
+  });
+  const explicitSets=(raw.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s*(?:x|×|times)?\s*\d{2,4}s?\b/gi)||[]).length;
+  return Boolean(raw)&&(incomplete||suspicious||(explicitSets>=3&&v3125CountRunnable(blocks)<Math.min(3,explicitSets)));
+}
+function v3125NormaliseClauses(content){
+  const raw=String(content||"").replace(/\r/g,"").trim();
+  if(!raw)return[];
+  return raw
+    .replace(/\b(and then|then)\b/gi,". ")
+    .split(/\n+|\s*;\s*|(?<=[.!?])\s+(?=[A-Z0-9])|\s*,\s*(?=(?:\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\b)/i)
+    .map(part=>part.replace(/^[,;:.\-–—\s]+|[,;:.\-–—\s]+$/g,"").trim())
+    .filter(Boolean);
+}
+function v3125SetMeta(raw,index=0){
+  const base=v3107SpokenSetMeta(raw,index),text=String(raw||"").trim();
+  if(base.runnable)return base;
+  const word="(?:\\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)";
+  let m=text.match(new RegExp(`\\b(${word})\\s+(\\d{2,4})s\\b`,"i"));
+  if(m){const reps=v3107WordNumber(m[1]),distance=Number(m[2]);return {...base,reps,distance,runnable:true,line_type:"set",stroke:inferStrokeFromLine(text)}}
+  m=text.match(/^(?:we(?:'|’)re\s+)?(?:going\s+to\s+)?(?:go\s+)?(?:into\s+)?(?:a\s+)?(\d{2,4})\s*(?:m|metres?|meters?)?\s+(?:at\s+)?(regeneration|development|overload|threshold|clearance|easy|free|back|breast|fly|choice)\b/i);
+  if(m){return {...base,reps:1,distance:Number(m[1]),runnable:true,line_type:"set",stroke:inferStrokeFromLine(text),instruction:text}}
+  m=text.match(/\b(?:go(?:ing)?|do(?:ing)?)\s+(?:a\s+)?(\d{2,4})\s+(free|back|breast|fly|choice)\b/i);
+  if(m&&!/\b(?:pace|target)\b/i.test(text)){return {...base,reps:1,distance:Number(m[1]),runnable:true,line_type:"set",stroke:inferStrokeFromLine(text),instruction:text}}
+  return {...base,runnable:false,line_type:"cue",reps:0,distance:null};
+}
+function v3125BlockItems(content,title){
+  const clauses=v3125NormaliseClauses(content),items=clauses.map(v3125SetMeta).filter(item=>item.raw);
+  const umbrellaIndex=items.findIndex(item=>item.runnable&&/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+\d{2,4}s\b/i.test(item.raw));
+  if(umbrellaIndex>=0){
+    // A phrase such as “16 50s” is the reliable volume statement. Following
+    // fragments are delivery instructions unless they contain their own full set.
+    for(let i=umbrellaIndex+1;i<items.length;i++){
+      if(items[i].runnable&&!/\b(?:x|×|times)\b/i.test(items[i].raw)&&!/^\s*\d{2,4}\s+(?:free|back|breast|fly|choice|development|overload|threshold|clearance|regeneration)\b/i.test(items[i].raw)){
+        items[i]={...items[i],runnable:false,line_type:"cue",reps:0,distance:null};
+      }
+    }
+  }
+  return items;
+}
+function v3125BlocksFromRaw(raw){
+  const text=String(raw||"").replace(/\r/g,"").trim();if(!text)return[];
+  const matches=v3107HeadingMatches(text);if(!matches.length)return v36ParseWorkoutBlocks(text).map((block,index)=>v361NormaliseDraftBlock(block,index));
+  const blocks=[];
+  const prefix=text.slice(0,matches[0].index).trim();
+  if(prefix&&/\d/.test(prefix)){
+    const support=v3107BlockSupport("other","Session notes",prefix),normalised=v361NormaliseDraftBlock({block_type:"other",title:"Session notes",raw_text:prefix,...support,keep_together:true},0);
+    normalised.items=v3125BlockItems(prefix,"Session notes");blocks.push(normalised);
+  }
+  matches.forEach((match,index)=>{
+    const next=matches[index+1]?.index??text.length;
+    const content=text.slice(match.end,next).trim().replace(/^[,;:.\-–—\s]+|[,;:.\-–—\s]+$/g,"");
+    if(!content)return;
+    const support=v3107BlockSupport(match.type,match.title,content),normalised=v361NormaliseDraftBlock({block_type:match.type,title:match.title,raw_text:content,...support,keep_together:true},blocks.length);
+    normalised.items=v3125BlockItems(content,match.title);blocks.push(normalised);
+  });
+  return blocks;
+}
+function v3125BoardBlocks(session){
+  const stored=v3123SessionBlocks(session),source=v3123SourceText(session),fresh=source?v3125BlocksFromRaw(source):[];
+  if(!fresh.length)return stored;
+  const storedDistance=v3125Distance(stored),freshDistance=v3125Distance(fresh),storedRuns=v3125CountRunnable(stored),freshRuns=v3125CountRunnable(fresh);
+  const storedWeak=v3125LooksFragmentary(stored,source)||!stored.length;
+  if(storedWeak||freshDistance>storedDistance*1.15||freshRuns>storedRuns+1)return fresh;
+  return stored;
+}
+function v3125TranscriptParagraphs(source){
+  const text=String(source||"").trim();if(!text)return"";
+  const headings=v3107HeadingMatches(text);if(!headings.length)return `<p>${escapeHtml(text)}</p>`;
+  const out=[];
+  const prefix=text.slice(0,headings[0].index).trim();if(prefix)out.push(`<p>${escapeHtml(prefix)}</p>`);
+  headings.forEach((heading,index)=>{
+    const next=headings[index+1]?.index??text.length,body=text.slice(heading.end,next).trim();
+    out.push(`<section><strong>${escapeHtml(heading.title)}</strong><p>${escapeHtml(body||"No words followed this heading.")}</p></section>`);
+  });
+  return out.join("");
+}
+v3123FullSessionHtml=function(session){
+  const blocks=v3125BoardBlocks(session),parsed=v3125Distance(blocks),source=v3123SourceText(session),needsCheck=v3125LooksFragmentary(blocks,source),delivery=v3122Unique(blocks.map(block=>block.cues)),purpose=v3122Unique([session.primary_system,session.technical_focus].filter(Boolean));
+  const status=needsCheck?`<div class="v3125-parse-warning"><strong>Session needs checking</strong><span>The complete dictation is shown below. ${parsed?`${parsed.toLocaleString()}m is confidently structured;`:"The total is not yet reliable."} Unclear phrases have not been hidden or treated as finished set lines.</span></div>`:"";
+  return `<div class="card-heading v3123-whole-heading"><div><span class="eyebrow">Whole session</span><h3>${escapeHtml(session.title||"Scheduled session")}</h3><small>Parsed coaching blocks first, followed by the complete dictation in its original order.</small></div><b>${parsed?`${parsed.toLocaleString()}m structured`:"Total needs checking"}</b></div>
+  ${status}
+  ${(purpose.length||delivery.length)?`<div class="v3123-session-cues"><div><span>Session purpose</span><strong>${escapeHtml(purpose.join(" · ")||"Taken from the set below")}</strong></div>${delivery.length?`<div><span>Delivery cues from the set</span><strong>${escapeHtml(delivery.join(" · "))}</strong></div>`:""}</div>`:""}
+  <div class="v3123-whole-blocks">${blocks.map((block,index)=>{
+    const lines=v34Array(block.items).map(item=>`<div class="v3123-whole-line ${item.runnable===false?"cue":""}"><span>${escapeHtml(v3123CleanSetLine(item.raw||item.instruction||""))}</span>${item.runnable!==false&&Number(item.reps)&&Number(item.distance)?`<b>${(Number(item.reps)*Number(item.distance)).toLocaleString()}m</b>`:""}</div>`).join("");
+    return `<section><div class="v3123-block-head"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><strong>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</strong><b>${v35BlockDistance(block)?`${v35BlockDistance(block).toLocaleString()}m`:"Check"}</b></div>${block.purpose?`<small>${escapeHtml(block.purpose)}</small>`:""}${block.cues?`<small class="v3123-block-cue"><strong>Cue:</strong> ${escapeHtml(block.cues)}</small>`:""}<div>${lines||`<pre>${escapeHtml(block.raw_text||"No parsed lines")}</pre>`}</div></section>`;
+  }).join("")||'<div class="warning-box">No structured blocks were recognised.</div>'}</div>
+  ${source?`<details class="v3123-source v3125-source" ${needsCheck?'open':''}><summary><strong>Full session as dictated</strong><span>${needsCheck?'Open because the structured version is incomplete':'Use this to check wording or total distance'}</span></summary><div class="v3125-transcript">${v3125TranscriptParagraphs(source)}</div></details>`:""}
+  <div class="v3123-whole-actions"><button type="button" data-v3123-edit>Edit / check session</button></div>`;
+};
+
+function v3125Brand(){
+  document.title=`McLay Swimming OS — v${V3125_VERSION} Complete Dictation Board`;
+  const subtitle=document.querySelector('.header-subtitle');if(subtitle)subtitle.textContent=`Version ${V3125_VERSION} · complete dictated session retained · cautious distance parsing · no hidden fragments`;
+}
+const v3125PriorRenderAll=renderAll;
+renderAll=function(){v3125PriorRenderAll();if((document.querySelector('.view.active')?.id||'deck')==='deck')v3121RenderBoardState();v3125Brand()};
+const v3125PriorRenderView=renderView;
+renderView=function(id){v3125PriorRenderView(id);if(id==='deck')v3121RenderBoardState();v3125Brand()};
+v3125Brand();requestAnimationFrame(()=>{if((document.querySelector('.view.active')?.id||'deck')==='deck')v3121RenderBoardState()});
