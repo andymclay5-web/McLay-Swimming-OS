@@ -7,7 +7,7 @@
   <title>McLay Swimming OS — v3.12.10 Sync Repair</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260801-sync31210">
+  <link rel="stylesheet" href="styles.css?v=20260801-board3131">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -188,7 +188,7 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">Version 3.12.7 · plan-guided build · Lee T400 / HR / Rushton targets · whole session first</div>
+      <div class="header-subtitle">Version 3.13.1 · recent finder · nested rounds · visible targets · aligned adaptations</div>
     </div>
     <div class="status-cluster">
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
@@ -977,7 +977,7 @@ Warm-down..."></textarea>
   <script>
   // One-time recovery from old installed-app caches. The page reloads once,
   // then the current build registers the current worker with updateViaCache disabled.
-  window.MCLAY_APP_BUILD="3.12.10-sync-repair-20260801";
+  window.MCLAY_APP_BUILD="3.13.1-board-targets-20260801";
   (async()=>{
     try{
       const key="mclay_last_installed_build";
@@ -985,13 +985,13 @@ Warm-down..."></textarea>
         localStorage.setItem(key,window.MCLAY_APP_BUILD);
         if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}
         if(window.caches){const names=await caches.keys();await Promise.all(names.filter(n=>n.startsWith("mclay-swimming-os-")).map(n=>caches.delete(n)))}
-        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="31210"){u.searchParams.set("recovered","31210");location.replace(u.toString());return}
+        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3131"){u.searchParams.set("recovered","3131");location.replace(u.toString());return}
       }
     }catch(error){console.warn("Cache recovery",error)}
   })();
   </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260801-sync31210"></script>
+  <script src="app.js?v=20260801-board3131"></script>
 </body>
 </html>

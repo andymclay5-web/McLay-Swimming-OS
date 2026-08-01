@@ -11001,3 +11001,384 @@ const v3130Repaired=v3130RepairTranscriptionQueue();
 v3130BindSyncButton();v3130Brand();
 if(v3130Repaired&&cloudReady())setTimeout(()=>{v3103ScheduleBackgroundSync(0,false)},250);
 requestAnimationFrame(()=>{v3130BindSyncButton();v3130Brand();const active=document.querySelector(".view.active")?.id;if(active==="settings")v3111RenderSyncDetails()});
+
+// ================================================================
+// v3.13.1 — PREVIEW-CHECKED BOARD: FINDER, NESTED ROUNDS,
+//            VISIBLE TARGET TIMES AND ALIGNED ADAPTATIONS
+// ================================================================
+const V3131_VERSION="3.13.1";
+const V3131_BUILD="20260801-board-targets-adaptations-3131";
+
+function v3131Text(value){return String(value||"").replace(/\r/g,"").trim()}
+function v3131RoundCount(value){
+  const text=v3131Text(value);
+  let match=text.match(/(?:^|\n)\s*(\d{1,2})\s+rounds?\s*(?:$|\n)/i);
+  if(!match)match=text.match(/(?:^|\n)\s*rounds?\s*[x×]\s*(\d{1,2})\s*(?:$|\n)/i);
+  return match?Number(match[1]):0;
+}
+function v3131RoundNumber(value){const match=v3131Text(value).match(/(?:^|\n)\s*round\s*(\d{1,2})\b/i);return match?Number(match[1]):0}
+function v3131BlockText(block){return [block?.title,block?.raw_text,...v34Array(block?.items).map(item=>item?.raw||item?.label||item?.instruction||"")].filter(Boolean).join("\n")}
+function v3131RoundHeadingItem(number){
+  const raw=`Round ${number}`;
+  return {id:uid("round-heading"),sort_order:0,raw,label:raw,reps:0,distance:null,cycle:"",stroke:"Choice",instruction:raw,runnable:false,line_type:"round_heading",round_number:number};
+}
+function v3131IsRoundCue(item){return item?.line_type==="round_heading"||/^\s*round\s*\d+\b/i.test(v3131Text(item?.raw||item?.label||item?.instruction))}
+function v3131IsRoundParentCue(item){return /^\s*(?:\d+\s+rounds?|rounds?\s*[x×]\s*\d+)\s*$/i.test(v3131Text(item?.raw||item?.label||item?.instruction))}
+
+const v3131BaseParseLine=v3128ParseLine;
+v3128ParseLine=function(raw,index=0){
+  const line=v3128CanonicalDisplayLine(raw).replace(/^[-•*#]+\s*/,"").trim();
+  let match=line.match(/^(\d{1,3})\s*[x×]\s*(?:dive\s+)?starts?\b.*?(?:to|through|over)?\s*(\d{1,3})\s*m\b/i);
+  if(!match)match=line.match(/^(\d{1,3})\s*[x×]\s*(\d{1,3})\s*m\s+(?:dive\s+)?starts?\b/i);
+  if(match){
+    const reps=Number(match[1]),distance=Number(match[2]);
+    return {kind:"set",item:{id:uid("block-line"),sort_order:index+1,raw:line,label:line,reps,distance,cycle:"",stroke:"Starts",instruction:line,runnable:true,line_type:"set",pace_zone:"",race_distance:null,pace_mode:"skill",pace_rest:null}};
+  }
+  match=line.match(/^round\s*(\d{1,2})\b/i);
+  if(match)return {kind:"cue",item:{...v3131RoundHeadingItem(Number(match[1])),sort_order:index+1,raw:line,label:line,instruction:line}};
+  return v3131BaseParseLine(raw,index);
+};
+
+function v3131CleanRoundItems(items){
+  const out=[];let seenRound=false;
+  for(const item of v34Array(items)){
+    if(v3131IsRoundParentCue(item))continue;
+    const number=Number(item?.round_number)||v3131RoundNumber(item?.raw||item?.label||item?.instruction);
+    if(number){
+      if(!seenRound||Number(out.at(-1)?.round_number)!==number)out.push({...item,line_type:"round_heading",round_number:number,runnable:false,reps:0,distance:null});
+      seenRound=true;continue;
+    }
+    out.push(item);
+  }
+  return out.map((item,index)=>({...item,sort_order:index+1}));
+}
+function v3131InferBlockName(block,sessionTitle=""){
+  const text=v3131BlockText(block);
+  if(/\b(?:dive\s+)?starts?\b|\bbreakout\b|\bunderwater\b/i.test(text))return {type:"skill",title:"Starts / breakout"};
+  if(Number(block?.round_count)>1){
+    const base=/threshold|a\s*\/\s*t|\bat\b/i.test(text)?"Threshold pressure":/@\s*(?:50|100|200|400|800|1500)\s*(?:p|pace)\b/i.test(text)?"Race pace":sessionTitle||(!/^(?:main set|aerobic development)$/i.test(block?.title||"")?block.title:"")||"Main set";
+    return {type:"main_set",title:`${base} · ${Number(block.round_count)} rounds`};
+  }
+  if(/^main set$/i.test(block?.title||"")){
+    if(/threshold|a\s*\/\s*t/i.test(text))return {type:"main_set",title:"Threshold"};
+    if(/@\s*(?:50|100|200|400|800|1500)\s*(?:p|pace)\b/i.test(text))return {type:"main_set",title:"Race pace"};
+    if(/\b(?:pull|dev|development|overload|o\s*\/\s*l)\b/i.test(text))return {type:"main_set",title:"Aerobic development"};
+  }
+  return {type:block?.block_type||"main_set",title:block?.title||"Main set"};
+}
+function v3131MergeRoundBlocks(blocks){
+  const source=v34Array(blocks).map(block=>({...block,items:v34Array(block.items)})),out=[];
+  for(let index=0;index<source.length;index++){
+    const block=source[index],text=v3131BlockText(block),parentCount=v3131RoundCount(text);
+    const embeddedRoundNumbers=v34Array(block.items).map(item=>Number(item?.round_number)||v3131RoundNumber(item?.raw||item?.label||item?.instruction)).filter(Boolean);
+    if(parentCount||embeddedRoundNumbers.length){
+      const merged={...block,block_type:"main_set",round_count:parentCount||Math.max(...embeddedRoundNumbers),repeat_count:1,items:v3131CleanRoundItems(block.items),raw_text:v3131Text(block.raw_text)};
+      let foundChild=embeddedRoundNumbers.length>0;
+      let cursor=index+1;
+      while(cursor<source.length){
+        const child=source[cursor],number=v3131RoundNumber(v3131BlockText(child));
+        if(!number)break;
+        foundChild=true;
+        if(!merged.items.some(item=>Number(item?.round_number)===number))merged.items.push(v3131RoundHeadingItem(number));
+        merged.items.push(...v3131CleanRoundItems(child.items));
+        merged.raw_text=[merged.raw_text,child.raw_text].filter(Boolean).join("\n\n");
+        cursor++;
+      }
+      if(foundChild){
+        merged.round_count=Math.max(merged.round_count||0,...merged.items.map(item=>Number(item?.round_number)||0));
+        merged.items=merged.items.map((item,itemIndex)=>({...item,sort_order:itemIndex+1}));
+        const named=v3131InferBlockName(merged);
+        merged.block_type=named.type;merged.title=named.title;
+        out.push(merged);index=cursor-1;continue;
+      }
+    }
+    const cleaned={...block,items:v3131CleanRoundItems(block.items)};
+    const named=v3131InferBlockName(cleaned);cleaned.block_type=named.type;cleaned.title=named.title;out.push(cleaned);
+  }
+  return out.filter(block=>v34Array(block.items).some(item=>item.runnable!==false)||v3131Text(block.raw_text));
+}
+const v3131BaseParseBlocks=v3128ParseBlocks;
+v3128ParseBlocks=function(raw){return v3131MergeRoundBlocks(v3131BaseParseBlocks(raw))};
+v3126ParseBlocks=v3128ParseBlocks;
+v3127ParseBlocks=v3128ParseBlocks;
+
+function v3131DisplayBlockTitle(session,block){
+  if(Number(block?.round_count)>1&&/^(?:main set|main set\s*·|threshold pressure|race pace)/i.test(String(block?.title||""))){
+    const title=String(session?.title||"").trim();
+    if(title&&!/^(?:national|development|intermediate|junior|fitness)\s+session$/i.test(title))return `${title} · ${Number(block.round_count)} rounds`;
+  }
+  return block?.title||v32BlockLabel(block?.block_type);
+}
+function v3131TargetRequired(block,item){return Boolean(v3129Zone(item,block)||v3129RaceDistance(item))}
+function v3131TargetTable(session,block,item){
+  if(item?.runnable===false||!v3131TargetRequired(block,item))return"";
+  const plan=v3129LanePlan(session),rows=v3129RowsForItem(session,block,item),byLane=new Map();
+  for(const athlete of plan.roster){
+    const lane=plan.assignments.get(athlete.id)||1,list=byLane.get(lane)||[];
+    list.push({athlete,target:rows.find(row=>row.athlete.id===athlete.id)||null});byLane.set(lane,list);
+  }
+  const laneRows=[];
+  for(const [lane,list] of [...byLane.entries()].sort((a,b)=>a[0]-b[0])){
+    const targets=list.filter(row=>row.target),numeric=targets.filter(row=>Number.isFinite(row.target.targetSeconds));
+    const guidance=targets.filter(row=>!Number.isFinite(row.target.targetSeconds));
+    const missing=list.filter(row=>!row.target);
+    let body="";
+    if(numeric.length){
+      const exact=numeric.map(row=>`${v3129Initials(row.athlete.full_name)} ${v3129Clock(row.target.targetSeconds)}`).join(" · ");
+      const cycles=numeric.map(row=>Number(row.target.cycleSeconds)).filter(Number.isFinite),cycle=cycles.length?Math.max(...cycles):null,sources=[...new Set(numeric.map(row=>row.target.source).filter(Boolean))].join(" / ");
+      body+=`<div class="v3131-target-values"><strong>${escapeHtml(exact)}</strong><small>${cycle?`on ${escapeHtml(v3129Clock(cycle))} · `:""}${escapeHtml(sources||"Target")}</small></div>`;
+    }
+    for(const row of guidance){body+=`<div class="v3131-target-values guidance"><strong>${escapeHtml(`${v3129Initials(row.athlete.full_name)} · ${row.target.primary}`)}</strong><small>${escapeHtml(row.target.source||"HR / SR")}</small></div>`}
+    if(missing.length)body+=`<div class="v3131-target-values missing"><strong>${escapeHtml(missing.map(row=>v3129Initials(row.athlete.full_name)).join(" "))}</strong><small>Coach target required</small></div>`;
+    laneRows.push(`<div class="v3131-target-row"><b>L${lane}</b><div>${body}</div></div>`);
+  }
+  return laneRows.length?`<div class="v3131-target-table"><span class="v3131-target-label">TARGET TIMES</span>${laneRows.join("")}</div>`:"";
+}
+
+function v3131SavedAdaptationText(athlete,session){
+  const saved=typeof v36SavedAdaptation==="function"?v36SavedAdaptation(athlete.id,session.id):null;
+  if(saved?.adapted_text)return {text:saved.adapted_text,source:"Saved adaptation"};
+  const capture=typeof v35SavedAdaptation==="function"?v35SavedAdaptation(athlete.id,session.id):null;
+  if(capture?.text_content)return {text:String(capture.text_content).replace(/^\[Adapted session v3\.5\]\s*/i,""),source:"Saved adaptation"};
+  return null;
+}
+function v3131NormalLine(value){return v3131Text(value).toLowerCase().replace(/\s+/g," ").replace(/[×]/g,"x")}
+function v3131AdaptationBlock(athlete,session,block,blockIndex){
+  const saved=v3131SavedAdaptationText(athlete,session);
+  if(saved){
+    const parsed=v3128ParseBlocks(saved.text),candidate=parsed[blockIndex]||parsed.find(row=>row.block_type===block.block_type)||null;
+    if(candidate){
+      const mainSet=new Set(v34Array(block.items).filter(item=>item.runnable!==false).map(item=>v3131NormalLine(item.raw||item.label||item.instruction)));
+      const changed=v34Array(candidate.items).filter(item=>item.runnable!==false&&!mainSet.has(v3131NormalLine(item.raw||item.label||item.instruction)));
+      if(changed.length)return {source:saved.source,lines:changed.map(item=>v3131Text(item.raw||item.label||item.instruction)).filter(Boolean),same:false};
+      const adaptedLines=v34Array(candidate.items).filter(item=>item.runnable!==false).map(item=>v3131Text(item.raw||item.label||item.instruction)).filter(Boolean);
+      const mainLines=v34Array(block.items).filter(item=>item.runnable!==false).map(item=>v3131Text(item.raw||item.label||item.instruction)).filter(Boolean);
+      if(adaptedLines.join("|")!==mainLines.join("|"))return {source:saved.source,lines:adaptedLines,same:false};
+      return {source:saved.source,lines:[],same:true};
+    }
+  }
+  const note=v3127ModificationNoteForBlock?.(athlete,session,block,blockIndex);
+  if(note?.same)return {source:"Profile",lines:[],same:true};
+  const text=v3131Text(note?.text||v3106ActiveModification?.(athlete,session.session_date)||athlete.modifications||"");
+  return text?{source:"Profile",lines:[text],same:false}:null;
+}
+function v3131AdaptationRail(session,block,blockIndex){
+  const modified=v3127ModifiedForSession(session);if(!modified.length)return"";
+  const cards=[];
+  for(const athlete of modified){
+    const detail=v3131AdaptationBlock(athlete,session,block,blockIndex);if(!detail||detail.same)continue;
+    cards.push(`<section class="v3131-adapt-card"><header><strong>${escapeHtml(athlete.full_name)}</strong><span>${escapeHtml(detail.source)}</span></header>${detail.lines.slice(0,8).map(line=>`<div>${escapeHtml(line)}</div>`).join("")}</section>`);
+  }
+  return cards.length?`<aside class="v3131-adapt-rail"><b>ADAPTED SWIMMERS</b>${cards.join("")}</aside>`:"";
+}
+
+function v3131LineHtml(session,block,item,itemIndex,blockIndex){
+  const line=v3129LineText(item);
+  if(v3131IsRoundCue(item))return `<div class="v3131-round-heading"><span>${escapeHtml(line)}</span></div>`;
+  const distance=item?.runnable!==false&&Number(item?.reps)&&Number(item?.distance)?Number(item.reps)*Number(item.distance):0;
+  return `<div class="v3129-line ${item?.runnable===false?"cue":""}" data-v3129-use-line="${blockIndex}:${itemIndex}"><div class="v3129-line-row"><span>${escapeHtml(line)}</span>${distance?`<b>${distance.toLocaleString()}m</b>`:""}<button type="button" title="Change this line live" data-v3127-edit-line="${blockIndex}:${itemIndex}">✎</button></div>${v3131TargetTable(session,block,item)}</div>`;
+}
+function v3131WholeSessionHtml(session){
+  const blocks=v3125BoardBlocks(session),total=blocks.reduce((sum,block)=>sum+v3128BlockDistance(block),0),source=v3123SourceText(session);
+  return `<div class="v3129-board-head"><div><span class="eyebrow">Whole session</span><h2>${escapeHtml(session.title||"Scheduled session")}</h2><small>${escapeHtml(session.technical_focus?`Focus: ${session.technical_focus}`:"Full session first. Targets and adapted swimmers sit beside the work they apply to.")}</small></div><strong>${total?`${total.toLocaleString()}m`:"Distance check"}</strong></div>${v3129PoolsideSummary(session)}
+  <div id="v3129DeckNotice" class="v3129-deck-notice" hidden></div>
+  <div class="v3129-session-flow">${blocks.map((block,blockIndex)=>`<section class="v3129-block"><header><div><span>${blockIndex+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(v3131DisplayBlockTitle(session,block))}</h3></div><b>${v3128BlockDistance(block).toLocaleString()}m${Number(block.round_count)>1?` · ${Number(block.round_count)} rounds`:""}</b></header><div class="v3129-block-grid"><div class="v3129-lines">${v34Array(block.items).map((item,itemIndex)=>v3131LineHtml(session,block,item,itemIndex,blockIndex)).join("")||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}</div>${v3131AdaptationRail(session,block,blockIndex)}</div><footer><button type="button" class="secondary" data-v3127-current="${blockIndex}">Make current</button><details data-v3129-target-detail="${blockIndex}"><summary>Purpose · full target detail · notes</summary><div class="v3129-lazy-targets help">Open to load detailed targets.</div></details></footer></section>`).join("")||'<div class="warning-box">No workout is attached to this calendar session yet.</div>'}</div>
+  ${source?`<details class="v3126-original-source"><summary><strong>Original source</strong><span>safety copy</span></summary><pre>${escapeHtml(source)}</pre></details>`:""}`;
+}
+v3129WholeSessionHtml=v3131WholeSessionHtml;
+v3128WholeSessionHtml=v3131WholeSessionHtml;
+v3127WholeSessionHtml=v3131WholeSessionHtml;
+v3126WholeSessionHtml=v3131WholeSessionHtml;
+
+function v3131SessionStamp(session){return Date.parse(session?.updated_at||session?.created_at||`${session?.session_date||"1970-01-01"}T${String(session?.day_part||"AM").toUpperCase()==="PM"?"18":"06"}:00:00`)||0}
+function v3131SessionSearchText(session){return [session?.title,session?.session_date,session?.day_part,session?.venue,...sessionSquads(session),session?.primary_system,session?.technical_focus].join(" ").toLowerCase()}
+function v3131RecentSessions(query=""){
+  const needle=String(query||"").trim().toLowerCase();
+  return (appState.sessions||[]).filter(session=>session.status!=="cancelled"&&(!needle||v3131SessionSearchText(session).includes(needle))).sort((a,b)=>v3131SessionStamp(b)-v3131SessionStamp(a)||String(b.session_date).localeCompare(String(a.session_date))).slice(0,10);
+}
+function v3131RelativeStamp(session){
+  const stamp=v3131SessionStamp(session),age=Date.now()-stamp;
+  if(age>=0&&age<36*60*60*1000)return age<6*60*60*1000?"Edited recently":"Edited in the last day";
+  return session.updated_at?`Edited ${new Date(session.updated_at).toLocaleDateString("en-NZ",{day:"numeric",month:"short"})}`:"Saved session";
+}
+function v3131RenderFinder(){
+  const deck=$("deck");if(!deck)return;let host=$("v3131SessionFinder");
+  if(!host){host=document.createElement("section");host.id="v3131SessionFinder";host.className="v3131-session-finder";deck.querySelector(".view-heading")?.insertAdjacentElement("afterend",host)}
+  const query=String(appState.settings.v3131_session_query||""),rows=v3131RecentSessions(query),selected=selectedSession();
+  host.innerHTML=`<div class="v3131-finder-head"><div><span class="eyebrow">Find a session</span><strong>Recent and edited sessions first</strong></div><input id="v3131SessionSearch" type="search" value="${escapeHtml(query)}" placeholder="Search rainbow, date, squad or venue"></div><div class="v3131-session-results">${rows.map(session=>`<button type="button" data-v3131-session="${escapeHtml(session.id)}" class="${session.id===selected?.id?"active":""}"><span><strong>${escapeHtml(`${weekday(session.session_date)} ${String(session.day_part||"").toUpperCase()} · ${session.title||"Untitled session"}`)}</strong><small>${escapeHtml([formatDate(session.session_date),session.venue,sessionSquads(session).join(" + ")].filter(Boolean).join(" · "))}</small></span><em>${escapeHtml(v3131RelativeStamp(session))}</em></button>`).join("")||'<div class="help">No matching sessions.</div>'}</div>`;
+  const input=$("v3131SessionSearch");if(input){input.oninput=()=>{appState.settings.v3131_session_query=input.value;v3131RenderFinder()};input.onsearch=input.oninput}
+  host.querySelectorAll("[data-v3131-session]").forEach(button=>button.onclick=()=>{setSelectedSession(button.dataset.v3131Session);appState.settings.v3111_manual_session_id=button.dataset.v3131Session;appState.settings.v3111_manual_selection_at=Date.now();saveState(appState);renderAll()});
+}
+
+// Keep the coach's chosen session until they explicitly choose another one.
+// Operational selection is only used when there is no valid selected record.
+const v3131OperationalBase=v3111SelectOperational;
+v3111SelectOperational=function({now=new Date(),force=false}={}){
+  const selected=selectedSession();
+  if(!force&&selected&&selected.status!=="cancelled")return selected;
+  return v3131OperationalBase({now,force:true});
+};
+v3111ApplyBeforeRender=function(id){if(id==="deck"&&!selectedSession())v3111SelectOperational({force:true})};
+
+// Remove the unrelated current/next booking banner. The selected calendar
+// session shown by the canonical picker owns every Board field.
+v312RenderCalendarBanner=function(){const host=$("v312CalendarBanner");if(host)host.remove()};
+
+function v3131BoardApply(){
+  const picker=$("deckSessionPicker");if(picker)picker.hidden=true;
+  v3131RenderFinder();
+  v3131Brand();
+}
+function v3131Brand(){document.title=`McLay Swimming OS — v${V3131_VERSION} Board Targets`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3131_VERSION} · recent session finder · nested rounds · visible target times · aligned adapted swimmers`}
+const v3131RenderViewBase=renderView;
+renderView=function(id){v3131RenderViewBase(id);if(id==="deck")requestAnimationFrame(v3131BoardApply);v3131Brand()};
+const v3131RenderAllBase=renderAll;
+renderAll=function(){v3131RenderAllBase();if((document.querySelector(".view.active")?.id||"deck")==="deck")requestAnimationFrame(v3131BoardApply);v3131Brand()};
+
+window.v3131AcceptanceSnapshot=function(session=selectedSession()){
+  const blocks=v3125BoardBlocks(session),plan=v3129LanePlan(session),modified=v3127ModifiedForSession(session),targeted=[];
+  blocks.forEach((block,bi)=>v34Array(block.items).forEach((item,ii)=>{if(v3131TargetRequired(block,item))targeted.push({block:bi,item:ii,line:v3129LineText(item),targets:v3129RowsForItem(session,block,item).length})}));
+  return {version:V3131_VERSION,session_id:session?.id||null,title:session?.title||null,blocks:blocks.map(block=>({title:v3131DisplayBlockTitle(session,block),type:block.block_type,distance:v3128BlockDistance(block),round_count:Number(block.round_count)||0,round_headings:v34Array(block.items).filter(v3131IsRoundCue).length})),total:blocks.reduce((n,b)=>n+v3128BlockDistance(b),0),roster:plan.roster.length,lanes:plan.laneCount,modified:modified.map(a=>a.full_name),targeted};
+};
+
+v3131Brand();
+requestAnimationFrame(v3131BoardApply);
+
+// v3.13.1 acceptance refinements after rendered desktop review.
+function v3131DedupeRoundHeadings(items){
+  const out=[];
+  for(const item of v34Array(items)){
+    if(v3131IsRoundCue(item)){
+      const number=Number(item?.round_number)||v3131RoundNumber(item?.raw||item?.label||item?.instruction);
+      const previous=out.at(-1);
+      if(v3131IsRoundCue(previous)&&(Number(previous?.round_number)||v3131RoundNumber(previous?.raw||previous?.label||previous?.instruction))===number)continue;
+      out.push({...item,line_type:"round_heading",round_number:number,runnable:false,reps:0,distance:null});
+    }else out.push(item);
+  }
+  return out.map((item,index)=>({...item,sort_order:index+1}));
+}
+const v3131MergeRoundBlocksBeforeReview=v3131MergeRoundBlocks;
+v3131MergeRoundBlocks=function(blocks){return v3131MergeRoundBlocksBeforeReview(blocks).map(block=>({...block,items:v3131DedupeRoundHeadings(block.items)}))};
+v3128ParseBlocks=function(raw){return v3131MergeRoundBlocks(v3131BaseParseBlocks(raw))};
+v3126ParseBlocks=v3128ParseBlocks;v3127ParseBlocks=v3128ParseBlocks;
+
+v3131TargetRequired=function(block,item){
+  if(item?.runnable===false)return false;
+  const line=v3129LineText(item);
+  if(/\b(?:easy|loosen|recovery|warm\s*[- ]?(?:up|down)|choice)\b/i.test(line))return false;
+  return Boolean(item?.pace_zone||v3127Zone(line)||v3129RaceDistance(item));
+};
+
+v3131AdaptationBlock=function(athlete,session,block,blockIndex){
+  const saved=v3131SavedAdaptationText(athlete,session);
+  if(saved){
+    const parsed=v3128ParseBlocks(saved.text);
+    let candidate=parsed[blockIndex]&&parsed[blockIndex].block_type===block.block_type?parsed[blockIndex]:null;
+    if(!candidate){
+      const sameType=parsed.filter(row=>row.block_type===block.block_type);
+      const typeIndex=v3125BoardBlocks(session).slice(0,blockIndex).filter(row=>row.block_type===block.block_type).length;
+      candidate=sameType[typeIndex]||sameType[0]||null;
+    }
+    if(candidate){
+      const mainSet=new Set(v34Array(block.items).filter(item=>!v3131IsRoundCue(item)&&!v3131IsRoundParentCue(item)).map(item=>v3131NormalLine(item.raw||item.label||item.instruction)).filter(Boolean));
+      const adapted=v34Array(candidate.items).filter(item=>!v3131IsRoundCue(item)&&!v3131IsRoundParentCue(item));
+      const changed=adapted.filter(item=>!mainSet.has(v3131NormalLine(item.raw||item.label||item.instruction)));
+      if(changed.length)return {source:saved.source,lines:changed.map(item=>v3131Text(item.raw||item.label||item.instruction)).filter(Boolean),same:false};
+      const adaptedLines=adapted.map(item=>v3131NormalLine(item.raw||item.label||item.instruction)).filter(Boolean),mainLines=[...mainSet];
+      if(adaptedLines.join("|")!==mainLines.join("|"))return {source:saved.source,lines:adapted.map(item=>v3131Text(item.raw||item.label||item.instruction)).filter(Boolean),same:false};
+      return {source:saved.source,lines:[],same:true};
+    }
+  }
+  const note=v3127ModificationNoteForBlock?.(athlete,session,block,blockIndex);
+  if(note?.same)return {source:"Profile",lines:[],same:true};
+  const text=v3131Text(note?.text||v3106ActiveModification?.(athlete,session.session_date)||athlete.modifications||"");
+  return text?{source:"Profile",lines:[text],same:false}:null;
+};
+
+const v3131BoardApplyBeforeReview=v3131BoardApply;
+v3131BoardApply=function(){
+  v3131BoardApplyBeforeReview();
+  const switcher=$("v3111SlotSwitcher");if(switcher&&selectedSession())switcher.remove();
+};
+
+const v3131TimingReadinessBase=v3129TimingReadiness;
+v3129TimingReadiness=function(){
+  const session=selectedSession();
+  if(!session||!v3129AttendanceStarted(session))return {ready:false,reason:"Take the roll before opening watches. Timing only uses swimmers actually in the water.",rows:[],lanes:0};
+  return v3131TimingReadinessBase();
+};
+
+// Make every older deferred brand callback resolve to the current build.
+v3129Brand=v3131Brand;
+if(typeof v3130Brand==="function")v3130Brand=v3131Brand;
+if(typeof v3128Brand==="function")v3128Brand=v3131Brand;
+
+function v3131RestoreCoachSelection(){
+  const preferred=String(appState.settings.v3111_manual_session_id||appState.settings.selected_session_id||"");
+  const session=(appState.sessions||[]).find(row=>row.id===preferred&&row.status!=="cancelled");
+  if(session&&appState.settings.selected_session_id!==session.id){v3111BaseSetSelectedSession(session.id)}
+  v3131Brand();
+  if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState();
+}
+setTimeout(v3131RestoreCoachSelection,0);
+setTimeout(v3131RestoreCoachSelection,350);
+
+const v3131BootSelectedId=(()=>{
+  try{
+    const raw=JSON.parse(localStorage.getItem(STATE_KEY)||"null");
+    const id=String(raw?.settings?.selected_session_id||"");
+    if(id)return id;
+  }catch{}
+  return String(window.MCLAY_SEED?.settings?.selected_session_id||"");
+})();
+function v3131RestoreBootSelection(){
+  const session=(appState.sessions||[]).find(row=>row.id===v3131BootSelectedId&&row.status!=="cancelled");
+  if(!session)return;
+  appState.settings.selected_session_id=session.id;
+  appState.settings.v3111_manual_session_id=session.id;
+  appState.settings.v3111_manual_selection_at=Date.now();
+  saveState(appState);
+  renderAll();
+  v3131Brand();
+}
+setTimeout(v3131RestoreBootSelection,1);
+setTimeout(v3131RestoreBootSelection,500);
+
+function v3131FinderRowsHtml(rows,selected){
+  return rows.map(session=>`<button type="button" data-v3131-session="${escapeHtml(session.id)}" class="${session.id===selected?.id?"active":""}"><span><strong>${escapeHtml(`${weekday(session.session_date)} ${String(session.day_part||"").toUpperCase()} · ${session.title||"Untitled session"}`)}</strong><small>${escapeHtml([formatDate(session.session_date),session.venue,sessionSquads(session).join(" + ")].filter(Boolean).join(" · "))}</small></span><em>${escapeHtml(v3131RelativeStamp(session))}</em></button>`).join("")||'<div class="help">No matching sessions.</div>';
+}
+function v3131BindFinderRows(host){
+  host.querySelectorAll("[data-v3131-session]").forEach(button=>button.onclick=()=>{setSelectedSession(button.dataset.v3131Session);appState.settings.v3111_manual_session_id=button.dataset.v3131Session;appState.settings.v3111_manual_selection_at=Date.now();saveState(appState);renderAll()});
+}
+v3131RenderFinder=function(){
+  const deck=$("deck");if(!deck)return;let host=$("v3131SessionFinder");
+  if(!host){host=document.createElement("section");host.id="v3131SessionFinder";host.className="v3131-session-finder";deck.querySelector(".view-heading")?.insertAdjacentElement("afterend",host)}
+  const query=String(appState.settings.v3131_session_query||""),selected=selectedSession();
+  host.innerHTML=`<div class="v3131-finder-head"><div><span class="eyebrow">Find a session</span><strong>Recent and edited sessions first</strong></div><input id="v3131SessionSearch" type="search" value="${escapeHtml(query)}" placeholder="Search rainbow, date, squad or venue"></div><div class="v3131-session-results">${v3131FinderRowsHtml(v3131RecentSessions(query),selected)}</div>`;
+  const input=$("v3131SessionSearch"),results=host.querySelector(".v3131-session-results");
+  if(input)input.oninput=()=>{appState.settings.v3131_session_query=input.value;results.innerHTML=v3131FinderRowsHtml(v3131RecentSessions(input.value),selectedSession());v3131BindFinderRows(host)};
+  v3131BindFinderRows(host);
+};
+
+// Rainbow/all-zone sessions read as a progression, not a stack of generic cards.
+const v3131RoundMergeBeforeRainbow=v3131MergeRoundBlocks;
+v3131MergeRoundBlocks=function(blocks){
+  const parsed=v3131RoundMergeBeforeRainbow(blocks),merged=[];
+  for(const block of parsed){
+    const previous=merged.at(-1),race=/race pace/i.test(String(block.title||"")),previousRace=/race pace/i.test(String(previous?.title||""));
+    if(previous&&race&&previousRace&&previous.block_type==="main_set"&&block.block_type==="main_set"){
+      previous.title="Race pace progression";
+      previous.items=[...v34Array(previous.items),...v34Array(block.items)].map((item,index)=>({...item,sort_order:index+1}));
+      previous.raw_text=[previous.raw_text,block.raw_text].filter(Boolean).join("\n\n");
+      continue;
+    }
+    merged.push({...block});
+  }
+  const last=merged.at(-1),lastRunnable=v34Array(last?.items).filter(item=>item.runnable!==false);
+  if(last&&last.block_type==="main_set"&&lastRunnable.length&&lastRunnable.every(item=>/\b(?:easy|loosen|recovery)\b/i.test(v3129LineText(item)))){
+    last.block_type="warm_down";last.title="Warm-down";
+  }
+  return merged;
+};
+v3128ParseBlocks=function(raw){return v3131MergeRoundBlocks(v3131BaseParseBlocks(raw))};
+v3126ParseBlocks=v3128ParseBlocks;v3127ParseBlocks=v3128ParseBlocks;
