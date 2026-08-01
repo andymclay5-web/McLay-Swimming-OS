@@ -11594,7 +11594,7 @@ function v3140SessionPlanTab(){
   return `<article class="card v3140-session-overview"><div class="v3140-hub-title"><div><span class="eyebrow">Selected session</span><h3>${escapeHtml(session?.title||"No selected session")}</h3><p>${escapeHtml(session?[weekday(session.session_date),formatDate(session.session_date),String(session.day_part||"").toUpperCase(),sessionSquads(session).join(" + ")].filter(Boolean).join(" · "):"Choose a session from Sessions or Board.")}</p></div><div class="v3140-hub-actions"><button data-v3140-jump="deck">Open Board</button><button class="secondary" data-v3140-edit-hub>Edit session</button><button class="secondary" data-v3140-jump="attendance">Take roll</button><button class="secondary" data-v3140-capture>＋ Capture</button></div></div></article>
   <div class="v3140-hub-grid"><article class="card"><div class="eyebrow">Whole-session coaching interpretation</div><h3>${escapeHtml(data.primary)}</h3><p><strong>Supporting:</strong> ${escapeHtml(data.support.join(" · ")||"General maintenance")}</p><p><strong>Modified swimmers:</strong> ${modified.length?escapeHtml(modified.map(a=>a.full_name).join(" · ")):"None currently marked"}</p><div class="v3140-emphasis-heading"><strong>Coaching emphasis</strong><small>Weighted interpretation — not a physiological-load score and not raw metres.</small></div>${v3140EmphasisBar(data)}</article><article class="card"><div class="eyebrow">Raw planned volume</div><h3>${Math.round(data.rawTotal||0).toLocaleString()}m parsed</h3><div class="v3140-raw-volume">${v3140RawVolume(data)}</div><p class="help">Recovery metres still count here, but they do not define a sprint or race-pace session simply because there are many of them.</p></article></div>
   ${data.check?`<article class="card v3140-session-check"><div><span class="eyebrow">One session-level coach check</span><h3>Confirm the whole-session tone</h3><p>${escapeHtml(data.check)}</p></div><button type="button" data-v3140-confirm-intent>Confirm as planned</button></article>`:`<article class="card v3140-aligned"><span class="eyebrow">Session-level check</span><h3>Whole-session tone is coherent</h3><p>The target zone reads as the main component once supporting, maintenance and recovery work are interpreted in context.</p></article>`}
-  <article class="card v3140-pace-note"><strong>Aerobic pace source</strong><span>T400 calibrates each swimmer’s aerobic target speeds. It is not the name of the set, the zone, or the training outcome.</span></article>
+  <article class="card v3140-pace-note"><strong>Aerobic pace source</strong><span>Lee T400 calibrates each swimmer’s aerobic target speeds. It is not the name of the set, the zone, or the training outcome.</span></article>
   <article class="card"><div class="eyebrow">Coach Hub operating centre</div><h3>Plan, deliver, review and communicate from one place</h3><div class="v3140-hub-launchers"><button data-v3140-jump="sessions"><b>Sessions</b><span>Completed, scheduled and future sessions</span></button><button data-v3140-jump="athletes"><b>Swimmers</b><span>Goals, targets and actual training</span></button><button data-v3140-jump="testsets"><b>Tests</b><span>T400 and repeatable test sets</span></button><button data-v3140-jump="results"><b>Results</b><span>Meets, qualifications, records and relays</span></button><button data-v3140-jump="reports"><b>Reports</b><span>Team, squad, swimmer and coach reports</span></button><button data-v3140-future-meet><b>Meet mode · later</b><span>At-meet Board, live races, splits and feedback</span></button></div></article>`;
 }
 function v3140ReportsTab(){return `<article class="card"><div class="eyebrow">Reporting centre</div><h3>Turn completed coaching work into useful records</h3><p>Generate or review team, squad, swimmer, coach, attendance, weekly, block and meet reporting from the information already collected through Roll, Board, Tests, Results and Finish.</p><div class="v3140-hub-launchers"><button data-v3140-jump="reports"><b>Open Reports</b><span>Existing weekly and squad reporting</span></button><button data-v3140-jump="finish"><b>Finish selected session</b><span>Planned versus actual, response and carry-forward</span></button><button data-v3140-jump="attendance"><b>Attendance records</b><span>Roll is the trigger for individual training history</span></button><button data-v3140-jump="athletes"><b>Individual swimmer record</b><span>Training, results, tests and goals together</span></button></div></article>`}
@@ -11660,3 +11660,334 @@ function v3140CompactFinder(){
 function v3140AfterRender(){
   v3140Navigation();for(const id of ["athletes","testsets","results"])v3140AddContextCapture(id);document.querySelectorAll(".v390-deck-intelligence").forEach(node=>node.hidden=true);v3140CompactFinder();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3140BoardBind();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();v3140Brand();
 }
+
+// =============================================================================
+// McLay Swimming OS v3.14.1 — session-link repair + usable current-block flow
+// - Pull a useful date window instead of allowing future timetable shells to push
+//   real workouts out of the cloud result limit.
+// - Resolve duplicate slot shells to the evidence-rich canonical session.
+// - Keep session/date navigation compact.
+// - Show saved/active modified swimmers when they are present, even if Roll was
+//   marked Here rather than Modified.
+// - Make the current-block Board move backwards and forwards, with Up next tappable.
+// =============================================================================
+const V3141_VERSION="3.14.1";
+
+function v3141DateAdd(dateString,days){
+  const date=new Date(`${dateString}T12:00:00`);date.setDate(date.getDate()+Number(days||0));return localIsoDate(date);
+}
+function v3141Today(){return localIsoDate(new Date())}
+function v3141SessionIdentity(session){
+  const squads=(v3111ExplicitSquads?.(session).length?v3111ExplicitSquads(session):sessionSquads(session)).map(squadKey).filter(Boolean).sort();
+  return [session?.session_date||"",String(session?.day_part||"").toUpperCase(),squads.join("+")||String(session?.title||"").toLowerCase()].join("|");
+}
+function v3141SessionEvidence(session){
+  if(!session)return -1;
+  const blocks=(appState.session_blocks||[]).filter(row=>row.session_id===session.id).length;
+  const workout=String(session.workout||"").trim();
+  const linked=["attendance","captures","timed_sets","session_reviews","session_transcriptions"].reduce((sum,key)=>sum+(appState[key]||[]).filter(row=>row.session_id===session.id).length,0);
+  const complete=typeof v3108SessionCompleted==="function"&&v3108SessionCompleted(session);
+  const generated=String(session.id||"").startsWith("session-slot-");
+  const stamp=Date.parse(session.updated_at||session.created_at||0)||0;
+  return (workout?200000+Math.min(workout.length,25000):0)+(blocks?100000+blocks*2500:0)+(Number(session.planned_distance)>0?25000+Number(session.planned_distance):0)+linked*1200+(complete?4000:0)+(generated?-250:250)+stamp/1e10;
+}
+function v3141SameSlot(a,b){
+  if(!a||!b||a.session_date!==b.session_date||String(a.day_part||"").toUpperCase()!==String(b.day_part||"").toUpperCase())return false;
+  const as=(v3111ExplicitSquads?.(a).length?v3111ExplicitSquads(a):sessionSquads(a)).map(squadKey).filter(Boolean),bs=(v3111ExplicitSquads?.(b).length?v3111ExplicitSquads(b):sessionSquads(b)).map(squadKey).filter(Boolean);
+  if(as.length&&bs.length&&!as.some(value=>bs.includes(value)))return false;
+  const av=String(a.venue||"").trim().toLowerCase(),bv=String(b.venue||"").trim().toLowerCase();
+  return !(av&&bv&&av!==bv);
+}
+function v3141CanonicalSessionFor(session){
+  if(!session)return null;
+  const candidates=(appState.sessions||[]).filter(row=>row.status!=="cancelled"&&v3141SameSlot(row,session));
+  return candidates.sort((a,b)=>v3141SessionEvidence(b)-v3141SessionEvidence(a)||v3131SessionStamp(b)-v3131SessionStamp(a))[0]||session;
+}
+function v3141CanonicalSessions(){
+  const canonical=[];
+  for(const session of (appState.sessions||[]).filter(row=>row.status!=="cancelled")){
+    const existingIndex=canonical.findIndex(row=>v3141SameSlot(row,session));
+    if(existingIndex<0)canonical.push(session);
+    else if(v3141SessionEvidence(session)>v3141SessionEvidence(canonical[existingIndex]))canonical[existingIndex]=session;
+  }
+  return canonical;
+}
+
+const v3141SelectedSessionBase=selectedSession;
+selectedSession=function(){
+  const selected=v3141SelectedSessionBase(),canonical=v3141CanonicalSessionFor(selected);
+  if(canonical&&selected&&canonical.id!==selected.id&&appState.settings.selected_session_id!==canonical.id){
+    appState.settings.selected_session_id=canonical.id;
+    const squads=sessionSquads(canonical);if(!squads.some(s=>squadKey(s)===squadKey(appState.settings.selected_squad)))appState.settings.selected_squad=squads[0]||"";
+    saveState(appState);
+  }
+  return canonical||selected;
+};
+
+const v3141FindSessionBase=v3111FindSession;
+v3111FindSession=function(date,slot,{includeComplete=true}={}){
+  const candidates=(appState.sessions||[]).filter(session=>session.session_date===date&&String(session.day_part||"").toUpperCase()===String(slot?.day_part||"").toUpperCase()&&v3111ExplicitSquads(session).some(s=>squadKey(s)===squadKey(slot?.squad_name))&&(!session.venue||!slot?.venue||String(session.venue).trim().toLowerCase()===String(slot.venue).trim().toLowerCase())&&(includeComplete||!v3108SessionCompleted(session)));
+  if(candidates.length)return candidates.sort((a,b)=>v3141SessionEvidence(b)-v3141SessionEvidence(a)||v3131SessionStamp(b)-v3131SessionStamp(a))[0];
+  return v3141FindSessionBase(date,slot,{includeComplete});
+};
+
+const v3141OperationalQueryBase=v3103OperationalQuery;
+v3103OperationalQuery=function(table,org){
+  if(table==="sessions"){
+    const start=v3141DateAdd(v3141Today(),-180),end=v3141DateAdd(v3141Today(),240);
+    return `/rest/v1/sessions?select=*&organisation_id=eq.${encodeURIComponent(org)}&session_date=gte.${start}&session_date=lte.${end}&order=session_date.desc&limit=1000`;
+  }
+  return v3141OperationalQueryBase(table,org);
+};
+
+function v3141SessionSearchText(session){
+  return [session?.title,session?.session_date,formatDate(session?.session_date||"1970-01-01"),weekday(session?.session_date||"1970-01-01"),session?.day_part,session?.venue,...sessionSquads(session),session?.primary_system,session?.technical_focus,String(session?.workout||"").slice(0,300)].join(" ").toLowerCase();
+}
+v3131SessionSearchText=v3141SessionSearchText;
+v3131RecentSessions=function(query=""){
+  let needle=String(query||"").trim().toLowerCase();if(/@/.test(needle))needle="";
+  const selected=selectedSession(),rows=v3141CanonicalSessions().filter(session=>!needle||v3141SessionSearchText(session).includes(needle));
+  return rows.sort((a,b)=>{
+    if(a.id===selected?.id)return -1;if(b.id===selected?.id)return 1;
+    if(!needle){const ae=v3141SessionEvidence(a)>10000?1:0,be=v3141SessionEvidence(b)>10000?1:0;if(ae!==be)return be-ae}
+    return v3131SessionStamp(b)-v3131SessionStamp(a)||String(b.session_date).localeCompare(String(a.session_date));
+  }).slice(0,12);
+};
+v3131RenderFinder=function(){
+  const deck=$("deck");if(!deck)return;let host=$("v3131SessionFinder");
+  if(!host){host=document.createElement("section");host.id="v3131SessionFinder";host.className="v3131-session-finder";deck.querySelector(".view-heading")?.insertAdjacentElement("afterend",host)}
+  let query=String(appState.settings.v3131_session_query||"");if(/@/.test(query)){query="";appState.settings.v3131_session_query=""}
+  const rows=v3131RecentSessions(query),selected=selectedSession();
+  host.innerHTML=`<div class="v3131-finder-head"><div><span class="eyebrow">Find a session</span><strong>Search by date, title, squad or venue</strong></div><input id="v3131SessionSearch" name="mclay-session-search-${Date.now()}" autocomplete="off" autocapitalize="off" spellcheck="false" type="search" value="${escapeHtml(query)}" placeholder="e.g. 1/8/26, National or rainbow"></div><div class="v3131-session-results">${rows.map(session=>`<button type="button" data-v3131-session="${escapeHtml(session.id)}" class="${session.id===selected?.id?"active":""}"><span><strong>${escapeHtml(`${weekday(session.session_date)} ${String(session.day_part||"").toUpperCase()} · ${session.title||"Untitled session"}`)}</strong><small>${escapeHtml([formatDate(session.session_date),session.venue,sessionSquads(session).join(" + "),Number(session.planned_distance||0)?`${Number(session.planned_distance).toLocaleString()}m`:""].filter(Boolean).join(" · "))}</small></span><em>${escapeHtml(v3131RelativeStamp(session))}</em></button>`).join("")||'<div class="help">No matching sessions.</div>'}</div>`;
+  const input=$("v3131SessionSearch");if(input){input.oninput=()=>{appState.settings.v3131_session_query=input.value;saveState(appState);v3131RenderFinder();v3140CompactFinder?.()};input.onsearch=input.oninput}
+  host.querySelectorAll("[data-v3131-session]").forEach(button=>button.onclick=()=>{setSelectedSession(button.dataset.v3131Session);appState.settings.v3111_manual_session_id=button.dataset.v3131Session;appState.settings.v3111_manual_selection_at=Date.now();saveState(appState);renderAll()});
+};
+
+function v3141ClosestSession(date,preferredSquad=""){
+  const rows=v3141CanonicalSessions(),sameDate=rows.filter(session=>session.session_date===date),preferred=sameDate.filter(session=>sessionSquads(session).some(s=>squadKey(s)===squadKey(preferredSquad)));
+  return preferred[0]||sameDate[0]||rows.sort((a,b)=>Math.abs(new Date(`${a.session_date}T12:00:00`)-new Date(`${date}T12:00:00`))-Math.abs(new Date(`${b.session_date}T12:00:00`)-new Date(`${date}T12:00:00`)))[0]||null;
+}
+function v3141SelectDate(date){
+  const target=v3141ClosestSession(date,activeSquad());if(!target)return updateStatus("No session is saved near that date.","warning");
+  appState.settings.v3141_session_date=target.session_date;setSelectedSession(target.id);
+}
+function v3141ContextDateControls(){
+  const picker=$("contextSessionPicker"),wrap=picker?.closest(".context-session");if(!picker||!wrap)return;
+  let nav=$("v3141ContextDate");if(!nav){nav=document.createElement("div");nav.id="v3141ContextDate";nav.className="v3141-context-date";nav.innerHTML='<button type="button" data-v3141-date-step="-1" aria-label="Previous day">‹</button><input type="date" aria-label="Jump to session date"><button type="button" data-v3141-date-step="1" aria-label="Next day">›</button>';picker.insertAdjacentElement("afterend",nav)}
+  const selected=selectedSession(),input=nav.querySelector("input");input.value=selected?.session_date||v3141Today();input.onchange=()=>v3141SelectDate(input.value);
+  nav.querySelectorAll("[data-v3141-date-step]").forEach(button=>button.onclick=()=>v3141SelectDate(v3141DateAdd(input.value||v3141Today(),Number(button.dataset.v3141DateStep))));
+}
+const v3141RenderActiveContextBase=renderActiveContext;
+renderActiveContext=function(){
+  v3141RenderActiveContextBase();const picker=$("contextSessionPicker"),selected=selectedSession();if(picker&&selected){
+    const all=v3141CanonicalSessions(),date=selected.session_date,near=all.filter(session=>Math.abs((new Date(`${session.session_date}T12:00:00`)-new Date(`${date}T12:00:00`))/86400000)<=4),chosen=[];
+    for(const session of [selected,...near])if(session&&!chosen.some(row=>row.id===session.id))chosen.push(session);
+    picker.innerHTML=chosen.slice(0,18).sort((a,b)=>String(b.session_date).localeCompare(String(a.session_date))||String(a.day_part).localeCompare(String(b.day_part))).map(session=>`<option value="${escapeHtml(session.id)}" ${session.id===selected.id?"selected":""}>${escapeHtml(window.innerWidth<=700?v3121ShortSessionLabel(session):`${sessionLabel(session)} — ${session.title}`)}</option>`).join("");picker.onchange=()=>setSelectedSession(picker.value);
+  }
+  v3141ContextDateControls();
+};
+
+function v3141HasActiveAdaptation(athlete,session){
+  if(!athlete||!session)return false;
+  if(v3131SavedAdaptationText?.(athlete,session)?.text)return true;
+  const active=typeof v3106ActiveModification==="function"?String(v3106ActiveModification(athlete,session.session_date)||"").trim():"";
+  return Boolean(active);
+}
+v3140ModifiedColumns=function(session){
+  if(!session)return[];
+  const roster=(appState.athletes||[]).filter(athlete=>athlete.active!==false&&sessionSquads(session).some(s=>squadKey(s)===squadKey(athlete.squad))),attendance=(appState.attendance||[]).filter(row=>row.session_id===session.id),status=new Map(attendance.map(row=>[row.athlete_id,String(row.status||"").toLowerCase()])),rollStarted=attendance.some(row=>["present","modified","late","absent"].includes(String(row.status||"").toLowerCase()));
+  return roster.filter(athlete=>{const state=status.get(athlete.id)||"";if(rollStarted&&!["present","modified","late"].includes(state))return false;return state==="modified"||v3141HasActiveAdaptation(athlete,session)}).sort(rosterSort);
+};
+
+function v3141CurrentBlockIndex(session,blocks=v3125BoardBlocks(session)){
+  const activeId=v35ActiveBlockId(session.id);let index=blocks.findIndex((block,i)=>(block.id||`fallback-${i}`)===activeId);
+  if(index<0){const active=v382ActiveBlockAndItem();index=Number(active?.blockIndex)}
+  return Math.max(0,Math.min(blocks.length-1,Number.isFinite(index)?index:0));
+}
+function v3141SetCurrentBlock(index){
+  const session=selectedSession(),blocks=v3125BoardBlocks(session);if(!session||!blocks.length)return;
+  index=Math.max(0,Math.min(blocks.length-1,Number(index)||0));const block=blocks[index],key=block.id||`fallback-${index}`,runnable=v34Array(block.items).filter(item=>item.runnable!==false),first=Math.max(0,runnable.findIndex(item=>v3129Zone(item,block)||v3129RaceDistance(item)));
+  v35SetActiveBlock(session.id,key);v382SetActivePaceLine(index,first,false);appState.settings.v3126_board_mode="deck";saveState(appState);v3121RenderBoardState();requestAnimationFrame(()=>$("v3126ActiveView")?.scrollIntoView({behavior:"smooth",block:"start"}));
+}
+function v3141ActiveHtml(session){
+  const blocks=v3125BoardBlocks(session);if(!blocks.length)return '<div class="warning-box">No workout is attached to this calendar session yet.</div>';
+  const index=v3141CurrentBlockIndex(session,blocks),block=blocks[index],modified=v3140ModifiedColumns(session),previous=blocks[index-1],next=blocks[index+1];
+  return `<div class="v3141-current-nav"><button type="button" class="secondary" data-v3141-previous ${previous?"":"disabled"}>‹ Previous</button><button type="button" class="secondary" data-v3141-whole>Whole session</button><button type="button" data-v3141-next ${next?"":"disabled"}>Next ›</button></div><div class="v3141-current-position"><span>Current block</span><strong>${index+1} of ${blocks.length}</strong></div>
+  <div class="v3140-board-scroll v3141-current-scroll ${modified.length?"":"no-mod"}" style="--v3140-mod-count:${Math.max(1,modified.length)}"><div class="v3140-board-table v3141-current-table">${v3140BoardHeader(modified)}<section class="v3140-board-block"><header><div><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(v3131DisplayBlockTitle(session,block))}</h3></div><b>${v3128BlockDistance(block).toLocaleString()}m</b></header><div class="v3140-main-cell">${v34Array(block.items).map((item,itemIndex)=>v3140LineHtml(session,block,item,itemIndex,index)).join("")||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}${block.purpose||block.cues?`<details class="v3141-current-cues"><summary>Purpose & coaching cues</summary>${block.purpose?`<p><b>Purpose:</b> ${escapeHtml(block.purpose)}</p>`:""}${block.cues?`<p><b>Cue:</b> ${escapeHtml(block.cues)}</p>`:""}</details>`:""}</div>${modified.map(athlete=>`<aside class="v3140-mod-cell"><div class="v3140-mod-mobile-name">${escapeHtml(athlete.full_name)}</div>${v3140AdaptationCell(athlete,session,block,index)}</aside>`).join("")}</section></div></div>
+  ${next?`<button type="button" class="v3141-up-next" data-v3141-up-next><span>Up next · tap to move forward</span><strong>${escapeHtml(next.title||v32BlockLabel(next.block_type))}</strong><em>${v3128BlockDistance(next).toLocaleString()}m</em></button>`:`<button type="button" class="v3141-up-next finish" data-view-jump="finish"><span>Session blocks complete</span><strong>Finish session</strong></button>`}`;
+}
+v3126ActiveHtml=v3141ActiveHtml;
+v3126RenderActive=function(session){
+  let host=$("v3126ActiveView");if(!host){host=document.createElement("article");host.id="v3126ActiveView";host.className="card v3126-active-view";$("v3126BoardTabs")?.insertAdjacentElement("afterend",host)}
+  host.innerHTML=v3141ActiveHtml(session);const blocks=v3125BoardBlocks(session),index=v3141CurrentBlockIndex(session,blocks);
+  host.querySelector("[data-v3141-previous]")?.addEventListener("click",()=>v3141SetCurrentBlock(index-1));host.querySelector("[data-v3141-next]")?.addEventListener("click",()=>v3141SetCurrentBlock(index+1));host.querySelector("[data-v3141-up-next]")?.addEventListener("click",()=>v3141SetCurrentBlock(index+1));host.querySelector("[data-v3141-whole]")?.addEventListener("click",()=>v3126SetMode("whole"));host.querySelectorAll("[data-view-jump]").forEach(button=>button.onclick=()=>showView(button.dataset.viewJump));v3140RestoreDetails(host);return host;
+};
+
+function v3141SessionListControls(){
+  const list=$("sessionList");if(!list)return null;let controls=$("v3141SessionListControls");if(!controls){controls=document.createElement("div");controls.id="v3141SessionListControls";controls.className="v3141-session-list-controls";controls.innerHTML='<button type="button" data-v3141-list-step="-1">‹</button><label><span>Session date</span><input type="date"></label><button type="button" data-v3141-list-step="1">›</button><button type="button" class="secondary" data-v3141-show-all>Show all</button>';list.insertAdjacentElement("beforebegin",controls)}return controls;
+}
+renderSessions=function(){
+  const selected=selectedSession(),controls=v3141SessionListControls(),all=v3141CanonicalSessions().sort((a,b)=>`${b.session_date}-${b.day_part}`.localeCompare(`${a.session_date}-${a.day_part}`)),showAll=appState.settings.v3141_sessions_show_all===true,date=appState.settings.v3141_session_list_date||selected?.session_date||v3141Today(),rows=showAll?all:all.filter(session=>session.session_date===date);
+  if(controls){const input=controls.querySelector("input");input.value=date;input.onchange=()=>{appState.settings.v3141_session_list_date=input.value;saveState(appState);renderSessions()};controls.querySelectorAll("[data-v3141-list-step]").forEach(button=>button.onclick=()=>{appState.settings.v3141_session_list_date=v3141DateAdd(input.value||date,Number(button.dataset.v3141ListStep));saveState(appState);renderSessions()});const toggle=controls.querySelector("[data-v3141-show-all]");toggle.textContent=showAll?"Show one date":"Show all";toggle.onclick=()=>{appState.settings.v3141_sessions_show_all=!showAll;saveState(appState);renderSessions()}}
+  $("sessionList").innerHTML=rows.map(session=>`<div class="session-list-item ${session.id===selected?.id?"active":""}"><strong>${escapeHtml(sessionLabel(session))}</strong><div>${escapeHtml(session.title)}</div><div class="list-meta">${escapeHtml(session.venue)} · ${sessionSquads(session).map(escapeHtml).join(" + ")} · ${Number(session.planned_distance||0).toLocaleString()}m${String(session.workout||"").trim()?" · workout linked":""}</div><div class="session-list-actions"><button type="button" data-use-session="${escapeHtml(session.id)}">Use</button><button type="button" class="secondary" data-edit-session="${escapeHtml(session.id)}">Edit</button><button type="button" class="danger-button" data-delete-session="${escapeHtml(session.id)}">Delete</button></div></div>`).join("")||`<div class="help">No sessions saved on ${escapeHtml(formatDate(date))}. Use the arrows or date picker.</div>`;
+  document.querySelectorAll("[data-use-session]").forEach(element=>element.onclick=()=>{appState.settings.v3141_session_list_date=appState.sessions.find(row=>row.id===element.dataset.useSession)?.session_date||date;setSelectedSession(element.dataset.useSession)});document.querySelectorAll("[data-edit-session]").forEach(element=>element.onclick=()=>{const session=appState.sessions.find(row=>row.id===element.dataset.editSession);showView("sessions");fillSessionEditor(session)});document.querySelectorAll("[data-delete-session]").forEach(element=>element.onclick=()=>deleteSession(element.dataset.deleteSession));
+  if(typeof v32RenderSessionBlocks==="function")v32RenderSessionBlocks();
+};
+
+function v3141Brand(){document.title=`McLay Swimming OS — v${V3141_VERSION} Board Flow Repair`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3141_VERSION} · restored workout linkage · main + modified Board · previous / next block navigation`}
+v3140Brand=v3141Brand;v3131Brand=v3141Brand;v3129Brand=v3141Brand;if(typeof v3130Brand!=="undefined")v3130Brand=v3141Brand;if(typeof v3128Brand!=="undefined")v3128Brand=v3141Brand;if(typeof v3127Brand!=="undefined")v3127Brand=v3141Brand;
+const v3141BoardBindBase=v3140BoardBind;
+v3140BoardBind=function(){v3141BoardBindBase?.();const active=$("v3126ActiveView");if(active)v3140RestoreDetails(active)};
+const v3141AfterRenderBase=v3140AfterRender;
+v3140AfterRender=function(){v3141AfterRenderBase?.();renderActiveContext();if((document.querySelector(".view.active")?.id||"")==="sessions")renderSessions();v3141Brand()};
+setTimeout(()=>{renderActiveContext();v3141Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()},0);
+setTimeout(v3141Brand,1500);
+
+// v3.14.1 compatibility: v3.6 repointed the older adaptation helper to the
+// structured table. Read both structured adaptations and legacy saved captures.
+v3131SavedAdaptationText=function(athlete,session){
+  const structured=(appState.session_adaptations||[]).filter(row=>row.athlete_id===athlete.id&&row.session_id===session.id).sort(byUpdated)[0];
+  if(structured?.adapted_text)return {text:structured.adapted_text,source:"Saved adaptation"};
+  const capture=(appState.captures||[]).filter(row=>row.session_id===session.id&&row.athlete_id===athlete.id&&String(row.text_content||"").startsWith("[Adapted session v3.5]")).sort(byUpdated)[0];
+  if(capture?.text_content)return {text:String(capture.text_content).replace(/^\[Adapted session v3\.5\]\s*/i,""),source:"Saved adaptation"};
+  return null;
+};
+v3141HasActiveAdaptation=function(athlete,session){
+  if(!athlete||!session)return false;if(v3131SavedAdaptationText(athlete,session)?.text)return true;
+  const active=typeof v3106ActiveModification==="function"?String(v3106ActiveModification(athlete,session.session_date)||"").trim():"";if(active)return true;
+  return /\b(modif|adapt|injur|return|reduced|restriction|separate|join)\b/i.test(String(athlete.modifications||""));
+};
+setTimeout(()=>{if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()},20);
+
+// =============================================================================
+// McLay Swimming OS v3.14.2 — permanent modified-session baselines
+// Every active athlete adaptation profile is a standing, editable baseline.
+// It is automatically applied when the swimmer is expected before Roll, and
+// when marked Here / Modified / Late once Roll has started. A saved session-
+// specific athlete version still overrides the baseline for that session.
+// =============================================================================
+const V3142_VERSION="3.14.2";
+const V3142_BUILD="20260801-permanent-modified-baselines-3142";
+
+function v3142EnsureBaselineProfiles(){
+  if(typeof v37EnsureLocalProfiles==="function")v37EnsureLocalProfiles();
+  for(const athlete of appState.athletes||[]){
+    const fallback=typeof v37DefaultProfileSeed==="function"?v37DefaultProfileSeed(athlete):null;
+    if(!fallback)continue;
+    let profile=(appState.athlete_adaptation_profiles||[]).find(row=>row.athlete_id===athlete.id);
+    if(!profile){
+      const now=nowIso();
+      profile={id:`adapt-profile-${athlete.id}`,athlete_id:athlete.id,profile_label:fallback.label,default_volume_ratio:fallback.ratio,default_cycle_multiplier:fallback.cycleMultiplier,rep_strategy:"Reduce repetitions first while retaining every key block.",distance_strategy:"Protect skill and quality distances; shorten long aerobic repetitions before short race work.",rest_strategy:v35NameKey(athlete.full_name)==="mckenzie drage"?"Set send-offs independently. Fast 75s usually need 1:45–2:00; never scale the squad cycle by volume ratio.":"Preserve enough recovery to maintain the planned stimulus.",stroke_restrictions:"",equipment_preferences:"",underwater_limits:"",skill_emphasis:"",locked_rules:fallback.ratio===.5?"Default main-session volume is approximately one half. Preserve theme, key skills and quality work.":"Default main-session volume is approximately two thirds. Preserve theme, key skills and quality work.",observed_patterns:"",current_considerations:"",successful_adaptations:"",avoid_review:"",active:true,created_at:now,updated_at:now};
+      appState.athlete_adaptation_profiles.push(profile);queueRecord?.("athlete_adaptation_profiles",profile.id);
+    }else if(profile.active===undefined){profile.active=true;profile.updated_at=nowIso();queueRecord?.("athlete_adaptation_profiles",profile.id)}
+  }
+  saveState(appState);
+}
+function v3142BaselineRecord(athlete){return (appState.athlete_adaptation_profiles||[]).find(row=>row.athlete_id===athlete?.id&&row.active!==false)||null}
+function v3142BaselineProfile(athlete){
+  if(!athlete)return null;const record=v3142BaselineRecord(athlete);if(!record)return null;
+  const profile=typeof v37ProfileForAthlete==="function"?v37ProfileForAthlete(athlete):null;
+  return profile?{...profile,profile:record}:null;
+}
+function v3142HasPermanentBaseline(athlete){return Boolean(v3142BaselineRecord(athlete))}
+
+v3142EnsureBaselineProfiles();
+
+function v3142HasActiveAdaptation(athlete,session){
+  if(!athlete||!session)return false;
+  if(typeof v3131SavedAdaptationText==="function"&&v3131SavedAdaptationText(athlete,session)?.text)return true;
+  if(v3142HasPermanentBaseline(athlete))return true;
+  const active=typeof v3106ActiveModification==="function"?String(v3106ActiveModification(athlete,session.session_date)||"").trim():"";
+  if(active)return true;
+  return /\b(modif|adapt|injur|return|reduced|restriction|separate|join)\b/i.test(String(athlete.modifications||""));
+}
+v3141HasActiveAdaptation=v3142HasActiveAdaptation;
+
+v3140ModifiedColumns=function(session){
+  if(!session)return[];
+  const squads=sessionSquads(session),roster=(appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!squads.length||squads.some(s=>squadKey(s)===squadKey(athlete.squad)))),attendance=(appState.attendance||[]).filter(row=>row.session_id===session.id),status=new Map(attendance.map(row=>[row.athlete_id,String(row.status||"").toLowerCase()])),rollStarted=attendance.some(row=>["present","modified","late","absent"].includes(String(row.status||"").toLowerCase()));
+  return roster.filter(athlete=>{
+    const state=status.get(athlete.id)||"";
+    if(rollStarted&&!['present','modified','late'].includes(state))return false;
+    return state==="modified"||v3142HasActiveAdaptation(athlete,session);
+  }).sort(rosterSort);
+};
+
+function v3142BaselineBlock(athlete,session,block,blockIndex){
+  const profile=v3142BaselineProfile(athlete);if(!profile)return null;
+  const rules=typeof v37RulesForAthlete==="function"?v37RulesForAthlete(athlete,session):[],changed=[];
+  for(const item of v34Array(block.items)){
+    if(item?.runnable===false)continue;
+    const original=v3131Text(v3129LineText(item));
+    let adapted=original;
+    try{adapted=typeof v37AdaptSetLine==="function"?v37AdaptSetLine(item,profile,athlete,block,rules,session):original}catch(error){console.warn("Baseline modification line retained",error)}
+    adapted=v3131Text(adapted);
+    if(adapted&&v3131NormalLine(adapted)!==v3131NormalLine(original))changed.push(adapted);
+  }
+  const activeText=typeof v3106ActiveModification==="function"?v3131Text(v3106ActiveModification(athlete,session.session_date)):"";
+  if(activeText&&!changed.some(line=>v3131NormalLine(line).includes(v3131NormalLine(activeText))))changed.push(activeText);
+  return {source:`${profile.label} baseline`,lines:changed,same:changed.length===0,baseline:true};
+}
+const v3142AdaptationBlockBase=v3131AdaptationBlock;
+v3131AdaptationBlock=function(athlete,session,block,blockIndex){
+  if(typeof v3131SavedAdaptationText==="function"&&v3131SavedAdaptationText(athlete,session)?.text)return v3142AdaptationBlockBase(athlete,session,block,blockIndex);
+  const baseline=v3142BaselineBlock(athlete,session,block,blockIndex);if(baseline)return baseline;
+  return v3142AdaptationBlockBase(athlete,session,block,blockIndex);
+};
+
+v3140BoardHeader=function(modified){
+  return `<div class="v3140-column-head main"><strong>MAIN SESSION</strong><small>Squad board</small></div>${modified.map(athlete=>{const profile=v3142BaselineProfile(athlete),saved=selectedSession()&&v3131SavedAdaptationText?.(athlete,selectedSession());return `<div class="v3140-column-head modified"><strong>${escapeHtml(athlete.full_name)}</strong><small>${escapeHtml(saved?.text?"Session override":profile?`${profile.label} · baseline`:"Modified session")}</small></div>`}).join("")}`;
+};
+
+function v3142BaselineProfilesForSession(session=selectedSession()){
+  const squads=session?sessionSquads(session):[];
+  return (appState.athletes||[]).filter(athlete=>athlete.active!==false&&v3142HasPermanentBaseline(athlete)&&(!squads.length||squads.some(s=>squadKey(s)===squadKey(athlete.squad)))).sort(rosterSort);
+}
+function v3142OpenBaselineEditor(athleteId){
+  const athlete=(appState.athletes||[]).find(row=>row.id===athleteId);if(!athlete)return;
+  v35AdaptationAthleteId=athlete.id;v37AdaptationMode="individual";if(appState.settings.v37)appState.settings.v37.adaptation_mode="individual";saveState(appState);showView("deck");
+  const reveal=()=>{v37RenderAdaptationPanel?.();const panel=$("adaptationPanel");if(panel){panel.hidden=false;panel.removeAttribute("hidden");panel.classList.remove("v3103-adaptation-collapsed")}const details=$("v37ProfileEditor")?.querySelector("details");if(details)details.open=true;return panel};
+  requestAnimationFrame(()=>{const panel=reveal();panel?.scrollIntoView({behavior:"smooth",block:"start"})});setTimeout(reveal,120);setTimeout(()=>{const panel=reveal();panel?.scrollIntoView({behavior:"smooth",block:"start"})},360);
+}
+function v3142BaselineHubCard(){
+  const profiles=v3142BaselineProfilesForSession();
+  return `<article id="v3142BaselineHubCard" class="card v3142-baseline-card"><div class="card-heading"><div><div class="eyebrow">Permanent modified baselines</div><h3>Automatically ready beside the main session</h3></div><span class="help">Session-specific edits can still override the baseline.</span></div><p class="help">These apply whenever the swimmer is expected before Roll, or marked Here, Modified or Late once Roll has started.</p><div class="v3142-baseline-list">${profiles.map(athlete=>{const profile=v3142BaselineProfile(athlete);return `<button type="button" data-v3142-edit-baseline="${escapeHtml(athlete.id)}"><strong>${escapeHtml(athlete.full_name)}</strong><span>${escapeHtml(profile?.label||"Individual baseline")}</span><em>Edit baseline</em></button>`}).join("")||'<div class="help">No permanent modified baseline matches this squad yet.</div>'}</div></article>`;
+}
+const v3142CoachHubBase=v3140RenderCoachHub;
+v3140RenderCoachHub=function(){
+  v3142CoachHubBase();const host=$("v390CoachHub")||$("v3140CoachHub");if(!host||$("v3142BaselineHubCard"))return;
+  const sessionOverview=host.querySelector(".v3140-session-overview");sessionOverview?.insertAdjacentHTML("afterend",v3142BaselineHubCard());
+  host.querySelectorAll("[data-v3142-edit-baseline]").forEach(button=>button.onclick=()=>v3142OpenBaselineEditor(button.dataset.v3142EditBaseline));
+};
+v390RenderCoachHub=v3140RenderCoachHub;
+
+const v3142RenderProfileEditorBase=v37RenderProfileEditor;
+v37RenderProfileEditor=function(athlete){
+  v3142RenderProfileEditorBase(athlete);const host=$("v37ProfileEditor"),details=host?.querySelector("details");if(!details)return;
+  const summary=details.querySelector("summary");if(summary)summary.innerHTML=`<strong>${escapeHtml(athlete.full_name)} permanent baseline modification</strong><span>Automatically used in future sessions while active</span>`;
+  if(!details.querySelector(".v3142-baseline-note"))summary?.insertAdjacentHTML("afterend",'<div class="v3142-baseline-note"><strong>Standing baseline</strong><span>Edit the volume, send-off and strategy fields below. The saved profile becomes this swimmer’s normal modified version. A saved session version can override it without changing the baseline.</span></div>');
+  const save=$("v37SaveProfileBtn");if(save)save.textContent="Save permanent baseline";
+};
+const v3142SaveProfileBase=v37SaveProfile;
+v37SaveProfile=async function(athlete){
+  const existing=(appState.athlete_adaptation_profiles||[]).find(row=>row.athlete_id===athlete?.id);if(existing)existing.active=true;
+  await v3142SaveProfileBase(athlete);v3142EnsureBaselineProfiles();v3121RenderBoardState?.();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();updateStatus(`${athlete.full_name} permanent modified baseline saved`,"good");
+};
+
+const v3142ProfileStarterRenderBase=v371RenderProfileStarter;
+v371RenderProfileStarter=function(){
+  v3142ProfileStarterRenderBase();const root=$("v371ProfileStarter"),summary=root?.querySelector("summary"),button=$("v371CreateProfileBtn"),message=$("v371ProfileStarterMessage");
+  if(summary)summary.innerHTML='<strong>Add another permanent modified baseline</strong><span>Saved against the swimmer ID and applied automatically when they attend</span>';
+  if(button)button.textContent="Create permanent baseline";
+  if(message&&button&&!button.disabled)message.textContent="The starting approach becomes the swimmer’s editable baseline for future sessions.";
+};
+const v3142CreateProfileBase=v371CreateProfile;
+v371CreateProfile=async function(){
+  const athlete=(appState.athletes||[]).find(row=>row.id===$("v371ProfileStarterAthlete")?.value);await v3142CreateProfileBase();if(athlete)updateStatus(`${athlete.full_name} permanent modified baseline created`,"good");
+};
+
+function v3142Brand(){document.title=`McLay Swimming OS — v${V3142_VERSION} Permanent Baselines`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3142_VERSION} · permanent editable modified baselines · automatic Here / Late Board columns`}
+v3141Brand=v3142Brand;v3140Brand=v3142Brand;v3131Brand=v3142Brand;v3129Brand=v3142Brand;
+
+function v3142Refresh(){v3142EnsureBaselineProfiles();v3142Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState?.();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();v371RenderProfileStarter?.()}
+setTimeout(v3142Refresh,0);setTimeout(v3142Refresh,500);setTimeout(v3142Brand,1500);

@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.14.0 Coach Hub</title>
+  <title>McLay Swimming OS — v3.14.2 Permanent Baselines</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23123a5b%22/><path d=%22M10 38c10-15 21-15 31 0 5 7 9 7 13 0%22 fill=%22none%22 stroke=%22white%22 stroke-width=%226%22 stroke-linecap=%22round%22/></svg>">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260801-coachhub3140">
+  <link rel="stylesheet" href="styles.css?v=20260801-baselines3142">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -978,7 +978,7 @@ Warm-down..."></textarea>
   <script>
   // One-time recovery from old installed-app caches. The page reloads once,
   // then the current build registers the current worker with updateViaCache disabled.
-  window.MCLAY_APP_BUILD="3.14.0-coach-hub-20260801";
+  window.MCLAY_APP_BUILD="3.14.2-permanent-baselines-20260801";
   (async()=>{
     try{
       const key="mclay_last_installed_build";
@@ -986,13 +986,13 @@ Warm-down..."></textarea>
         localStorage.setItem(key,window.MCLAY_APP_BUILD);
         if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}
         if(window.caches){const names=await caches.keys();await Promise.all(names.filter(n=>n.startsWith("mclay-swimming-os-")).map(n=>caches.delete(n)))}
-        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3140"){u.searchParams.set("recovered","3140");location.replace(u.toString());return}
+        const u=new URL(location.href);if(u.searchParams.get("recovered")!=="3141"){u.searchParams.set("recovered","3141");location.replace(u.toString());return}
       }
     }catch(error){console.warn("Cache recovery",error)}
   })();
   </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
-  <script src="app.js?v=20260801-coachhub3140"></script>
+  <script src="app.js?v=20260801-baselines3142"></script>
 </body>
 </html>
