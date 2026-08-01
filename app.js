@@ -13002,3 +13002,126 @@ v3123SessionBlocks=function(session){
   return v3150SanitisedSessionBlocks(session);
 };
 setTimeout(v3150Brand,7000);
+
+
+// =============================================================================
+// McLay Swimming OS v3.15.1 — modified-cycle feasibility repair
+// A modified swimmer may use the main start cycle only after the work distance
+// has been checked against an individual target or, at minimum, a conservative
+// PB lower bound. "Same as main" is never inferred merely because the cycle
+// text was left unchanged.
+// =============================================================================
+const V3151_VERSION="3.15.1";
+const V3151_BUILD="20260801-modified-cycle-feasibility-3151";
+
+function v3151SequenceLength(text){
+  const line=String(text||"");
+  let match=line.match(/(?:descend(?:ing)?|\bd)\s*1\s*(?:-|–|to)\s*([2-9])/i);
+  if(match)return Number(match[1]);
+  match=line.match(/\b1\s*build\s*[\/,]\s*2\s*fast\b/i);if(match)return 3;
+  match=line.match(/\bone\s+build\s*[,/]?\s*two\s+fast\b/i);if(match)return 3;
+  return 0;
+}
+function v3151StandardDistance(value,maximum=Infinity){
+  const options=[15,25,35,50,75,100,125,150,200,250,300,400,500,600,800,1000,1500].filter(v=>v<=maximum);
+  if(!options.length)return Math.max(1,Math.round(Number(value)||1));
+  const target=Math.max(1,Number(value)||1);
+  return options.slice().sort((a,b)=>Math.abs(a-target)-Math.abs(b-target)||b-a)[0];
+}
+function v3151BestCaseSeconds(athlete,session,stroke,distance){
+  const course=v3Course(session?.pool_course||"SCM"),wantedStroke=v3150Stroke(stroke)||"Freestyle",wantedDistance=Number(distance)||0;
+  let rows=v3150RaceRows(athlete).filter(row=>row.course===course&&row.stroke===wantedStroke);
+  if(!rows.length&&wantedStroke!=="Freestyle")rows=v3150RaceRows(athlete).filter(row=>row.course===course&&row.stroke==="Freestyle");
+  const exact=rows.filter(row=>Number(row.distance)===wantedDistance).sort((a,b)=>a.result_seconds-b.result_seconds)[0];
+  if(exact)return Number(exact.result_seconds);
+  const usable=rows.filter(row=>Number(row.distance)>0&&Number.isFinite(Number(row.result_seconds)));
+  if(usable.length)return Math.min(...usable.map(row=>Number(row.result_seconds)/Number(row.distance)*wantedDistance));
+  if(wantedStroke==="Freestyle"&&typeof v380T400Anchor==="function"){
+    const anchor=v380T400Anchor(athlete.id);if(anchor?.result_seconds)return Number(anchor.result_seconds)/400*wantedDistance;
+  }
+  return NaN;
+}
+function v3151RestNeed(text,distance,quality){
+  const line=String(text||"");
+  if(quality)return distance<=50?20:distance<=100?30:40;
+  if(/\bkick\b/i.test(line))return distance<=50?12:distance<=100?15:20;
+  if(/descend|\bd\s*1\s*[-–]/i.test(line))return distance<=50?10:distance<=100?12:15;
+  return distance<=50?8:distance<=100?10:15;
+}
+function v3151ReplaceWork(text,reps,distance){
+  const replacement=`${reps} × ${distance}`;
+  let out=String(text||"").replace(/^\s*\d+\s*(?:[x×]\s*)?\d+\b/i,replacement);
+  if(out===String(text||"")&&!/^\s*\d+\s*(?:[x×]\s*)?\d+\b/i.test(out))out=`${replacement} ${out}`;
+  return out;
+}
+function v3151CleanSameMain(text){
+  return String(text||"").replace(/\s*(?:·|-)\s*same\s+as\s+main\b/ig,"").replace(/\bsame\s+as\s+main\b/ig,"").replace(/\s{2,}/g," ").trim();
+}
+
+v3150AdaptItem=function(athlete,session,block,item,profile){
+  const original=v3129LineText(item),ratio=Math.max(.2,Math.min(1,Number(profile?.ratio||profile?.profile?.default_volume_ratio||.66))),reps=Math.max(1,Number(item.reps)||1),distance=Math.max(0,Number(item.distance)||0),cycle=v3129ExplicitCycle(item),quality=v3150QualityLine(original),aerobic=v3150AerobicLine(item,block),sequence=v3151SequenceLength(original);
+  let newReps=Math.max(1,Math.round(reps*ratio)),newDistance=distance,newCycle=cycle;
+  const resolved=v3140ResolveStroke(athlete,session,block,item,0,0),stroke=resolved.stroke||"Freestyle";
+  const raceTarget=quality?v3150RaceTarget(athlete,item,block,session,stroke):null,lee=aerobic&&stroke==="Freestyle"?v3129DirectLeeTarget(athlete,item,block):null;
+  const directTarget=Number(raceTarget?.targetSeconds||lee?.targetSeconds),pbLowerBound=(!quality||distance>=75)?v3151BestCaseSeconds(athlete,session,stroke,distance):NaN,anchor=Number.isFinite(directTarget)?directTarget:pbLowerBound;
+  const targetVolume=reps*distance*ratio;
+
+  // Preserve a complete instruction cycle such as d1–3. For one three-rep
+  // cycle, reduce the distance instead of producing an impossible d1–3 over
+  // only two repetitions.
+  if(sequence>1){
+    if(newReps<sequence)newReps=sequence;
+    else if(newReps%sequence)newReps=Math.max(sequence,Math.round(newReps/sequence)*sequence);
+    newDistance=v3151StandardDistance(targetVolume/newReps,distance);
+  }
+
+  const fits=(candidateDistance)=>{
+    if(!cycle||!Number.isFinite(anchor)||distance<=0)return null;
+    const projected=anchor*(candidateDistance/distance),rest=v3151RestNeed(original,candidateDistance,quality);
+    return {ok:cycle-projected>=rest,projected,rest};
+  };
+
+  let check=fits(newDistance);
+  if(check&& !check.ok){
+    // For a short complete sequence or kick pattern, preserve the starts and
+    // reduce distance to the baseline volume first. Otherwise choose the
+    // longest practical distance that genuinely fits the main cycle.
+    if((sequence>1&&reps<=sequence)||(/\bkick\b/i.test(original)&&reps<=4)){
+      newReps=reps;
+      newDistance=v3151StandardDistance(targetVolume/newReps,distance);
+      check=fits(newDistance);
+    }
+    if(check&&!check.ok){
+      const candidates=[100,75,50,35,25,15].filter(value=>value<newDistance&&value<=distance);
+      const found=candidates.find(value=>fits(value)?.ok);
+      if(found){newDistance=found;newReps=Math.max(1,Math.round(targetVolume/newDistance));if(sequence>1)newReps=Math.max(sequence,Math.round(newReps/sequence)*sequence);check=fits(newDistance)}
+      else newCycle=v3150Round5(check.projected+check.rest);
+    }
+  }
+
+  // If no target exists, apply the volume baseline without claiming the work
+  // has been physiologically verified. Repetitions are reduced first, except
+  // for a single repetition where distance carries the baseline.
+  if(!Number.isFinite(anchor)&&reps===1&&distance>25&&!quality)newDistance=v3151StandardDistance(distance*ratio,distance);
+  if(!sequence&&newDistance!==distance&&distance>0)newReps=Math.max(1,Math.round(targetVolume/newDistance));
+
+  let text=v3151ReplaceWork(original,newReps,newDistance);
+  if(cycle){
+    const shown=newCycle||cycle;
+    text=text.replace(/\bon\s+(?:\d{1,2}:\d{2}|\d{2,3})\b/i,`on ${v3150Clock(shown)}`);
+    if(!/\bon\s+/i.test(text))text+=` on ${v3150Clock(shown)}`;
+  }
+  text=v3151CleanSameMain(text);
+  const finalCheck=fits(newDistance),strongEvidence=Number.isFinite(directTarget)||(!/\bkick\b/i.test(original)&&Number.isFinite(pbLowerBound))||newDistance<=50,sameStart=cycle&&newCycle===cycle&&finalCheck?.ok&&strongEvidence&&(newDistance!==distance||newReps!==reps);
+  if(sameStart&&!/\bmain start cycle\b/i.test(text))text+=" · main start cycle";
+  return text;
+};
+
+function v3151Brand(){
+  document.title=`McLay Swimming OS — v${V3151_VERSION} Modified Cycle Repair`;
+  const subtitle=document.querySelector(".header-subtitle");
+  if(subtitle)subtitle.textContent=`Version ${V3151_VERSION} · v3.15 rollout retained · modified work checked against swimmer ability before using the main cycle`;
+}
+v3150Brand=v3151Brand;v3144Brand=v3151Brand;v3143Brand=v3151Brand;v3142Brand=v3151Brand;v3141Brand=v3151Brand;v3140Brand=v3151Brand;
+window.v3151Debug={version:V3151_VERSION,build:V3151_BUILD,adapt:v3150AdaptItem,bestCase:v3151BestCaseSeconds,sequence:v3151SequenceLength};
+v3151Brand();setTimeout(v3151Brand,50);setTimeout(v3151Brand,1000);setTimeout(v3151Brand,7500);

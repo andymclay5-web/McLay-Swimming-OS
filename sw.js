@@ -1,6 +1,6 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-15-0-full-coaching-rollout-20260801";
-const CORE=["./","./index.html","./styles.css?v=20260801-coaching3150","./app.js?v=20260801-coaching3150","./config.js","./seed.js","./manifest.webmanifest","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-15-1-modified-cycle-repair-20260801";
+const CORE=["./","./index.html","./styles.css?v=20260801-cycle3151","./app.js?v=20260801-cycle3151","./config.js","./seed.js","./manifest.webmanifest","./monthly_calendar.json"];
 self.addEventListener("install",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);const cache=await caches.open(CACHE_NAME);for(const url of CORE){try{const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(response.ok)await cache.put(request,response.clone())}catch(error){console.warn("Install cache skipped",url,error)}}await self.skipWaiting()})()));
 self.addEventListener("activate",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
 self.addEventListener("message",event=>{if(event.data==="SKIP_WAITING")self.skipWaiting()});
