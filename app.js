@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260731-timetable3111",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260802-qualified3164",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -12322,10 +12322,27 @@ setTimeout(v3144Refresh,0);setTimeout(v3144Refresh,500);setTimeout(v3144Brand,15
 // cloud refreshes only update the screen later if they finish successfully.
 // =============================================================================
 const V3144_TARGET_CACHE=new Map();
+function v3144HashParts(parts){
+  let hash=2166136261;for(const part of parts){const text=String(part??"");for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619)}hash^=124;hash=Math.imul(hash,16777619)}return (hash>>>0).toString(36)
+}
+let V3164_STANDARD_STAMP_CACHE={rows:null,length:-1,loadedAt:null,stamp:""};
+function v3164StandardsStamp(){
+  const rows=appState.pathway_standards||[],loadedAt=appState.settings?.v3163_standards_loaded_at||"";
+  if(V3164_STANDARD_STAMP_CACHE.rows===rows&&V3164_STANDARD_STAMP_CACHE.length===rows.length&&V3164_STANDARD_STAMP_CACHE.loadedAt===loadedAt)return V3164_STANDARD_STAMP_CACHE.stamp;
+  const parts=[rows.length,loadedAt];for(const row of rows)parts.push(row.id,row.active,row.version_status,row.course,row.distance,row.stroke,row.sex,row.para_class,row.age_min,row.age_max,row.progression_order,row.qualifying_seconds,row.record_seconds,row.updated_at);
+  const stamp=v3144HashParts(parts);V3164_STANDARD_STAMP_CACHE={rows,length:rows.length,loadedAt,stamp};return stamp;
+}
 function v3144TargetCacheStamp(session){
-  const present=v3129LanePlan(session)?.roster?.map(a=>a.id).join(",")||"";
-  const updates=[appState.results_pb_board?.length,appState.coach_results?.length,appState.results_event_history?.length,appState.race_goals?.length,appState.pathway_standards?.length,appState.training_test_results?.length,appState.captures?.filter(row=>row.session_id===session?.id&&row.capture_type==="stroke_override").length].join(":");
-  return `${present}|${updates}`;
+  const roster=v3129LanePlan(session)?.roster||[],present=roster.map(a=>a.id).join(","),ids=new Set(roster.map(a=>a.id)),parts=[present,v3164StandardsStamp()];
+  const add=(rows,fields)=>{for(const row of rows||[]){if(row?.athlete_id&&ids.size&&!ids.has(row.athlete_id))continue;for(const field of fields)parts.push(row?.[field])}};
+  add(appState.results_pb_board,["athlete_id","course","distance","stroke","pb_seconds","pb_time","pb_date","updated_at"]);
+  add(appState.coach_results,["athlete_id","course","distance","stroke","result_seconds","result_time_text","excluded_from_pb","result_date","updated_at"]);
+  add(appState.results_event_history,["athlete_id","course","distance","stroke","result_time_seconds","result_time_text","result_date"]);
+  add(appState.race_goals,["athlete_id","course","distance","stroke","target_seconds","target_time_text","status","updated_at"]);
+  add(appState.training_test_results,["athlete_id","test_type_id","course","result_seconds","result_date","valid_for_pacing","updated_at"]);
+  add(appState.athlete_achievements,["athlete_id","achievement_type","programme","title","badge_label","course","distance","stroke","achievement_time","achieved_date","active","updated_at"]);
+  add((appState.captures||[]).filter(row=>row.session_id===session?.id&&row.capture_type==="stroke_override"),["id","athlete_id","text_content","updated_at"]);
+  return v3144HashParts(parts);
 }
 function v3144ClockTokens(value){
   return String(value||"").split(/\s*[·|]\s*/).map(part=>{
@@ -12333,9 +12350,10 @@ function v3144ClockTokens(value){
     if(!matches?.length)return null;const token=matches.at(-1),seconds=Number(v3Seconds(token));return Number.isFinite(seconds)&&seconds>0?seconds:null;
   }).filter(value=>Number.isFinite(value));
 }
+function v3164PaceClock(seconds){const value=Number(seconds);if(!Number.isFinite(value))return"—";const rounded=Math.round(value*100)/100,minutes=Math.floor(rounded/60),secs=rounded-minutes*60;return minutes?`${minutes}:${secs.toFixed(2).padStart(5,"0")}`:rounded.toFixed(2)}
 function v3144RaceRange(primary){
   const values=[...new Set(v3144ClockTokens(primary).map(value=>Math.round(value*100)/100))].sort((a,b)=>a-b);
-  if(!values.length)return "";if(values.length===1)return v3140Clock(values[0]);return `${v3140Clock(values[0])}–${v3140Clock(values.at(-1))}`;
+  if(!values.length)return "";if(values.length===1)return v3164PaceClock(values[0]);return `${v3164PaceClock(values[0])}–${v3164PaceClock(values.at(-1))}`;
 }
 function v3144TargetCacheKey(session,block,item,blockIndex,itemIndex){
   return [session?.id,block?.id||blockIndex,v3140LineKey(block,item,blockIndex,itemIndex),v3144TargetCacheStamp(session)].join("|");
@@ -13125,3 +13143,352 @@ function v3151Brand(){
 v3150Brand=v3151Brand;v3144Brand=v3151Brand;v3143Brand=v3151Brand;v3142Brand=v3151Brand;v3141Brand=v3151Brand;v3140Brand=v3151Brand;
 window.v3151Debug={version:V3151_VERSION,build:V3151_BUILD,adapt:v3150AdaptItem,bestCase:v3151BestCaseSeconds,sequence:v3151SequenceLength};
 v3151Brand();setTimeout(v3151Brand,50);setTimeout(v3151Brand,1000);setTimeout(v3151Brand,7500);
+
+// =============================================================================
+// McLay Swimming OS v3.16.4 — VERIFIED PATHWAY + LIVE COVERAGE REPAIR
+// Built from the stable v3.15.1 base. One event resolver supplies swimmer
+// pathway cards, race-goal pacing and Board targets. Historical achievements
+// remain separate from current-age standards. Missing data is explained, not
+// hidden or guessed.
+// =============================================================================
+const V3163_VERSION="3.16.4";
+const V3163_BUILD="20260802-live-course-class-coverage";
+const V3163_UI_KEY="mclay_swimming_v3163_ui";
+const V3163_STANDARD_PAGE=1000;
+const v3163HydrateRuns=new Map();
+let v3163RestoringUi=false;
+let v3163HistoryApplying=false;
+let v3163ScrollTimer=null;
+let v3163ExitArmedAt=0;
+let v3163AllowExit=false;
+
+if(!Array.isArray(appState.athlete_achievements))appState.athlete_achievements=[];
+if(!CLOUD_TABLES.includes("athlete_achievements"))CLOUD_TABLES.push("athlete_achievements");
+if(typeof V3103_OPERATIONAL_TABLES!=="undefined"&&!V3103_OPERATIONAL_TABLES.includes("athlete_achievements"))V3103_OPERATIONAL_TABLES.push("athlete_achievements");
+
+function v3163Norm(value){return String(value??"").toLowerCase().replace(/&/g," and ").replace(/[–—]/g,"-").replace(/[^a-z0-9]+/g," ").trim()}
+function v3163ExplicitCourse(value){const course=v3Course(value);return course==="LCM"||course==="SCM"?course:""}
+function v3163Sex(value){const n=v3163Norm(value);if(["m","male","boy","boys","men"].includes(n))return"M";if(["f","female","girl","girls","women"].includes(n))return"F";if(["open","mixed","all"].includes(n))return"OPEN";return String(value||"").toUpperCase()}
+function v3163Seconds(...values){for(const value of values){const number=Number(value);if(Number.isFinite(number)&&number>0)return number;const parsed=Number(v3Seconds(value));if(Number.isFinite(parsed)&&parsed>0)return parsed}return NaN}
+function v3163Clock(seconds){return Number.isFinite(Number(seconds))?v3144CompactClock(Number(seconds)):"—"}
+function v3163Kind(row){const value=v3163Norm(`${row?.standard_kind||row?.kind||""} ${row?.programme||row?.record_scope||""}`);if(/record/.test(value))return"record";if(/target 2028|target 2032|squad|pathway target/.test(value))return"squad";if(/qualif|champ|nags|nzsc|division/.test(value))return"qualifying";return"performance"}
+function v3163StageLabel(row){return String(row?.programme||row?.record_scope||row?.standard_name||row?.name||"Loaded target").trim()}
+function v3163StageSeconds(row){return v3163Seconds(row?.qualifying_seconds,row?.record_seconds,row?.target_seconds,row?.qualifying_time_text,row?.record_time_text,row?.record_time,row?.target_time_text,row?.time_text)}
+function v3163StageTime(row,seconds){return String(row?.qualifying_time_text||row?.record_time_text||row?.record_time||row?.target_time_text||row?.time_text||v3163Clock(seconds))}
+function v3163Active(row,date=localIsoDate(new Date())){if(row?.active===false)return false;const status=v3163Norm(row?.version_status||row?.status);if(["inactive","rolled back","superseded","draft","archived"].includes(status))return false;if(row?.effective_from&&String(row.effective_from)>date)return false;if(row?.effective_to&&String(row.effective_to)<date)return false;return true}
+function v3163AgeBounds(row){if(typeof v3106AgeBounds==="function")return v3106AgeBounds(row);let min=Number.isFinite(Number(row?.age_min))?Number(row.age_min):null,max=Number.isFinite(Number(row?.age_max))?Number(row.age_max):null;const text=v3163Norm(row?.age_group||row?.age);if(min===null&&max===null&&text&&!/open|all ages|senior/.test(text)){let match=text.match(/^(\d+)$/);if(match)min=max=Number(match[1]);else if((match=text.match(/(\d+)\s*(?:-|to)\s*(\d+)/))){min=Number(match[1]);max=Number(match[2])}else if((match=text.match(/(\d+)\s*(?:and )?under|under\s*(\d+)|u\s*(\d+)/)))max=Number(match[1]||match[2]||match[3]);else if((match=text.match(/(\d+)\s*(?:and )?over|over\s*(\d+)/)))min=Number(match[1]||match[2])}return{min,max}}
+function v3163AgeDate(row){const kind=v3163Kind(row);if(kind==="record"||kind==="squad")return localIsoDate(new Date());return row?.age_date||row?.meet_date||localIsoDate(new Date())}
+function v3163Targetable(row,date=localIsoDate(new Date())){const kind=v3163Kind(row);if(kind==="record"||kind==="squad"||kind==="performance")return true;const meet=String(row?.meet_date||"");return !meet||meet>=date}
+function v3163ActualClass(athlete,stroke){return String(v3ParaClassForEvent(athlete,v3Stroke(stroke))||"").toUpperCase()}
+function v3163ClassParts(value){const text=String(value||"").toUpperCase().replace(/\s+/g,"").replace(/^(S|SB|SM)(\d+)-(?:S|SB|SM)?(\d+)$/,"$1$2-$3"),match=text.match(/^(SB|SM|S)(\d+)(?:-(\d+))?$/);return match?{prefix:match[1],min:Number(match[2]),max:Number(match[3]||match[2]),text}:null}
+function v3163ClassMatches(required,actual){const req=v3163ClassParts(required),act=v3163ClassParts(actual);if(req&&act)return req.prefix===act.prefix&&act.min>=req.min&&act.min<=req.max;return String(required||"").toUpperCase()===String(actual||"").toUpperCase()}
+function v3163ProfileWarning(athlete){const s=v3163ClassParts(athlete?.current_s_class),sb=v3163ClassParts(athlete?.current_sb_class),sm=v3163ClassParts(athlete?.current_sm_class);if(s&&sb&&sm&&s.min===sb.min&&s.min>=18&&sm.min!==s.min)return`${sm.text} differs from ${s.text}/${sb.text} — check the swimmer’s IM classification`;return""}
+function v3163StandardReason(row,athlete,pb){
+  if(!v3163Active(row))return"inactive version";
+  if(Number(row?.distance)!==Number(pb?.distance)||v3Stroke(row?.stroke)!==v3Stroke(pb?.stroke))return"event";
+  const rowCourse=v3Course(row?.course||"BOTH"),pbCourse=v3163ExplicitCourse(pb?.course);if(!pbCourse)return"missing course";if(rowCourse!=="BOTH"&&rowCourse!==""&&rowCourse!==pbCourse)return"course";
+  const requiredSex=v3163Sex(row?.sex),actualSex=v3163Sex(athlete?.sex);if(requiredSex&&requiredSex!=="OPEN"&&requiredSex!==actualSex)return actualSex?"sex":"missing sex";
+  const requiredClass=String(row?.para_class||row?.classification||"").toUpperCase(),actualClass=v3163ActualClass(athlete,pb?.stroke);
+  if(requiredClass){if(!actualClass)return"missing classification";if(!v3163ClassMatches(requiredClass,actualClass))return"classification"}else if(actualClass)return"para standard";
+  const {min,max}=v3163AgeBounds(row),age=v3Age(athlete,v3163AgeDate(row));if((min!==null||max!==null)&&age===null)return"missing DOB";if(age!==null&&((min!==null&&age<min)||(max!==null&&age>max)))return"age";
+  return"match";
+}
+
+function v3163ResultEvidence(athleteId){const rows=[];for(const raw of [...(appState.coach_results||[]),...(appState.results_event_history||[])]){if(raw?.athlete_id!==athleteId||raw?.excluded_from_pb===true)continue;const course=v3163ExplicitCourse(raw?.course||raw?.pool_course||raw?.pool_length),stroke=v3Stroke(raw?.stroke||raw?.event_stroke||raw?.event),distance=Number(raw?.distance||raw?.event_distance),seconds=v3163Seconds(raw?.result_seconds,raw?.result_time_seconds,raw?.pb_seconds,raw?.result_time_text,raw?.pb_time,raw?.time_text);if(course&&stroke&&distance&&Number.isFinite(seconds))rows.push({course,stroke,distance,seconds,source_file:String(raw?.source_file||""),meet_name:String(raw?.meet_name||"")})}return rows}
+function v3163InferCourse(raw,athleteId,distance,stroke,seconds,evidence=null){const stated=v3163ExplicitCourse(raw?.course||raw?.pool_course||raw?.pool_length);if(stated)return{course:stated,source:"stated"};if(!athleteId||!distance||!stroke||!Number.isFinite(seconds))return{course:"",source:""};const exact=new Set((evidence||v3163ResultEvidence(athleteId)).filter(row=>row.distance===distance&&row.stroke===stroke&&Math.abs(row.seconds-seconds)<.005).map(row=>row.course));if(exact.size===1)return{course:[...exact][0],source:"exact official result"};return{course:"",source:exact.size>1?"ambiguous exact official results":""}}
+function v3163PbRow(raw,source="result",athleteId=raw?.athlete_id,evidence=null){
+  const stroke=v3Stroke(raw?.stroke||raw?.event_stroke||raw?.event),distance=Number(raw?.distance||raw?.event_distance),seconds=v3163Seconds(raw?.pb_seconds,raw?.result_seconds,raw?.result_time_seconds,raw?.best_time_seconds,raw?.pb_time,raw?.result_time_text,raw?.best_time_text),inferred=v3163InferCourse(raw,athleteId,distance,stroke,seconds,evidence);
+  return {...raw,course:inferred.course,course_inference_source:inferred.source==="stated"?"":inferred.source,stroke,distance,result_seconds:seconds,result_time_text:raw?.pb_time||raw?.result_time_text||raw?.best_time_text||v3163Clock(seconds),result_date:raw?.pb_date||raw?.result_date||raw?.best_date||"",meet_name:raw?.meet_name||raw?.source_label||"",source_type:source};
+}
+function v3163PbInventory(athlete){
+  const candidates=[],evidence=v3163ResultEvidence(athlete.id);
+  for(const raw of appState.results_pb_board||[])if(raw.athlete_id===athlete.id)candidates.push(v3163PbRow(raw,"official-pb",athlete.id,evidence));
+  for(const raw of appState.coach_results||[])if(raw.athlete_id===athlete.id&&raw.excluded_from_pb!==true)candidates.push(v3163PbRow(raw,raw.source_type||"coach",athlete.id,evidence));
+  const valid=[],unresolved=[];
+  for(const row of candidates){if(!Number.isFinite(row.result_seconds)||!row.distance||!row.stroke)continue;if(!row.course){unresolved.push(row);continue}valid.push(row)}
+  const best=new Map();for(const row of valid){const key=`${row.course}|${row.distance}|${row.stroke}`,prior=best.get(key),same=prior&&Math.abs(row.result_seconds-prior.result_seconds)<.001,richer=same&&((row.result_date&&!prior.result_date)||(Boolean(row.result_date)===Boolean(prior.result_date)&&v3Points(row)>v3Points(prior)));if(!prior||row.result_seconds<prior.result_seconds-.001||richer)best.set(key,row)}
+  const resolvedTimes=new Set([...best.values()].map(row=>`${row.distance}|${row.stroke}|${Number(row.result_seconds).toFixed(3)}`)),unresolvedBest=new Map();for(const row of unresolved){const resolvedKey=`${row.distance}|${row.stroke}|${Number(row.result_seconds).toFixed(3)}`;if(resolvedTimes.has(resolvedKey))continue;const key=`${row.distance}|${row.stroke}`,prior=unresolvedBest.get(key);if(!prior||row.result_seconds<prior.result_seconds)unresolvedBest.set(key,row)}
+  return {pbs:[...best.values()].sort((a,b)=>Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke))||String(a.course).localeCompare(String(b.course))),unresolved:[...unresolvedBest.values()].sort((a,b)=>Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke)))};
+}
+v3140Pbs=function(athlete){return v3163PbInventory(athlete).pbs};
+athleteOfficialPbs=function(athleteId){const athlete=(appState.athletes||[]).find(row=>row.id===athleteId);return athlete?v3163PbInventory(athlete).pbs:[]};
+v382PbFor=function(athlete,course,distance,stroke){return v3163PbInventory(athlete).pbs.find(row=>row.course===v3163ExplicitCourse(course)&&Number(row.distance)===Number(distance)&&row.stroke===v3Stroke(stroke))||null};
+
+function v3163FallbackRecordStages(athlete,pb){return (appState.results_record_gaps||[]).filter(row=>row.athlete_id===athlete.id&&v3163ExplicitCourse(row.course)===pb.course&&Number(row.distance)===Number(pb.distance)&&v3Stroke(row.stroke)===pb.stroke).map(row=>{const bounds=v3163AgeBounds(row);return{order:Number(row.progression_order)||(/nz record/i.test(String(row.record_scope||""))?10:9),name:row.record_scope||"Record",target:row.record_time_text||row.record_time||v3163Clock(row.record_seconds),targetSeconds:v3163Seconds(row.record_seconds,row.record_time_text,row.record_time),ceilingSeconds:null,kind:"record",ageGroup:String(row.age_group||""),ageSpecific:bounds.min!==null||bounds.max!==null,targetable:true,source:row}})}
+function v3163Stages(athlete,pb){
+  const stages=[];
+  for(const row of appState.pathway_standards||[]){if(v3163StandardReason(row,athlete,pb)!=="match")continue;const seconds=v3163StageSeconds(row);if(!Number.isFinite(seconds))continue;const bounds=v3163AgeBounds(row);stages.push({order:Number(row.progression_order)||100,name:v3163StageLabel(row),target:v3163StageTime(row,seconds),targetSeconds:seconds,ceilingSeconds:Number(row.ceiling_seconds)||null,kind:v3163Kind(row),ageGroup:String(row.age_group||""),ageSpecific:bounds.min!==null||bounds.max!==null,targetable:v3163Targetable(row),source:row})}
+  if(!stages.some(stage=>stage.kind==="record"))stages.push(...v3163FallbackRecordStages(athlete,pb));
+  const unique=new Map();for(const stage of stages){if(!Number.isFinite(stage.targetSeconds))continue;const key=`${v3163Norm(stage.name)}|${stage.targetSeconds.toFixed(3)}|${stage.ageGroup}`;const prior=unique.get(key);if(!prior||stage.order>prior.order)unique.set(key,stage)}
+  const rows=[...unique.values()],ageSpecificRecords=new Set(rows.filter(stage=>stage.kind==="record"&&stage.ageSpecific).map(stage=>v3163Norm(stage.name)));return rows.filter(stage=>!(stage.kind==="record"&&!stage.ageSpecific&&ageSpecificRecords.has(v3163Norm(stage.name)))).sort((a,b)=>b.targetSeconds-a.targetSeconds||a.order-b.order||a.name.localeCompare(b.name));
+}
+function v3163StageState(stage,pbSeconds){
+  const division=/division ii/.test(v3163Norm(stage.name));if(division&&stage.ceilingSeconds){if(pbSeconds<=stage.ceilingSeconds)return"outgrown";if(pbSeconds<=stage.targetSeconds)return"achieved";return"unmet"}
+  return pbSeconds<=stage.targetSeconds?"achieved":"unmet";
+}
+function v3163AchievementEvent(row){
+  const all=[row?.event,row?.event_name,row?.badge_label,row?.title,row?.achievement_type,row?.programme,row?.notes].filter(Boolean).join(" "),course=v3163ExplicitCourse(row?.course||row?.pool_course||all),distance=Number(row?.distance||row?.event_distance||String(all).match(/\b(50|100|200|400|800|1500)\b/)?.[1]),stroke=v3Stroke(row?.stroke||row?.event_stroke||all),embeddedTime=String(all).match(/\b(?:\d{1,2}:)?\d{1,2}:\d{2}(?:\.\d+)?\b/)?.[0],seconds=v3163Seconds(row?.achievement_seconds,row?.result_seconds,row?.pb_seconds,row?.time_seconds,row?.achievement_time,row?.result_time_text,row?.pb_time,row?.time_text,embeddedTime);
+  return {course,distance,stroke,seconds};
+}
+function v3163HistoricalRecordLabel(row){const base=v3163StageLabel(row),age=String(row?.age_group||"").trim();if(!age||!/^(?:\d+)$/.test(age))return base;return /record$/i.test(base)?base.replace(/record$/i,`${age}Y record`):`${base} ${age}Y`}
+function v3163HistoricalDerived(){return[]}
+function v3163HistoricalForEvent(athlete,pb){const explicit=(appState.athlete_achievements||[]).filter(row=>row.athlete_id===athlete.id&&v3163Active(row)).map(row=>({row,event:v3163AchievementEvent(row)})).filter(({event})=>event.course===pb.course&&event.distance===pb.distance&&event.stroke===pb.stroke).map(({row,event})=>({name:String(row.badge_label||row.title||row.achievement_type||row.programme||"Achievement"),time:String(row.achievement_time||row.result_time_text||row.pb_time||row.time_text||(Number.isFinite(event.seconds)?v3163Clock(event.seconds):"")),date:String(row.achieved_date||row.result_date||row.effective_year||""),source:row,derived:false})),unique=new Map();for(const item of explicit){const key=`${v3163Norm(item.name)}|${v3163Seconds(item.time)||""}`;if(!unique.has(key))unique.set(key,item)}return [...unique.values()]}
+function v3163ManualGoal(athlete,pb){const goal=(appState.race_goals||[]).filter(row=>row.athlete_id===athlete.id&&!/archive/.test(v3163Norm(row.status))&&v3163ExplicitCourse(row.course)===pb.course&&Number(row.distance)===pb.distance&&v3Stroke(row.stroke)===pb.stroke).sort(byUpdated)[0];if(!goal)return null;const seconds=v3163Seconds(goal.target_seconds,goal.target_time_text);return Number.isFinite(seconds)&&seconds<Number(pb.result_seconds)?{name:goal.basis||"Coach goal",target:goal.target_time_text||v3163Clock(seconds),targetSeconds:seconds,gap:Number(pb.result_seconds)-seconds,kind:"coach",source:goal}:null}
+function v3163Diagnostic(athlete,pb){
+  if(!pb.course)return"Course missing — no unique official-result match was found";
+  const active=(appState.pathway_standards||[]).filter(row=>v3163Active(row));if(!active.length)return"Standards are not loaded — tap Load pathway data";
+  const eventRows=active.filter(row=>Number(row.distance)===Number(pb.distance)&&v3Stroke(row.stroke)===pb.stroke);if(!eventRows.length)return"No standard is published for this event";
+  const relevant=eventRows.filter(row=>{const rc=v3Course(row?.course||"BOTH"),sex=v3163Sex(row?.sex),actualSex=v3163Sex(athlete?.sex);return(rc==="BOTH"||rc===""||rc===pb.course)&&(!sex||sex==="OPEN"||sex===actualSex)}),actualClass=v3163ActualClass(athlete,pb.stroke);
+  if(actualClass&&!relevant.some(row=>{const required=String(row?.para_class||row?.classification||"").toUpperCase();return required&&v3163ClassMatches(required,actualClass)}))return`No published ${actualClass} standard for ${pb.distance} ${pb.stroke}`;
+  const reasons=new Set(eventRows.map(row=>v3163StandardReason(row,athlete,pb)));if(reasons.has("para standard")&&actualClass)return`No published ${actualClass} standard for ${pb.distance} ${pb.stroke}`;if(reasons.has("missing classification"))return"Classification is required for this event";if(reasons.has("missing DOB"))return"Date of birth is required for age-group targets";if(reasons.has("course"))return`No ${pb.course} standard is loaded for this event`;if(reasons.has("age"))return"No standard applies at the swimmer’s current/meet age";if(reasons.has("sex"))return"No standard matches the swimmer’s sex category";return"No applicable active standard is loaded";
+}
+function v3163ResolveEvent(athlete,pb){
+  const pbSeconds=Number(pb.result_seconds),stages=v3163Stages(athlete,pb),historical=v3163HistoricalForEvent(athlete,pb),achievedStages=stages.filter(stage=>["achieved","outgrown"].includes(v3163StageState(stage,pbSeconds))),allUnmet=stages.filter(stage=>v3163StageState(stage,pbSeconds)==="unmet"&&stage.targetSeconds<pbSeconds),unmet=allUnmet.filter(stage=>stage.targetable!==false);
+  const achieved=achievedStages.slice().sort((a,b)=>b.order-a.order||a.targetSeconds-b.targetSeconds||a.name.localeCompare(b.name)),current=achieved[0]||null;
+  const orderedUnmet=unmet.slice().sort((a,b)=>b.targetSeconds-a.targetSeconds||b.order-a.order||a.name.localeCompare(b.name));
+  const manual=v3163ManualGoal(athlete,pb),next=manual||orderedUnmet[0]||null;
+  let bridge=null,stretch=null;if(next){const faster=orderedUnmet.filter(stage=>stage!==next&&stage.targetSeconds<next.targetSeconds-.005),nextOrder=Number(next.order)||0,higher=faster.filter(stage=>(Number(stage.order)||0)>nextOrder);if(higher.length){const firstHigherOrder=Math.min(...higher.map(stage=>Number(stage.order)||0));stretch=higher.filter(stage=>(Number(stage.order)||0)===firstHigherOrder).sort((a,b)=>b.targetSeconds-a.targetSeconds)[0]||null}else stretch=faster[0]||null;if(stretch)bridge=faster.filter(stage=>stage!==stretch&&stage.targetSeconds>stretch.targetSeconds+.005).sort((a,b)=>b.targetSeconds-a.targetSeconds)[0]||null}
+  const unit=50,currentPace=pbSeconds/Number(pb.distance)*unit,targetPace=next?next.targetSeconds/Number(pb.distance)*unit:NaN,paceRange=Number.isFinite(targetPace)?{unit,current:currentPace,target:targetPace,low:Math.min(currentPace,targetPace),high:Math.max(currentPace,targetPace)}:null;
+  let diagnostic="";if(!next){if(!stages.length)diagnostic=v3163Diagnostic(athlete,pb);else if(allUnmet.length)diagnostic="No current future target is loaded for this event";else diagnostic="Highest applicable loaded target achieved"}
+  return {pb,stages,historical,achieved,current,next:next?{...next,gap:pbSeconds-next.targetSeconds}:null,bridge:bridge?{...bridge,gap:pbSeconds-bridge.targetSeconds}:null,stretch:stretch?{...stretch,gap:pbSeconds-stretch.targetSeconds}:null,paceRange,diagnostic};
+}
+v3TargetStages=function(athlete,pb){return v3163Stages(athlete,pb)};
+v3Pathway=function(athlete,pb){const resolved=v3163ResolveEvent(athlete,pb);return {achieved:resolved.achieved.map(stage=>stage.name),achievedStages:resolved.achieved,highest:resolved.current,next:resolved.next,bridge:resolved.bridge,stretch:resolved.stretch,historical:resolved.historical,paceRange:resolved.paceRange,diagnostic:resolved.diagnostic,stages:resolved.stages}};
+v382GoalFor=function(athlete,pb,course,distance,stroke){const exact=pb||v382PbFor(athlete,course,distance,stroke);if(!exact)return null;const resolved=v3163ResolveEvent(athlete,exact),goal=resolved.next;return goal?{seconds:Number(goal.targetSeconds),label:goal.name||"Next target",splits:Array.isArray(goal.source?.target_splits)?goal.source.target_splits:[],splitDistance:Number(goal.source?.split_distance)||null,source:goal.kind||"pathway"}:null};
+
+// Final Board race output uses the same resolved next target as the swimmer pathway.
+// The existing race calculator still translates whole-race totals into the exact
+// segment requested by the set; only the source and presentation are unified here.
+const v3164RaceTargetBase=v3150RaceTarget;
+v3150RaceTarget=function(athlete,item,block,session,resolvedStroke){
+  const base=v3164RaceTargetBase(athlete,item,block,session,resolvedStroke),spec=v3150EventSpec(item,block,session,resolvedStroke);if(!base||base.status!=="ok"||!spec.eventDistance||!spec.repDistance)return base;
+  const pb=v382PbFor(athlete,spec.course,spec.eventDistance,spec.eventStroke);if(!pb?.result_seconds)return base;
+  const goal=v3150GoalFor(athlete,pb,spec.course,spec.eventDistance,spec.eventStroke),args={sex:v3150Sex(athlete),eventDistance:spec.eventDistance,eventStroke:spec.eventStroke,repDistance:spec.repDistance,line:spec.line,resolvedStroke};
+  const segment=total=>v3150TargetFromTotal(Number(total),args)||v3150FallbackTarget(Number(total),spec.eventDistance,spec.repDistance),pbSegment=segment(pb.result_seconds),goalSegment=goal?.seconds?segment(goal.seconds):null;
+  if(!pbSegment?.seconds)return base;
+  const pbPace=Number(pbSegment.seconds),targetPace=Number(goalSegment?.seconds),goalLabel=String(goal?.label||"Next target"),hasTarget=Number.isFinite(targetPace)&&targetPace>0;
+  return {...base,targetSeconds:hasTarget?targetPace:pbPace,currentSeconds:pbPace,targetRangeText:hasTarget?`${v3164PaceClock(Math.min(targetPace,pbPace))}–${v3164PaceClock(Math.max(targetPace,pbPace))}`:v3164PaceClock(pbPace),primary:hasTarget?`PB ${v3164PaceClock(pbPace)} · ${goalLabel} ${v3164PaceClock(targetPace)}`:`PB ${v3164PaceClock(pbPace)}`,secondary:hasTarget?`${spec.course} ${spec.eventDistance} ${spec.eventStroke} · PB ${pb.result_time_text||v3163Clock(pb.result_seconds)} · target ${v3163Clock(goal.seconds)}`:`${spec.course} ${spec.eventDistance} ${spec.eventStroke} · PB ${pb.result_time_text||v3163Clock(pb.result_seconds)}`,source:`Unified pathway · ${goalSegment?.method||pbSegment.method||base.source||"race segment"}`};
+};
+
+function v3163AchievementText(row){const event=v3163AchievementEvent(row),parts=[row.badge_label||row.title||row.achievement_type||row.programme||"Achievement"];if(event.course&&event.distance&&event.stroke)parts.push(`${event.course} ${event.distance} ${event.stroke}`);if(Number.isFinite(event.seconds))parts.push(v3163Clock(event.seconds));if(row.achieved_date||row.result_date||row.effective_year)parts.push(row.achieved_date||row.result_date||row.effective_year);return parts.filter(Boolean).join(" · ")}
+function v3163EventHtml(resolved){
+  const {pb,historical,current,next,bridge,stretch,paceRange}=resolved,achievements=[...historical.map(row=>row.name+(row.time?` ${row.time}`:"")),...(current?[`${current.name} achieved`]:[])];
+  return `<article class="v3163-event"><header><strong>${escapeHtml(`${pb.course} ${pb.distance} ${pb.stroke}`)}</strong><span>PB ${escapeHtml(pb.result_time_text||v3163Clock(pb.result_seconds))}</span></header>${achievements.length?`<div class="v3163-milestone"><span>Current / achieved</span><strong>${escapeHtml([...new Set(achievements)].join(" · "))}</strong></div>`:""}${next?`<div class="v3163-target"><span>Next target</span><strong>${escapeHtml(next.name)} · ${escapeHtml(next.target||v3163Clock(next.targetSeconds))}</strong><b>${Number(next.gap).toFixed(2)}s</b></div>`:`<div class="v3163-target missing"><span>Next target</span><strong>${escapeHtml(resolved.diagnostic||"Highest applicable loaded target achieved")}</strong></div>`}${bridge?`<div class="v3163-bridge"><span>Then</span><strong>${escapeHtml(bridge.name)} · ${escapeHtml(bridge.target||v3163Clock(bridge.targetSeconds))}</strong><b>${Number(bridge.gap).toFixed(2)}s</b></div>`:""}${stretch?`<div class="v3163-stretch"><span>Stretch</span><strong>${escapeHtml(stretch.name)} · ${escapeHtml(stretch.target||v3163Clock(stretch.targetSeconds))}</strong><b>${Number(stretch.gap).toFixed(2)}s</b></div>`:""}${paceRange?`<div class="v3163-pace"><span>Deck pace /50</span><strong>${escapeHtml(`${v3164PaceClock(paceRange.low)}–${v3164PaceClock(paceRange.high)}`)}</strong><small>target ${escapeHtml(v3164PaceClock(paceRange.target))} · current PB ${escapeHtml(v3164PaceClock(paceRange.current))}</small></div>`:""}</article>`;
+}
+function v3163PathwayHtml(athlete){
+  const inventory=v3163PbInventory(athlete),resolved=inventory.pbs.map(pb=>v3163ResolveEvent(athlete,pb)),allAchievements=(appState.athlete_achievements||[]).filter(row=>row.athlete_id===athlete.id&&v3163Active(row)),eventAchievementRows=new Set(resolved.flatMap(result=>result.historical.map(item=>item.source))),otherAchievements=allAchievements.filter(row=>!eventAchievementRows.has(row));
+  const standards=(appState.pathway_standards||[]).length,records=(appState.results_record_gaps||[]).filter(row=>row.athlete_id===athlete.id).length,squadStages=resolved.flatMap(result=>result.achieved.filter(stage=>stage.kind==="squad")).sort((a,b)=>b.order-a.order||a.targetSeconds-b.targetSeconds),squadLevel=squadStages[0]||null,profileWarning=v3163ProfileWarning(athlete);
+  return `<details class="v3163-pathway" data-v3163-state="pathway"><summary><span><strong>Performance pathway</strong><small>${resolved.length} PB event${resolved.length===1?"":"s"} · ${standards?`${standards.toLocaleString()} standards`:`standards not loaded`} · ${records} record comparisons</small></span><b>＋</b></summary><div class="v3163-pathway-body">${profileWarning?`<div class="v3163-profile-warning"><strong>Classification check</strong><span>${escapeHtml(profileWarning)}</span></div>`:""}${squadLevel?`<div class="v3163-overall-level"><span>Highest squad standard achieved</span><strong>${escapeHtml(squadLevel.name)}</strong></div>`:""}${!standards?`<div class="v3163-data-action"><strong>Pathway standards have not loaded on this device.</strong><button type="button" data-v3163-load-pathway>Load pathway data</button></div>`:""}${otherAchievements.length?`<details class="v3163-history"><summary><strong>Other historical achievements</strong><span>${otherAchievements.length}</span></summary>${otherAchievements.map(row=>`<div class="mini-result"><strong>${escapeHtml(v3163AchievementText(row))}</strong></div>`).join("")}</details>`:""}<div class="v3163-events">${resolved.map(v3163EventHtml).join("")||'<div class="help">No verified PB events are available.</div>'}</div>${inventory.unresolved.length?`<details class="v3163-data-issues"><summary><strong>PBs still needing a course</strong><span>${inventory.unresolved.length} unresolved</span></summary>${inventory.unresolved.map(pb=>`<div class="mini-result"><strong>${escapeHtml(`${pb.distance} ${pb.stroke} · ${pb.result_time_text}`)}</strong><span>${escapeHtml(pb.course_inference_source||"No unique exact official-result match — set SCM or LCM before using a target.")}</span></div>`).join("")}</details>`:""}</div></details>`;
+}
+
+const v3163RenderAthleteHubBase=renderAthleteResultsHub;
+renderAthleteResultsHub=function(athlete){
+  const hub=$("athleteResultsHub");if(!hub||!athlete)return;$("athleteResultsHubTitle").textContent=`${athlete.full_name} · performance pathway`;
+  const summary=v3144CachedSummary(athlete),inventory=v3163PbInventory(athlete),historyCount=summary.races||athleteHistory(athlete.id).length;
+  hub.innerHTML=`<div class="v3144-athlete-hub-summary"><span><b>${historyCount||0}</b> races</span><span><b>${inventory.pbs.length}</b> PB events</span><span><b>${escapeHtml(summary.latest||"No latest meet cached")}</b></span></div>${v3163PathwayHtml(athlete)}${v3144LazyAthleteSection("pbs","Official PBs",inventory.pbs.length?`${inventory.pbs.length} events`:"None loaded")}${v3144LazyAthleteSection("history","Race history",historyCount?`${historyCount} races`:"Not cached")}<details class="v3163-edit-link"><summary><strong>Full results and record detail</strong><span>Open only when needed</span></summary>${v3144LazyAthleteSection("records","Relevant records",(appState.results_record_gaps||[]).filter(row=>row.athlete_id===athlete.id).length?"Available":"No match")}</details>`;
+  hub.querySelectorAll("details").forEach(details=>details.addEventListener("toggle",()=>{const marker=details.querySelector(":scope > summary > b");if(marker)marker.textContent=details.open?"−":"＋";if(details.classList.contains("v3144-athlete-detail")&&details.open)v3144PopulateAthleteSection(details,athlete)}));
+  // Hub hydration/re-render must not silently collapse the panel the coach was using.
+  if(document.querySelector(".view.active")?.id==="athletes")requestAnimationFrame(()=>{const ui={...v3163ReadUi(),...(history.state?.mclay&&history.state.ui?history.state.ui:{})};v3163ApplyDetails(ui)});
+};
+
+async function v3163FetchPages(path,pageSize=V3163_STANDARD_PAGE,maxRows=10000){const rows=[];for(let offset=0;offset<maxRows;offset+=pageSize){const separator=path.includes("?")?"&":"?",page=await cloudFetch(`${path}${separator}offset=${offset}&limit=${pageSize}`);rows.push(...(page||[]));if(!page||page.length<pageSize)break}return rows}
+function v3163MergeAthleteRows(table,athleteId,rows){const other=(appState[table]||[]).filter(row=>row.athlete_id!==athleteId);appState[table]=other.concat((rows||[]).map(stripCloudFields))}
+async function v3163HydrateSelectedAthlete(force=false){
+  const athleteId=appState.settings.selected_athlete_id;if(!athleteId)return false;const existing=v3163HydrateRuns.get(athleteId);if(existing)return existing;
+  const last=Number(appState.settings[`v3163_athlete_loaded_${athleteId}`]||0),hasPb=(appState.results_pb_board||[]).some(row=>row.athlete_id===athleteId);if(!force&&hasPb&&Date.now()-last<15*60*1000)return true;
+  const run=(async()=>{let changed=false;try{if(typeof v3103HydrateResults==="function")await v3103HydrateResults({all:false,render:false,force:true});if(!cloudReady())return false;const org=encodeURIComponent(appState.settings.organisation_id),ath=encodeURIComponent(athleteId),queries=[
+    ["results_athlete_overview",`/rest/v1/results_athlete_overview?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],
+    ["results_pb_board",`/rest/v1/results_pb_board?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],
+    ["results_event_history",`/rest/v1/results_event_history?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}&order=result_date.desc`],
+    ["results_record_gaps",`/rest/v1/results_record_gaps?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],
+    ["athlete_achievements",`/rest/v1/athlete_achievements?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],
+    ["training_test_results",`/rest/v1/training_test_results?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}&order=result_date.desc`]
+  ];
+  const settled=await Promise.allSettled(queries.map(async([table,url])=>[table,await cloudFetch(url)]));for(const result of settled){if(result.status!=="fulfilled")continue;const [table,rows]=result.value;v3163MergeAthleteRows(table,athleteId,rows);changed=true}
+  const needT400References=force||!v380T400Type()||!(appState.training_pace_models||[]).some(row=>row.model_key==="t400"&&row.active!==false);
+  if(needT400References){
+    const references=await Promise.allSettled([
+      cloudFetch(`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}&active=eq.true`),
+      cloudFetch(`/rest/v1/training_pace_models?select=*&organisation_id=eq.${org}&active=eq.true`)
+    ]);
+    for(const [index,result] of references.entries()){if(result.status!=="fulfilled")continue;const table=index===0?"training_test_types":"training_pace_models",merged=new Map((appState[table]||[]).map(row=>[row.id,row]));for(const row of result.value||[])merged.set(row.id,stripCloudFields(row));appState[table]=[...merged.values()];changed=true}
+  }
+  const standardsAge=Number(appState.settings.v3163_standards_loaded_at||0),needStandards=force||!(appState.pathway_standards||[]).length||Date.now()-standardsAge>24*60*60*1000;if(needStandards){try{const standards=await v3163FetchPages("/rest/v1/pathway_standards?select=*&active=eq.true&order=progression_order.asc,id.asc",1000,6000);if(standards.length){appState.pathway_standards=standards.map(stripCloudFields);appState.settings.v3163_standards_loaded_at=Date.now();changed=true}}catch(error){console.warn("Pathway standards refresh deferred",error)}}
+  if(changed){appState.settings[`v3163_athlete_loaded_${athleteId}`]=Date.now();saveState(appState);window.v374ScheduleHeavyCache?.(appState);V3144_TARGET_CACHE?.clear?.();if(document.querySelector(".view.active")?.id==="athletes"&&appState.settings.selected_athlete_id===athleteId)renderAthletes()}return changed}catch(error){console.warn("Selected swimmer pathway refresh deferred",error);return false}finally{v3163HydrateRuns.delete(athleteId)}})();v3163HydrateRuns.set(athleteId,run);return run;
+}
+v3127HydrateSelectedAthlete=v3163HydrateSelectedAthlete;
+
+document.addEventListener("click",event=>{const button=event.target.closest("[data-v3163-load-pathway]");if(!button)return;button.disabled=true;button.textContent="Loading…";v3163HydrateSelectedAthlete(true).finally(()=>{button.disabled=false;button.textContent="Load pathway data"})},true);
+
+function v3163T400Label(athlete){const anchor=athlete?v380T400Anchor(athlete.id):null;if(!anchor)return"No current Lee T400";return [v380Clock(anchor.result_seconds),anchor.pool_course||"course not stated",v380Period(anchor),anchor.source_label].filter(Boolean).join(" · ")}
+const v3163QuickProfileBase=v3144QuickProfileHtml;
+v3144QuickProfileHtml=function(athlete){const html=v3163QuickProfileBase(athlete),label=escapeHtml(v3163T400Label(athlete));return html.replace(/(<span>Lee T400<\/span><strong>)[\s\S]*?(<\/strong>)/,"$1"+label+"$2")};
+athleteQuickHtml=v3144QuickProfileHtml;
+
+// Ordinary modified repeats stay on complete 25 m pool lengths. Deliberate
+// short sprint/underwater work already entered as a partial distance is retained.
+v3151StandardDistance=function(value,maximum=Infinity){const options=[25,50,75,100,125,150,200,250,300,400,500,600,800,1000,1500].filter(distance=>distance<=maximum);if(!options.length)return Math.max(1,Math.min(Number(maximum)||Number(value)||1,Math.round(Number(value)||1)));const target=Math.max(1,Number(value)||1);return options.slice().sort((a,b)=>Math.abs(a-target)-Math.abs(b-target)||b-a)[0]};
+const v3163AdaptBase=v3150AdaptItem;
+v3150AdaptItem=function(athlete,session,block,item,profile){const original=v3129LineText(item),deliberate=/\b(underwater|breakout|burst|sprint\s+to|to\s+(?:10|15|20)m?|(?:10|15|20)m)\b/i.test(original)||Number(item?.distance)<25;let output=v3163AdaptBase(athlete,session,block,item,profile);if(!deliberate)output=output.replace(/(\d+\s*[x×]\s*)(?:15|20|35)\b/ig,"$125");return output};
+
+// Exact phone context: current view, swimmer, session, squad, Board mode, active
+// block/line, expanded panels and per-view scroll. Every history entry is a
+// complete UI snapshot. Before a new entry is pushed, the entry being left is
+// replaced with its latest state so native Back can restore it exactly.
+function v3163ReadUi(){try{return JSON.parse(localStorage.getItem(V3163_UI_KEY)||"{}")||{}}catch{return{}}}
+function v3163DetailsKey(details,index){if(details.id)return`#${CSS.escape(details.id)}`;for(const name of ["v3163State","v3144AthleteDetail","v3127Lazy","v35DeckBlock","v3129TargetDetail"]){if(details.dataset[name]!==undefined){const attr=name.replace(/[A-Z]/g,char=>`-${char.toLowerCase()}`);return`[data-${attr}=\"${CSS.escape(details.dataset[name])}\"]`}}const text=String(details.querySelector(":scope > summary")?.textContent||"").replace(/\s+/g," ").trim().slice(0,90);return text?`summary:${text}`:`index:${index}`}
+function v3163OpenDetailKeys(){return [...document.querySelectorAll(".view.active details[open]")].map(v3163DetailsKey)}
+function v3163Snapshot(overrides={}){const view=overrides.view||document.querySelector(".view.active")?.id||"deck",stored=v3163ReadUi(),entry=history.state?.mclay&&history.state.ui?history.state.ui:{},prior={...stored,...entry},priorScroll={...(stored.scroll||{}),...(entry.scroll||{})};return {...prior,view,selected_session_id:appState.settings.selected_session_id||"",selected_squad:appState.settings.selected_squad||"",selected_athlete_id:appState.settings.selected_athlete_id||"",board_mode:appState.settings.v3126_board_mode||"whole",active_block_index:Number(appState.settings.v3129_active_block_index)||0,active_pace_key:appState.settings.v382_active_pace_key||"",open_details:overrides.open_details??v3163OpenDetailKeys(),scroll:{...priorScroll,[view]:overrides.scrollTop??Math.max(0,Math.round(window.scrollY||0))},detail_entry_key:overrides.detail_entry_key!==undefined?overrides.detail_entry_key:(prior.detail_entry_key||null),saved_at:Date.now(),...overrides}}
+function v3163PersistUi(ui,{replaceHistory=false}={}){try{localStorage.setItem(V3163_UI_KEY,JSON.stringify(ui))}catch(error){console.warn("Poolside view state could not be saved",error)}if(replaceHistory&&!v3163HistoryApplying&&history.state?.mclay)history.replaceState({mclay:true,ui},"",location.href);window.v374FlushLocalState?.();return ui}
+function v3163SaveUi(options={}){return v3163PersistUi(v3163Snapshot(),{replaceHistory:options.replaceHistory!==false})}
+function v3163FindDetail(key){if(key.startsWith("summary:")){const text=key.slice(8);return [...document.querySelectorAll(".view.active details")].find(node=>String(node.querySelector(":scope > summary")?.textContent||"").replace(/\s+/g," ").trim().slice(0,90)===text)||null}if(key.startsWith("index:"))return document.querySelectorAll(".view.active details")[Number(key.slice(6))]||null;try{return document.querySelector(key)}catch{return null}}
+function v3163ApplyDetails(ui){v3163HistoryApplying=true;try{const wanted=new Set(ui.open_details||[]);[...document.querySelectorAll(".view.active details")].forEach((details,index)=>{const key=v3163DetailsKey(details,index),open=wanted.has(key);if(details.open!==open)details.open=open})}finally{setTimeout(()=>{v3163HistoryApplying=false},0)}}
+function v3163RestoreScroll(ui,view){const top=Number(ui.scroll?.[view]||0);requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top,behavior:"auto"})))}
+function v3163ApplySelection(ui){if(ui.selected_session_id&&(appState.sessions||[]).some(row=>row.id===ui.selected_session_id))appState.settings.selected_session_id=ui.selected_session_id;if(ui.selected_athlete_id&&(appState.athletes||[]).some(row=>row.id===ui.selected_athlete_id))appState.settings.selected_athlete_id=ui.selected_athlete_id;if(ui.selected_squad)appState.settings.selected_squad=ui.selected_squad;if(ui.board_mode)appState.settings.v3126_board_mode=ui.board_mode;if(Number.isFinite(Number(ui.active_block_index)))appState.settings.v3129_active_block_index=Number(ui.active_block_index);if(ui.active_pace_key!==undefined)appState.settings.v382_active_pace_key=ui.active_pace_key;saveState(appState)}
+function v3163Toast(text){let node=$("v3163Toast");if(!node){node=document.createElement("div");node.id="v3163Toast";node.className="v3163-toast";document.body.appendChild(node)}node.textContent=text;node.classList.add("show");clearTimeout(node._timer);node._timer=setTimeout(()=>node.classList.remove("show"),1800)}
+function v3163CloseOverlay(){const stroke=$("v3140StrokeChooser");if(stroke){stroke.remove();return true}const wall=$("v390WallDisplay");if(wall&&!wall.hidden){wall.hidden=true;document.exitFullscreen?.();return true}const visible=[...document.querySelectorAll(".modal:not([hidden]),dialog[open]")].at(-1);if(visible){visible.close?.();visible.hidden=true;return true}return false}
+function v3163RenderUi(ui){v3163HistoryApplying=true;try{v3163ApplySelection(ui);const view=ui.view&&$(ui.view)?ui.view:"deck";document.body.dataset.v3163View=view;v3163ShowViewBase(view);v3163ApplyDetails(ui);v3163RestoreScroll(ui,view);v3163PersistUi(ui,{replaceHistory:false});if(view==="athletes")v3163HydrateSelectedAthlete(false)}finally{setTimeout(()=>{v3163HistoryApplying=false},0)}}
+const v3163ShowViewBase=showView;
+showView=function(id,options={}){
+  if(options.fromHistory&&options.ui){v3163RenderUi(options.ui);return}
+  document.body.dataset.v3163View=id||"deck";
+  const current=document.querySelector(".view.active")?.id||"deck";
+  if(current===id){
+    const sameUi=v3163Snapshot();
+    v3163HistoryApplying=true;
+    try{v3163ShowViewBase(id)}finally{v3163HistoryApplying=false}
+    v3163ApplyDetails(sameUi);v3163RestoreScroll(sameUi,id);v3163PersistUi(sameUi,{replaceHistory:true});
+    if(id==="athletes")v3163HydrateSelectedAthlete(false);
+    return
+  }
+  // Freeze the state being left into its current history entry.
+  v3163SaveUi({replaceHistory:true});
+  v3163HistoryApplying=true;
+  try{v3163ShowViewBase(id)}finally{v3163HistoryApplying=false}
+  const prior={...v3163ReadUi(),...(history.state?.mclay&&history.state.ui?history.state.ui:{})},target=v3163Snapshot({view:id,open_details:[],scrollTop:Number(prior.scroll?.[id]||0),detail_entry_key:null});
+  v3163PersistUi(target,{replaceHistory:false});
+  history.pushState({mclay:true,ui:target},"",location.href);
+  v3163RestoreScroll(target,id);
+  if(id==="athletes")v3163HydrateSelectedAthlete(false)
+};
+
+document.addEventListener("click",event=>{const summary=event.target.closest("details > summary");if(summary?.parentElement instanceof HTMLDetailsElement)summary.parentElement._v3163UserToggleAt=Date.now()},true);
+document.addEventListener("toggle",event=>{const details=event.target,userAction=Date.now()-Number(details?._v3163UserToggleAt||0)<1200;if(v3163HistoryApplying||!userAction||!(details instanceof HTMLDetailsElement)||!details.closest(".view.active"))return;clearTimeout(details._v3163Timer);details._v3163Timer=setTimeout(()=>{if(v3163HistoryApplying)return;const key=v3163DetailsKey(details,[...document.querySelectorAll(".view.active details")].indexOf(details));if(details.open){const ui=v3163Snapshot({detail_entry_key:key});v3163PersistUi(ui,{replaceHistory:false});history.pushState({mclay:true,ui},"",location.href)}else if(history.state?.mclay&&history.state.ui?.detail_entry_key===key){history.back()}else if(history.state?.mclay){const ui=v3163Snapshot({detail_entry_key:null});v3163PersistUi(ui,{replaceHistory:false});history.replaceState({mclay:true,ui},"",location.href)}},0)},true);
+window.addEventListener("scroll",()=>{if(v3163HistoryApplying)return;clearTimeout(v3163ScrollTimer);v3163ScrollTimer=setTimeout(()=>v3163SaveUi({replaceHistory:true}),140)},{passive:true});
+window.addEventListener("pagehide",()=>v3163SaveUi({replaceHistory:true}));
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")v3163SaveUi({replaceHistory:true})});
+window.addEventListener("popstate",event=>{
+  if(v3163AllowExit)return;
+  if(v3163CloseOverlay()){history.pushState({mclay:true,ui:v3163Snapshot()},"",location.href);return}
+  const state=event.state;
+  if(state?.mclay&&state.ui){v3163RenderUi(state.ui);return}
+  if(state?.mclayRoot){const now=Date.now();if(now-v3163ExitArmedAt>2200){v3163ExitArmedAt=now;v3163Toast("Press back again to exit");const ui=v3163Snapshot();history.pushState({mclay:true,ui},"",location.href);v3163PersistUi(ui,{replaceHistory:false})}else{v3163AllowExit=true;history.back()}return}
+});
+
+function v3163RestoreUi(){if(v3163RestoringUi)return;v3163RestoringUi=true;try{const saved=v3163ReadUi(),view=saved.view&&$(saved.view)?saved.view:(document.querySelector(".view.active")?.id||"deck"),ui={...saved,view};v3163RenderUi(ui);history.replaceState({mclayRoot:true},"",location.href);const current=v3163Snapshot({view,open_details:ui.open_details||[],scrollTop:Number(ui.scroll?.[view]||0)});history.pushState({mclay:true,ui:current},"",location.href);v3163PersistUi(current,{replaceHistory:false})}finally{v3163RestoringUi=false}}
+
+// Exact, narrow source control. No generic strong/span click interception.
+document.addEventListener("click",event=>{const trigger=event.target.closest("[data-v3163-open-source]");if(!trigger)return;const source=$("v3126ActiveView")?.querySelector(".v3126-original-source")||document.querySelector(".view.active .v3126-original-source");if(!source)return;if(trigger.matches(".v3126-original-source > summary")){event.preventDefault();source.open=!source.open;if(source.open)source.scrollIntoView({behavior:"smooth",block:"start"});return}source.open=true;source.scrollIntoView({behavior:"smooth",block:"start"})},true);
+function v3163MarkSourceControls(){document.querySelectorAll(".v3126-original-source > summary").forEach(summary=>{summary.dataset.v3163OpenSource="1";summary.setAttribute("role","button")})}
+const v3163BoardRenderBase=typeof v3121RenderBoardState==="function"?v3121RenderBoardState:null;if(v3163BoardRenderBase)v3121RenderBoardState=function(){const result=v3163BoardRenderBase();requestAnimationFrame(v3163MarkSourceControls);return result};
+
+function v3163CompactSwimmerPage(){const view=$("athletes");if(!view)return;view.classList.add("v3163-swimmer-page");const editor=view.querySelector(".athlete-profile-editor");if(editor&&!editor.closest(".v3163-editor-wrap")){const details=document.createElement("details");details.className="v3163-editor-wrap card";details.dataset.v3163State="swimmer-editor";details.innerHTML='<summary><span><strong>Edit swimmer</strong><small>notes, modifications and admin fields</small></span><b>＋</b></summary>';editor.classList.remove("card");editor.before(details);details.appendChild(editor)}const table=view.querySelector(".athlete-table-card");if(table)table.hidden=true;
+  const attendee=view.querySelector("#v3105AttendeeBar");if(attendee)attendee.hidden=!attendee.querySelector("button,.quick-swimmer-button,[data-athlete-id]");
+  const ready=view.querySelector(".v3144-athlete-ready");if(ready)ready.hidden=true;
+  view.querySelectorAll(".athlete-quick-card .deck-answer-row").forEach(row=>{const label=v3163Norm(row.querySelector("span")?.textContent),value=v3163Norm(row.querySelector("strong")?.textContent);row.hidden=label==="official results"||(label==="next meet"&&/^no upcoming/.test(value))||(label==="planned adaptations"&&/^no permanent/.test(value))});
+  const training=view.querySelector("#v3140SwimmerTraining");if(training)training.hidden=!training.querySelector(".v3140-training-list details");
+  const operations=view.querySelector("#v310ProfileOperations");if(operations&&!operations.closest(".v3163-operations-wrap")){const details=document.createElement("details");details.className="v3163-operations-wrap card";details.dataset.v3163State="swimmer-operations";details.innerHTML='<summary><span><strong>Swimmer plans and modifications</strong><small>squad moves, adaptations and individual plans</small></span><b>＋</b></summary>';operations.before(details);details.appendChild(operations);const inner=operations.querySelector(":scope > .card");if(inner)inner.classList.remove("card")}
+}
+const v3163RenderAthletesBase=renderAthletes;renderAthletes=function(){v3163RenderAthletesBase();const apply=()=>{v3163CompactSwimmerPage();const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id)||(appState.athletes||[])[0];if(athlete&&!$("athleteResultsHub")?.querySelector(".v3163-pathway"))renderAthleteResultsHub(athlete)};apply();requestAnimationFrame(apply);setTimeout(apply,120)};
+
+function v3163Brand(){document.title=`McLay Swimming OS — v${V3163_VERSION} Verified Pathway`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3163_VERSION} · one verified pathway resolver · compact swimmer page · exact poolside resume`}
+// Older layers still call their named brand hooks after renders and delayed startup.
+// Point every active hook at the final release identity instead of racing timers.
+for(const name of ["v3151Brand","v3150Brand","v3144Brand","v3143Brand","v3142Brand","v3141Brand","v3140Brand","v3131Brand","v3129Brand","v3127Brand","v3105ApplyBrand","v3103ApplyBrand"]){try{globalThis[name]=v3163Brand}catch{}}
+const v3163BrandObserver=new MutationObserver(()=>{const expected=`McLay Swimming OS — v${V3163_VERSION} Verified Pathway`,subtitle=document.querySelector(".header-subtitle"),subExpected=`Version ${V3163_VERSION} · one verified pathway resolver · compact swimmer page · exact poolside resume`;if(document.title!==expected||subtitle&&subtitle.textContent!==subExpected)queueMicrotask(v3163Brand)});const v3163Title=document.querySelector("title"),v3163Subtitle=document.querySelector(".header-subtitle");if(v3163Title)v3163BrandObserver.observe(v3163Title,{childList:true,subtree:true,characterData:true});if(v3163Subtitle)v3163BrandObserver.observe(v3163Subtitle,{childList:true,subtree:true,characterData:true});
+window.v3163Debug={version:V3163_VERSION,build:V3163_BUILD,pbInventory:v3163PbInventory,stages:v3163Stages,resolve:v3163ResolveEvent,standardReason:v3163StandardReason,hydrate:v3163HydrateSelectedAthlete,snapshot:v3163Snapshot,historicalDerived:v3163HistoricalDerived,classMatches:v3163ClassMatches,inferCourse:v3163InferCourse,profileWarning:v3163ProfileWarning};
+document.body.dataset.v3163View=document.querySelector(".view.active")?.id||"deck";
+v3163Brand();setTimeout(()=>{v3163Brand();v3163RestoreUi();v3163MarkSourceControls()},0);setTimeout(v3163Brand,1200);setTimeout(v3163Brand,8000);setTimeout(v3163Brand,12000);
+
+// =============================================================================
+// v3.16.3 Coach Hub qualification — one whole-session picture, not line-by-line
+// checks. The Hub is the selected-session workbench: build/edit, Board, Roll,
+// capture, plan context, modified baselines and one session-tone decision.
+// =============================================================================
+function v3163ZoneDisplay(zone){
+  return ({
+    Regeneration:"Recovery / reset",
+    Development:"Aerobic capacity",
+    Overload:"Aerobic power",
+    Threshold:"Threshold",
+    Clearance:"Aerobic clearance",
+    Speed:"Speed",
+    "Anaerobic power":"Anaerobic power",
+    "Anaerobic capacity":"Anaerobic capacity",
+    "Lactate tolerance":"Lactate tolerance",
+    "Race pace":"Race pace",
+    Unclassified:"General work"
+  })[zone]||String(zone||"General session");
+}
+function v3163HubPlanContext(session){
+  const brief=session?v3124PlanBriefData(session):{},purpose=session?v3150SessionPurpose(session):"No selected session",season=brief?.week?.phase||brief?.season?.name||"Season block",links=session?v3150PreviousNext(session):{};
+  return {brief,purpose,season,links,modified:session?v3140ModifiedColumns(session):[]};
+}
+function v3163HubContextDetails(session,context){
+  const {brief,purpose,season,links,modified}=context;
+  return `<details class="card v3163-hub-detail" data-v3163-state="coachhub-context"><summary><span><strong>Session context</strong><small>${escapeHtml([purpose,season,modified.length?`${modified.length} modified ready`:"main squad only"].filter(Boolean).join(" · "))}</small></span><b>＋</b></summary><div class="v3163-hub-detail-body"><div class="v3163-context-grid"><div><span>Weekly session purpose</span><strong>${escapeHtml(purpose)}</strong></div><div><span>Season-block emphasis</span><strong>${escapeHtml(brief?.weekObjective||brief?.seasonGoal||season)}</strong></div><div><span>From previous</span><strong>${escapeHtml(links?.previous?.title||"No carry-forward cue logged")}</strong></div><div><span>Protect / lead into</span><strong>${escapeHtml(links?.next?.title||v3144NextMeet(session))}</strong></div></div>${modified.length?`<div class="v3163-modified-ready"><strong>Modified versions ready</strong>${modified.map(athlete=>{const profile=v3142BaselineProfile(athlete);return `<button type="button" data-v3163-edit-baseline="${escapeHtml(athlete.id)}"><span>${escapeHtml(athlete.full_name)}</span><small>${escapeHtml(profile?.label||"Session modification")}</small></button>`}).join("")}</div>`:'<p class="help">No modified baseline is currently active for this session roster.</p>'}<button type="button" class="secondary" data-v3163-open-planning>Open Planning</button></div></details>`;
+}
+function v3163HubReasoningDetails(data){
+  const rows=data?.rows||[],targetRows=rows.filter(row=>v3140RoleForRow(row,data.primary)==="Primary target"),supportRows=rows.filter(row=>v3140RoleForRow(row,data.primary)==="Supporting work"),raw=Object.entries(data?.raw||{}).filter(([,value])=>Number(value)>0).sort((a,b)=>b[1]-a[1]);
+  return `<details class="card v3163-hub-detail" data-v3163-state="coachhub-reasoning"><summary><span><strong>Why the session reads this way</strong><small>${Math.round(data?.rawTotal||0).toLocaleString()}m parsed · weighted by role and intensity</small></span><b>＋</b></summary><div class="v3163-hub-detail-body"><p class="help">This is a whole-session interpretation. Recovery, preparation and skill work remain visible, but do not overpower the target stimulus simply because their raw metres are high.</p><div class="v3163-raw-zones">${raw.map(([zone,value])=>`<span><b>${escapeHtml(v3163ZoneDisplay(zone))}</b>${Math.round(value).toLocaleString()}m</span>`).join("")||'<span>No planned volume could be parsed.</span>'}</div><div class="v3163-evidence-grid"><div><span>Target evidence</span><strong>${targetRows.length} runnable line${targetRows.length===1?"":"s"}</strong></div><div><span>Supporting evidence</span><strong>${supportRows.length} runnable line${supportRows.length===1?"":"s"}</strong></div></div><p class="v3163-t400-note"><strong>Lee T400:</strong> calibrates individual aerobic speeds only. It is the measuring vehicle, not the set name, zone or training outcome.</p></div></details>`;
+}
+function v3163HubToolsDetails(){
+  return `<details class="card v3163-hub-detail" data-v3163-state="coachhub-tools"><summary><span><strong>More coaching tools</strong><small>swimmers, tests, results, reports and programme</small></span><b>＋</b></summary><div class="v3163-hub-tools"><button data-v3163-jump="athletes"><b>Swimmers</b><span>Goals, pathway and actual training</span></button><button data-v3163-jump="testsets"><b>Tests</b><span>T400 and repeatable test sets</span></button><button data-v3163-jump="results"><b>Results</b><span>Meets, qualifications and records</span></button><button data-v3163-jump="reports"><b>Reports</b><span>Weekly, squad and swimmer records</span></button><button data-v3163-jump="sessions"><b>Sessions</b><span>Completed, scheduled and future work</span></button><button data-v3163-tab-open="club"><b>Programme</b><span>Plan structure and timetable</span></button></div></details>`;
+}
+function v3163CoachHubPlanTab(){
+  const session=selectedSession();
+  if(!session)return `<article class="card v3163-hub-empty"><span class="eyebrow">Session workbench</span><h3>Select or create a session</h3><p>Coach Hub works from one selected session. Open Sessions to choose a calendar slot, then build or attach the workout here.</p><button type="button" data-v3163-jump="sessions">Open Sessions</button></article>`;
+  const data=v3163SessionInterpretation(session),context=v3163HubPlanContext(session),expected=(data.expected||[]).map(v3163ZoneDisplay),planned=context.purpose,interpreted=v3163ZoneDisplay(data.primary),confirmed=Boolean(appState.settings[`v3140_intent_confirmed_${session.id}`]),hasCheck=Boolean(data.check)&&!confirmed,source=String(v3123SourceText(session)||"").trim();
+  const status=hasCheck?"Coach check":confirmed&&data.check?"Coach confirmed":"Aligned";
+  const statusClass=hasCheck?"check":confirmed&&data.check?"confirmed":"aligned";
+  const checkText=data.check?String(data.check).replace(/\bOverload\b/g,"Aerobic power").replace(/\bDevelopment\b/g,"Aerobic capacity").replace(/\bRegeneration\b/g,"Recovery / reset"):"";
+  return `<article class="card v3163-session-workbench"><div class="v3163-workbench-title"><div><span class="eyebrow">Selected session workbench</span><h3>${escapeHtml(session.title||"Scheduled session")}</h3><p>${escapeHtml([weekday(session.session_date),formatDate(session.session_date),String(session.day_part||"").toUpperCase(),sessionSquads(session).join(" + ")].filter(Boolean).join(" · "))}</p></div><span class="v3163-tone-status ${statusClass}">${escapeHtml(status)}</span></div><div class="v3163-workbench-actions"><button type="button" data-v3163-jump="deck">Open Board</button><button type="button" class="secondary" data-v3163-build-session>Build / edit session</button><button type="button" class="secondary" data-v3163-jump="attendance">Take roll</button><button type="button" class="secondary" data-v3163-capture>＋ Capture</button>${source?'<button type="button" class="secondary" data-v3163-source>Source</button>':""}</div></article>
+  <article class="card v3163-session-shape"><div class="v3163-shape-heading"><div><span class="eyebrow">Whole-session picture</span><h3>${escapeHtml(interpreted)}</h3><p><strong>Plan:</strong> ${escapeHtml(planned)}${expected.length?` · <strong>Model zone:</strong> ${escapeHtml(expected.join(" / "))}`:""}</p></div><div class="v3163-primary-share"><b>${data.shares?.["Primary target"]||0}%</b><span>target emphasis</span></div></div>${v3140EmphasisBar(data)}${data.support?.length?`<p class="v3163-support-line"><strong>Supporting:</strong> ${escapeHtml(data.support.map(v3163ZoneDisplay).join(" · "))}</p>`:""}${hasCheck?`<div class="v3163-one-check"><div><strong>One whole-session decision</strong><span>${escapeHtml(checkText)}</span></div><button type="button" data-v3163-confirm-intent>Confirm planned focus</button></div>`:confirmed&&data.check?`<div class="v3163-confirmed-note"><strong>Planned focus confirmed by coach</strong><span>${escapeHtml(checkText)}</span></div>`:`<div class="v3163-aligned-note"><strong>The session tone is coherent.</strong><span>The target stimulus remains the lead component after supporting, skill and recovery work are interpreted in context.</span></div>`}</article>
+  ${v3163HubContextDetails(session,context)}${v3163HubReasoningDetails(data)}${v3163HubToolsDetails()}`;
+}
+function v3163BindCoachHub(host){
+  host.querySelectorAll("[data-v3163-tab]").forEach(button=>button.onclick=()=>{appState.settings.v3140_hub_tab=button.dataset.v3163Tab;saveState(appState);v3163RenderCoachHub()});
+  host.querySelectorAll("[data-v3163-jump]").forEach(button=>button.onclick=()=>showView(button.dataset.v3163Jump));
+  host.querySelectorAll("[data-v3163-tab-open]").forEach(button=>button.onclick=()=>{appState.settings.v3140_hub_tab=button.dataset.v3163TabOpen;saveState(appState);v3163RenderCoachHub()});
+  host.querySelector("[data-v3163-build-session]")?.addEventListener("click",()=>v33OpenSessionComposer({reset:false}));
+  host.querySelector("[data-v3163-capture]")?.addEventListener("click",()=>v3140OpenCapture({sessionId:selectedSession()?.id}));
+  host.querySelector("[data-v3163-confirm-intent]")?.addEventListener("click",()=>{const session=selectedSession();if(!session)return;appState.settings[`v3140_intent_confirmed_${session.id}`]=nowIso();saveState(appState);v3163RenderCoachHub();updateStatus("Whole-session focus confirmed","good")});
+  host.querySelector("[data-v3163-source]")?.addEventListener("click",()=>{appState.settings.v3126_board_mode="whole";saveState(appState);showView("deck");requestAnimationFrame(()=>{const source=document.querySelector("#deck .v3126-original-source");if(source){source.open=true;source.scrollIntoView({behavior:"smooth",block:"start"})}})});
+  host.querySelector("[data-v3163-open-planning]")?.addEventListener("click",()=>showView("planning"));
+  host.querySelectorAll("[data-v3163-edit-baseline]").forEach(button=>button.onclick=()=>v3142OpenBaselineEditor(button.dataset.v3163EditBaseline));
+  host.querySelectorAll("[data-v390-create-draft]").forEach(button=>button.onclick=async()=>{const athlete=appState.athletes.find(a=>a.id===button.dataset.v390CreateDraft);await v390CreateCommunication(athlete,selectedSession());v3163RenderCoachHub()});
+  host.querySelectorAll("[data-v390-create-meet-draft]").forEach(button=>button.onclick=async()=>{const athlete=appState.athletes.find(a=>a.id===button.dataset.v390CreateMeetDraft);await v390CreateMeetCommunication(athlete);v3163RenderCoachHub()});
+  host.querySelectorAll("[data-v390-save-draft]").forEach(button=>button.onclick=()=>v390SaveDraft(button.dataset.v390SaveDraft));
+  host.querySelectorAll("[data-v390-edit-programme]").forEach(button=>button.onclick=()=>v390EditProgramme(button.dataset.v390EditProgramme));
+  $("v390SaveSlot")?.addEventListener("click",v390SaveSlot);$("v390SaveProfile")?.addEventListener("click",v390SaveProfile);
+}
+function v3163RenderCoachHub(){
+  const host=$("v390CoachHub");if(!host)return;
+  const available=[["plan","Session"],["comms","Communication"],["club","Programme"],["reports","Reports"]];if(v381IsOwner?.())available.push(["profile","Coaching model"]);
+  let tab=appState.settings.v3140_hub_tab||"plan";if(!available.some(([key])=>key===tab))tab="plan";
+  const body=tab==="plan"?v3163CoachHubPlanTab():tab==="comms"?v390CommsTab():tab==="club"?v390ClubTab():tab==="reports"?v3140ReportsTab():v390ProfileTab();
+  host.innerHTML=`<nav class="v390-tabs v3163-hub-tabs">${available.map(([key,label])=>`<button type="button" data-v3163-tab="${key}" class="${tab===key?"active":""}">${label}</button>`).join("")}</nav><div id="v390HubBody">${body}</div>`;
+  v3163BindCoachHub(host);v3163ApplyDetails(v3163ReadUi());
+}
+v3140RenderCoachHub=v3163RenderCoachHub;v390RenderCoachHub=v3163RenderCoachHub;v390IntelligenceTab=v3163CoachHubPlanTab;
+function v3163ToneCompatible(expected,actual){
+  const pair=new Set([String(expected||""),String(actual||"")]);
+  if(pair.has("Speed")&&pair.has("Anaerobic power"))return true;
+  if(pair.has("Anaerobic capacity")&&pair.has("Lactate tolerance"))return true;
+  return expected===actual;
+}
+function v3163SessionInterpretation(session=selectedSession()){
+  const data=v3140SessionInterpretation(session),expected=data.expected?.[0];
+  if(data.check&&expected&&v3163ToneCompatible(expected,data.primary))data.check="";
+  return data;
+}
