@@ -1,6 +1,6 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-17-0-poolside-board-rebuild-20260802";
-const CORE=["./","./index.html","./styles.css?v=20260802-poolside3170","./app.js?v=20260802-poolside3170","./config.js","./seed.js","./manifest.webmanifest","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-17-1-poolside-roster-modified-fix-20260802";
+const CORE=["./","./index.html","./styles.css?v=20260802-poolside3171","./app.js?v=20260802-poolside3171","./config.js","./seed.js","./manifest.webmanifest","./monthly_calendar.json"];
 self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);for(const url of CORE){const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(!response.ok)throw new Error(`Core cache failed ${url}: ${response.status}`);await cache.put(request,response.clone())}await self.skipWaiting()})()));
 self.addEventListener("activate",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
 self.addEventListener("message",event=>{if(event.data==="SKIP_WAITING")self.skipWaiting()});

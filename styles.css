@@ -650,3 +650,8 @@ body:not(.v3170-editing) #deck>.session-import-card{display:none!important}
 
 .v3170-editing #sessionImportDetails>summary{display:none!important}
 .v3170-editing #sessionImportDetails{padding-top:.15rem!important}
+
+/* v3.17.1 — direct modified status in Session/Plan and mixed Monday squad context */
+.v3171-modified-summary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:.55rem;min-height:44px;margin:.38rem 0;padding:.42rem .55rem;text-align:left;background:#fff8e5;color:#5e4700;border:1px solid #dec56d;border-left:5px solid #b98300;border-radius:10px}
+.v3171-modified-summary>span{display:grid;gap:.04rem;min-width:0}.v3171-modified-summary b{font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;color:#806313}.v3171-modified-summary strong{font-size:.76rem;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.v3171-modified-summary em{font-size:.68rem;font-style:normal;font-weight:900;white-space:nowrap;color:#6d5200}
+@media(max-width:430px){.v3171-modified-summary strong{max-width:205px}.v3171-modified-summary em{font-size:.63rem}}

@@ -13504,8 +13504,8 @@ function v3163SessionInterpretation(session=selectedSession()){
 // planning and editing are separate compact surfaces rather than one long page.
 // Modified swimmer work sits below the matching main block on phones.
 // =============================================================================
-const V3170_VERSION="3.17.0";
-const V3170_BUILD="20260802-poolside-board-rebuild";
+const V3170_VERSION="3.17.1";
+const V3170_BUILD="20260802-poolside-roster-modified-fix";
 
 function v3170NormText(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
 function v3170ClockFromLoose(value){
@@ -13918,3 +13918,149 @@ setTimeout(()=>{if(!v3170UserInteracted){v3170RestorePoolsideState(V3170_INITIAL
 window.v3170Debug={...window.v3170Debug,readState:v3170ReadPoolsideState,saveState:v3170SavePoolsideState,restoreState:v3170RestorePoolsideState,initialState:V3170_INITIAL_STATE};
 setTimeout(()=>{v3170PaintBoard();if(v3170InitialRestorePending)v3170RestorePoolsideState(V3170_INITIAL_STATE,{scroll:true,retries:true})},180);
 
+
+// =============================================================================
+// McLay Swimming OS v3.17.1 — MODIFIED SWIMMER + FITNESS SESSION REPAIR
+// - A swimmer marked Modified is visible in every Board mode immediately.
+// - The Session map provides a direct route to the current modified version.
+// - Monday AM Fitness joiners inherit the National session as an operational
+//   squad, so the context selector, Roll and current/next session logic all agree.
+// =============================================================================
+
+const V3171_VERSION="3.17.1";
+const V3171_BUILD="20260802-modified-fitness-session-repair";
+
+// Keep the database session unchanged while exposing programmed operational
+// squads to the poolside UI. Use the pre-v3.17.1 resolver inside this function
+// to avoid recursive sessionSquads calls.
+const v3171SessionSquadsBase=sessionSquads;
+function v3171BaseSessionSquads(session){
+  const rows=v3171SessionSquadsBase?.(session)||[];
+  return [...new Set(rows.filter(Boolean))];
+}
+function v3171MondayAmFitnessJoin(session){
+  if(!session||String(session.day_part||"").toUpperCase()!=="AM")return false;
+  const date=new Date(`${session.session_date||"1970-01-01"}T12:00:00`);
+  return date.getDay()===1&&v3171BaseSessionSquads(session).some(s=>squadKey(s)==="national")&&(appState.athletes||[]).some(a=>a.active!==false&&squadKey(a.squad)==="fitness");
+}
+function v3171FitnessSquadName(){
+  return (appState.athletes||[]).map(a=>a.squad).find(s=>squadKey(s)==="fitness")||"Fitness";
+}
+sessionSquads=function(session){
+  const rows=v3171BaseSessionSquads(session);
+  if(v3171MondayAmFitnessJoin(session)){
+    const fitness=v3171FitnessSquadName();
+    if(!rows.some(s=>squadKey(s)===squadKey(fitness)))rows.push(fitness);
+  }
+  return rows;
+};
+
+// Attendance marked Modified is the strongest source of truth. Permanent
+// baselines remain available through the existing resolver, but a direct Roll
+// choice can never disappear because of squad filtering or a stale profile.
+const v3171ModifiedColumnsBase=v3140ModifiedColumns;
+v3140ModifiedColumns=function(session){
+  if(!session)return[];
+  const map=new Map();
+  for(const athlete of v3171ModifiedColumnsBase?.(session)||[])if(athlete?.id)map.set(athlete.id,athlete);
+  const modifiedIds=new Set((appState.attendance||[])
+    .filter(row=>row.session_id===session.id&&String(row.status||"").toLowerCase()==="modified")
+    .map(row=>row.athlete_id));
+  for(const athlete of appState.athletes||[])if(athlete.active!==false&&modifiedIds.has(athlete.id))map.set(athlete.id,athlete);
+  return [...map.values()].sort(rosterSort);
+};
+
+function v3171ModifiedNames(session){return v3140ModifiedColumns(session).map(a=>a.full_name).filter(Boolean)}
+function v3171ModifiedLabel(session){
+  const names=v3171ModifiedNames(session);if(!names.length)return"";
+  return names.length<=2?`${names.join(" + ")} modified`:`${names.length} modified swimmers`;
+}
+
+const v3171RollStateBase=v3170RollState;
+v3170RollState=function(session){
+  const state=v3171RollStateBase(session),label=v3171ModifiedLabel(session);
+  if(label&&state.started)state.label=`${state.here} in the water · ${label}`;
+  return state;
+};
+
+function v3171ModifiedSummary(session){
+  const modified=v3140ModifiedColumns(session);if(!modified.length)return"";
+  return `<button type="button" class="v3171-modified-summary" data-v3171-open-modified><span><b>Modified</b><strong>${escapeHtml(modified.map(a=>a.full_name).join(" · "))}</strong></span><em>Open current versions ›</em></button>`;
+}
+
+const v3171WholeHtmlBase=v3170WholeHtml;
+v3170WholeHtml=function(session){
+  const html=v3171WholeHtmlBase(session),summary=v3171ModifiedSummary(session);
+  return summary?html.replace('<div class="v3170-session-map">',`${summary}<div class="v3170-session-map">`):html;
+};
+
+const v3171PlanHtmlBase=v3170PlanHtml;
+v3170PlanHtml=function(session){
+  const html=v3171PlanHtmlBase(session),summary=v3171ModifiedSummary(session);
+  return summary?html.replace('<section class="v3170-plan-card">',`${summary}<section class="v3170-plan-card">`):html;
+};
+
+function v3171OpenCurrentModified(session){
+  appState.settings.v3126_board_mode="deck";
+  saveState(appState);
+  v3170WritePoolsideState?.(v3170LivePoolsideState?.({mode:"deck",modified_parent_open:true,modified_open_athletes:v3140ModifiedColumns(session).map(a=>a.id),scroll_top:0})||{});
+  v3170PaintBoard();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const host=$("v3126ActiveView"),group=host?.querySelector("[data-v3170-modified-group]");
+    if(group)group.open=true;
+    host?.querySelectorAll("[data-v3170-modified-athlete]").forEach(node=>node.open=true);
+    group?.scrollIntoView({block:"center",behavior:"smooth"});
+    v3170SavePoolsideState?.({mode:"deck",modified_parent_open:true,modified_open_athletes:v3140ModifiedColumns(session).map(a=>a.id)});
+  }));
+}
+
+const v3171BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){
+  v3171BindBoardBase(host,session);
+  host.querySelectorAll("[data-v3171-open-modified]").forEach(button=>button.onclick=()=>v3171OpenCurrentModified(session));
+};
+
+// Repaint immediately after a Roll choice, so the Board summary and modified
+// version are current before the coach returns from the Roll tab.
+const v3171AttendanceRecordBase=attendanceRecord;
+attendanceRecord=function(session,athleteId,status){
+  const result=v3171AttendanceRecordBase(session,athleteId,status);
+  V3144_TARGET_CACHE?.clear?.();
+  if((document.querySelector(".view.active")?.id||"")==="deck")v3170PaintBoard();
+  return result;
+};
+
+function v3171Brand(){
+  document.title=`McLay Swimming OS — v${V3171_VERSION} Poolside Board`;
+  const subtitle=document.querySelector(".header-subtitle");
+  if(subtitle)subtitle.textContent=`Version ${V3171_VERSION} · current block first · modified Roll visible · Fitness Monday session linked`;
+}
+for(const name of ["v3170Brand","v3163Brand","v3151Brand","v3150Brand","v3144Brand","v3143Brand","v3142Brand","v3141Brand","v3140Brand"]){try{globalThis[name]=v3171Brand}catch{}}
+try{v3170BrandObserver?.disconnect?.()}catch{}
+const v3171BrandObserver=new MutationObserver(()=>{const title=`McLay Swimming OS — v${V3171_VERSION} Poolside Board`,subtitle=document.querySelector(".header-subtitle"),sub=`Version ${V3171_VERSION} · current block first · modified Roll visible · Fitness Monday session linked`;if(document.title!==title||(subtitle&&subtitle.textContent!==sub))queueMicrotask(v3171Brand)});
+const v3171Title=document.querySelector("title"),v3171Subtitle=document.querySelector(".header-subtitle");
+if(v3171Title)v3171BrandObserver.observe(v3171Title,{childList:true,subtree:true,characterData:true});
+if(v3171Subtitle)v3171BrandObserver.observe(v3171Subtitle,{childList:true,subtree:true,characterData:true});
+
+// Rebuild operational context once after the compatibility layers have settled.
+function v3171RefreshOperationalUi(){
+  renderActiveContext?.();
+  if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard();
+  v3171Brand();
+}
+window.v3171Debug={version:V3171_VERSION,build:V3171_BUILD,sessionSquads,modified:v3140ModifiedColumns,fitnessJoin:v3171MondayAmFitnessJoin};
+setTimeout(v3171RefreshOperationalUi,40);setTimeout(v3171RefreshOperationalUi,500);setTimeout(v3171Brand,1800);
+
+// Active squad drives the dedicated Roll screen. This keeps a mixed Monday
+// booking fast to use: tap National or Fitness in the sticky context, then mark
+// only that roster instead of searching one long combined list.
+renderAttendance=function(){
+  const session=selectedSession();if(!session)return;
+  const roster=selectedRoster(),squad=activeSquad()||sessionSquads(session).join(" + ");
+  if($("attendanceHeading"))$("attendanceHeading").textContent=`${sessionLabel(session)} · ${session.venue||""} · ${squad}`;
+  if($("attendanceList"))$("attendanceList").innerHTML=roster.map(athlete=>{
+    const value=String(attendanceFor(session.id,athlete.id)?.status||"").toLowerCase(),meet=typeof v310MeetForAthleteOnDate==="function"?v310MeetForAthleteOnDate(athlete.id,session.session_date):null;
+    return `<div class="attendance-row ${value==="present"||value==="modified"?"":"unmarked"}" data-athlete-id="${escapeHtml(athlete.id)}"><div><strong>${escapeHtml(athlete.full_name)}</strong><small>${escapeHtml(athlete.squad||"Unassigned")}${meet?` · At ${escapeHtml(meet.meet.name)}`:""}</small></div><div class="attendance-buttons"><button type="button" class="attendance-choice ${value==="present"?"active":""}" data-status="present">Here</button><button type="button" class="attendance-choice ${value==="modified"?"active":""}" data-status="modified">Modified</button><span class="attendance-default">${value==="present"||value==="modified"?"":"Absent"}</span></div></div>`;
+  }).join("")||'<div class="help">No swimmers are linked to the active squad for this session.</div>';
+  document.querySelectorAll("#attendance .attendance-choice").forEach(button=>button.onclick=()=>{const row=button.closest(".attendance-row"),already=button.classList.contains("active"),status=already?"absent":button.dataset.status;attendanceRecord(session,row.dataset.athleteId,status);renderAttendance();v310RenderSessionAttendance?.();v390DeckPanel?.()});
+};
