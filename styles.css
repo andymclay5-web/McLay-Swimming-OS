@@ -765,3 +765,12 @@ html,body{max-width:100%;overflow-x:hidden}
   .v3191-plan-cascade{grid-template-columns:1fr}.v3191-plan-cascade>details{grid-column:1}.v3191-live-roll{align-items:flex-start;flex-direction:column}.v3191-live-roll strong{text-align:left}.v3191-add-swimmer>summary{display:grid}.v3191-roll-row{display:grid!important;grid-template-columns:minmax(0,1fr)!important}.v3191-roll-row .attendance-buttons{justify-content:flex-start!important}
 }
 @media(min-width:760px){.v3191-all-mods>div{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
+
+/* v3.19.2 verified direct Board intake */
+#parseSessionBtn[aria-busy="true"],#runImportedSessionBtn[aria-busy="true"]{opacity:.72;cursor:progress}
+.v371-composer-progress [data-v371-step="use"].done{box-shadow:inset 5px 0 0 #177a45}
+.session-import-result.warning,.session-import-result.error{border-left-color:#b56a00}
+@media(max-width:700px){
+  #parseSessionBtn{min-height:58px;font-size:1.08rem}
+  .import-save-actions{display:grid;grid-template-columns:1fr;gap:10px}
+}

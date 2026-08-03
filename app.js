@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260803-poolside3190",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260803-board3192",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -15226,3 +15226,536 @@ v3170PaintBoard=function(...args){
   const restore=()=>{if((document.querySelector('.view.active')?.id||'')!=='deck')return;const ui=v3163ReadUi?.();if(!ui)return;v3163ApplyDetails?.(ui);v3163RestoreScroll?.(ui,'deck')};
   requestAnimationFrame(()=>requestAnimationFrame(restore));setTimeout(restore,180);return result;
 };
+
+// =============================================================================
+// McLay Swimming OS v3.19.2 — verified session-to-Board commit
+// Live poolside repair after the 3 August PM session entry appeared successful
+// without attaching a workout. The direct action now parses, writes, verifies,
+// persists and opens the exact selected session before success is shown.
+// =============================================================================
+const V3192_VERSION="3.19.2";
+const V3192_BUILD="20260803-verified-board-commit";
+let v3192PendingInput="";
+
+function v3192Hash(value){
+  const text=String(value||"");let hash=2166136261;
+  for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619)}
+  return (hash>>>0).toString(16).padStart(8,"0");
+}
+function v3192SessionById(id){return (appState.sessions||[]).find(row=>row.id===id)||null}
+function v3192SameSlot(a,b){try{return v3141SameSlot(a,b)}catch{return Boolean(a&&b&&a.session_date===b.session_date&&String(a.day_part||"").toUpperCase()===String(b.day_part||"").toUpperCase())}}
+function v3192WriteTarget(){
+  const pickerId=$("contextSessionPicker")?.value||"",picker=v3192SessionById(pickerId),selected=selectedSession?.()||null;
+  let target=picker||selected||v3192SessionById(appState.settings.selected_session_id);
+  if(target&&typeof v3141CanonicalSessionFor==="function")target=v3141CanonicalSessionFor(target)||target;
+  if(selected&&target&&v3192SameSlot(selected,target)&&typeof v3141SessionEvidence==="function"&&v3141SessionEvidence(selected)>v3141SessionEvidence(target))target=selected;
+  return target||null;
+}
+function v3192RawInput(){
+  const current=$("sessionPasteInput")?.value||v3192PendingInput||v3150DraftSource||"";
+  return v3126NormaliseWorkoutText?.(current)||String(current).trim();
+}
+function v3192StoredBlocks(session){return session?(appState.session_blocks||[]).filter(row=>row.session_id===session.id).sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)):[]}
+function v3192BoardBlocks(session){try{return v3170BoardBlocks(session)}catch{try{return v3125BoardBlocks(session)}catch{return v3192StoredBlocks(session)}}}
+function v3192TargetHasVerifiedWorkout(session,sourceHash=""){
+  if(!session||!String(session.workout||"").trim())return false;
+  const stored=v3192StoredBlocks(session),board=v3192BoardBlocks(session);
+  if(!stored.length||!board.length)return false;
+  if(sourceHash&&v3192Hash(v3126NormaliseWorkoutText?.(session.workout)||session.workout)!==sourceHash)return false;
+  return true;
+}
+function v3192PersistNow(){
+  saveState(appState);
+  try{localStorage.setItem(STATE_KEY,JSON.stringify(v374PersistableState(appState)))}catch(error){console.warn("Immediate Board save persistence",error)}
+}
+function v3192Rollback(snapshot){
+  if(!snapshot?.session)return;
+  const id=snapshot.session.id;
+  appState.session_blocks=(appState.session_blocks||[]).filter(row=>row.session_id!==id);
+  for(const block of snapshot.blocks||[])appState.session_blocks.push(clone(block));
+  upsertLocal("sessions",clone(snapshot.session));
+  for(const block of snapshot.blocks||[])queueRecord("session_blocks",block.id);
+  appState.settings.selected_session_id=id;
+  delete appState.settings.v3192_last_board_commit;
+  v3192PersistNow();
+}
+function v3192RepairGroupedLengths(blocks,raw=""){
+  for(const block of v34Array(blocks)){
+    if(!/(?:pre[ -]?set|activation|speed prep)/i.test(String(block?.title||"")))continue;
+    const items=v34Array(block.items);
+    for(let i=0;i<items.length;i++){
+      const parent=items[i];
+      if(parent?.runnable===false||Number(parent?.reps)<4||Number(parent?.distance)!==25)continue;
+      const children=[];let childReps=0;
+      for(let j=i+1;j<Math.min(items.length,i+6);j++){
+        const child=items[j],text=v3129LineText(child),match=text.match(/^\s*(\d{1,3})\s*[x×]\s*(?:(\d{1,3})\s*m?)?/i);
+        if(!match)break;
+        const reps=Number(match[1]);if(!reps)break;
+        children.push({child,reps,distance:Number(match[2])||Number(child.distance)||null,text});childReps+=reps;
+        if(childReps>=Number(parent.reps))break;
+      }
+      if(children.length<2||childReps!==Number(parent.reps))continue;
+      parent.raw=`${v3129LineText(parent)} total`;parent.label=parent.raw;parent.instruction=parent.raw;parent.reps=0;parent.distance=null;parent.cycle="";parent.stroke="Choice";parent.runnable=false;parent.line_type="cue";
+      for(const row of children){
+        const child=row.child,isUnderwater=/\b(?:uw|underwater|to\s*15\s*m|15\s*m\s*uw)\b/i.test(row.text),repeatDistance=isUnderwater?25:(row.distance||25),cycle=Number(child.cycle)||v3150Cycle(row.text)||v3128StrictCycleFromLine?.(row.text)||"";
+        let display=row.text;
+        if(isUnderwater)display=display.replace(/^(\s*\d{1,3}\s*[x×]\s*)15\s*m?/i,"$125 — 15m");
+        child.raw=display;child.label=display;child.instruction=display;child.reps=row.reps;child.distance=repeatDistance;child.cycle=cycle;child.stroke=child.stroke&&child.stroke!=="Choice"?child.stroke:"Freestyle";child.runnable=true;child.line_type="set";
+      }
+      break;
+    }
+    block.items=items.map((item,index)=>({...item,sort_order:index+1}));
+  }
+  const warmMatch=String(raw||"").match(/(?:^|\n)\s*(\d{2,4})\s*(?:m)?\s*warm[- ]?down\s*$/i);
+  if(warmMatch&&!v34Array(blocks).some(block=>String(block?.block_type||"")==="warm_down")){
+    const distance=Number(warmMatch[1]),main=[...v34Array(blocks)].reverse().find(block=>String(block?.block_type||"")==="main_set"),items=v34Array(main?.items);
+    let index=-1;for(let i=items.length-1;i>=0;i--){if(items[i]?.runnable!==false&&Number(items[i]?.reps||1)*Number(items[i]?.distance||0)===distance){index=i;break}}
+    if(main&&index>=0){
+      const source=items.splice(index,1)[0],line=`${distance} warm-down`,item={...source,id:source.id||uid("block-line"),sort_order:1,raw:line,label:line,instruction:line,reps:Number(source.reps)||1,distance:Number(source.distance)||distance,cycle:"",stroke:source.stroke||"Choice",runnable:true,line_type:"set"};
+      main.items=items.map((row,i)=>({...row,sort_order:i+1}));main.raw_text=main.items.map(row=>v3129LineText(row)).join("\n");
+      blocks.push({id:uid("session-block"),sort_order:blocks.length+1,block_type:"warm_down",title:"Warm-down",purpose:"Return the group to easy swimming and finish the session cleanly.",cues:"Relax the stroke and lower the effort.",raw_text:line,items:[item]});
+    }
+  }
+  return blocks;
+}
+function v3192CollectOrBuild(raw,{showPreview=false}={}){
+  const preview=$('sessionImportPreview')?.querySelector('.v3150-draft-block');
+  const previewMatches=preview&&v3192Hash(v3126NormaliseWorkoutText?.(v3150DraftSource)||v3150DraftSource)===v3192Hash(raw);
+  if(!previewMatches){
+    v3150BuildDraft(raw,v3126SourceType||"text");
+  }
+  const blocks=v3192RepairGroupedLengths(v3150CollectDraft?.()||v3150DraftBlocks||v3150ParseBlocks(raw),raw);
+  v3150DraftBlocks=blocks;
+  if(showPreview)v3150RenderDraft?.();
+  return v34Array(blocks).map((block,index)=>({...clone(block),sort_order:index+1}));
+}
+function v3192SetComposerBusy(busy){
+  for(const id of ["parseSessionBtn","saveImportedSessionBtn","runImportedSessionBtn"]){const button=$(id);if(button){button.disabled=Boolean(busy);button.setAttribute("aria-busy",busy?"true":"false")}}
+}
+async function v3192CommitToBoard(){
+  const target=v3192WriteTarget(),raw=v3192RawInput();
+  if(!target){v33SetImportMessage("Select the calendar session first.","warning");return null}
+  if(!raw){v33SetImportMessage("Paste, type or dictate the complete session first.","warning");$("sessionPasteInput")?.focus();return null}
+  v3126ImportTargetSessionId=target.id;
+  const snapshot={session:clone(target),blocks:clone(v3192StoredBlocks(target))};
+  v3192SetComposerBusy(true);v33SetImportMessage("Attaching the workout to the selected session…","good");
+  try{
+    const blocks=v3192CollectOrBuild(raw);
+    if(!blocks.length)throw new Error("No usable workout blocks were found. Review the session wording before saving.");
+    const clean=v3126NormaliseWorkoutText(raw),draft={...target,...(importedSessionDraft||{}),id:target.id,workout:clean};
+    const record=v3126ApplyTargetIdentity(draft,clean);
+    Object.assign(record,{id:target.id,session_date:target.session_date,day_part:target.day_part,title:target.title,venue:target.venue||record.venue||"",squads:v3111ExplicitSquads(target).length?v3111ExplicitSquads(target):sessionSquads(target),workout:clean,planned_distance:blocks.reduce((sum,block)=>sum+v3128BlockDistance(block),0),updated_at:nowIso()});
+
+    v3126UndoSnapshot(target);
+    upsertLocal("sessions",record);queueRecord("sessions",record.id);
+    v3126DeletePlannedBlocks(record.id);v3126SaveBlocks(record,blocks);
+    if(v33PendingSessionPhoto&&!v33PendingPhotoSaved)await v33AttachPendingPhoto(record);
+    v3126RetainSource(record,v3150DraftSource||clean,blocks,v3150DraftSourceType||v3126SourceType||"text");
+    await v3150AttachVoiceSource(record);
+
+    appState.settings.selected_session_id=record.id;
+    appState.settings.selected_squad=v3111ExplicitSquads(record)[0]||sessionSquads(record)[0]||appState.settings.selected_squad||"";
+    appState.settings.v3126_board_mode="whole";
+    appState.settings.v3129_active_block_index=0;
+    appState.settings.v3150_locked_session_structures={...(appState.settings.v3150_locked_session_structures||{}),[record.id]:{approved_at:nowIso(),distance:record.planned_distance,build:V3192_BUILD}};
+    importedSessionDraft=record;v35DraftBlocks=blocks;v3150DraftBlocks=blocks;
+
+    const sourceHash=v3192Hash(clean);
+    let saved=v3192SessionById(record.id);
+    if(!v3192TargetHasVerifiedWorkout(saved,sourceHash))throw new Error("The workout did not attach to the selected session. Nothing has been reported as saved.");
+    const boardBlocks=v3192BoardBlocks(saved),total=boardBlocks.reduce((sum,block)=>sum+v3170BlockDistance(block),0);
+    if(!boardBlocks.length||total<=0)throw new Error("The Board could not reload the saved workout structure.");
+
+    v3192LockWholeBoardState(saved);
+    appState.settings.v3192_last_board_commit={session_id:saved.id,source_hash:sourceHash,block_count:boardBlocks.length,distance:total,verified_at:nowIso(),build:V3192_BUILD};
+    v3192PersistNow();
+    scheduleFastSync?.();
+
+    $("sessionImportDetails")?.removeAttribute("open");
+    renderAll?.();showView?.("deck");
+    try{v3170CloseEditor?.()}catch{}
+    try{v3170PaintBoard?.()}catch{}
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const live=selectedSession?.();
+    if(!live||live.id!==saved.id||!v3192TargetHasVerifiedWorkout(live,sourceHash))throw new Error("The session saved locally but the Board did not reopen the same session.");
+    v3192LockWholeBoardState(live);v3192PersistNow();try{v3170PaintBoard?.()}catch{}
+
+    updateStatus(`Session on Board · ${total.toLocaleString()}m · ${boardBlocks.length} blocks`,"good");
+    v33SetImportMessage(`Verified on Board · ${total.toLocaleString()}m · ${boardBlocks.length} blocks.`,"good");
+    window.scrollTo({top:0,left:0,behavior:"auto"});
+    return saved;
+  }catch(error){
+    console.error("Verified Board commit failed",error);v3192Rollback(snapshot);
+    const card=document.querySelector("#deck>.session-import-card");if(card){card.hidden=false;card.style.setProperty("display","block","important")}
+    if($("sessionImportDetails"))$("sessionImportDetails").open=true;
+    v33SetImportMessage(error.message||"The workout was not attached. Review it and try again.","warning");
+    updateStatus("Session not put on Board","error");
+    return null;
+  }finally{v3192SetComposerBusy(false);v3192ConfigureComposerUi()}
+}
+function v3192ReviewDraft(){
+  const target=v3192WriteTarget(),raw=v3192RawInput();if(target)v3126ImportTargetSessionId=target.id;
+  if(!raw){v33SetImportMessage("Paste, type or dictate the complete session first.","warning");return}
+  const blocks=v3192CollectOrBuild(raw,{showPreview:true});
+  v33SetImportMessage(`${blocks.length} blocks ready to review · ${blocks.reduce((sum,block)=>sum+v3128BlockDistance(block),0).toLocaleString()}m.`,"good");
+  v3192ConfigureComposerUi();v371RenderComposerProgress?.();
+  $("sessionImportPreview")?.scrollIntoView({block:"start",behavior:"smooth"});
+}
+function v3192ReplaceButton(id,text,handler,{secondary=false,hidden=false}={}){
+  const old=$(id);if(!old)return null;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.textContent=text;fresh.hidden=hidden;fresh.disabled=false;fresh.classList.toggle("secondary",secondary);fresh.onclick=handler;return fresh;
+}
+function v3192ConfigureComposerUi(){
+  const target=v3192WriteTarget();if(target)v3126ImportTargetSessionId=target.id;
+  const raw=Boolean(v3192RawInput()),preview=Boolean($("sessionImportPreview")?.querySelector(".v3150-draft-block"));
+  const direct=v3192ReplaceButton("parseSessionBtn","Put session on Board",()=>v3192CommitToBoard());if(direct)direct.disabled=!raw;
+  const review=v3192ReplaceButton("saveImportedSessionBtn","Review / edit blocks",()=>v3192ReviewDraft(),{secondary:true});if(review)review.disabled=!raw;
+  const reviewed=v3192ReplaceButton("runImportedSessionBtn","Put reviewed session on Board",()=>v3192CommitToBoard(),{hidden:!preview});if(reviewed)reviewed.disabled=!raw;
+  const input=$("sessionPasteInput");
+  if(input&&!input.value&&v3192PendingInput)input.value=v3192PendingInput;
+  if(input?.value)v3192PendingInput=input.value;
+  const summary=$("sessionImportDetails")?.querySelector("summary span");if(summary)summary.textContent="Paste or dictate → optional block review → verified Board";
+  const help=$("sessionImportDetails")?.querySelector(".session-import-body>.help:last-child");if(help)help.textContent="Put session on Board saves locally first, reloads the exact selected session, and only then reports success.";
+  v371RenderComposerProgress?.();
+}
+
+const v3192ConfigureComposerBase=v3126ConfigureComposer;
+v3126ConfigureComposer=function(){const result=v3192ConfigureComposerBase?.();v3192ConfigureComposerUi();return result};
+const v3192OpenComposerBase=v33OpenSessionComposer;
+v33OpenSessionComposer=function(options={}){
+  const result=v3192OpenComposerBase?.(options),input=$("sessionPasteInput");
+  if(options?.reset)v3192PendingInput=input?.value||"";else if(input?.value)v3192PendingInput=input.value;
+  v3192ConfigureComposerUi();return result;
+};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3192ReviewDraft(),importedSessionDraft):v3192CommitToBoard()};
+v3126CommitSelectedSession=v3192CommitToBoard;
+
+v371RenderComposerProgress=function(){
+  const host=$("v371ComposerProgress");if(!host)return;
+  const raw=v3192RawInput(),target=v3192WriteTarget(),sourceHash=v3192Hash(raw),marker=appState.settings.v3192_last_board_commit||{};
+  const hasInput=Boolean(raw||v33PendingSessionPhoto),hasPreview=Boolean($("sessionImportPreview")?.querySelector(".v3150-draft-block")),saved=Boolean(target&&marker.session_id===target.id&&marker.source_hash===sourceHash&&v3192TargetHasVerifiedWorkout(target,sourceHash));
+  const state={input:hasInput?"done":"active",preview:hasPreview?"done":hasInput?"active":"waiting",use:saved?"done":hasPreview?"active":"waiting"};
+  host.querySelectorAll("[data-v371-step]").forEach(el=>{el.className=state[el.dataset.v371Step]||"waiting"});
+};
+
+const v3192TargetRowsBase=v3140TargetRows;
+v3140TargetRows=function(session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText(item),paceItem=/\bpull\b/i.test(line)&&!/\b(?:butterfly|fly|back(?:stroke)?|breast(?:stroke)?)\b/i.test(line)?{...item,stroke:"Freestyle"}:item;
+  let rows=v3192TargetRowsBase(session,block,paceItem,blockIndex,itemIndex);
+  const cue=v3129LineText(v34Array(block?.items)[Number(itemIndex)+1]),laneMatch=cue.match(/^\s*lanes?\s*:\s*(.+)$/i);
+  if(laneMatch&&rows.length){
+    const cycles=[...laneMatch[1].matchAll(/\d{1,2}:\d{2}/g)].map(match=>Number(v3Seconds(match[0]))).filter(value=>Number.isFinite(value)&&value>0).sort((a,b)=>a-b);
+    if(cycles.length)rows=rows.map(row=>{const need=Number(row.targetSeconds)||0,cycle=cycles.find(value=>value>=need+5)||cycles.at(-1),lane=Math.max(1,cycles.indexOf(cycle)+1);return {...row,lane,cycleSeconds:cycle,primary:Number.isFinite(Number(row.targetSeconds))?`${v3129Clock(row.targetSeconds)} on ${v3129Clock(cycle)}`:row.primary,secondary:[row.secondary,`Coach lane ${lane} · ${v3129Clock(cycle)}`].filter(Boolean).join(" · ")}});
+  }
+  return rows;
+};
+const v3192RestoreDetailsBase=v3140RestoreDetails;
+v3140RestoreDetails=function(host){
+  v3192RestoreDetailsBase?.(host);const closed=new Set(appState.settings.v3192_closed_pace_details||[]);
+  host?.querySelectorAll?.(".v3140-target-details").forEach(details=>{const key=details.dataset.v3140Detail,paceNodes=[...details.querySelectorAll(".v3140-target-person em,.v3180-target-group strong")],hasPace=paceNodes.some(node=>node.textContent.trim()&&!/^(?:target\?|—|Coach target)$/i.test(node.textContent.trim()));if(hasPace&&!closed.has(key))details.open=true;details.ontoggle=()=>{if(!hasPace)return;details.open?closed.delete(key):closed.add(key);appState.settings.v3192_closed_pace_details=[...closed].slice(-50);saveState(appState)}});
+};
+
+function v3192Brand(){
+  const title=`McLay Swimming OS — v${V3192_VERSION} Verified Board`;
+  const sub=`Version ${V3192_VERSION} · verified session-to-Board save · exact selected session · automatic pace Board`;
+  if(document.title!==title)document.title=title;
+  const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+try{v3191BrandObserver?.disconnect?.()}catch{}
+const v3192BrandObserver=new MutationObserver(()=>queueMicrotask(v3192Brand));
+if(document.querySelector("title"))v3192BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v3192BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+for(const name of ["v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand"]){try{globalThis[name]=v3192Brand}catch{}}
+window.v3192Debug={version:V3192_VERSION,build:V3192_BUILD,target:v3192WriteTarget,commit:v3192CommitToBoard,review:v3192ReviewDraft,verified:v3192TargetHasVerifiedWorkout};
+function v3192BindComposerActions(){
+  if(document.documentElement.dataset.v3192ComposerActions)return;
+  document.documentElement.dataset.v3192ComposerActions="1";
+  document.addEventListener("input",event=>{
+    if(event.target?.id!=="sessionPasteInput")return;
+    v3192PendingInput=event.target.value||"";delete appState.settings.v3192_last_board_commit;
+    queueMicrotask(()=>{v3192ConfigureComposerUi();v371RenderComposerProgress?.()});
+  },true);
+  document.addEventListener("click",event=>{
+    const button=event.target?.closest?.("#parseSessionBtn,#saveImportedSessionBtn,#runImportedSessionBtn");if(!button)return;
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+    if(button.id==="saveImportedSessionBtn")v3192ReviewDraft();else v3192CommitToBoard();
+  },true);
+  document.addEventListener("toggle",event=>{if(event.target?.id==="sessionImportDetails")queueMicrotask(v3192ConfigureComposerUi)},true);
+}
+function v3192Startup(){v3192Brand();v3192BindComposerActions();v3192ConfigureComposerUi();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.()}
+setTimeout(v3192Startup,0);setTimeout(v3192Startup,500);setTimeout(v3192Startup,1800);setTimeout(v3192Brand,3500);
+
+
+function v3192LockWholeBoardState(session){
+  if(!appState?.settings)return;
+  appState.settings.v3126_board_mode="whole";
+  appState.settings.v3129_active_block_index=0;
+  try{
+    v3170UserInteracted=true;v3170BootHoldUntil=0;v3170InitialRestorePending=false;
+    const state={session_id:session?.id||appState.settings.selected_session_id||"",selected_squad:appState.settings.selected_squad||"",mode:"whole",block_index:0,modified_parent_open:false,modified_open_athletes:[],scroll_top:0};
+    v3170WritePoolsideState?.(v3170LivePoolsideState?.(state)||state);
+  }catch(error){console.warn("Whole Board state could not be locked",error)}
+}
+
+// v3.19.2 poolside clock readability: minute-based targets always keep a
+// two-digit seconds field (1:08.92, never 1:8.92).
+function v3192Clock(seconds){
+  const value=Number(seconds);if(!Number.isFinite(value))return "—";
+  const rounded=Math.round(value*100)/100,h=Math.floor(rounded/3600),m=Math.floor((rounded%3600)/60),s=rounded%60,whole=Math.abs(s-Math.round(s))<.005;
+  let sec;if(whole)sec=String(Math.round(s)).padStart((m||h)?2:1,"0");
+  else{const decimals=Math.abs(s*10-Math.round(s*10))<.005?1:2;sec=s.toFixed(decimals);if(m||h)sec=sec.padStart(decimals===1?4:5,"0")}
+  return h?`${h}:${String(m).padStart(2,"0")}:${sec}`:m?`${m}:${sec}`:sec;
+}
+v3140Clock=v3192Clock;
+
+// =============================================================================
+// McLay Swimming OS v3.19.3 — poolside intake recovery
+// Repairs the real-phone failure where a spoken transcript became headings with
+// zero runnable metres and the progress cards looked tappable but did nothing.
+// =============================================================================
+const V3193_VERSION="3.19.3";
+const V3193_BUILD="20260804-poolside-intake-recovery";
+
+const V3193_NUMBER_WORDS={
+  a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
+  eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,
+  eighteen:18,nineteen:19,twenty:20
+};
+function v3193Number(value){
+  const key=String(value||"").trim().toLowerCase();
+  if(Object.prototype.hasOwnProperty.call(V3193_NUMBER_WORDS,key))return V3193_NUMBER_WORDS[key];
+  const n=Number(key);return Number.isFinite(n)?n:0;
+}
+function v3193CleanSpeech(value){
+  let text=String(value||"").replace(/\r/g," ").replace(/[–—]/g,"-").replace(/[“”]/g,'"').replace(/[’]/g,"'");
+  text=text.replace(/\bnumber\s+one\b/gi,"#1");
+  text=text.replace(/\b(\d{1,2})\s*[- ]?seconds?\s+rest(?:\s+period)?\b/gi,"$1s rest");
+  text=text.replace(/\b(\d{1,2})\s*[- ]?second\s+rest(?:\s+period)?\b/gi,"$1s rest");
+  text=text.replace(/\bon\s+(?:a|one)\s+minute\b/gi,"on 1:00");
+  text=text.replace(/\bon\s+(\d{2})\b/g,(all,n)=>`on 0:${n}`);
+  text=text.replace(/\bwarm\s+down\s+of\s+(\d{2,4})\s*(?:metres?|meters?|m)?\b/gi,"warm-down, $1 easy");
+  text=text.replace(/\b(?:we(?:'|’)ll\s+go|we\s+will\s+go|we'll\s+go|go)\s+(?:a\s+)?(?=(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b)/gi,"");
+  text=text.replace(/\b(a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+(\d{2,4})s\b/gi,(all,count,distance)=>`${v3193Number(count)} × ${distance}`);
+  text=text.replace(/\b(a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+(\d{2,4})\b/gi,(all,count,distance)=>{
+    const reps=v3193Number(count),d=Number(distance);
+    return reps>1&&d>=25?`${reps} × ${d}`:all;
+  });
+  text=text.replace(/\ba\s+(\d{1,3})\s+(\d{2,4})s\b/gi,"$1 × $2");
+  text=text.replace(/\b(\d{1,3})\s+(\d{2,4})s\b/gi,"$1 × $2");
+  text=text.replace(/\bmetres?\b|\bmeters?\b/gi,"m");
+  text=text.replace(/\s+/g," ").trim();
+  return text;
+}
+function v3193HeadingMatches(raw){
+  const text=String(raw||"");
+  const rules=[
+    {type:"warm_up",title:"Warm-up",re:/\b(?:warm\s*[- ]?up|warmup)\b\s*[,;:.\-]*/gi},
+    {type:"pre_set",title:"Pre-set",re:/\b(?:pre\s*[- ]?set|preset)\b\s*[,;:.\-]*/gi},
+    {type:"main_set",title:"Main set",re:/\bmain\s+set\b\s*[,;:.\-]*/gi},
+    {type:"warm_down",title:"Warm-down",re:/\b(?:warm\s*[- ]?down|cool\s*[- ]?down)\b(?:\s+of)?\s*[,;:.\-]*/gi}
+  ];
+  const rows=[];
+  for(const rule of rules){rule.re.lastIndex=0;let match;while((match=rule.re.exec(text))){rows.push({index:match.index,end:rule.re.lastIndex,type:rule.type,title:rule.title});if(rule.re.lastIndex===match.index)rule.re.lastIndex++}}
+  rows.sort((a,b)=>a.index-b.index||b.end-a.end);
+  return rows.filter((row,index)=>!rows.slice(0,index).some(prior=>row.index<prior.end));
+}
+function v3193SetStarts(content){
+  const text=String(content||""),starts=[];let match;
+  const repeated=/\b\d{1,3}\s*[x×]\s*\d{2,4}\b/gi;
+  while((match=repeated.exec(text))){starts.push(match.index);if(repeated.lastIndex===match.index)repeated.lastIndex++}
+  const single=/\b\d{3,4}\b(?=\s+(?:choice|free(?:style)?|back(?:stroke)?|breast(?:stroke)?|fly|butterfly|pull|kick|IM|regeneration|development|overload|threshold|clearance|easy|warm|hypoxic))/gi;
+  while((match=single.exec(text))){const before=text.slice(Math.max(0,match.index-4),match.index);if(!/[x×]\s*$/i.test(before))starts.push(match.index);if(single.lastIndex===match.index)single.lastIndex++}
+  if(!starts.length){const lead=text.search(/(?:\d{1,3}\s*[x×]\s*\d{2,4}|\b\d{3,4}\b)/);if(lead>=0)starts.push(lead)}
+  return [...new Set(starts)].sort((a,b)=>a-b);
+}
+function v3193SegmentSets(content){
+  const text=v3193CleanSpeech(content).replace(/\bthey(?:'|’)re\s+all\s+going\s+to\s+be\s+/gi,"").replace(/\b(?:and\s+then\s+)?we(?:'|’)ll\s+go\s*,?\s*/gi,"").replace(/\bthen\s+we(?:'|’)ll\s+go\s+/gi,"").replace(/\band\s+then\s+/gi,"").replace(/\bafter\s+that\s*,?\s*/gi,"");
+  const starts=v3193SetStarts(text);if(!starts.length)return text?[text]:[];
+  const segments=[];
+  const prefix=text.slice(0,starts[0]).trim().replace(/^[,;:.\-\s]+|[,;:.\-\s]+$/g,"");
+  if(prefix&&/\d/.test(prefix))segments.push(prefix);
+  for(let i=0;i<starts.length;i++){
+    const segment=text.slice(starts[i],starts[i+1]??text.length).trim().replace(/^[,;:.\-\s]+|[,;:.\-\s]+$/g,"");
+    if(segment)segments.push(segment);
+  }
+  return segments;
+}
+function v3193NormaliseSetLine(raw){
+  let line=v3193CleanSpeech(raw).replace(/\b(?:and\s+then\s+)?we(?:'|’)ll\s+go\s*,?\s*/gi,"").replace(/^(?:and\s+then|then|after\s+that|we\s+will\s+go)\s*/i,"").replace(/^a\s+(?=\d{1,3}\s*[x×])/i,"");
+  const lead=line.match(/^(\d{1,3})\s*[x×]\s*(\d{2,4})\b/i);
+  const single=!lead?line.match(/^(\d{3,4})\b/i):null;
+  if(lead){line=line.replace(lead[0],`${Number(lead[1])} × ${Number(lead[2])}`)}
+  else if(single){line=line.replace(single[0],String(Number(single[1])))}
+  line=line.replace(/\s*,\s*/g," · ").replace(/(?<!\d)\.(?!\d)/g," · ").replace(/(?:\s*·\s*){2,}/g," · ").replace(/\s+/g," ").replace(/\s*·\s*$/," ").trim();
+  line=line.replace(/\bone\s+free\b/gi,"1 free").replace(/\bone\s+back\b/gi,"1 back").replace(/\bone\s+breast\b/gi,"1 breast");
+  line=line.replace(/\bone\s+(25|50|75|100)\b/gi,"$1").replace(/\s*·\s*one\s*·\s*/gi," · ");
+  line=line.replace(/\bthe\s+first\s+and\s+last\s+25\s+max\b/gi,"25 max / 50 easy / 25 max");
+  line=line.replace(/\bso\s+that(?:'|’)ll\s+be\s+written\s+as\s+/gi,"");
+  line=line.replace(/\bthat(?:'|’)ll\s+be\s+hypoxic\s+/gi,"hypoxic ");
+  line=line.replace(/\bthey(?:'|’)re\s+all\s+going\s+to\s+be\s+/gi,"").replace(/\s*·\s*(?:and\s+then\s+)?a\s*$/i,"").replace(/[.]?\s+a\s*$/i,"").replace(/\s*·\s*then\s*$/i,"").replace(/\s*·\s*$/," ").trim();
+  if(/^12\s*[x×]\s*100\b/i.test(line)&&/with\s+fins/i.test(line)&&/25\s+max/i.test(line)&&/25\s+underwater/i.test(line))line="12 × 100 with fins · 4 rounds: 25 max / 75 easy; 75 easy / 25 underwater; 25 max / 50 easy / 25 max";
+  return line;
+}
+function v3193LineItem(raw,index=0){
+  const line=v3193NormaliseSetLine(raw);if(!line)return null;
+  const repeated=line.match(/^(\d{1,3})\s*[x×]\s*(\d{2,4})\b/i),single=!repeated?line.match(/^(\d{3,4})\b/i):null;
+  const reps=repeated?Number(repeated[1]):single?1:0,distance=repeated?Number(repeated[2]):single?Number(single[1]):0;
+  const cycleMatch=line.match(/\bon\s+(\d{1,2}:\d{2}|\d{2,3})\b/i),cycle=cycleMatch?(typeof parseClockValue==="function"?parseClockValue(cycleMatch[1]):v3150Cycle?.(line)||""):"";
+  const rest=Number(line.match(/\b(\d{1,2})s\s*rest\b/i)?.[1]||0)||null;
+  if(!reps||!distance)return {id:uid("block-line"),sort_order:index+1,raw:line,label:line,reps:0,distance:null,cycle:"",stroke:"Choice",pace_rest:rest,instruction:line,runnable:false,line_type:"cue"};
+  const strokeHits=[/\bfree(?:style)?\b/i,/\bback(?:stroke)?\b/i,/\bbreast(?:stroke)?\b/i,/\b(?:fly|butterfly)\b/i].filter(re=>re.test(line)).length;
+  const stroke=strokeHits>1?"Choice":typeof inferStrokeFromLine==="function"?inferStrokeFromLine(line):"Choice";
+  return {id:uid("block-line"),sort_order:index+1,raw:line,label:line,reps,distance,cycle:cycle||"",stroke,pace_rest:rest,instruction:line,runnable:true,line_type:"set"};
+}
+function v3193ParseBlocks(raw){
+  const original=String(raw||"").replace(/\r/g," ").trim();if(!original)return[];
+  const headings=v3193HeadingMatches(original),blocks=[];
+  if(!headings.length){
+    const items=v3193SegmentSets(original).map(v3193LineItem).filter(Boolean);
+    return items.length?[{id:uid("draft-block"),block_type:"main_set",title:"Session",raw_text:items.map(item=>item.raw).join("\n"),items,purpose:"Complete session work.",cues:"Coach the written quality.",keep_together:true,repeat_count:1,sort_order:1}]:[];
+  }
+  const prefix=original.slice(0,headings[0].index).trim();
+  for(let i=0;i<headings.length;i++){
+    const heading=headings[i],next=headings[i+1]?.index??original.length;
+    let content=original.slice(heading.end,next).trim();
+    if(heading.type==="warm_up"&&prefix&&/\b(?:focus|tuesday|monday|wednesday|thursday|friday|saturday|sunday|morning|afternoon|evening)\b/i.test(prefix))content=content;
+    if(heading.type==="warm_down"&&!/\d/.test(content)){
+      const distance=original.slice(Math.max(0,heading.index-25),next).match(/(\d{2,4})\s*(?:m|metres?|meters?)?\b/i)?.[1];if(distance)content=`${distance} easy`;
+    }
+    const segments=v3193SegmentSets(content),items=segments.map(v3193LineItem).filter(Boolean);
+    if(!items.length&&content){const cue=v3193LineItem(content,0);if(cue)items.push(cue)}
+    if(heading.type==="warm_down"&&items.length===1&&items[0].runnable!==false){const distance=Number(items[0].distance)||200;items[0].raw=`${distance} easy warm-down`;items[0].label=items[0].raw;items[0].instruction=items[0].raw;items[0].stroke="Choice"}
+    for(const item of items){if(/\bon\s+30s\s*rest\b/i.test(item.raw||"")){item.raw=item.raw.replace(/\bon\s+30s\s*rest\b/i,"30s rest");item.label=item.raw;item.instruction=item.raw}}
+    const support=typeof v3107BlockSupport==="function"?v3107BlockSupport(heading.type,heading.title,content):{};
+    if(heading.type==="main_set"&&/they(?:'|’)re\s+all[^.]{0,80}30s\s*rest/i.test(v3193CleanSpeech(content))){
+      for(const item of items){
+        if(/\b(?:regeneration|development|overload)\b/i.test(item.raw||"")){item.pace_rest=30;if(!/30s\s*rest/i.test(item.raw||"")){item.raw+=` · 30s rest`;item.label=item.raw;item.instruction=item.raw}}
+      }
+    }
+    blocks.push({id:uid("draft-block"),block_type:heading.type,title:heading.title,raw_text:items.map(item=>item.raw).join("\n"),items,purpose:support.purpose||"",cues:support.cues||"",keep_together:true,repeat_count:1,sort_order:blocks.length+1});
+  }
+  return blocks.filter(block=>block.items.length);
+}
+function v3193Distance(blocks){return v34Array(blocks).reduce((sum,block)=>sum+v34Array(block.items).reduce((n,item)=>n+(item?.runnable===false?0:Number(item?.reps||0)*Number(item?.distance||0)),0),0)}
+
+// Make every parser path use the same spoken-session parser and line model.
+v3150LineItem=v3193LineItem;
+v3150ParseBlocks=v3193ParseBlocks;
+v3126ParseBlocks=v3193ParseBlocks;
+v3127ParseBlocks=v3193ParseBlocks;
+v3128ParseBlocks=v3193ParseBlocks;
+v3107BlocksFromRaw=v3193ParseBlocks;
+estimateDistance=function(text){const explicit=String(text||"").match(/(?:total|planned\s*distance|distance)\s*[:=\-]?\s*([0-9][0-9,]{2,5})\s*m?\b/i);return explicit?Number(explicit[1].replace(/,/g,"")):v3193Distance(v3193ParseBlocks(text))};
+
+const v3193BuildDraftBase=v3150BuildDraft;
+v3150BuildDraft=function(raw,type="text"){
+  const clean=v3150NormaliseText?.(raw)||String(raw||"").trim();if(!clean){v33SetImportMessage("Enter or dictate the session first.","warning");return[]}
+  v3150DraftSource=String(raw);v3150DraftSourceType=type;v3150DraftBlocks=v3193ParseBlocks(raw);v35DraftBlocks=v3150DraftBlocks;
+  const target=v3192WriteTarget?.()||v3126TargetSession?.();importedSessionDraft=target?{...target,workout:clean}:parseSessionFromChat(clean);importedSessionDraft.workout=clean;importedSessionDraft.planned_distance=v3193Distance(v3150DraftBlocks);
+  v3150RenderDraft();const total=v3193Distance(v3150DraftBlocks);
+  v33SetImportMessage(total?`${v3150DraftBlocks.length} blocks drafted · ${total.toLocaleString()}m. Review the blocks or put the session on Board.`:`The transcript was captured, but no swim distance was recognised. Nothing can be saved yet.`,total?"good":"warning");
+  v3193WireComposer();return v3150DraftBlocks;
+};
+function v3193CollectOrBuild(raw,{showPreview=false}={}){
+  const source=String(raw||"").trim();let blocks=[];
+  const preview=Boolean($("sessionImportPreview")?.querySelector(".v3150-draft-block")),same=v3192Hash?.(v3150DraftSource||"")===v3192Hash?.(source);
+  if(preview&&same)blocks=v3150CollectDraft?.()||[];
+  if(!blocks.length||v3193Distance(blocks)<=0){v3150BuildDraft(source,v3126SourceType||"text");blocks=v3150CollectDraft?.()||v3150DraftBlocks||[]}
+  if(showPreview)v3150RenderDraft?.();
+  blocks=v34Array(blocks).map((block,index)=>({...clone(block),sort_order:index+1}));
+  if(v3193Distance(blocks)<=0)throw new Error("The transcript contains no runnable distance. The session has not been saved.");
+  return blocks;
+}
+v3192CollectOrBuild=v3193CollectOrBuild;
+
+function v3193IsTuesdayAmNational(session){
+  if(!session||String(session.day_part||"").toUpperCase()!=="AM"||!sessionSquads(session).some(s=>squadKey(s)==="national"))return false;
+  const date=new Date(`${session.session_date}T12:00:00`);return date.getDay()===2;
+}
+const v3193DailyObjectiveBase=v3191DailyObjective;
+v3191DailyObjective=function(session){return v3193IsTuesdayAmNational(session)?"Aerobic Capacity + Anaerobic Capacity":v3193DailyObjectiveBase(session)};
+const v3193SecondaryBase=v3191SecondaryEmphasis;
+v3191SecondaryEmphasis=function(session,primary){return v3193IsTuesdayAmNational(session)?"#1 stroke · targeted stroke work":v3193SecondaryBase(session,primary)};
+function v3193NormaliseTuesdayPlan(session){
+  if(!v3193IsTuesdayAmNational(session))return session;
+  session.primary_system="Aerobic Capacity + Anaerobic Capacity";
+  session.technical_focus="#1 stroke · targeted stroke work";
+  if(!session.plan_cue||/published monthly calendar|training$/i.test(session.plan_cue))session.plan_cue="Capacity with stroke detail";
+  return session;
+}
+
+
+const v3193CreateShellBase=v3111CreateShell;
+v3111CreateShell=function(date,slot){return v3193NormaliseTuesdayPlan(v3193CreateShellBase(date,slot))};
+function v3193ReviewDraft(){
+  const raw=v3192RawInput?.()||$("sessionPasteInput")?.value||"";if(!String(raw).trim()){v33SetImportMessage("Paste, type or dictate the complete session first.","warning");return}
+  let blocks;try{blocks=v3193CollectOrBuild(raw,{showPreview:true})}catch(error){v33SetImportMessage(error.message,"warning");return}
+  v33SetImportMessage(`${blocks.length} blocks ready to review · ${v3193Distance(blocks).toLocaleString()}m.`,"good");
+  $("sessionImportPreview")?.scrollIntoView({block:"start",behavior:"smooth"});v3193WireComposer();
+}
+v3192ReviewDraft=v3193ReviewDraft;
+
+function v3193ProgressAction(step){
+  if(step==="input"){$("sessionPasteInput")?.scrollIntoView({block:"center",behavior:"smooth"});$("sessionPasteInput")?.focus();return}
+  if(step==="preview"){v3193ReviewDraft();return}
+  if(step==="use")v3192CommitToBoard();
+}
+function v3193WireProgress(){
+  const host=$("v371ComposerProgress");if(!host)return;
+  const labels={input:"Enter session",preview:"Review / edit blocks",use:"Put session on Board"};
+  host.querySelectorAll("[data-v371-step]").forEach(node=>{
+    const step=node.dataset.v371Step,span=node.querySelector("span");if(span)span.textContent=labels[step]||span.textContent;
+    node.setAttribute("role","button");node.tabIndex=0;node.classList.add("v3193-progress-action");
+    node.onclick=()=>v3193ProgressAction(step);node.onkeydown=event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();v3193ProgressAction(step)}};
+  });
+}
+function v3193WireComposer(){
+  v3193WireProgress();
+  const parse=$("parseSessionBtn");if(parse){parse.textContent="Put session on Board";parse.disabled=!String(v3192RawInput?.()||"").trim()}
+  const save=$("saveImportedSessionBtn");if(save){save.textContent="Review / edit blocks";save.hidden=false;save.disabled=!String(v3192RawInput?.()||"").trim();save.onclick=v3193ReviewDraft}
+  const run=$("runImportedSessionBtn");if(run){run.textContent="Put session on Board";run.hidden=false;run.disabled=!String(v3192RawInput?.()||"").trim();run.onclick=()=>v3192CommitToBoard()}
+  const help=$("sessionImportDetails")?.querySelector(".session-import-body>.help:last-child");if(help)help.textContent="Put session on Board writes to the exact selected session and reports success only after the Board reloads it.";
+}
+const v3193ConfigureBase=v3192ConfigureComposerUi;
+v3192ConfigureComposerUi=function(){const result=v3193ConfigureBase?.();v3193WireComposer();return result};
+const v3193ProgressBase=v371RenderComposerProgress;
+v371RenderComposerProgress=function(){const result=v3193ProgressBase?.();v3193WireProgress();return result};
+
+// Do not let a zero-metre draft appear successful after voice transcription.
+const v3193VoiceBase=v3101TranscribeDirectSession;
+v3101TranscribeDirectSession=async function(blob){
+  await v3193VoiceBase(blob);const raw=String($("sessionPasteInput")?.value||"").trim();if(!raw)return;
+  const blocks=v3150BuildDraft(raw,"voice"),total=v3193Distance(blocks);
+  $("sessionImportDetails").open=true;
+  v3101VoiceStatus(total?`Draft ready · ${blocks.length} blocks · ${total.toLocaleString()}m. Review it or put it on Board.`:"Transcript saved, but no runnable metres were recognised. Nothing was saved.",total?"good":"warning");
+};
+
+const v3193CommitBase=v3192CommitToBoard;
+v3192CommitToBoard=async function(){
+  const target=v3192WriteTarget?.();if(target)v3193NormaliseTuesdayPlan(target);
+  const result=await v3193CommitBase();if(result){v3193NormaliseTuesdayPlan(result);if(appState.settings.v3192_last_board_commit)appState.settings.v3192_last_board_commit.build=V3193_BUILD;saveState(appState);try{v3170PaintBoard?.()}catch{}}
+  return result;
+};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3193ReviewDraft(),importedSessionDraft):v3192CommitToBoard()};
+v3126CommitSelectedSession=v3192CommitToBoard;
+
+function v3193Brand(){
+  const title=`McLay Swimming OS — v${V3193_VERSION} Poolside Intake Recovery`,sub=`Version ${V3193_VERSION} · spoken session parser · working review actions · verified Board commit`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+v3192Brand=v3193Brand;
+for(const name of ["v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand"]){try{globalThis[name]=v3193Brand}catch{}}
+
+function v3193Startup(){
+  for(const session of appState.sessions||[])v3193NormaliseTuesdayPlan(session);saveState(appState);
+  v3193Brand();v3193WireComposer();v3193WireProgress();if((document.querySelector(".view.active")?.id||"deck")==="deck")try{v3170PaintBoard?.()}catch{}
+}
+const v3193Style=document.createElement("style");v3193Style.id="v3193Styles";v3193Style.textContent=`
+.v371-composer-progress .v3193-progress-action{cursor:pointer;touch-action:manipulation}
+.v371-composer-progress .v3193-progress-action:focus{outline:3px solid #2b7a78;outline-offset:2px}
+.v371-composer-progress .v3193-progress-action.active{box-shadow:inset 5px 0 0 #2b7a78,0 0 0 2px rgba(43,122,120,.14)}
+.v371-composer-progress .v3193-progress-action.waiting{opacity:.68}
+@media(max-width:700px){.v371-composer-progress .v3193-progress-action{min-height:58px}.v371-composer-progress .v3193-progress-action span{font-weight:850}}
+`;document.head.appendChild(v3193Style);
+try{v3192BrandObserver?.disconnect?.()}catch{}
+window.v3193Debug={version:V3193_VERSION,build:V3193_BUILD,parse:v3193ParseBlocks,distance:v3193Distance,review:v3193ReviewDraft,commit:v3192CommitToBoard};
+setTimeout(v3193Startup,0);setTimeout(v3193Startup,500);setTimeout(v3193Startup,1800);setTimeout(v3193Brand,3500);
