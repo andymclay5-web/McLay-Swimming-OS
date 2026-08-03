@@ -14839,3 +14839,390 @@ compactRecordRows=function(athlete){
   }).join("");
 };
 window.v3190Debug.recordRows=v3190RecordRows;
+
+// =============================================================================
+// McLay Swimming OS v3.19.1 — CORRECTED REAL-STATE POOLSIDE
+// Real persisted-state repair after the 3.19.0 field failure:
+// - one latest attendance status per swimmer/session
+// - session-wide live roll summary and modified-work resolver
+// - add cross-squad swimmers and visitors directly from Roll
+// - completed sessions leave the live Board and remain available in Past
+// - Whole Session is the default Board view
+// - daily plan objective stays primary; session emphasis remains secondary
+// =============================================================================
+const V3191_VERSION="3.19.1";
+const V3191_BUILD="20260803-corrected-real-state-poolside";
+
+function v3191Stamp(row,index=0){
+  const raw=row?.updated_at||row?.created_at||"";
+  const parsed=Date.parse(raw);
+  return Number.isFinite(parsed)?parsed:index;
+}
+function v3191AttendanceKey(row){return `${row?.session_id||""}|${row?.athlete_id||""}`}
+function v3191LatestAttendanceRows(sessionId=null){
+  const winners=new Map();
+  (appState.attendance||[]).forEach((row,index)=>{
+    if(!row?.session_id||!row?.athlete_id)return;
+    if(sessionId&&row.session_id!==sessionId)return;
+    const key=v3191AttendanceKey(row),old=winners.get(key);
+    if(!old||v3191Stamp(row,index)>=v3191Stamp(old.row,old.index))winners.set(key,{row,index});
+  });
+  return [...winners.values()].map(item=>item.row);
+}
+function v3191DedupeAttendance({queue=false}={}){
+  const winners=new Map(),removed=[];
+  (appState.attendance||[]).forEach((row,index)=>{
+    if(!row?.session_id||!row?.athlete_id){removed.push(row);return}
+    const key=v3191AttendanceKey(row),old=winners.get(key);
+    if(!old||v3191Stamp(row,index)>=v3191Stamp(old.row,old.index)){
+      if(old)removed.push(old.row);
+      winners.set(key,{row,index});
+    }else removed.push(row);
+  });
+  if(!removed.length)return 0;
+  const keepIds=new Set([...winners.values()].map(item=>item.row.id));
+  appState.attendance=[...winners.values()].map(item=>item.row);
+  if(queue){
+    for(const row of removed){
+      if(!row?.id||keepIds.has(row.id))continue;
+      appState.pending=(appState.pending||[]).filter(item=>!(item.table==="attendance"&&item.id===row.id));
+      queueDelete?.("attendance",row.id);
+    }
+  }
+  saveState(appState);
+  return removed.length;
+}
+function v3191Status(value){return String(value||"").trim().toLowerCase().replace(/[^a-z]+/g,"_").replace(/^_+|_+$/g,"")}
+function v3191Here(value){const key=v3191Status(value);return key==="present"||key==="late"||key.startsWith("modified")}
+function v3191Modified(value){return v3191Status(value).startsWith("modified")}
+function v3191Athlete(id){return (appState.athletes||[]).find(row=>row.id===id&&row.active!==false)||null}
+function v3191ParticipantIds(session){return new Set((appState.session_participants||[]).filter(row=>row.session_id===session?.id).map(row=>row.athlete_id))}
+function v3191BaseSquadKeys(session){return new Set(sessionSquads(session).map(squadKey))}
+function v3191SessionRoster(session=selectedSession()){
+  if(!session)return[];
+  const keys=v3191BaseSquadKeys(session),participants=v3191ParticipantIds(session),marked=new Set(v3191LiveRows(session).map(row=>row.athlete_id));
+  return (appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!v310AllowedAthlete||v310AllowedAthlete(athlete))&&(keys.has(squadKey(athlete.squad))||participants.has(athlete.id)||marked.has(athlete.id))).sort(rosterSort);
+}
+function v3191LiveRows(session=selectedSession()){
+  if(!session)return[];
+  return v3191LatestAttendanceRows(session.id).filter(row=>v3191Here(row.status)&&v3191Athlete(row.athlete_id)).sort((a,b)=>rosterSort(v3191Athlete(a.athlete_id),v3191Athlete(b.athlete_id)));
+}
+function v3191InitialList(rows){return rows.map(row=>v3180Initials(v3191Athlete(row.athlete_id)?.full_name||"")).filter(Boolean)}
+
+attendanceFor=function(sessionId,athleteId){return v3191LatestAttendanceRows(sessionId).find(row=>row.athlete_id===athleteId)||null};
+allSessionRoster=v3191SessionRoster;
+v310AllSessionRoster=v3191SessionRoster;
+v382PresentRoster=function(){return v3191LiveRows(selectedSession()).map(row=>v3191Athlete(row.athlete_id)).filter(Boolean)};
+
+attendanceRecord=function(session,athleteId,status){
+  if(!session||!athleteId)return null;
+  const athlete=v3191Athlete(athleteId),existing=attendanceFor(session.id,athleteId),canonical=attendanceId(session.id,athleteId),stamp=nowIso();
+  for(const row of (appState.attendance||[]).filter(item=>item.session_id===session.id&&item.athlete_id===athleteId&&item.id!==canonical)){
+    appState.attendance=appState.attendance.filter(item=>item.id!==row.id);
+    if(row.id)queueDelete?.("attendance",row.id);
+  }
+  const record={id:canonical,session_id:session.id,athlete_id:athleteId,status:v3191Modified(status)?"modified":v3191Status(status)||"absent",note:existing?.note||"",created_at:existing?.created_at||stamp,updated_at:stamp};
+  upsertLocal("attendance",record);queueRecord("attendance",record.id);
+  if(athlete&&!v3191BaseSquadKeys(session).has(squadKey(athlete.squad))&&!v3191ParticipantIds(session).has(athlete.id)){
+    const participant={id:`participant-${session.id}-${athlete.id}`,session_id:session.id,athlete_id:athlete.id,participant_type:athlete.is_visitor?"visitor":"extra",source_squad:athlete.squad||"",notes:athlete.is_visitor?"Visitor":"Added from another squad",created_at:stamp,updated_at:stamp};
+    upsertLocal("session_participants",participant);queueRecord("session_participants",participant.id);
+  }
+  saveState(appState);scheduleFastSync?.();V3144_TARGET_CACHE?.clear?.();
+  if((document.querySelector(".view.active")?.id||"")==="deck")v3170PaintBoard?.();
+  return record;
+};
+
+v3180RelevantAttendance=function(session){return v3191LatestAttendanceRows(session?.id).filter(row=>v3191Athlete(row.athlete_id))};
+v3180AttendanceSummary=function(session){
+  const rows=v3191LiveRows(session),modified=rows.filter(row=>v3191Modified(row.status)),initials=v3191InitialList(rows),compact=initials.length<=5?initials.join(" · "):`${initials.slice(0,4).join(" · ")} +${initials.length-4}`,expected=v3191SessionRoster(session).length;
+  const modText=modified.length?` · Modified ${v3191InitialList(modified).join(" ")}`:"";
+  return {rows,modified,names:rows.map(row=>v3191Athlete(row.athlete_id)?.full_name).filter(Boolean),label:rows.length?`${rows.length} in${compact?` · ${compact}`:""}${modText}`:`Roll not taken · ${expected} available`};
+};
+v3170RollState=function(session){const data=v3180AttendanceSummary(session);return{started:data.rows.length>0,here:data.rows.length,expected:v3191SessionRoster(session).length,modified:data.modified.length,label:data.label}};
+
+v3180ModifiedAthletes=function(session){
+  if(!session)return[];
+  const live=v3191LiveRows(session),rollStarted=v3191LatestAttendanceRows(session.id).length>0,map=new Map();
+  for(const row of live){
+    const athlete=v3191Athlete(row.athlete_id);if(!athlete)continue;
+    let baseline=false;try{baseline=Boolean(v3142HasActiveAdaptation?.(athlete,session)||v3142HasPermanentBaseline?.(athlete))}catch{}
+    if(v3191Modified(row.status)||baseline)map.set(athlete.id,athlete);
+  }
+  if(!rollStarted){
+    for(const athlete of v3191SessionRoster(session)){let baseline=false;try{baseline=Boolean(v3142HasActiveAdaptation?.(athlete,session)||v3142HasPermanentBaseline?.(athlete))}catch{}if(baseline)map.set(athlete.id,athlete)}
+  }
+  return [...map.values()].sort(rosterSort);
+};
+v3172ModifiedAthletes=v3180ModifiedAthletes;v3140ModifiedColumns=v3180ModifiedAthletes;
+v3172SquadRoster=function(session=selectedSession(),squad=v3172ActiveSquadName(session)){
+  if(!session)return[];const key=squadKey(squad),participants=v3191ParticipantIds(session),marked=new Set(v3191LiveRows(session).map(row=>row.athlete_id));
+  return (appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!v310AllowedAthlete||v310AllowedAthlete(athlete))&&(!key||squadKey(athlete.squad)===key||participants.has(athlete.id)||marked.has(athlete.id))).sort(rosterSort);
+};
+
+function v3191ParticipantRecord(session,athlete,type="extra"){
+  const stamp=nowIso(),record={id:`participant-${session.id}-${athlete.id}`,session_id:session.id,athlete_id:athlete.id,participant_type:type,source_squad:athlete.squad||"",notes:type==="visitor"?(athlete.visitor_home_club?`Visiting from ${athlete.visitor_home_club}`:"Visitor"):`Added from ${athlete.squad||"another squad"}`,created_at:stamp,updated_at:stamp};
+  upsertLocal("session_participants",record);queueRecord("session_participants",record.id);return record;
+}
+async function v3191AddExisting(athleteId,status="present"){
+  const session=selectedSession(),athlete=v3191Athlete(athleteId);if(!session||!athlete)return;
+  v3191ParticipantRecord(session,athlete,"extra");attendanceRecord(session,athlete.id,status);saveState(appState);await syncIfPossible();renderAttendance();renderActiveContext?.();v3170PaintBoard?.();updateStatus(`${athlete.full_name} added to this session`,"good");
+}
+async function v3191AddVisitor(name,squad,club,status="present"){
+  const session=selectedSession();name=String(name||"").trim();if(!session||!name)return alert("Enter the visitor's name.");
+  let athlete=(appState.athletes||[]).find(row=>v3NameKey(row.full_name)===v3NameKey(name));
+  if(!athlete){athlete={id:uid("athlete"),full_name:name,squad:squad||"Visitor",active:true,is_visitor:true,visitor_home_club:String(club||"").trim()||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("athletes",athlete);queueRecord("athletes",athlete.id)}
+  v3191ParticipantRecord(session,athlete,"visitor");attendanceRecord(session,athlete.id,status);saveState(appState);await syncIfPossible();renderAttendance();renderActiveContext?.();v3170PaintBoard?.();updateStatus(`${athlete.full_name} added as a visitor`,"good");
+}
+async function v3191RemoveParticipant(athleteId){
+  const session=selectedSession(),row=(appState.session_participants||[]).find(item=>item.session_id===session?.id&&item.athlete_id===athleteId);if(!session||!row)return;
+  appState.session_participants=appState.session_participants.filter(item=>item.id!==row.id);queueDelete("session_participants",row.id);attendanceRecord(session,athleteId,"absent");saveState(appState);await syncIfPossible();renderAttendance();v3170PaintBoard?.();
+}
+
+renderAttendance=function(){
+  const session=selectedSession();if(!session)return;
+  const roster=v3191SessionRoster(session),live=v3191LiveRows(session),participants=v3191ParticipantIds(session),outside=(appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!v310AllowedAthlete||v310AllowedAthlete(athlete))&&!roster.some(row=>row.id===athlete.id)).sort((a,b)=>a.full_name.localeCompare(b.full_name)),active=v3172ActiveSquadName?.(session)||activeSquad?.()||"Session";
+  if($('attendanceHeading'))$('attendanceHeading').textContent=`${sessionLabel(session)} · ${active} · ${live.length} currently in`;
+  const rows=roster.map(athlete=>{
+    const value=v3191Status(attendanceFor(session.id,athlete.id)?.status),added=participants.has(athlete.id)&&!v3191BaseSquadKeys(session).has(squadKey(athlete.squad));
+    return `<div class="attendance-row v3191-roll-row ${v3191Here(value)?"here":"unmarked"}" data-athlete-id="${escapeHtml(athlete.id)}"><div><strong>${escapeHtml(athlete.full_name)}</strong><small>${escapeHtml(athlete.squad||"Unassigned")}${added?" · added to this session":""}</small></div><div class="attendance-buttons"><button type="button" class="attendance-choice ${value==="present"||value==="late"?"active":""}" data-status="present">Here</button><button type="button" class="attendance-choice ${v3191Modified(value)?"active":""}" data-status="modified">Modified</button><button type="button" class="attendance-choice secondary ${value==="absent"?"active":""}" data-status="absent">Absent</button>${added?`<button type="button" class="secondary v3191-remove" data-remove-participant="${escapeHtml(athlete.id)}" aria-label="Remove ${escapeHtml(athlete.full_name)} from this session">Remove</button>`:""}</div></div>`;
+  }).join("")||'<div class="help">No swimmers are linked to this session yet.</div>';
+  const host=$('attendanceList');if(!host)return;
+  host.innerHTML=`<section class="v3191-live-roll"><span>Live session</span><strong>${escapeHtml(v3180AttendanceSummary(session).label)}</strong></section><details class="v3191-add-swimmer" open><summary><strong>Add swimmer or visitor</strong><span>Other squads, move-ups and visitors</span></summary><div class="v3191-add-grid"><label>Search all swimmers<input id="v3191AthleteSearch" type="search" placeholder="Awatea, Seth, squad or name"></label><label>Choose swimmer<select id="v3191ExtraAthlete"><option value="">Choose swimmer</option>${outside.map(athlete=>`<option value="${escapeHtml(athlete.id)}">${escapeHtml(athlete.full_name)} — ${escapeHtml(athlete.squad||"Unassigned")}</option>`).join("")}</select></label><div class="button-row"><button type="button" id="v3191AddHere">Add as Here</button><button type="button" id="v3191AddModified" class="secondary">Add as Modified</button></div><details class="v3191-visitor"><summary><strong>Add visitor / trial swimmer</strong></summary><div class="form-grid"><label>Name<input id="v3191VisitorName"></label><label>Training with<select id="v3191VisitorSquad">${sessionSquads(session).map(squad=>`<option>${escapeHtml(squad)}</option>`).join("")}<option>Visitor</option></select></label><label>Home club<input id="v3191VisitorClub"></label></div><button type="button" id="v3191AddVisitor">Add visitor as Here</button></details></div></details><div class="v3191-roll-list">${rows}</div>`;
+  const search=$('v3191AthleteSearch'),select=$('v3191ExtraAthlete');
+  if(search&&select)search.oninput=()=>{const term=v3NameKey(search.value);select.innerHTML='<option value="">Choose swimmer</option>'+outside.filter(athlete=>!term||v3NameKey(`${athlete.full_name} ${athlete.squad||""}`).includes(term)).map(athlete=>`<option value="${escapeHtml(athlete.id)}">${escapeHtml(athlete.full_name)} — ${escapeHtml(athlete.squad||"Unassigned")}</option>`).join("")};
+  $('v3191AddHere')?.addEventListener('click',()=>v3191AddExisting(select?.value,'present'));$('v3191AddModified')?.addEventListener('click',()=>v3191AddExisting(select?.value,'modified'));$('v3191AddVisitor')?.addEventListener('click',()=>v3191AddVisitor($('v3191VisitorName')?.value,$('v3191VisitorSquad')?.value,$('v3191VisitorClub')?.value,'present'));
+  host.querySelectorAll('.attendance-choice').forEach(button=>button.onclick=()=>{const athleteId=button.closest('[data-athlete-id]')?.dataset.athleteId;if(!athleteId)return;attendanceRecord(session,athleteId,button.dataset.status);renderAttendance();v3170PaintBoard?.()});
+  host.querySelectorAll('[data-remove-participant]').forEach(button=>button.onclick=()=>v3191RemoveParticipant(button.dataset.removeParticipant));
+};
+
+// --- Live vs past sessions --------------------------------------------------
+function v3191IsCompleted(session){return Boolean(session&&(String(session.status||"").toLowerCase()==="completed"||sessionReview?.(session.id)?.completed_at))}
+const v3191CanonicalSessionsBase=v3141CanonicalSessions;
+function v3191Generated(session){return String(session?.id||"").startsWith("session-slot-")}
+function v3191OperationalSquadKeys(session){
+  const keys=new Set(sessionSquads(session).map(squadKey).filter(Boolean));
+  for(const row of v3191LatestAttendanceRows(session?.id)){const athlete=v3191Athlete(row.athlete_id);if(athlete?.squad)keys.add(squadKey(athlete.squad))}
+  for(const id of v3191ParticipantIds(session)){const athlete=v3191Athlete(id);if(athlete?.squad)keys.add(squadKey(athlete.squad))}
+  return keys;
+}
+function v3191GeneratedSuperseded(session,all){
+  if(!v3191Generated(session))return false;const generatedKeys=new Set(sessionSquads(session).map(squadKey).filter(Boolean));
+  return all.some(real=>!v3191Generated(real)&&real.status!=="cancelled"&&real.session_date===session.session_date&&String(real.day_part||"").toUpperCase()===String(session.day_part||"").toUpperCase()&&[...v3191OperationalSquadKeys(real)].some(key=>generatedKeys.has(key)));
+}
+function v3191SessionPool(){const all=v3191CanonicalSessionsBase().filter(Boolean);return all.filter(session=>!v3191GeneratedSuperseded(session,all))}
+v3141CanonicalSessions=v3191SessionPool;
+function v3191ActiveSessions(){return v3191SessionPool().filter(session=>session.status!=="cancelled"&&!v3191IsCompleted(session))}
+function v3191PastSessions(){return v3191SessionPool().filter(session=>!v3191Generated(session)&&v3191IsCompleted(session)).sort((a,b)=>String(b.session_date||"").localeCompare(String(a.session_date||""))||v3143PartRank(b)-v3143PartRank(a))}
+function v3191SessionOrder(session){const part=v3143PartRank?.(session)??(/PM/i.test(session?.day_part||"")?2:1),time=String(session?.start_time||session?.session_start||"");return `${session?.session_date||""}|${String(part).padStart(2,"0")}|${time}|${v3191Generated(session)?1:0}|${session?.id||""}`}
+function v3191NextActiveAfter(session){const current=`${session?.session_date||""}|${String(v3143PartRank?.(session)??1).padStart(2,"0")}`;return v3191ActiveSessions().filter(row=>`${row.session_date||""}|${String(v3143PartRank?.(row)??1).padStart(2,"0")}`>current).sort((a,b)=>v3191SessionOrder(a).localeCompare(v3191SessionOrder(b)))[0]||v3191ActiveSessions().sort((a,b)=>v3191SessionOrder(a).localeCompare(v3191SessionOrder(b)))[0]||null}
+v3143CandidateSessions=function(preferredSquad=v3143PreferredSquad()){
+  const all=v3191ActiveSessions(),preferred=preferredSquad?all.filter(session=>sessionSquads(session).some(squad=>squadKey(squad)===squadKey(preferredSquad))):[];return preferred.length?preferred:all;
+};
+const v3191SelectedSessionBase=selectedSession;
+selectedSession=function(){
+  const exact=(appState.sessions||[]).find(session=>session.id===appState.settings.selected_session_id),pastId=appState.settings.v3191_viewing_past_session_id||"";
+  if(exact&&(!v3191IsCompleted(exact)||exact.id===pastId))return v3141CanonicalSessionFor?.(exact)||exact;
+  const active=v3143CurrentOrNextSession?.();return active||exact||v3191SelectedSessionBase?.()||null;
+};
+const v3191SetSelectedSessionBase=setSelectedSession;
+setSelectedSession=function(id){
+  const session=(appState.sessions||[]).find(row=>row.id===id);if(!session)return;
+  if(v3191IsCompleted(session))appState.settings.v3191_viewing_past_session_id=id;else delete appState.settings.v3191_viewing_past_session_id;
+  appState.settings.v3126_board_mode="whole";appState.settings.v3129_active_block_index=0;saveState(appState);return v3191SetSelectedSessionBase(id);
+};
+function v3191SelectLiveSession(){
+  delete appState.settings.v3191_viewing_past_session_id;const next=v3143CurrentOrNextSession?.()||v3191ActiveSessions().sort((a,b)=>v3191SessionOrder(a).localeCompare(v3191SessionOrder(b)))[0]||null;if(next){appState.settings.selected_session_id=next.id;const squads=sessionSquads(next);appState.settings.selected_squad=squads[0]||""}appState.settings.v3126_board_mode="whole";appState.settings.v3129_active_block_index=0;saveState(appState);renderAll?.();showView?.('deck');v3170PaintBoard?.();
+}
+function v3191OpenPastSessions(){
+  const rows=v3191PastSessions(),html=rows.length?`<div class="v3191-past-list">${rows.map(session=>{const review=sessionReview?.(session.id),note=String(review?.what_changed||"").replace(/^\[[^\]]+\]\s*/,"").trim();return `<button type="button" data-v3191-past="${escapeHtml(session.id)}"><span><strong>${escapeHtml(sessionLabel(session))}</strong><small>${escapeHtml(session.title||sessionSquads(session).join(' + '))}</small></span><b>${Number(review?.actual_distance||session.planned_distance||0).toLocaleString()}m</b>${note?`<em>${escapeHtml(note.slice(0,100))}</em>`:""}</button>`}).join("")}</div>`:'<div class="help">No completed sessions yet.</div>';
+  const dialog=v3170OpenDialog('Past sessions',html);dialog.querySelectorAll('[data-v3191-past]').forEach(button=>button.onclick=()=>{const id=button.dataset.v3191Past;dialog.close();dialog.remove();setSelectedSession(id);showView('deck');v3170PaintBoard?.()});
+}
+function v3191EnsurePastButton(){
+  const row=document.querySelector('.context-session');if(!row)return;let button=$('v3191PastSessionsBtn');if(!button){button=document.createElement('button');button.id='v3191PastSessionsBtn';button.type='button';button.className='v3191-past-button secondary';button.textContent='Past';button.setAttribute('aria-label','Open completed sessions');row.appendChild(button)}button.onclick=v3191OpenPastSessions;
+}
+const v3191RenderActiveContextBase=renderActiveContext;
+renderActiveContext=function(){
+  const result=v3191RenderActiveContextBase?.(),picker=$('contextSessionPicker'),selected=selectedSession(),target=v3143CurrentOrNextSession?.(),active=v3143SessionSort?.(v3191ActiveSessions(),target)||v3191ActiveSessions();
+  if(picker){const chosen=[];for(const session of [target,selected,...active])if(session&&!chosen.some(row=>row.id===session.id))chosen.push(session);picker.innerHTML=chosen.slice(0,30).map(session=>`<option value="${escapeHtml(session.id)}" ${session.id===selected?.id?'selected':''}>${escapeHtml((v3191IsCompleted(session)?'PAST · ':v3143SessionPrefix?.(session,target)||'')+(window.innerWidth<=700?v3121ShortSessionLabel(session):`${sessionLabel(session)} — ${session.title}`))}</option>`).join('');picker.onchange=()=>setSelectedSession(picker.value)}
+  v3191EnsurePastButton();return result;
+};
+
+// --- Plan hierarchy: daily objective first, session emphasis second ----------
+function v3191DailyObjective(session){
+  const explicit=v3180Text(session?.daily_objective||session?.session_objective||session?.plan_objective||session?.objective);if(explicit)return explicit;
+  let role="";try{role=v3144SessionRole?.(session)||""}catch{}role=String(role).split(/[.\n]/)[0].trim();
+  if(role&&!/session role not resolved|support work/i.test(role))return role;
+  const data=v3124PlanBriefData?.(session)||{},week=v3180Text(data.weekObjective||session?.week_objective);const match=week.match(/(?:develop|build|maintain|reinforce)\s+([^.;]+?)(?:\s+while|\s+and|[.;]|$)/i);return match?.[1]?.trim()||week||"Session objective not entered";
+}
+function v3191SecondaryEmphasis(session,primary){
+  const candidates=[session?.technical_focus,session?.primary_system,session?.plan_cue,session?.title].map(v3180Text).filter(Boolean);
+  return candidates.find(value=>v3163Norm?.(value)!==v3163Norm?.(primary)&&!/^national session$|^fitness session$/i.test(value))||"Coach the quality written in the set";
+}
+v3180PlanData=function(session){
+  let data={};try{data=v3124PlanBriefData?.(session)||{}}catch{}
+  const today=v3191DailyObjective(session),emphasis=v3191SecondaryEmphasis(session,today),week=v3180Text(session?.week_objective)||v3180Text(data.weekObjective)||"Weekly focus not entered",season=v3180Text(data.seasonGoal)||v3180Text(session?.season_name)||"Season alignment not entered";return{today,emphasis,week,season};
+};
+function v3191PlanCascade(session){
+  const plan=v3180PlanData(session);return `<div class="v3191-plan-cascade"><div class="primary"><span>Primary plan</span><strong>${escapeHtml(plan.today)}</strong></div><div><span>Session emphasis</span><strong>${escapeHtml(plan.emphasis)}</strong></div><details><summary><span>Week / season</span><b>View</b></summary><div><span>Week</span><strong>${escapeHtml(plan.week)}</strong></div><div><span>Season</span><strong>${escapeHtml(plan.season)}</strong></div></details></div>`;
+}
+function v3191Header(session,blocks,{label="Whole session"}={}){
+  const total=v3180ReconcileDistance(session,blocks),roll=v3180AttendanceSummary(session),squad=v3172ActiveSquadName?.(session)||activeSquad?.()||"",past=v3191IsCompleted(session);
+  return `<header class="v3170-session-head v3180-session-head"><div><span>${escapeHtml(past?'Past session':label)} · ${escapeHtml(formatDate(session.session_date))} ${escapeHtml(String(session.day_part||''))}${squad?` · ${escapeHtml(squad)}`:''}</span><h2>${escapeHtml(v3172SessionTitle?.(session)||session.title||'Session')}</h2></div><strong>${total.toLocaleString()}m</strong></header>${past?`<div class="v3191-past-banner"><span>Completed session · notes retained</span><button type="button" data-v3191-return-live>Return to live Board</button></div>`:(v3172ContextBadge?.(session)||'')}${!past?(v3190SquadTiming?.(session,blocks)||''):''}${v3191PlanCascade(session)}<button class="v3170-roll-strip v3180-roll-strip" type="button" data-v3170-roll><span>${escapeHtml(roll.label)}</span><b>Roll ›</b></button>`;
+}
+v3170Header=v3191Header;v3180Header=v3191Header;
+
+// A Roll status of Modified is itself a request for a usable version. Older
+// profile code can return the placeholder cue "Modified today" with zero work
+// when the swimmer has no saved baseline. Generate a conservative 75% version
+// in that case rather than presenting an empty modified card.
+const v3191AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3191AdaptationBase(athlete,session,block,blockIndex),status=attendanceFor(session?.id,athlete?.id)?.status||"",runnable=v34Array(block?.items).filter(item=>item?.runnable!==false&&Number(item?.distance)>0);
+  const deliberateNoWork=(result?.rows||[]).some(row=>/\b(rest|no swim|do not swim|out of water|skip block|medical hold)\b/i.test(String(row?.line||"")));
+  if(Number(result?.total)>0||!v3191Modified(status)||!runnable.length||deliberateNoWork)return result;
+  const rows=runnable.map((item,itemIndex)=>v3180AdaptLine(athlete,session,block,item,itemIndex,"","Roll-marked modified · 75% stimulus fit"));
+  const targetCounts=new Map();for(const row of rows)if(row.target)targetCounts.set(row.target,(targetCounts.get(row.target)||0)+1);const sharedTarget=[...targetCounts.entries()].sort((a,b)=>b[1]-a[1])[0];if(sharedTarget?.[1]>1)for(const row of rows)if(row.target===sharedTarget[0])row.target="";
+  const repeat=Math.max(1,Number(block?.repeat_count)||1);return{athlete,rows,total:rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat,repeat,sharedTarget:sharedTarget?.[1]>1?sharedTarget[0]:"",source:"Roll-marked modified · 75% stimulus fit"};
+};
+
+// --- Multiple modified swimmers remain visible and reachable in both views --
+function v3191CompactAdaptation(session,block,index,athlete){const adapt=v3180Adaptation(athlete,session,block,index);return `<article class="v3191-mini-mod"><header><strong>${escapeHtml(athlete.full_name)}</strong><b>${adapt.total.toLocaleString()}m</b></header>${adapt.rows.filter(row=>!row.cue).map(row=>`<div><span>${escapeHtml(row.line)}</span>${row.target?`<b>${escapeHtml(row.target)}</b>`:''}</div>`).join('')}</article>`}
+function v3191AllModified(session,block,index,selected,{whole=false}={}){const modified=v3180ModifiedAthletes(session).filter(athlete=>athlete.id!==selected?.id);if(!modified.length)return'';const open=modified.length<=1?' open':'';return `<details class="v3191-all-mods"${open}><summary><strong>${modified.length} more modified version${modified.length===1?'':'s'}</strong><span>${modified.map(athlete=>escapeHtml(athlete.full_name)).join(' · ')}</span></summary><div>${modified.map(athlete=>v3191CompactAdaptation(session,block,index,athlete)).join('')}</div></details>`}
+function v3191BlockCard(session,block,index,{whole=false}={}){
+  const cue=[block.purpose,block.cues].filter(Boolean).join(' · '),repeat=Math.max(1,Number(block.repeat_count)||1),modified=v3180ModifiedAthletes(session),selected=v3180SelectedModified(session,modified),paired=v3190PairedLines(session,block,index,selected),tabs=v3180ModTabs(session,modified,selected),modHead=selected?`<div class="v3190-mod-head"><span>Modified beside main</span><strong>${escapeHtml(selected.full_name)}</strong>${tabs}</div>`:'',modFoot=selected&&paired.adapt?`<div class="v3190-mod-foot"><span>${escapeHtml(paired.adapt.rows.find(row=>row.source)?.source||'Stimulus-fit version')}</span><strong>${paired.adapt.total.toLocaleString()}m${repeat>1?` · ×${repeat}`:''}</strong></div>`:'';
+  return `<section class="v3170-current-card v3180-board-block v3190-board-block ${whole?'whole':'current'}" data-v3180-block="${index}"><header><button type="button" class="v3180-block-title" data-v3170-block="${index}"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</h3></button><strong>${v3170BlockDistance(block).toLocaleString()}m</strong></header>${cue?`<div class="v3170-block-cue">${escapeHtml(cue)}</div>`:''}${repeat>1?`<div class="v3170-repeat-banner"><strong>Repeat whole block ×${repeat}</strong><span>${v3170BlockDistance(block).toLocaleString()}m total</span></div>`:''}${modHead}<div class="v3190-paired-lines ${selected?'has-mod':''}">${paired.html||`<pre>${escapeHtml(block.raw_text||'No set lines')}</pre>`}</div>${modFoot}${v3191AllModified(session,block,index,selected,{whole})}<div class="v3170-block-actions"><button type="button" data-v3170-time>Times</button><button type="button" class="secondary" data-v3170-capture data-v3180-capture-block="${index}">Capture</button><button type="button" class="secondary" data-v3170-source>Source</button></div></section>`;
+}
+v3190BlockCard=v3191BlockCard;v3180BlockCard=v3191BlockCard;v3170BlockCard=function(session,block,index){return v3191BlockCard(session,block,index,{whole:false})};
+function v3191WholeHtml(session){
+  const blocks=v3170BoardBlocks(session),modified=v3180ModifiedAthletes(session),selected=v3180SelectedModified(session,modified);return `${v3191Header(session,blocks,{label:'Whole session'})}${modified.length?`<div class="v3180-session-mod-selector"><span>${modified.length} modified swimmer${modified.length===1?'':'s'} · shown beside each block</span>${v3180ModTabs(session,modified,selected)}</div>`:''}<div class="v3180-whole-flow">${blocks.map((block,index)=>v3191BlockCard(session,block,index,{whole:true})).join('')||'<div class="warning-box">No workout attached.</div>'}</div>${!v3191IsCompleted(session)?v3180FinishPanel(session,blocks):''}<div class="v3170-session-actions"><button type="button" data-v3170-source>Original source</button><button type="button" class="secondary" data-v3170-edit>Edit workout</button><button type="button" class="secondary" data-v3170-capture>Capture</button></div>`;
+}
+v3170WholeHtml=v3191WholeHtml;v3180WholeHtml=v3191WholeHtml;
+
+const v3191BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){v3191BindBoardBase(host,session);host.querySelectorAll('[data-v3191-return-live]').forEach(button=>button.onclick=v3191SelectLiveSession)};
+
+const v3191SaveFinishBase=v3180SaveFinish;
+v3180SaveFinish=async function(host,session){
+  await v3191SaveFinishBase(host,session);
+  if(!v3191IsCompleted(session))return;
+  delete appState.settings.v3191_viewing_past_session_id;const next=v3191NextActiveAfter(session);
+  if(next&&next.id!==session.id){appState.settings.selected_session_id=next.id;appState.settings.selected_squad=sessionSquads(next)[0]||''}else appState.settings.selected_session_id='';
+  appState.settings.v3126_board_mode='whole';appState.settings.v3129_active_block_index=0;saveState(appState);renderAll?.();showView?.('deck');v3170PaintBoard?.();updateStatus('Session finished · moved to Past sessions','good');
+};
+
+// The legacy v3.17 state restorer can schedule several delayed paints with its
+// boot-time mode. In the corrected build appState.settings is the authoritative
+// mode because every user tab change writes there immediately. Preserve the
+// old snapshot's block/scroll detail, but never let it flip Session/Current.
+const v3191RestorePoolsideStateBase=v3170RestorePoolsideState;
+v3170RestorePoolsideState=function(state,options={}){
+  const desired=["deck","whole","plan"].includes(appState?.settings?.v3126_board_mode)?appState.settings.v3126_board_mode:"whole";
+  return v3191RestorePoolsideStateBase({...state,mode:desired},options);
+};
+
+// Whole Session is the poolside default for this corrected release. A coach can
+// still choose Current and that choice is retained until a different session is selected.
+function v3191ApplyDefault(){
+  v3191DedupeAttendance({queue:true});
+  if(appState.settings.v3191_corrected_migrated!==true){
+    appState.settings.v3126_board_mode='whole';
+    appState.settings.v3129_active_block_index=0;
+    appState.settings.v3191_corrected_migrated=true;
+    appState.settings.v3170_poolside_migrated=true;
+    delete appState.settings.v3191_viewing_past_session_id;
+    // v3.17 retained a separate boot snapshot and could restore the old Current
+    // view several seconds after v3.19 had rendered. Replace that snapshot as
+    // part of the one-time migration so Whole Session remains the true default.
+    try{
+      v3170UserInteracted=true;
+      v3170BootHoldUntil=0;
+      v3170InitialRestorePending=false;
+      v3170WritePoolsideState?.(v3170LivePoolsideState?.({
+        session_id:appState.settings.selected_session_id||'',
+        selected_squad:appState.settings.selected_squad||'',
+        mode:'whole',block_index:0,modified_parent_open:false,
+        modified_open_athletes:[],scroll_top:0
+      })||{mode:'whole',block_index:0,scroll_top:0});
+    }catch(error){console.warn('Whole Session default snapshot could not be migrated',error)}
+    saveState(appState);
+  }
+  const selected=(appState.sessions||[]).find(row=>row.id===appState.settings.selected_session_id);if(selected&&v3191IsCompleted(selected)&&appState.settings.v3191_viewing_past_session_id!==selected.id){const next=v3143CurrentOrNextSession?.();if(next)appState.settings.selected_session_id=next.id;saveState(appState)}
+  renderActiveContext?.();v3191EnsurePastButton();if((document.querySelector('.view.active')?.id||'deck')==='deck')v3170PaintBoard?.();
+}
+
+function v3191Brand(){document.title=`McLay Swimming OS — v${V3191_VERSION} Corrected Poolside`;const subtitle=document.querySelector('.header-subtitle');if(subtitle)subtitle.textContent=`Version ${V3191_VERSION} · real-state Roll · add swimmers · modified work in both Board views · completed sessions move to Past`}
+for(const name of ['v3190Brand','v3180Brand','v3172Brand','v3171Brand','v3170Brand','v3163Brand']){try{globalThis[name]=v3191Brand}catch{}}
+try{v3190BrandObserver?.disconnect?.()}catch{}
+const v3191BrandObserver=new MutationObserver(()=>{const title=`McLay Swimming OS — v${V3191_VERSION} Corrected Poolside`,subtitle=document.querySelector('.header-subtitle'),sub=`Version ${V3191_VERSION} · real-state Roll · add swimmers · modified work in both Board views · completed sessions move to Past`;if(document.title!==title||(subtitle&&subtitle.textContent!==sub))queueMicrotask(v3191Brand)});if(document.querySelector('title'))v3191BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3191BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
+
+
+// Sequence-aware stimulus preservation. Descending 1-3 and one-build/two-fast
+// sets are three-rep coaching cycles. Modified work must retain complete cycles
+// rather than choosing a mathematically closer but operationally broken rep count.
+function v3191SequenceLength(text){
+  const source=String(text||"");let length=0;
+  try{length=Math.max(0,Number(v3151SequenceLength?.(source)||0))}catch{}
+  if(/\b(?:descending|descend)\s*1\s*(?:-|–|to)\s*3\b/i.test(source)||/\bone\s+build\s*[,/]?\s*two\s+fast\b/i.test(source))length=Math.max(length,3);
+  const explicit=source.match(/\b(?:descending|descend)\s*1\s*(?:-|–|to)\s*(\d+)\b/i);if(explicit)length=Math.max(length,Number(explicit[1])||0);
+  return length;
+}
+function v3191StimulusWork(athlete,item){
+  const original=v3129LineText(item),profile=v3180Profile(athlete),ratio=Math.max(.2,Math.min(1,Number(profile?.ratio||profile?.profile?.default_volume_ratio||.75))),reps=Math.max(1,Number(item?.reps)||1),distance=Math.max(0,Number(item?.distance)||0);
+  if(!distance)return null;
+  const target=reps*distance*ratio,sequence=v3191SequenceLength(original),deliberate=v3180DeliberatePartial(original);
+  const standard=[1500,1000,800,600,500,400,300,250,200,150,125,100,75,50,25].filter(value=>value<=distance),distances=deliberate?[distance]:[...new Set(standard.length?standard:[distance])],repOptions=[];
+  if(reps===1)repOptions.push(1);else if(sequence>1){for(let value=sequence;value<=reps;value+=sequence)repOptions.push(value)}else for(let value=1;value<=reps;value++)repOptions.push(value);
+  if(!repOptions.length)repOptions.push(reps);
+  const rows=[];
+  for(const adaptedReps of repOptions)for(const adaptedDistance of distances){
+    const volume=adaptedReps*adaptedDistance,diff=Math.abs(volume-target),ratioError=Math.abs(volume/(reps*distance)-ratio),distanceChanged=adaptedDistance===distance?0:1,repsChanged=adaptedReps===reps?0:1,over=volume>target?1:0;
+    rows.push({reps:adaptedReps,distance:adaptedDistance,volume,diff,ratioError,distanceChanged,repsChanged,over});
+  }
+  rows.sort((a,b)=>a.diff-b.diff||a.ratioError-b.ratioError||a.over-b.over||a.distanceChanged-b.distanceChanged||a.repsChanged-b.repsChanged||b.distance-a.distance||b.reps-a.reps);
+  return rows[0]||null;
+}
+v3190StimulusWork=v3191StimulusWork;
+v3190StimulusLine=function(athlete,item){const choice=v3191StimulusWork(athlete,item);return choice?v3151CleanSameMain(v3151ReplaceWork(v3129LineText(item),choice.reps,choice.distance)):""};
+
+// Keep the older detailed Finish page consistent with the in-Board hierarchy.
+// The session title/emphasis is context; it must never replace the daily plan.
+const v3191RenderReviewBase=renderReview;
+renderReview=function(){
+  const result=v3191RenderReviewBase?.(),session=selectedSession();if(!session||!$("finishSessionHeading"))return result;
+  const plan=v3180PlanData(session);$("finishSessionHeading").innerHTML=`<strong>${escapeHtml(sessionLabel(session))} — ${escapeHtml(plan.today)}</strong><div class="help">Planned ${Number(session.planned_distance||0).toLocaleString()}m · emphasis ${escapeHtml(plan.emphasis)}</div>`;return result;
+};
+
+window.v3191Debug={version:V3191_VERSION,build:V3191_BUILD,latestAttendance:v3191LatestAttendanceRows,dedupeAttendance:v3191DedupeAttendance,liveRows:v3191LiveRows,roster:v3191SessionRoster,modified:v3180ModifiedAthletes,activeSessions:v3191ActiveSessions,pastSessions:v3191PastSessions,sessionPool:v3191SessionPool,adaptation:v3180Adaptation,plan:v3180PlanData};
+setTimeout(v3191ApplyDefault,0);setTimeout(v3191ApplyDefault,450);setTimeout(()=>{v3191Brand();v3191EnsurePastButton()},1500);
+
+// v3.19.1 hardening: keep the nearest bridge and the genuine stretch target
+// visible when more than one faster progression remains. This preserves the
+// full compact pathway (e.g. Canterbury record -> 2028 target -> NZ record).
+const v3191ResolveEventBase=v3163ResolveEvent;
+v3163ResolveEvent=function(athlete,pb){
+  const resolved=v3191ResolveEventBase(athlete,pb);if(!resolved?.next)return resolved;
+  const faster=(resolved.stages||[]).filter(stage=>stage.targetable!==false&&v3163StageState(stage,Number(pb?.result_seconds))==="unmet"&&Number(stage.targetSeconds)<Number(resolved.next.targetSeconds)-.005).sort((a,b)=>Number(b.targetSeconds)-Number(a.targetSeconds)||Number(b.order)-Number(a.order));
+  if(faster.length===1){resolved.bridge=null;resolved.stretch={...faster[0],gap:Number(pb.result_seconds)-Number(faster[0].targetSeconds)}}
+  else if(faster.length>1){resolved.bridge={...faster[0],gap:Number(pb.result_seconds)-Number(faster[0].targetSeconds)};const last=faster[faster.length-1];resolved.stretch={...last,gap:Number(pb.result_seconds)-Number(last.targetSeconds)}}
+  return resolved;
+};
+// A five-second practical rounding can put an adaptation a few seconds beyond
+// the mathematical line window. Describe that honestly rather than implying an
+// exact simultaneous finish.
+const v3191AdaptLineClockBase=v3180AdaptLine;
+v3180AdaptLine=function(...args){const row=v3191AdaptLineClockBase(...args);if(row?.clock==="Same group finish")row.clock="Within final cycle";return row};
+if(window.v3163Debug)window.v3163Debug.resolve=v3163ResolveEvent;
+
+// v3.19.1 hardening: every Board surface uses the same Today -> emphasis
+// hierarchy. A workout title such as "Kick" can never replace the daily plan.
+v3170SessionRole=function(session){return v3191DailyObjective(session)};
+v3170TechnicalCue=function(session){return v3191SecondaryEmphasis(session,v3191DailyObjective(session))};
+
+// v3.19.1 hardening: a Board repaint must not discard the exact expanded
+// panel and scroll snapshot that was saved before app switching/reload.
+const v3191PaintBoardStateBase=v3170PaintBoard;
+v3170PaintBoard=function(...args){
+  const result=v3191PaintBoardStateBase(...args);
+  const restore=()=>{if((document.querySelector('.view.active')?.id||'')!=='deck')return;const ui=v3163ReadUi?.();if(!ui)return;v3163ApplyDetails?.(ui);v3163RestoreScroll?.(ui,'deck')};
+  requestAnimationFrame(()=>requestAnimationFrame(restore));setTimeout(restore,180);return result;
+};
