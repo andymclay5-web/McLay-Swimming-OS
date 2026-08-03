@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260802-qualified3164",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260803-poolside3190",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -5174,7 +5174,9 @@ function v374Interface(){
 }
 
 // Preserve the current full result/reference pack before future lightweight reloads.
-v374SaveHeavyCache(appState);
+// Never overwrite an existing heavy cache with the intentionally lightweight
+// empty arrays loaded from localStorage during startup.
+if([...V374_HEAVY_STATE_KEYS].some(key=>(appState[key]||[]).length))v374SaveHeavyCache(appState);else v374HydrateHeavyCache();
 v374Interface();saveState(appState);/* startup render deferred to v3.12.9 */
 // v3.10.3: heavy result/reference data is restored lazily, never during poolside startup.
 
@@ -13213,7 +13215,7 @@ function v3163PbInventory(athlete){
   for(const row of candidates){if(!Number.isFinite(row.result_seconds)||!row.distance||!row.stroke)continue;if(!row.course){unresolved.push(row);continue}valid.push(row)}
   const best=new Map();for(const row of valid){const key=`${row.course}|${row.distance}|${row.stroke}`,prior=best.get(key),same=prior&&Math.abs(row.result_seconds-prior.result_seconds)<.001,richer=same&&((row.result_date&&!prior.result_date)||(Boolean(row.result_date)===Boolean(prior.result_date)&&v3Points(row)>v3Points(prior)));if(!prior||row.result_seconds<prior.result_seconds-.001||richer)best.set(key,row)}
   const resolvedTimes=new Set([...best.values()].map(row=>`${row.distance}|${row.stroke}|${Number(row.result_seconds).toFixed(3)}`)),unresolvedBest=new Map();for(const row of unresolved){const resolvedKey=`${row.distance}|${row.stroke}|${Number(row.result_seconds).toFixed(3)}`;if(resolvedTimes.has(resolvedKey))continue;const key=`${row.distance}|${row.stroke}`,prior=unresolvedBest.get(key);if(!prior||row.result_seconds<prior.result_seconds)unresolvedBest.set(key,row)}
-  return {pbs:[...best.values()].sort((a,b)=>Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke))||String(a.course).localeCompare(String(b.course))),unresolved:[...unresolvedBest.values()].sort((a,b)=>Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke)))};
+  return {pbs:[...best.values()].sort((a,b)=>v3Points(b)-v3Points(a)||Number(a.result_seconds)-Number(b.result_seconds)||Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke))||String(a.course).localeCompare(String(b.course))),unresolved:[...unresolvedBest.values()].sort((a,b)=>v3Points(b)-v3Points(a)||Number(a.result_seconds)-Number(b.result_seconds)||Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke)))};
 }
 v3140Pbs=function(athlete){return v3163PbInventory(athlete).pbs};
 athleteOfficialPbs=function(athleteId){const athlete=(appState.athletes||[]).find(row=>row.id===athleteId);return athlete?v3163PbInventory(athlete).pbs:[]};
@@ -14064,3 +14066,776 @@ renderAttendance=function(){
   }).join("")||'<div class="help">No swimmers are linked to the active squad for this session.</div>';
   document.querySelectorAll("#attendance .attendance-choice").forEach(button=>button.onclick=()=>{const row=button.closest(".attendance-row"),already=button.classList.contains("active"),status=already?"absent":button.dataset.status;attendanceRecord(session,row.dataset.athleteId,status);renderAttendance();v310RenderSessionAttendance?.();v390DeckPanel?.()});
 };
+
+// =============================================================================
+// McLay Swimming OS v3.17.2 — ACTIVE-SQUAD BOARD + MODIFIED VISIBILITY REPAIR
+// - Monday-AM Fitness keeps the National workout source, but selecting Fitness
+//   now shows an explicit Fitness session view instead of leaving the Board
+//   labelled National.
+// - Roll totals and modified swimmers are scoped to the selected squad.
+// - A Roll status beginning with "modified" is treated as modified even when a
+//   legacy/local status variant is present.
+// =============================================================================
+
+const V3172_VERSION="3.17.2";
+const V3172_BUILD="20260802-active-squad-board-modified-visibility";
+
+function v3172StatusKey(value){return String(value||"").trim().toLowerCase().replace(/[^a-z]+/g,"_").replace(/^_+|_+$/g,"")}
+function v3172IsModified(value){return v3172StatusKey(value).startsWith("modified")}
+function v3172IsHere(value){const key=v3172StatusKey(value);return key==="present"||key==="late"||v3172IsModified(key)}
+function v3172ActiveSquadName(session=selectedSession()){
+  const active=activeSquad?.();
+  return active||sessionSquads(session)[0]||"";
+}
+function v3172BaseSquads(session){return v3171BaseSessionSquads?.(session)||sessionSquads(session)}
+function v3172PrimarySquad(session){return v3172BaseSquads(session)[0]||sessionSquads(session)[0]||""}
+function v3172IsInheritedFitnessView(session){
+  return squadKey(v3172ActiveSquadName(session))==="fitness"&&v3172BaseSquads(session).some(s=>squadKey(s)==="national");
+}
+function v3172SquadRoster(session=selectedSession(),squad=v3172ActiveSquadName(session)){
+  const key=squadKey(squad);
+  return (appState.athletes||[]).filter(a=>a.active!==false&&(!key||squadKey(a.squad)===key)).sort(rosterSort);
+}
+function v3172RollRows(session){
+  const ids=new Set(v3172SquadRoster(session).map(a=>a.id));
+  return (appState.attendance||[]).filter(row=>row.session_id===session.id&&ids.has(row.athlete_id));
+}
+function v3172ModifiedAthletes(session){
+  if(!session)return[];
+  const roster=v3172SquadRoster(session),ids=new Set(roster.map(a=>a.id)),rows=v3172RollRows(session),rollStarted=rows.some(row=>["present","late","absent"].includes(v3172StatusKey(row.status))||v3172IsModified(row.status));
+  const modifiedIds=new Set(rows.filter(row=>v3172IsModified(row.status)).map(row=>row.athlete_id));
+  const map=new Map();
+  for(const athlete of roster){
+    if(modifiedIds.has(athlete.id)){map.set(athlete.id,athlete);continue}
+    if(!rollStarted){
+      let baseline=false;
+      try{baseline=Boolean(v3142HasActiveAdaptation?.(athlete,session))}catch{}
+      if(baseline)map.set(athlete.id,athlete);
+    }
+  }
+  // Never lose a direct Modified choice because an older roster resolver did
+  // not include the athlete yet. Keep it within the selected squad only.
+  for(const row of rows)if(v3172IsModified(row.status)&&ids.has(row.athlete_id)){
+    const athlete=(appState.athletes||[]).find(a=>a.id===row.athlete_id&&a.active!==false);
+    if(athlete)map.set(athlete.id,athlete);
+  }
+  return [...map.values()].sort(rosterSort);
+}
+
+// Make the existing modified-work renderer consume the direct, squad-aware
+// source of truth.
+v3140ModifiedColumns=function(session){return v3172ModifiedAthletes(session)};
+
+v3170RollState=function(session){
+  const roster=v3172SquadRoster(session),rows=v3172RollRows(session),started=rows.length>0,here=rows.filter(row=>v3172IsHere(row.status)).length,expected=roster.length,modified=rows.filter(row=>v3172IsModified(row.status)).length;
+  return{started,here,expected,modified,label:started?`${here} ${v3172ActiveSquadName(session)||"swimmer"}${here===1?"":""} in the water${modified?` · ${modified} modified`:""}`:`Roll not taken · ${expected} expected`};
+};
+
+function v3172SessionTitle(session){
+  const squad=v3172ActiveSquadName(session);
+  if(v3172IsInheritedFitnessView(session))return `${squad||"Fitness"} session`;
+  const base=String(session?.title||"").trim();
+  if(squad&&sessionSquads(session).length>1&&(!base||!new RegExp(`\\b${String(squad).replace(/[.*+?^${}()|[\\]\\]/g,"\\$&")}\\b`,`i`).test(base)))return `${squad} session`;
+  return base||`${squad||"Squad"} session`;
+}
+function v3172ContextBadge(session){
+  if(v3172IsInheritedFitnessView(session))return `<div class="v3172-squad-context"><strong>Fitness</strong><span>Using the Monday AM National workout</span></div>`;
+  return "";
+}
+
+v3170Header=function(session,blocks,{label="Current block"}={}){
+  const total=v3170Total(blocks),roll=v3170RollState(session),saved=Number(session.planned_distance||0),mismatch=saved&&Math.abs(saved-total)>25,squad=v3172ActiveSquadName(session);
+  return `<header class="v3170-session-head"><div><span>${escapeHtml(label)} · ${escapeHtml(formatDate(session.session_date))} ${escapeHtml(String(session.day_part||""))}${squad?` · ${escapeHtml(squad)}`:""}</span><h2>${escapeHtml(v3172SessionTitle(session))}</h2></div><strong>${total.toLocaleString()}m</strong></header>${v3172ContextBadge(session)}<div class="v3170-coach-cues"><div><span>Today</span><strong>${escapeHtml(v3170SessionRole(session))}</strong></div><div><span>Cue</span><strong>${escapeHtml(v3170TechnicalCue(session))}</strong></div></div><button class="v3170-roll-strip" type="button" data-v3170-roll><span>${escapeHtml(roll.label)}</span><b>${escapeHtml(squad||"Roll")} ›</b></button>${mismatch?`<button class="v3170-distance-check" type="button" data-v3170-source><strong>Distance check</strong><span>Source structure ${total.toLocaleString()}m · saved ${saved.toLocaleString()}m</span></button>`:""}`;
+};
+
+function v3172ModifiedSummary(session){
+  const modified=v3172ModifiedAthletes(session);if(!modified.length)return"";
+  return `<button type="button" class="v3171-modified-summary" data-v3171-open-modified><span><b>Modified · ${escapeHtml(v3172ActiveSquadName(session)||"squad")}</b><strong>${escapeHtml(modified.map(a=>a.full_name).join(" · "))}</strong></span><em>Open current versions ›</em></button>`;
+}
+
+const v3172WholeBase=v3170WholeHtml;
+v3170WholeHtml=function(session){
+  let html=v3172WholeBase(session),summary=v3172ModifiedSummary(session);
+  // v3.17.1 may already have inserted a summary. Replace any existing summary
+  // so it is always based on the active squad and current Roll state.
+  html=html.replace(/<button[^>]*class="v3171-modified-summary"[\s\S]*?<\/button>/,"" );
+  return summary?html.replace('<div class="v3170-session-map">',`${summary}<div class="v3170-session-map">`):html;
+};
+const v3172PlanBase=v3170PlanHtml;
+v3170PlanHtml=function(session){
+  let html=v3172PlanBase(session),summary=v3172ModifiedSummary(session);
+  html=html.replace(/<button[^>]*class="v3171-modified-summary"[\s\S]*?<\/button>/,"" );
+  return summary?html.replace('<section class="v3170-plan-card">',`${summary}<section class="v3170-plan-card">`):html;
+};
+
+// Update the picker label as the coach changes the operational squad. The
+// underlying saved session remains National; the visible poolside context does
+// not pretend Fitness is still looking at National.
+const v3172RenderActiveContextBase=renderActiveContext;
+renderActiveContext=function(){
+  const result=v3172RenderActiveContextBase?.();
+  const session=selectedSession(),picker=$("contextSessionPicker"),option=picker?.selectedOptions?.[0];
+  if(session&&option&&v3172IsInheritedFitnessView(session)){
+    const prefix=v3143SessionPrefix?.(session,v3143CurrentOrNextSession?.())||"";
+    option.textContent=`${prefix}${String(session.day_part||"").toUpperCase()} · ${formatDate(session.session_date)} · Fitness`;
+  }
+  return result;
+};
+
+// Repaint the exact Board context after a squad button is selected.
+const v3172SetActiveSquadBase=setActiveSquad;
+setActiveSquad=function(squad){
+  const result=v3172SetActiveSquadBase(squad);
+  renderActiveContext?.();
+  if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
+  return result;
+};
+
+// Ensure a Modified Roll choice appears on the Board immediately and after
+// returning from Roll, regardless of legacy status spelling.
+const v3172AttendanceRecordBase=attendanceRecord;
+attendanceRecord=function(session,athleteId,status){
+  const normal=v3172IsModified(status)?"modified":status;
+  const result=v3172AttendanceRecordBase(session,athleteId,normal);
+  V3144_TARGET_CACHE?.clear?.();
+  if((document.querySelector(".view.active")?.id||"")==="deck")v3170PaintBoard?.();
+  return result;
+};
+
+function v3172Brand(){
+  document.title=`McLay Swimming OS — v${V3172_VERSION} Poolside Board`;
+  const subtitle=document.querySelector(".header-subtitle");
+  if(subtitle)subtitle.textContent=`Version ${V3172_VERSION} · selected-squad Board · modified Roll visible · Fitness uses National workout`;
+}
+for(const name of ["v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand","v3144Brand","v3143Brand","v3142Brand","v3141Brand","v3140Brand"]){try{globalThis[name]=v3172Brand}catch{}}
+try{v3171BrandObserver?.disconnect?.()}catch{}
+const v3172BrandObserver=new MutationObserver(()=>{const title=`McLay Swimming OS — v${V3172_VERSION} Poolside Board`,subtitle=document.querySelector(".header-subtitle"),sub=`Version ${V3172_VERSION} · selected-squad Board · modified Roll visible · Fitness uses National workout`;if(document.title!==title||(subtitle&&subtitle.textContent!==sub))queueMicrotask(v3172Brand)});
+const v3172Title=document.querySelector("title"),v3172Subtitle=document.querySelector(".header-subtitle");
+if(v3172Title)v3172BrandObserver.observe(v3172Title,{childList:true,subtree:true,characterData:true});
+if(v3172Subtitle)v3172BrandObserver.observe(v3172Subtitle,{childList:true,subtree:true,characterData:true});
+
+function v3172Refresh(){renderActiveContext?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();v3172Brand()}
+window.v3172Debug={version:V3172_VERSION,build:V3172_BUILD,activeSquad:v3172ActiveSquadName,roster:v3172SquadRoster,modified:v3172ModifiedAthletes,fitnessInherited:v3172IsInheritedFitnessView};
+setTimeout(v3172Refresh,0);setTimeout(v3172Refresh,350);setTimeout(v3172Brand,1600);
+
+// =============================================================================
+// McLay Swimming OS v3.18.0 — POOLSIDE FLOW
+// One Board: full session + current block, integrated stimulus-fit adaptations,
+// roll-driven names, single distance truth, in-flow finish, tagged capture and
+// exact-course no-PB standard fallback.
+// =============================================================================
+const V3180_VERSION="3.18.1";
+const V3180_BUILD="20260803-poolside-flow-rounding-points";
+
+function v3180Text(value){return String(value??"").trim()}
+function v3180Initials(name){return v3180Text(name).split(/\s+/).filter(Boolean).map(x=>x[0]).join("").slice(0,3).toUpperCase()||"SW"}
+function v3180Clock(seconds){const n=Number(seconds);if(!Number.isFinite(n)||n<=0)return"";const m=Math.floor(n/60),s=n-m*60,hasDecimal=Math.abs(s-Math.round(s))>.001,body=(hasDecimal?s.toFixed(1):String(Math.round(s))).padStart(hasDecimal?4:2,"0");return `${m}:${body}`}
+function v3180Minutes(value){const [h,m]=String(value||"").split(":").map(Number);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:null}
+function v3180Status(value){return String(value||"").trim().toLowerCase()}
+function v3180Here(value){return ["present","late","modified"].includes(v3180Status(value))||v3180Status(value).startsWith("modified")}
+function v3180IsModified(value){return v3180Status(value).startsWith("modified")}
+function v3180ParticipantIds(session){try{return new Set((v310SessionParticipants?.(session?.id)||[]).map(row=>row.athlete_id))}catch{return new Set()}}
+function v3180RelevantAttendance(session){
+  if(!session)return[];const activeKey=squadKey(v3172ActiveSquadName?.(session)||activeSquad?.()||""),participants=v3180ParticipantIds(session);
+  return (appState.attendance||[]).filter(row=>{const athlete=(appState.athletes||[]).find(a=>a.id===row.athlete_id&&a.active!==false);if(!athlete)return false;return !activeKey||squadKey(athlete.squad)===activeKey||participants.has(athlete.id)});
+}
+function v3180ModifiedAthletes(session){
+  const map=new Map(),rows=v3180RelevantAttendance(session),rollStarted=rows.length>0;
+  for(const row of rows)if(v3180IsModified(row.status)){const athlete=(appState.athletes||[]).find(a=>a.id===row.athlete_id&&a.active!==false);if(athlete)map.set(athlete.id,athlete)}
+  if(!rollStarted){for(const athlete of (v3172SquadRoster?.(session)||[])){let active=false;try{active=Boolean(v3142HasActiveAdaptation?.(athlete,session))}catch{}if(active)map.set(athlete.id,athlete)}}
+  return [...map.values()].sort(rosterSort);
+}
+v3172ModifiedAthletes=v3180ModifiedAthletes;
+v3140ModifiedColumns=v3180ModifiedAthletes;
+
+function v3180AttendanceSummary(session){
+  const rows=v3180RelevantAttendance(session).filter(row=>v3180Here(row.status)),modified=rows.filter(row=>v3180IsModified(row.status)),names=rows.map(row=>(appState.athletes||[]).find(a=>a.id===row.athlete_id)?.full_name).filter(Boolean);
+  const compact=names.length<=4?names.map(v3180Initials).join(" · "):`${names.slice(0,3).map(v3180Initials).join(" · ")} +${names.length-3}`;
+  const modText=modified.length?` · Modified ${modified.map(row=>v3180Initials((appState.athletes||[]).find(a=>a.id===row.athlete_id)?.full_name)).join(" ")}`:"";
+  const expected=(v3172SquadRoster?.(session)||[]).length;
+  return {rows,modified,names,label:rows.length?`${rows.length} in · ${compact}${modText}`:`Roll not taken · ${expected} expected`};
+}
+v3170RollState=function(session){const s=v3180AttendanceSummary(session);return{started:s.rows.length>0,here:s.rows.length,expected:(v3172SquadRoster?.(session)||[]).length,modified:s.modified.length,label:s.label}};
+
+function v3180PlanData(session){
+  let data={};try{data=v3124PlanBriefData?.(session)||{}}catch{}
+  const today=v3180Text(session?.primary_system)||v3180Text(session?.technical_focus)||v3180Text(data.role)||"Session objective not entered";
+  const week=v3180Text(session?.week_objective)||v3180Text(data.weekObjective)||v3180Text(session?.plan_cue)||"Weekly focus not entered";
+  const season=v3180Text(data.seasonGoal)||v3180Text(session?.season_name)||"Season alignment not entered";
+  return {today,week,season};
+}
+function v3180BlockMinutes(block){
+  let seconds=0,hasCycle=false;
+  for(const item of v34Array(block?.items)){if(item?.runnable===false)continue;const cycle=Number(v3129ExplicitCycle?.(item)||0),reps=Math.max(1,Number(item?.reps)||1);if(cycle){seconds+=cycle*reps;hasCycle=true}else seconds+=(Number(item?.distance)||0)*reps*1.15}
+  seconds*=Math.max(1,Number(block?.repeat_count)||1);return Math.max(1,Math.round(seconds/60))*(hasCycle?1:1);
+}
+function v3180SquadTiming(session,blocks){
+  try{
+    const squad=v3172ActiveSquadName(session),slots=v312SlotsForDate(session.session_date).filter(slot=>String(slot.day_part).toUpperCase()===String(session.day_part||"").toUpperCase()),current=slots.find(slot=>squadKey(slot.squad_name)===squadKey(squad)),national=slots.find(slot=>squadKey(slot.squad_name)==="national");
+    const currentStart=v3180Minutes(current?.start_time),baseStart=v3180Minutes(national?.start_time);if(currentStart===null||baseStart===null||currentStart<=baseStart)return"";
+    const offset=currentStart-baseStart;let running=0,join=blocks[0]?.title||"first block";for(const block of blocks){running+=v3180BlockMinutes(block);join=block.title||v32BlockLabel(block.block_type);if(running>=offset)break}
+    return `<div class="v3180-entry"><strong>${escapeHtml(squad)} starts ${offset} min later</strong><span>Suggested entry: compress the opening work and join at ${escapeHtml(join)}.</span></div>`;
+  }catch{return""}
+}
+function v3180ReconcileDistance(session,blocks){
+  const total=v3170Total(blocks);if(!session||!total)return total;const saved=Number(session.planned_distance||0),key=`${session.id}:${total}`;
+  if(Math.abs(saved-total)>25&&appState.settings.v3180_distance_reconciled!==key){session.planned_distance=total;session.updated_at=nowIso();appState.settings.v3180_distance_reconciled=key;queueRecord?.("sessions",session.id);saveState(appState);scheduleFastSync?.()}
+  return total;
+}
+function v3180Header(session,blocks,{label="Current block"}={}){
+  const total=v3180ReconcileDistance(session,blocks),roll=v3180AttendanceSummary(session),plan=v3180PlanData(session),squad=v3172ActiveSquadName(session);
+  return `<header class="v3170-session-head v3180-session-head"><div><span>${escapeHtml(label)} · ${escapeHtml(formatDate(session.session_date))} ${escapeHtml(String(session.day_part||""))}${squad?` · ${escapeHtml(squad)}`:""}</span><h2>${escapeHtml(v3172SessionTitle?.(session)||session.title||"Session")}</h2></div><strong>${total.toLocaleString()}m</strong></header>${v3172ContextBadge?.(session)||""}${v3180SquadTiming(session,blocks)}<div class="v3180-plan-cascade"><div><span>Today</span><strong>${escapeHtml(plan.today)}</strong></div><div><span>Week</span><strong>${escapeHtml(plan.week)}</strong></div><div><span>Season</span><strong>${escapeHtml(plan.season)}</strong></div></div><button class="v3170-roll-strip v3180-roll-strip" type="button" data-v3170-roll><span>${escapeHtml(roll.label)}</span><b>Roll ›</b></button>`;
+}
+v3170Header=v3180Header;
+
+function v3180Profile(athlete){
+  try{return v3142BaselineProfile?.(athlete)||v37ProfileForAthlete?.(athlete)||{ratio:.75,cycleMultiplier:1,profile:{profile_label:"Modified"}}}catch{return{ratio:.75,cycleMultiplier:1,profile:{profile_label:"Modified"}}}
+}
+function v3180DeliberatePartial(text){return /\b(underwater|breakout|burst|sprint\s+to|to\s+(?:10|15|20)m?|(?:10|15|20)m)\b/i.test(text)}
+function v3180FullLengthLine(text){if(v3180DeliberatePartial(text))return text;return String(text||"").replace(/(\d+\s*[x×]\s*)(?:15|20|35)\b/ig,"$125")}
+function v3181RoundSendoff(seconds){const value=Number(seconds);return Number.isFinite(value)&&value>0?Math.ceil(value/5)*5:value}
+function v3180ReplaceCycle(line,seconds){
+  const shown=v3150Clock?.(seconds)||v3180Clock(seconds),clean=String(line||"").replace(/\s*·\s*same as main\b/i,"").trim();
+  if(/\bon\s+(?:\d{1,2}:\d{2}(?:\.\d+)?|\d{2,3})\b/i.test(clean))return clean.replace(/\bon\s+(?:\d{1,2}:\d{2}(?:\.\d+)?|\d{2,3})\b/i,`on ${shown}`);
+  return `${clean} · on ${shown}`;
+}
+function v3180AdaptLine(athlete,session,block,item,itemIndex,providedLine="",sourceLabel=""){
+  const original=v3129LineText(item),profile=v3180Profile(athlete);let line=String(providedLine||"").trim();
+  if(!line){try{line=v3150AdaptItem?.(athlete,session,block,item,profile)||original}catch{line=original}}
+  line=v3180FullLengthLine(line).replace(/\s*·\s*main start cycle\b/i,"").replace(/\s*·\s*same as main\b/i,"").trim();
+  let parsedResult=v3170ParseItem?.(line,itemIndex),parsed=parsedResult?.item||parsedResult||{raw:line,reps:item.reps,distance:item.distance},mainCycle=Number(v3129ExplicitCycle?.(item)||0),mainReps=Math.max(1,Number(item.reps)||1),adaptReps=Math.max(1,Number(parsed.reps)||1);
+  const mckenzieFast75=v35NameKey?.(athlete.full_name)==="mckenzie drage"&&Number(parsed.distance)===75&&v3150QualityLine?.(original);
+  let finalCycle=Number(v3129ExplicitCycle?.(parsed)||0);
+  // Modified work must occupy the same line clock as the main group. When reps
+  // are reduced, spread them across the original line window rather than
+  // leaving the swimmer finished early. McKenzie's established fast-75 cap is
+  // the deliberate exception.
+  if(mainCycle&&adaptReps){
+    if(mckenzieFast75){finalCycle=v3181RoundSendoff(Math.min(120,Math.max(105,finalCycle||120)))}
+    else finalCycle=Math.max(5,v3181RoundSendoff((mainCycle*mainReps)/adaptReps));
+    line=v3180ReplaceCycle(line,finalCycle);parsedResult=v3170ParseItem?.(line,itemIndex);parsed=parsedResult?.item||parsedResult||{...parsed,raw:line,cycle:finalCycle};parsed.cycle=finalCycle;
+  }
+  let target="";try{const spec=v382PaceSpec?.(parsed,block,session),resolved=v3140ResolveStroke?.(athlete,session,block,parsed,0,itemIndex),result=v382RowTarget?.(athlete,{...spec,stroke:resolved?.stroke||spec?.stroke});if(result?.status==="ok")target=result.primary||result.secondary||""}catch{}
+  const mainWindow=mainCycle*mainReps,adaptWindow=finalCycle*adaptReps;let clock="";
+  if(mainWindow&&adaptWindow){const delta=Math.round(adaptWindow-mainWindow);clock=Math.abs(delta)<=5?"Same line clock":delta<0?`Rejoin ${v3180Clock(Math.abs(delta))} early`:`Runs ${v3180Clock(delta)} over main line`}
+  return {line,target,clock,distance:(Number(parsed.reps)||0)*(Number(parsed.distance)||0),source:v3180Text(sourceLabel||profile?.profile?.profile_label||profile?.label||"Stimulus fit")};
+}
+function v3180Adaptation(athlete,session,block,blockIndex){
+  const rows=[],mainItems=v34Array(block.items).filter(item=>item?.runnable!==false);let detail=null;
+  try{detail=v3131AdaptationBlock?.(athlete,session,block,blockIndex)||null}catch{}
+  const supplied=detail&&!detail.same&&Array.isArray(detail.lines)&&detail.lines.length?detail.lines:[];
+  if(supplied.length){
+    let setIndex=0;for(const raw of supplied){const probe=v3170ParseItem?.(raw,setIndex),parsed=probe?.item||probe;if(parsed?.runnable===false||!Number(parsed?.distance)){rows.push({line:String(raw),cue:true,distance:0,source:detail.source||"Session adaptation"});continue}const main=mainItems[Math.min(setIndex,mainItems.length-1)];if(main)rows.push(v3180AdaptLine(athlete,session,block,main,setIndex,raw,detail.source||"Session adaptation"));setIndex++}
+  }else{
+    for(const [itemIndex,item] of v34Array(block.items).entries()){if(item?.runnable===false){if(v3131IsRoundCue?.(item))rows.push({line:v3129LineText(item),cue:true,distance:0});continue}rows.push(v3180AdaptLine(athlete,session,block,item,itemIndex))}
+  }
+  const targetCounts=new Map();for(const row of rows)if(row.target)targetCounts.set(row.target,(targetCounts.get(row.target)||0)+1);const sharedTarget=[...targetCounts.entries()].sort((a,b)=>b[1]-a[1])[0];if(sharedTarget?.[1]>1)for(const row of rows)if(row.target===sharedTarget[0])row.target="";
+  return {athlete,rows,total:rows.reduce((n,row)=>n+(Number(row.distance)||0),0)*Math.max(1,Number(block.repeat_count)||1),repeat:Math.max(1,Number(block.repeat_count)||1),sharedTarget:sharedTarget?.[1]>1?sharedTarget[0]:"",source:detail?.source||""};
+}
+function v3180SelectedModified(session,modified){
+  if(!modified.length)return null;if(!appState.settings.v3180_modified_by_session)appState.settings.v3180_modified_by_session={};const wanted=appState.settings.v3180_modified_by_session[session.id];return modified.find(a=>a.id===wanted)||modified[0];
+}
+function v3180ModTabs(session,modified,selected){if(modified.length<=1)return"";return `<div class="v3180-mod-tabs">${modified.map(a=>`<button type="button" data-v3180-mod="${escapeHtml(a.id)}" class="${a.id===selected?.id?"active":""}" title="${escapeHtml(a.full_name)}">${escapeHtml(v3180Initials(a.full_name))}</button>`).join("")}</div>`}
+function v3180ModRail(session,block,blockIndex){
+  const modified=v3180ModifiedAthletes(session);if(!modified.length)return"";const selected=v3180SelectedModified(session,modified),adapt=v3180Adaptation(selected,session,block,blockIndex);
+  return `<aside class="v3180-mod-rail"><header><div><span>Modified</span><strong>${escapeHtml(selected.full_name)}</strong></div><b>${adapt.total.toLocaleString()}m</b></header>${v3180ModTabs(session,modified,selected)}${adapt.repeat>1?`<div class="v3180-repeat">Repeat block ×${adapt.repeat}</div>`:""}${adapt.sharedTarget?`<div class="v3180-shared-target"><b>${escapeHtml(v3180Initials(selected.full_name))}</b><span>${escapeHtml(adapt.sharedTarget)}</span></div>`:""}<div class="v3180-mod-lines">${adapt.rows.map(row=>row.cue?`<div class="v3180-mod-cue">${escapeHtml(row.line)}</div>`:`<div class="v3180-mod-line"><strong>${escapeHtml(row.line)}</strong>${row.target?`<span>${escapeHtml(row.target)}</span>`:""}${row.clock?`<small>${escapeHtml(row.clock)}</small>`:""}</div>`).join("")}</div><footer><span>${escapeHtml(adapt.rows.find(r=>r.source)?.source||"Stimulus-fit version")}</span>${modified.length>1?`<b>${modified.length} versions</b>`:""}</footer></aside>`;
+}
+function v3180MainLines(session,block,index){return v34Array(block.items).map((item,itemIndex)=>v3170LineHtml(session,block,item,itemIndex,index)).join("")||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}
+function v3180BlockCard(session,block,index,{whole=false}={}){
+  const cue=[block.purpose,block.cues].filter(Boolean).join(" · "),repeat=Math.max(1,Number(block.repeat_count)||1),modified=v3180ModifiedAthletes(session);
+  return `<section class="v3170-current-card v3180-board-block ${whole?"whole":"current"}" data-v3180-block="${index}"><header><button type="button" class="v3180-block-title" data-v3170-block="${index}"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</h3></button><strong>${v3170BlockDistance(block).toLocaleString()}m</strong></header>${cue?`<div class="v3170-block-cue">${escapeHtml(cue)}</div>`:""}${repeat>1?`<div class="v3170-repeat-banner"><strong>Repeat whole block ×${repeat}</strong><span>${v3170BlockDistance(block).toLocaleString()}m total</span></div>`:""}<div class="v3180-block-grid ${modified.length?"has-mod":""}"><div class="v3170-main-lines v3180-main-lines">${v3180MainLines(session,block,index)}</div>${v3180ModRail(session,block,index)}</div><div class="v3170-block-actions"><button type="button" data-v3170-time>Times</button><button type="button" class="secondary" data-v3170-capture data-v3180-capture-block="${index}">Capture</button><button type="button" class="secondary" data-v3170-source>Source</button></div></section>`;
+}
+v3170BlockCard=function(session,block,index){return v3180BlockCard(session,block,index,{whole:false})};
+
+function v3180FinishReview(session){return sessionReview(session.id)||{}}
+function v3180OutcomeButtons(scope,current="") {return `<div class="v3180-outcomes" data-v3180-outcome-group="${scope}">${[['yes','Yes'],['mostly','Mostly'],['no','Not yet']].map(([value,label])=>`<button type="button" data-v3180-outcome="${scope}:${value}" class="${current===value?"active":""}">${label}</button>`).join("")}</div>`}
+function v3180FinishPanel(session,blocks,{open=false}={}){
+  const review=v3180FinishReview(session),plan=v3180PlanData(session),total=v3170Total(blocks),saved=appState.settings.v3180_finish_outcomes?.[session.id]||{};
+  return `<details class="v3180-finish" data-v3180-finish ${open?"open":""}><summary><span><strong>Finish session</strong><small>One minute · today → week → season</small></span><b>＋</b></summary><div class="v3180-finish-body"><div class="v3180-finish-question"><span>Today</span><strong>${escapeHtml(plan.today)}</strong>${v3180OutcomeButtons("today",saved.today)}</div><div class="v3180-finish-question"><span>Week</span><strong>${escapeHtml(plan.week)}</strong>${v3180OutcomeButtons("week",saved.week)}</div><div class="v3180-finish-question"><span>Season</span><strong>${escapeHtml(plan.season)}</strong>${v3180OutcomeButtons("season",saved.season)}</div><label>What changed?<textarea data-v3180-changed placeholder="One line is enough">${escapeHtml(review.what_changed||"")}</textarea></label><label>Carry into the next session<textarea data-v3180-carry>${escapeHtml(review.carry_forward||"")}</textarea></label><label>Actual distance<input data-v3180-distance type="number" inputmode="numeric" value="${Number(review.actual_distance||total)||""}"></label><div class="v3180-finish-actions"><button type="button" data-v3180-finish-capture="audio">🎙 Audio</button><button type="button" class="secondary" data-v3180-finish-capture="photo">📷 Photo</button><button type="button" class="secondary" data-v3180-finish-capture="video">🎥 Video</button></div><button type="button" class="v3180-complete" data-v3180-complete>Save & finish session</button><div class="help" data-v3180-finish-status>${review.completed_at?`Saved ${escapeHtml(new Date(review.completed_at).toLocaleString("en-NZ"))}`:""}</div></div></details>`;
+}
+function v3180ActiveHtml(session){
+  const blocks=v3170BoardBlocks(session);if(!blocks.length)return`<div class="warning-box">No workout is attached to this session.</div>`;const index=v3170ActiveIndex(session,blocks),block=blocks[index],previous=index>0,next=index<blocks.length-1;
+  return `${v3180Header(session,blocks)}${v3170BlockChips(blocks,index)}<div class="v3170-current-nav"><button class="secondary" data-v3170-prev ${previous?"":"disabled"}>‹ Previous</button><span>${index+1} / ${blocks.length}</span><button data-v3170-next ${next?"":"disabled"}>Next ›</button></div>${v3180BlockCard(session,block,index,{whole:false})}${next?`<button class="v3170-up-next" type="button" data-v3170-next><span>Up next</span><strong>${escapeHtml(blocks[index+1].title||v32BlockLabel(blocks[index+1].block_type))}</strong><b>${v3170BlockDistance(blocks[index+1]).toLocaleString()}m</b></button>`:v3180FinishPanel(session,blocks,{open:true})}`;
+}
+v3170ActiveHtml=v3180ActiveHtml;
+function v3180WholeHtml(session){
+  const blocks=v3170BoardBlocks(session),modified=v3180ModifiedAthletes(session),selected=v3180SelectedModified(session,modified);
+  return `${v3180Header(session,blocks,{label:"Whole session"})}${modified.length?`<div class="v3180-session-mod-selector"><span>Modified version beside every block</span>${v3180ModTabs(session,modified,selected)}</div>`:""}<div class="v3180-whole-flow">${blocks.map((block,index)=>v3180BlockCard(session,block,index,{whole:true})).join("")||'<div class="warning-box">No workout attached.</div>'}</div>${v3180FinishPanel(session,blocks)}<div class="v3170-session-actions"><button type="button" data-v3170-source>Original source</button><button type="button" class="secondary" data-v3170-edit>Edit workout</button><button type="button" class="secondary" data-v3170-capture>Capture</button></div>`;
+}
+v3170WholeHtml=v3180WholeHtml;
+
+function v3180SetModified(session,athleteId){if(!appState.settings.v3180_modified_by_session)appState.settings.v3180_modified_by_session={};appState.settings.v3180_modified_by_session[session.id]=athleteId;saveState(appState);v3170PaintBoard?.()}
+async function v3180SaveFinish(host,session){
+  const outcomes=appState.settings.v3180_finish_outcomes?.[session.id]||{},changed=host.querySelector("[data-v3180-changed]")?.value.trim()||"",carry=host.querySelector("[data-v3180-carry]")?.value.trim()||"",actual=Number(host.querySelector("[data-v3180-distance]")?.value||0),existing=sessionReview(session.id)||{};
+  if(!outcomes.today){host.querySelector("[data-v3180-finish-status]").textContent="Answer Today first.";return}
+  const record={...existing,id:existing.id||`review-${session.id}`,session_id:session.id,what_changed:`[Today ${outcomes.today||"—"} · Week ${outcomes.week||"—"} · Season ${outcomes.season||"—"}]${changed?`\n${changed}`:""}`,went_well:existing.went_well||"",reinforce:existing.reinforce||"",athlete_notes:existing.athlete_notes||"",carry_forward:carry,actual_distance:actual,actual_duration:Number(existing.actual_duration||0),energy_systems:existing.energy_systems||{},training_modes:existing.training_modes||{},stroke_exposure:existing.stroke_exposure||{},athlete_response:existing.athlete_response||"",modifications:existing.modifications||"",race_split_evidence:existing.race_split_evidence||"",completed_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("session_reviews",record);queueRecord("session_reviews",record.id);session.status="completed";session.updated_at=nowIso();queueRecord("sessions",session.id);saveState(appState);await syncIfPossible();host.querySelector("[data-v3180-finish-status]").textContent="Session finished and carry-forward saved.";updateStatus("Session finished · today, week and season review saved","good")
+}
+function v3180OpenCaptureForBlock(session,blockIndex,{mode="quick_note",media=""}={}){
+  appState.settings.v3129_active_block_index=Math.max(0,Number(blockIndex)||0);saveState(appState);v3140OpenCapture({sessionId:session.id});requestAnimationFrame(()=>{if($("voiceNoteMode"))$("voiceNoteMode").value=mode;if(media==="audio")$("startVoiceBtn")?.focus();if(media==="photo")$("photoInput")?.closest("label")?.scrollIntoView({block:"center"});if(media==="video")$("videoInput")?.closest("label")?.scrollIntoView({block:"center"});v3180CaptureTagsUi()})
+}
+const v3180BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){
+  v3180BindBoardBase(host,session);
+  host.querySelectorAll("[data-v3180-mod]").forEach(button=>button.onclick=()=>v3180SetModified(session,button.dataset.v3180Mod));
+  host.querySelectorAll("[data-v3170-capture]").forEach(button=>button.onclick=()=>v3180OpenCaptureForBlock(session,Number(button.dataset.v3180CaptureBlock??appState.settings.v3129_active_block_index)||0));
+  host.querySelectorAll("[data-v3180-outcome]").forEach(button=>button.onclick=()=>{const [scope,value]=button.dataset.v3180Outcome.split(":");if(!appState.settings.v3180_finish_outcomes)appState.settings.v3180_finish_outcomes={};const row=appState.settings.v3180_finish_outcomes[session.id]||{};row[scope]=value;appState.settings.v3180_finish_outcomes[session.id]=row;saveState(appState);button.closest("[data-v3180-outcome-group]").querySelectorAll("button").forEach(b=>b.classList.toggle("active",b===button))});
+  host.querySelectorAll("[data-v3180-complete]").forEach(button=>button.onclick=()=>v3180SaveFinish(button.closest("[data-v3180-finish]"),session));
+  host.querySelectorAll("[data-v3180-finish-capture]").forEach(button=>button.onclick=()=>v3180OpenCaptureForBlock(session,v3170BoardBlocks(session).length-1,{mode:"session_debrief",media:button.dataset.v3180FinishCapture}));
+  host.querySelectorAll("[data-v3180-finish]").forEach(details=>details.addEventListener("toggle",()=>{const marker=details.querySelector(":scope>summary b");if(marker)marker.textContent=details.open?"−":"＋"}));
+};
+
+// Exact-course no-PB race fallback: use the swimmer's achieved overall meet/QT
+// level, then take that level's standard for the requested event.
+function v3180OverallLevel(athlete){
+  const candidates=[];try{for(const pb of v3163PbInventory(athlete).pbs){const resolved=v3163ResolveEvent(athlete,pb);for(const stage of resolved.achieved||[])if(stage.kind==="qualifying")candidates.push(stage)}}catch{}
+  if(!candidates.length)return null;const counts=new Map();for(const stage of candidates){const key=v3163Norm(stage.name);const row=counts.get(key)||{name:stage.name,count:0,order:Number(stage.order)||0};row.count++;row.order=Math.max(row.order,Number(stage.order)||0);counts.set(key,row)}return [...counts.values()].sort((a,b)=>b.order-a.order||b.count-a.count)[0]||null;
+}
+function v3180StandardForNoPb(athlete,spec){
+  const level=v3180OverallLevel(athlete);if(!level)return null;const fake={course:spec.course,distance:spec.raceDistance,stroke:spec.stroke};const matches=(appState.pathway_standards||[]).filter(row=>v3163Kind(row)==="qualifying"&&v3163Norm(v3163StageLabel(row))===v3163Norm(level.name)&&v3163StandardReason(row,athlete,fake)==="match").map(row=>({row,seconds:v3163StageSeconds(row)})).filter(x=>Number.isFinite(x.seconds)&&x.seconds>0).sort((a,b)=>a.seconds-b.seconds);return matches[0]?{...matches[0],label:v3163StageLabel(matches[0].row)}:null;
+}
+const v3180RowTargetBase=v382RowTarget;
+v382RowTarget=function(athlete,spec){
+  const result=v3180RowTargetBase(athlete,spec);if(spec?.mode!=="race")return result;
+  let exactPb=null;try{exactPb=v382PbFor?.(athlete,spec.course,spec.raceDistance,spec.stroke)||null}catch{}
+  const standard=!exactPb?v3180StandardForNoPb(athlete,spec):null;
+  if(result?.status==="ok"){
+    if(!exactPb&&standard)return {...result,kind:result.kind||"race_standard",secondary:`Based on ${standard.label} QT — no official PB · ${spec.course} ${spec.raceDistance} ${spec.stroke}`,source_label:`${standard.label} QT`,source:`${standard.label} QT — no official PB`};
+    return result;
+  }
+  if(!standard)return result;
+  const segment=v382RaceSegment(standard.seconds,spec.raceDistance,spec.repDistance,{splits:Array.isArray(standard.row.target_splits)?standard.row.target_splits:[],splitDistance:Number(standard.row.split_distance)||null,segmentIndex:spec.segmentIndex});if(!segment?.seconds)return result;
+  return {status:"ok",kind:"race_standard",primary:`${v380Clock(segment.seconds)}`,secondary:`Based on ${standard.label} QT — no official PB · ${spec.course} ${spec.raceDistance} ${spec.stroke}`,method:`exact-course meet QT / ${segment.method}`,source_label:`${standard.label} QT`,source:`${standard.label} QT — no official PB`};
+};
+
+// Compact shared target groups: show ALL once, then only exceptions.
+v3140TargetDetails=function(session,block,item,blockIndex,itemIndex){
+  const rows=v3140TargetRows(session,block,item,blockIndex,itemIndex);if(!rows.length)return"";const groups=new Map();for(const row of rows){const key=[row.primary||"",Number(row.cycleSeconds)||0,row.source||row.source_label||"",row.missing?"missing":"ok"].join("|");const list=groups.get(key)||[];list.push(row);groups.set(key,list)}
+  const allCount=rows.length,body=[...groups.values()].map(list=>{const first=list[0],all=list.length===allCount,label=all?"ALL":list.map(row=>v3180Initials(row.athlete.full_name)).join(" "),target=v3140TargetTime(first),cycle=Number(first.cycleSeconds)?`@ ${v3140Clock(first.cycleSeconds)}`:"",source=first.source||first.source_label||first.resolved?.source||"Target";return `<div class="v3180-target-group"><b>${escapeHtml(label)}</b><strong>${escapeHtml([target,cycle].filter(Boolean).join(" · ")||"Coach target")}</strong><small>${escapeHtml(source)}</small></div>`}).join("");
+  return `<details class="v3140-target-details v3180-target-details" data-v3140-detail="${escapeHtml(v3140LineKey(block,item,blockIndex,itemIndex))}"><summary><span>Times & cues</span><small>${groups.size===1?"shared":"exceptions shown"}</small></summary><div class="v3180-target-groups">${body}</div></details>`;
+};
+
+// Tagged block capture: group or multiple swimmers; audio/video remain linked to
+// the same block and media, with cloud transcription using the existing service.
+function v3180CaptureRoster(){const session=selectedSession();if(!session)return[];const here=v3180RelevantAttendance(session).filter(row=>v3180Here(row.status)).map(row=>(appState.athletes||[]).find(a=>a.id===row.athlete_id)).filter(Boolean);return here.length?here:[...(v3172SquadRoster?.(session)||[])]}
+function v3180TagIds(){return Array.isArray(appState.settings.v3180_capture_tags)?appState.settings.v3180_capture_tags.filter(Boolean):[]}
+function v3180SetTagIds(ids){appState.settings.v3180_capture_tags=[...new Set(ids.filter(Boolean))];saveState(appState);const first=appState.settings.v3180_capture_tags[0];if($("captureAthlete"))$("captureAthlete").value=first||""}
+function v3180CaptureTagsUi(){
+  const select=$("captureAthlete");if(!select)return;let host=$("v3180CaptureTags");if(!host){host=document.createElement("div");host.id="v3180CaptureTags";host.className="v3180-capture-tags";select.closest("div")?.insertAdjacentElement("afterend",host)}const ids=v3180TagIds(),roster=v3180CaptureRoster();host.innerHTML=`<span>Tag</span><button type="button" data-v3180-tag="group" class="${ids.length?"":"active"}">Group</button>${roster.map(a=>`<button type="button" data-v3180-tag="${escapeHtml(a.id)}" class="${ids.includes(a.id)?"active":""}">${escapeHtml(v3180Initials(a.full_name))}</button>`).join("")}`;host.querySelectorAll("[data-v3180-tag]").forEach(button=>button.onclick=()=>{if(button.dataset.v3180Tag==="group")v3180SetTagIds([]);else{const next=new Set(v3180TagIds());next.has(button.dataset.v3180Tag)?next.delete(button.dataset.v3180Tag):next.add(button.dataset.v3180Tag);v3180SetTagIds([...next])}v3180CaptureTagsUi()});
+}
+function v3180CaptureTargets(){const ids=v3180TagIds();return ids.length?ids:[$("captureAthlete")?.value||null]}
+function v3180CloneCapture(base,athleteId){const copy={...base,id:uid("capture"),athlete_id:athleteId||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",copy);queueRecord("captures",copy.id);return copy}
+function v3180SaveTextCapture(event){
+  event.preventDefault();event.stopImmediatePropagation();const text=$("captureText")?.value.trim();if(!text){alert("Add a note first.");return}const targets=v3180CaptureTargets(),base={session_id:selectedSession().id,capture_type:"text",text_content:`[${$("captureCategory").value}]${v33CaptureBlockPrefix()} ${text}`,session_block_id:$("captureBlock")?.value||null,media_path:null,media_local_id:null,mime_type:null};for(const id of targets)v3180CloneCapture(base,id);saveState(appState);$("captureText").value="";syncIfPossible().then(()=>{renderCaptures();renderOverview()})
+}
+async function v3180SaveTaggedMedia(file,kind){
+  if(!file)return;const localId=await saveMediaBlob(file,kind,file.name||`${kind}-${Date.now()}`),targets=v3180CaptureTargets(),base={session_id:selectedSession().id,capture_type:kind,text_content:`${kind==="photo"?"Poolside photo":"Poolside video"}${v33CaptureBlockPrefix()}`,session_block_id:$("captureBlock")?.value||null,media_path:null,media_local_id:localId,mime_type:file.type||"application/octet-stream"},captures=targets.map(id=>v3180CloneCapture(base,id));saveState(appState);await syncIfPossible();renderCaptures();renderOverview();
+  if(kind==="video"){
+    let audio;try{audio=await v3106ExtractVideoAudio(file)}catch(error){updateStatus(`Video saved · commentary extraction unavailable: ${error.message}`,"error");return}const audioLocal=await saveMediaBlob(audio,"voice",audio.name||"video-commentary.wav");for(const video of captures){const voice=v3180CloneCapture({session_id:video.session_id,capture_type:"voice",text_content:`Audio extracted from video ${video.id}`,session_block_id:video.session_block_id,media_path:null,media_local_id:audioLocal,mime_type:"audio/wav"},video.athlete_id);const tr={id:uid("transcript"),session_id:voice.session_id,capture_id:voice.id,athlete_id:voice.athlete_id,session_block_id:voice.session_block_id,source_type:"voice",purpose:"quick_note",status:"audio_saved",raw_text:"",structured_blocks:[],structured_data:{parent_video_capture_id:video.id},error_message:"",created_at:nowIso(),updated_at:nowIso()};upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);try{await v34TranscribeCapture(tr,voice);video.text_content=tr.raw_text?`Video commentary: ${tr.raw_text}`:video.text_content;video.updated_at=nowIso();queueRecord("captures",video.id)}catch(error){console.warn("Video transcript deferred",error)}}saveState(appState);renderAll();updateStatus("Video saved · spoken commentary prepared for review","good")
+  }
+}
+function v3180InstallCaptureHandlers(){
+  const save=$("saveTextCaptureBtn");if(save&&!save.dataset.v3180){save.dataset.v3180="1";save.addEventListener("click",v3180SaveTextCapture,true)}
+  for(const [id,kind] of [["photoInput","photo"],["galleryPhotoInput","photo"],["videoInput","video"]]){const input=$(id);if(!input||input.dataset.v3180)continue;input.dataset.v3180="1";input.addEventListener("change",async event=>{event.stopImmediatePropagation();const file=event.target.files?.[0];event.target.value="";await v3180SaveTaggedMedia(file,kind)},true)}
+}
+const v3180VoiceBase=v34CreateVoiceTranscription;
+v34CreateVoiceTranscription=async function(capture,autoTranscribe=false){
+  const result=await v3180VoiceBase(capture,autoTranscribe),targets=v3180TagIds().filter(id=>id!==capture.athlete_id);if(!targets.length)return result;const original=(appState.session_transcriptions||[]).find(t=>t.capture_id===capture.id);for(const athleteId of targets){const clone=v3180CloneCapture(capture,athleteId),tr=original?{...original,id:uid("transcript"),capture_id:clone.id,athlete_id:athleteId,created_at:nowIso(),updated_at:nowIso()}:{id:uid("transcript"),session_id:clone.session_id,capture_id:clone.id,athlete_id:athleteId,session_block_id:clone.session_block_id,source_type:"voice",purpose:$("voiceNoteMode")?.value||"quick_note",status:"audio_saved",raw_text:"",structured_blocks:[],structured_data:{},error_message:"",created_at:nowIso(),updated_at:nowIso()};upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id)}saveState(appState);scheduleFastSync?.();return result
+};
+
+// Swimmer relevance: highest points event, not a generic stroke order.
+function v3180BestEvent(athlete){const rows=v3140Pbs(athlete).filter(row=>v3Points(row)>0).sort((a,b)=>v3Points(b)-v3Points(a)||Number(a.result_seconds)-Number(b.result_seconds));const row=rows[0];return row?{label:`${v3Course(row.course)} ${row.distance} ${v3Stroke(row.stroke)}`,points:v3Points(row),stroke:v3Stroke(row.stroke)}:null}
+const v3180QuickHtmlBase=athleteQuickHtml;
+athleteQuickHtml=function(athlete){let html=v3180QuickHtmlBase(athlete),best=v3180BestEvent(athlete);if(!best)return html;html=html.replace(/<span>Stroke selection<\/span><strong>[\s\S]*?<\/strong>/,`<span>Highest-points event</span><strong>${escapeHtml(best.label)} · ${best.points} pts</strong>`);return html};
+const v3180TrainingBase=v3140SwimmerTrainingPanel;
+v3140SwimmerTrainingPanel=function(athlete){let html=v3180TrainingBase(athlete),best=v3180BestEvent(athlete);if(best)html=html.replace(/<div class="v3140-stroke-summary">[\s\S]*?<\/div><div class="v3140-training-list">/,`<div class="v3140-stroke-summary"><span><b>#1 event</b>${escapeHtml(best.label)} · ${best.points} pts</span><span><b>#1F</b>${escapeHtml(v3140BestStroke(athlete,{excludeFree:true}))}</span></div><div class="v3140-training-list">`);return html};
+
+function v3180RecordLabel(row){const course=v3Course(row?.course||row?.record_course||row?.pool_course),age=v3180Text(row?.age_group||row?.record_age_group||row?.age),event=[row?.distance,row?.stroke&&v3Stroke(row.stroke)].filter(Boolean).join(" "),scope=v3180Text(row?.programme||row?.record_scope||row?.standard_name||"Record");return [scope,course&&course!=="BOTH"?course:"",age?`${age}${/^\d+$/.test(age)?"Y":""}`:"",event].filter(Boolean).join(" · ")}
+const v3180CompactRecordsBase=compactRecordRows;
+compactRecordRows=function(athlete){let html=v3180CompactRecordsBase(athlete);const rows=(appState.results_record_gaps||[]).filter(row=>row.athlete_id===athlete.id);for(const row of rows){const old=v3180Text(row.programme||row.record_scope||row.standard_name);const label=v3180RecordLabel(row);if(old&&label&&old!==label)html=html.split(escapeHtml(old)).join(escapeHtml(label))}return html};
+
+function v3180Logo(){
+  const header=document.querySelector(".app-header>div:first-child");if(header&&!header.querySelector(".v3180-mark")){const mark=document.createElement("span");mark.className="v3180-mark";mark.textContent="M";header.prepend(mark)}document.querySelectorAll(".sidebar .nav-button[data-view='finish'],.mobile-nav .nav-button[data-view='finish']").forEach(button=>button.hidden=true)
+}
+function v3180CaptureRefresh(){if((document.querySelector(".view.active")?.id||"")==="capture"){v3180CaptureTagsUi();v3180InstallCaptureHandlers()}}
+const v3180RenderViewBase=renderView;
+renderView=function(id){const result=v3180RenderViewBase(id);v3180Logo();if(id==="capture")requestAnimationFrame(v3180CaptureRefresh);return result};
+const v3180RenderAllBase=renderAll;
+renderAll=function(){const result=v3180RenderAllBase();v3180Logo();v3180CaptureRefresh();return result};
+
+function v3180Brand(){document.title=`McLay Swimming OS — v${V3180_VERSION} Poolside Flow`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3180_VERSION} · whole-session Board · block-side modified work · finish in flow`}
+for(const name of ["v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand","v3144Brand","v3143Brand","v3142Brand","v3141Brand","v3140Brand"]){try{globalThis[name]=v3180Brand}catch{}}
+try{v3172BrandObserver?.disconnect?.()}catch{}
+const v3180BrandObserver=new MutationObserver(()=>{const title=`McLay Swimming OS — v${V3180_VERSION} Poolside Flow`,subtitle=document.querySelector(".header-subtitle"),sub=`Version ${V3180_VERSION} · whole-session Board · block-side modified work · finish in flow`;if(document.title!==title||(subtitle&&subtitle.textContent!==sub))queueMicrotask(v3180Brand)});if(document.querySelector("title"))v3180BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3180BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+function v3180Refresh(){v3180Logo();v3180Brand();v3180InstallCaptureHandlers();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.()}
+window.v3180Debug={version:V3180_VERSION,build:V3180_BUILD,modified:v3180ModifiedAthletes,adaptation:v3180Adaptation,whole:v3180WholeHtml,active:v3180ActiveHtml,noPb:v3180StandardForNoPb};
+setTimeout(v3180Refresh,0);setTimeout(v3180Refresh,400);setTimeout(v3180Refresh,1500);
+
+// v3.18.0 capture-link repair: source-parsed sessions may not yet have
+// persisted session_blocks. Materialise stable block records before capture so
+// text, photo, audio, video and transcripts all retain the active block link.
+function v3180EnsureCaptureBlocks(session){
+  if(!session)return[];
+  const board=v3170BoardBlocks(session),existing=v32SessionBlocks(session.id);
+  if(existing.length>=board.length)return existing;
+  const byOrder=new Map(existing.map((row,index)=>[Number(row.sort_order??index+1),row]));
+  board.forEach((block,index)=>{
+    const order=index+1;if(byOrder.has(order))return;
+    const record={
+      id:uid("block"),session_id:session.id,block_type:block.block_type||"other",
+      title:block.title||v32BlockLabel(block.block_type),sort_order:order,
+      items:v34Array(block.items).map((item,itemIndex)=>({...clone(item),id:item.id||uid("item"),sort_order:Number(item.sort_order||itemIndex+1)})),
+      raw_text:block.raw_text||"",purpose:block.purpose||"",cues:block.cues||"",
+      notes:"Linked from the poolside Board for block capture",status:"planned",
+      source_import:"v3180-poolside-capture",repeat_count:Math.max(1,Number(block.repeat_count)||1),
+      updated_at:nowIso()
+    };
+    upsertLocal("session_blocks",record);queueRecord("session_blocks",record.id);byOrder.set(order,record)
+  });
+  saveState(appState);scheduleFastSync?.();return v32SessionBlocks(session.id)
+}
+function v3180CaptureBlockId(){return $("captureBlock")?.value||appState.settings.v3180_capture_block_id||null}
+function v3180SelectCaptureBlock(blockId,session){
+  const select=$("captureBlock");if(!select||!blockId)return;
+  const blocks=v32SessionBlocks(session.id);
+  if(![...select.options].some(option=>option.value===blockId))select.innerHTML='<option value="">Whole session</option>'+blocks.map(block=>`<option value="${escapeHtml(block.id||"")}">${escapeHtml(block.title||v32BlockLabel(block.block_type))}</option>`).join("");
+  select.value=blockId;select.dataset.v311Session=session.id
+}
+v3180OpenCaptureForBlock=function(session,blockIndex,{mode="quick_note",media=""}={}){
+  const safe=Math.max(0,Number(blockIndex)||0),blocks=v3180EnsureCaptureBlocks(session),block=blocks[safe]||null;
+  appState.settings.v3129_active_block_index=safe;appState.settings.v3180_capture_block_id=block?.id||null;saveState(appState);
+  v3140OpenCapture({sessionId:session.id});
+  const apply=()=>{v3180SelectCaptureBlock(block?.id,session);if($("voiceNoteMode"))$("voiceNoteMode").value=mode;if(media==="audio")$("startVoiceBtn")?.focus();if(media==="photo")$("photoInput")?.closest("label")?.scrollIntoView({block:"center"});if(media==="video")$("videoInput")?.closest("label")?.scrollIntoView({block:"center"});v3180CaptureTagsUi()};
+  requestAnimationFrame(apply);setTimeout(apply,80)
+};
+v3180SaveTextCapture=function(event){
+  event.preventDefault();event.stopImmediatePropagation();const text=$("captureText")?.value.trim();if(!text){alert("Add a note first.");return}
+  const blockId=v3180CaptureBlockId(),block=appState.session_blocks.find(row=>row.id===blockId),targets=v3180CaptureTargets(),prefix=block?` [${block.title||v32BlockLabel(block.block_type)}]`:"",base={session_id:selectedSession().id,capture_type:"text",text_content:`[${$("captureCategory").value}]${prefix} ${text}`,session_block_id:blockId,media_path:null,media_local_id:null,mime_type:null};
+  for(const id of targets)v3180CloneCapture(base,id);saveState(appState);$("captureText").value="";syncIfPossible().then(()=>{renderCaptures();renderOverview()})
+};
+v3180SaveTaggedMedia=async function(file,kind){
+  if(!file)return;const blockId=v3180CaptureBlockId(),block=appState.session_blocks.find(row=>row.id===blockId),prefix=block?` · ${block.title||v32BlockLabel(block.block_type)}`:"",localId=await saveMediaBlob(file,kind,file.name||`${kind}-${Date.now()}`),targets=v3180CaptureTargets(),base={session_id:selectedSession().id,capture_type:kind,text_content:`${kind==="photo"?"Poolside photo":"Poolside video"}${prefix}`,session_block_id:blockId,media_path:null,media_local_id:localId,mime_type:file.type||"application/octet-stream"},captures=targets.map(id=>v3180CloneCapture(base,id));saveState(appState);await syncIfPossible();renderCaptures();renderOverview();
+  if(kind==="video"){
+    let audio;try{audio=await v3106ExtractVideoAudio(file)}catch(error){updateStatus(`Video saved · commentary extraction unavailable: ${error.message}`,"error");return}
+    const audioLocal=await saveMediaBlob(audio,"voice",audio.name||"video-commentary.wav");
+    for(const video of captures){const voice=v3180CloneCapture({session_id:video.session_id,capture_type:"voice",text_content:`Audio extracted from video ${video.id}${prefix}`,session_block_id:blockId,media_path:null,media_local_id:audioLocal,mime_type:"audio/wav"},video.athlete_id),tr={id:uid("transcript"),session_id:voice.session_id,capture_id:voice.id,athlete_id:voice.athlete_id,session_block_id:blockId,source_type:"voice",purpose:"quick_note",status:"audio_saved",raw_text:"",structured_blocks:[],structured_data:{parent_video_capture_id:video.id},error_message:"",created_at:nowIso(),updated_at:nowIso()};upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);try{await v34TranscribeCapture(tr,voice);video.text_content=tr.raw_text?`Video commentary: ${tr.raw_text}`:video.text_content;video.updated_at=nowIso();queueRecord("captures",video.id)}catch(error){console.warn("Video transcript deferred",error)}}
+    saveState(appState);renderAll();updateStatus("Video saved · spoken commentary prepared for review","good")
+  }
+};
+
+// Later-start squads shorten only the entry work, then join the shared session
+// at the next clear block boundary.
+v3180SquadTiming=function(session,blocks){
+  try{
+    const squad=v3172ActiveSquadName(session),slots=v312SlotsForDate(session.session_date).filter(slot=>String(slot.day_part).toUpperCase()===String(session.day_part||"").toUpperCase()),current=slots.find(slot=>squadKey(slot.squad_name)===squadKey(squad)),national=slots.find(slot=>squadKey(slot.squad_name)==="national"),currentStart=v3180Minutes(current?.start_time),baseStart=v3180Minutes(national?.start_time);
+    if(currentStart===null||baseStart===null||currentStart<=baseStart)return"";
+    const offset=currentStart-baseStart;let running=0,index=0;for(;index<blocks.length;index++){running+=v3180BlockMinutes(blocks[index]);if(running>=offset)break}
+    const affected=blocks[Math.min(index,blocks.length-1)]?.title||"opening work",join=blocks[Math.min(index+1,blocks.length-1)]?.title||affected;
+    return `<div class="v3180-entry"><strong>${escapeHtml(squad)} starts ${offset} min later</strong><span>Shorten ${escapeHtml(affected)} only, then join the main group at ${escapeHtml(join)}.</span></div>`
+  }catch{return""}
+};
+
+// =============================================================================
+// McLay Swimming OS v3.19.0 — HARDENED POOLSIDE RELEASE
+// Full-scope hardening after live poolside review: one Board surface, paired
+// main/modified lines in both views, stimulus-clock send-offs, squad entry
+// adaptation, points-first swimmer ordering, exact-course no-PB standards,
+// resilient detail controls and release diagnostics.
+// =============================================================================
+const V3190_VERSION="3.19.0";
+const V3190_BUILD="20260803-hardened-poolside-full-scope";
+
+function v3190Round25(value,{minimum=25,mode="nearest"}={}){
+  const n=Number(value);if(!Number.isFinite(n)||n<=0)return 0;
+  const fn=mode==="up"?Math.ceil:mode==="down"?Math.floor:Math.round;
+  return Math.max(minimum,fn(n/25)*25);
+}
+function v3190ItemText(item){return String(item?.raw||item?.label||item?.instruction||"").trim()}
+function v3190MainCell(session,block,item,itemIndex,blockIndex){
+  if(item?.runnable===false)return `<div class="v3190-pair-cue">${escapeHtml(v3190ItemText(item))}</div>`;
+  return `<div class="v3190-main-cell">${v3170LineHtml(session,block,item,itemIndex,blockIndex)}</div>`;
+}
+function v3190ModCell(row){
+  if(!row)return `<div class="v3190-mod-cell same"><strong>Same as main</strong></div>`;
+  if(row.cue)return `<div class="v3190-mod-cell cue"><strong>${escapeHtml(row.line||"")}</strong></div>`;
+  return `<div class="v3190-mod-cell"><strong>${escapeHtml(row.line||"Modified work")}</strong>${row.target?`<span>${escapeHtml(row.target)}</span>`:""}${row.clock?`<small>${escapeHtml(row.clock)}</small>`:""}</div>`;
+}
+function v3190PairedLines(session,block,blockIndex,athlete){
+  const items=v34Array(block.items),adapt=athlete?v3180Adaptation(athlete,session,block,blockIndex):null;
+  let runnableIndex=0,cueIndex=0;
+  const pairs=items.map((item,itemIndex)=>{
+    if(item?.runnable===false){
+      const row=adapt?.rows?.find((candidate,index)=>candidate.cue&&index>=cueIndex);if(row)cueIndex=adapt.rows.indexOf(row)+1;
+      return `<div class="v3190-pair full">${v3190MainCell(session,block,item,itemIndex,blockIndex)}</div>`;
+    }
+    const runnable=(adapt?.rows||[]).filter(row=>!row.cue),row=runnable[runnableIndex++]||null;
+    return `<div class="v3190-pair"><div class="v3190-pair-main">${v3190MainCell(session,block,item,itemIndex,blockIndex)}</div>${athlete?`<div class="v3190-pair-mod">${v3190ModCell(row)}</div>`:""}</div>`;
+  }).join("");
+  return {html:pairs,adapt};
+}
+function v3190BlockCard(session,block,index,{whole=false}={}){
+  const cue=[block.purpose,block.cues].filter(Boolean).join(" · "),repeat=Math.max(1,Number(block.repeat_count)||1),modified=v3180ModifiedAthletes(session),selected=v3180SelectedModified(session,modified),paired=v3190PairedLines(session,block,index,selected);
+  const modHead=selected?`<div class="v3190-mod-head"><span>Modified beside main</span><strong>${escapeHtml(selected.full_name)}</strong>${v3180ModTabs(session,modified,selected)}</div>`:"";
+  const modFoot=selected&&paired.adapt?`<div class="v3190-mod-foot"><span>${escapeHtml(paired.adapt.rows.find(row=>row.source)?.source||"Stimulus-fit version")}</span><strong>${paired.adapt.total.toLocaleString()}m${repeat>1?` · ×${repeat}`:""}</strong></div>`:"";
+  return `<section class="v3170-current-card v3180-board-block v3190-board-block ${whole?"whole":"current"}" data-v3180-block="${index}"><header><button type="button" class="v3180-block-title" data-v3170-block="${index}"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</h3></button><strong>${v3170BlockDistance(block).toLocaleString()}m</strong></header>${cue?`<div class="v3170-block-cue">${escapeHtml(cue)}</div>`:""}${repeat>1?`<div class="v3170-repeat-banner"><strong>Repeat whole block ×${repeat}</strong><span>${v3170BlockDistance(block).toLocaleString()}m total</span></div>`:""}${modHead}<div class="v3190-paired-lines ${selected?"has-mod":""}">${paired.html||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}</div>${modFoot}<div class="v3170-block-actions"><button type="button" data-v3170-time>Times</button><button type="button" class="secondary" data-v3170-capture data-v3180-capture-block="${index}">Capture</button><button type="button" class="secondary" data-v3170-source>Source</button></div></section>`;
+}
+v3180BlockCard=v3190BlockCard;
+v3170BlockCard=function(session,block,index){return v3190BlockCard(session,block,index,{whole:false})};
+
+function v3190SquadEntryPlan(session,blocks){
+  try{
+    const squad=v3172ActiveSquadName(session),slots=v312SlotsForDate(session.session_date).filter(slot=>String(slot.day_part).toUpperCase()===String(session.day_part||"").toUpperCase()),current=slots.find(slot=>squadKey(slot.squad_name)===squadKey(squad)),national=slots.find(slot=>squadKey(slot.squad_name)==="national"),currentStart=v3180Minutes(current?.start_time),baseStart=v3180Minutes(national?.start_time);
+    if(currentStart===null||baseStart===null||currentStart<=baseStart)return null;
+    const offset=currentStart-baseStart;let consumed=0,index=0;
+    while(index<blocks.length){const minutes=v3180BlockMinutes(blocks[index]);if(consumed+minutes>offset)break;consumed+=minutes;index++}
+    const block=blocks[Math.min(index,blocks.length-1)],blockMinutes=v3180BlockMinutes(block),lost=Math.max(0,offset-consumed),remaining=Math.max(0,blockMinutes-lost),ratio=blockMinutes?remaining/blockMinutes:0,total=v3170BlockDistance(block),entryDistance=ratio>0?v3190Round25(total*ratio,{mode:"nearest"}):0,join=blocks[Math.min(index+1,blocks.length-1)]||block,skipped=blocks.slice(0,index).map(row=>row.title||v32BlockLabel(row.block_type));
+    return {squad,offset,currentStart:current?.start_time,baseStart:national?.start_time,block,blockIndex:index,entryDistance,join,skipped};
+  }catch{return null}
+}
+function v3190SquadTiming(session,blocks){
+  const plan=v3190SquadEntryPlan(session,blocks);if(!plan)return"";
+  const entry=plan.entryDistance?`${plan.entryDistance}m entry ${String(plan.block?.title||"opening work").toLowerCase()}`:`Join immediately`;
+  return `<section class="v3190-entry-plan"><header><div><span>Squad entry</span><strong>${escapeHtml(plan.squad)} ${escapeHtml(plan.currentStart||"")} · National ${escapeHtml(plan.baseStart||"")}</strong></div><b>${plan.offset} min later</b></header>${plan.skipped.length?`<div><span>Already underway</span><strong>${escapeHtml(plan.skipped.join(" · "))}</strong></div>`:""}<div><span>Do on arrival</span><strong>${escapeHtml(entry)}</strong></div><div><span>Join main group</span><strong>${escapeHtml(plan.join?.title||v32BlockLabel(plan.join?.block_type)||"next block")}</strong></div></section>`;
+}
+v3180SquadTiming=v3190SquadTiming;
+
+// Overall no-PB level is the modal highest qualifying level across the swimmer's
+// events, rather than one exceptional event or every lower stage it also passed.
+function v3190OverallLevel(athlete){
+  const levels=new Map();
+  try{
+    for(const pb of v3163PbInventory(athlete).pbs){
+      const qualifying=v3163ResolveEvent(athlete,pb).achieved.filter(stage=>stage.kind==="qualifying").sort((a,b)=>b.order-a.order||a.targetSeconds-b.targetSeconds);
+      const current=qualifying[0];if(!current)continue;const key=v3163Norm(current.name),row=levels.get(key)||{name:current.name,count:0,order:Number(current.order)||0};row.count++;row.order=Math.max(row.order,Number(current.order)||0);levels.set(key,row)
+    }
+  }catch{}
+  return [...levels.values()].sort((a,b)=>b.count-a.count||b.order-a.order||a.name.localeCompare(b.name))[0]||null;
+}
+v3180OverallLevel=v3190OverallLevel;
+
+function v3190PointsRows(athlete){return v3163PbInventory(athlete).pbs.slice().sort((a,b)=>v3Points(b)-v3Points(a)||Number(a.result_seconds)-Number(b.result_seconds)||Number(a.distance)-Number(b.distance)||String(a.stroke).localeCompare(String(b.stroke)))}
+const v3190PathwayBase=v3163PathwayHtml;
+v3163PathwayHtml=function(athlete){
+  const inventory=v3163PbInventory(athlete),ordered=v3190PointsRows(athlete);if(ordered.length)inventory.pbs=ordered;
+  return v3190PathwayBase(athlete);
+};
+
+// Make swimmer operational sections stable across repeated renders. Native
+// details remain in place and duplicated wrappers from older renders are removed.
+function v3190StabiliseAthletePage(){
+  const view=$("athletes");if(!view)return;const seen=new Set();
+  view.querySelectorAll("details.v3163-operations-wrap").forEach(details=>{const athleteId=appState.settings.selected_athlete_id||"",key=`${athleteId}|${details.querySelector("summary strong")?.textContent||"operations"}`;if(seen.has(key)){details.remove();return}seen.add(key);details.querySelector("summary")?.setAttribute("role","button")});
+  view.querySelectorAll("details").forEach(details=>{const marker=details.querySelector(":scope>summary b");if(marker)marker.textContent=details.open?"−":"＋"});
+}
+const v3190RenderAthletesBase=renderAthletes;
+renderAthletes=function(){const result=v3190RenderAthletesBase();requestAnimationFrame(v3190StabiliseAthletePage);setTimeout(v3190StabiliseAthletePage,120);return result};
+
+function v3190Brand(){document.title=`McLay Swimming OS — v${V3190_VERSION} Hardened Poolside`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3190_VERSION} · paired main/modified Board · stimulus-clock adaptations · finish in flow`}
+for(const name of ["v3180Brand","v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand","v3144Brand"]){try{globalThis[name]=v3190Brand}catch{}}
+try{v3180BrandObserver?.disconnect?.()}catch{}
+const v3190BrandObserver=new MutationObserver(()=>{const title=`McLay Swimming OS — v${V3190_VERSION} Hardened Poolside`,subtitle=document.querySelector(".header-subtitle"),sub=`Version ${V3190_VERSION} · paired main/modified Board · stimulus-clock adaptations · finish in flow`;if(document.title!==title||(subtitle&&subtitle.textContent!==sub))queueMicrotask(v3190Brand)});if(document.querySelector("title"))v3190BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3190BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+function v3190Refresh(){v3190Brand();v3180Logo();v3190StabiliseAthletePage();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.()}
+window.v3190Debug={version:V3190_VERSION,build:V3190_BUILD,roundSendoff:v3181RoundSendoff,entryPlan:v3190SquadEntryPlan,overallLevel:v3190OverallLevel,modified:v3180ModifiedAthletes,adaptation:v3180Adaptation};
+setTimeout(v3190Refresh,0);setTimeout(v3190Refresh,450);setTimeout(v3190Refresh,1600);
+
+// v3.19.0 structured-distance repair: when a single total such as
+// "800 (200 free, 200 choice...)" is adapted, scale the bracketed pieces too.
+function v3190ScaleBreakdown(line,originalDistance,newDistance){
+  const text=String(line||""),oldTotal=Number(originalDistance),newTotal=Number(newDistance);if(!oldTotal||!newTotal||oldTotal===newTotal)return text;
+  const match=text.match(/\(([^()]*)\)/);if(!match)return text;const parts=[...match[1].matchAll(/\b(\d{2,4})\b/g)];if(parts.length<2)return text;
+  const values=parts.map(m=>Number(m[1])),sum=values.reduce((a,b)=>a+b,0);if(Math.abs(sum-oldTotal)>25||newTotal<parts.length*25)return text.replace(match[0],"(preserve the original mix)");
+  const raw=values.map(value=>value*newTotal/sum),scaled=raw.map(value=>Math.max(25,Math.floor(value/25)*25));let remainder=newTotal-scaled.reduce((a,b)=>a+b,0);
+  const order=raw.map((value,index)=>({index,fraction:value-scaled[index]})).sort((a,b)=>b.fraction-a.fraction);
+  let cursor=0;while(remainder>=25&&order.length){scaled[order[cursor%order.length].index]+=25;remainder-=25;cursor++}
+  let piece=match[1],offset=0;parts.forEach((m,index)=>{const start=m.index+offset,end=start+m[1].length;piece=piece.slice(0,start)+String(scaled[index])+piece.slice(end);offset+=String(scaled[index]).length-m[1].length});
+  return text.replace(match[0],`(${piece})`);
+}
+const v3190AdaptLineBase=v3180AdaptLine;
+v3180AdaptLine=function(athlete,session,block,item,itemIndex,providedLine="",sourceLabel=""){
+  const row=v3190AdaptLineBase(athlete,session,block,item,itemIndex,providedLine,sourceLabel),parsed=v3170ParseItem?.(row.line,itemIndex),adapted=parsed?.item||parsed;
+  row.line=v3190ScaleBreakdown(row.line,Number(item?.distance),Number(adapted?.distance));return row;
+};
+
+// v3.19.0 stimulus-fit optimiser. Choose a complete-pool-length combination
+// closest to the swimmer's prescribed volume while preserving pattern cycles.
+// The selected repeats are then spread across the main group's line window and
+// the send-off is rounded UP to the next practical five-second clock mark.
+function v3190StimulusWork(athlete,item){
+  const original=v3129LineText(item),profile=v3180Profile(athlete),ratio=Math.max(.2,Math.min(1,Number(profile?.ratio||profile?.profile?.default_volume_ratio||.75))),reps=Math.max(1,Number(item?.reps)||1),distance=Math.max(0,Number(item?.distance)||0);
+  if(!distance)return null;
+  const target=reps*distance*ratio,sequence=Math.max(0,Number(v3151SequenceLength?.(original)||0)),deliberate=v3180DeliberatePartial(original);
+  const standard=[1500,1000,800,600,500,400,300,250,200,150,125,100,75,50,25].filter(value=>value<=distance);
+  const distances=deliberate?[distance]:[...new Set(standard.length?standard:[distance])];
+  const repOptions=[];
+  if(reps===1)repOptions.push(1);
+  else if(sequence>1){for(let value=sequence;value<=reps;value+=sequence)repOptions.push(value)}
+  else for(let value=1;value<=reps;value++)repOptions.push(value);
+  if(!repOptions.length)repOptions.push(reps);
+  const rows=[];
+  for(const adaptedReps of repOptions)for(const adaptedDistance of distances){
+    const volume=adaptedReps*adaptedDistance,diff=Math.abs(volume-target),ratioError=Math.abs(volume/(reps*distance)-ratio),distanceChanged=adaptedDistance===distance?0:1,repsChanged=adaptedReps===reps?0:1,over=volume>target?1:0;
+    rows.push({reps:adaptedReps,distance:adaptedDistance,volume,diff,ratioError,distanceChanged,repsChanged,over});
+  }
+  rows.sort((a,b)=>a.diff-b.diff||a.ratioError-b.ratioError||a.over-b.over||a.distanceChanged-b.distanceChanged||a.repsChanged-b.repsChanged||b.distance-a.distance||b.reps-a.reps);
+  return rows[0]||null;
+}
+function v3190StimulusLine(athlete,item){
+  const choice=v3190StimulusWork(athlete,item);if(!choice)return"";
+  return v3151CleanSameMain(v3151ReplaceWork(v3129LineText(item),choice.reps,choice.distance));
+}
+const v3190AdaptLineScaledBase=v3180AdaptLine;
+v3180AdaptLine=function(athlete,session,block,item,itemIndex,providedLine="",sourceLabel=""){
+  const generated=!String(providedLine||"").trim(),optimised=generated?v3190StimulusLine(athlete,item):String(providedLine||"").trim(),row=v3190AdaptLineScaledBase(athlete,session,block,item,itemIndex,optimised,sourceLabel);
+  if(row?.clock&&/^Runs 0:1[0-5] over main line$/.test(row.clock))row.clock="Same group finish";
+  return row;
+};
+window.v3190Debug.stimulusWork=v3190StimulusWork;
+window.v3190Debug.stimulusLine=v3190StimulusLine;
+
+// Baseline profile lines are recalculated by the hardened stimulus optimiser.
+// Only deliberate session-specific adaptations override those generated rows.
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const rows=[],mainItems=v34Array(block.items).filter(item=>item?.runnable!==false);let detail=null;
+  try{detail=v3131AdaptationBlock?.(athlete,session,block,blockIndex)||null}catch{}
+  const supplied=detail&&!detail.same&&!detail.baseline&&Array.isArray(detail.lines)&&detail.lines.length?detail.lines:[];
+  if(supplied.length){
+    let setIndex=0;for(const raw of supplied){const probe=v3170ParseItem?.(raw,setIndex),parsed=probe?.item||probe;if(parsed?.runnable===false||!Number(parsed?.distance)){rows.push({line:String(raw),cue:true,distance:0,source:detail.source||"Session adaptation"});continue}const main=mainItems[Math.min(setIndex,mainItems.length-1)];if(main)rows.push(v3180AdaptLine(athlete,session,block,main,setIndex,raw,detail.source||"Session adaptation"));setIndex++}
+  }else{
+    for(const [itemIndex,item] of v34Array(block.items).entries()){if(item?.runnable===false){if(v3131IsRoundCue?.(item))rows.push({line:v3129LineText(item),cue:true,distance:0});continue}rows.push(v3180AdaptLine(athlete,session,block,item,itemIndex,"",detail?.source||""))}
+  }
+  const targetCounts=new Map();for(const row of rows)if(row.target)targetCounts.set(row.target,(targetCounts.get(row.target)||0)+1);const sharedTarget=[...targetCounts.entries()].sort((a,b)=>b[1]-a[1])[0];if(sharedTarget?.[1]>1)for(const row of rows)if(row.target===sharedTarget[0])row.target="";
+  return {athlete,rows,total:rows.reduce((n,row)=>n+(Number(row.distance)||0),0)*Math.max(1,Number(block.repeat_count)||1),repeat:Math.max(1,Number(block.repeat_count)||1),sharedTarget:sharedTarget?.[1]>1?sharedTarget[0]:"",source:detail?.source||""};
+};
+window.v3190Debug.adaptation=v3180Adaptation;
+
+// Session-added swimmers belong to the live roster even when their home squad
+// differs from the selected squad. This keeps visitors, para swimmers and
+// temporary squad moves available to Roll, Board adaptations and Capture.
+const v3190SquadRosterBase=v3172SquadRoster;
+v3172SquadRoster=function(session=selectedSession(),squad=v3172ActiveSquadName(session)){
+  const rows=v3190SquadRosterBase(session,squad),map=new Map(rows.map(row=>[row.id,row]));
+  for(const participant of (v310SessionParticipants?.(session?.id)||[])){
+    const athlete=(appState.athletes||[]).find(row=>row.id===participant.athlete_id&&row.active!==false);if(athlete)map.set(athlete.id,athlete);
+  }
+  return [...map.values()].sort(rosterSort);
+};
+
+// Choosing Group is a true whole-group capture, not an accidental attachment
+// to whichever swimmer happened to remain selected in the legacy dropdown.
+v3180CaptureTargets=function(){const ids=v3180TagIds();return ids.length?ids:[null]};
+
+// Whole Session has one compact swimmer selector above all blocks. Current
+// Block keeps the selector alongside the active block; repeating it five times
+// in the whole-session view wastes poolside space.
+v3190BlockCard=function(session,block,index,{whole=false}={}){
+  const cue=[block.purpose,block.cues].filter(Boolean).join(" · "),repeat=Math.max(1,Number(block.repeat_count)||1),modified=v3180ModifiedAthletes(session),selected=v3180SelectedModified(session,modified),paired=v3190PairedLines(session,block,index,selected);
+  const tabs=whole?"":v3180ModTabs(session,modified,selected),modHead=selected?`<div class="v3190-mod-head"><span>Modified beside main</span><strong>${escapeHtml(selected.full_name)}</strong>${tabs}</div>`:"";
+  const modFoot=selected&&paired.adapt?`<div class="v3190-mod-foot"><span>${escapeHtml(paired.adapt.rows.find(row=>row.source)?.source||"Stimulus-fit version")}</span><strong>${paired.adapt.total.toLocaleString()}m${repeat>1?` · ×${repeat}`:""}</strong></div>`:"";
+  return `<section class="v3170-current-card v3180-board-block v3190-board-block ${whole?"whole":"current"}" data-v3180-block="${index}"><header><button type="button" class="v3180-block-title" data-v3170-block="${index}"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</h3></button><strong>${v3170BlockDistance(block).toLocaleString()}m</strong></header>${cue?`<div class="v3170-block-cue">${escapeHtml(cue)}</div>`:""}${repeat>1?`<div class="v3170-repeat-banner"><strong>Repeat whole block ×${repeat}</strong><span>${v3170BlockDistance(block).toLocaleString()}m total</span></div>`:""}${modHead}<div class="v3190-paired-lines ${selected?"has-mod":""}">${paired.html||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}</div>${modFoot}<div class="v3170-block-actions"><button type="button" data-v3170-time>Times</button><button type="button" class="secondary" data-v3170-capture data-v3180-capture-block="${index}">Capture</button><button type="button" class="secondary" data-v3170-source>Source</button></div></section>`;
+};
+v3180BlockCard=v3190BlockCard;
+v3170BlockCard=function(session,block,index){return v3190BlockCard(session,block,index,{whole:false})};
+window.v3190Debug.roster=v3172SquadRoster;
+
+// Capture can tag any swimmer attached to the live session, not only those
+// already marked here. Present swimmers sort first; squad and added swimmers
+// remain available for quick on-the-fly notes.
+v3180CaptureRoster=function(){
+  const session=selectedSession();if(!session)return[];
+  const here=v3180RelevantAttendance(session).filter(row=>v3180Here(row.status)).map(row=>(appState.athletes||[]).find(a=>a.id===row.athlete_id)).filter(Boolean),map=new Map(here.map(a=>[a.id,a]));
+  for(const athlete of v3172SquadRoster(session))map.set(athlete.id,athlete);
+  return [...map.values()].sort((a,b)=>(here.some(x=>x.id===a.id)?0:1)-(here.some(x=>x.id===b.id)?0:1)||rosterSort(a,b));
+};
+
+// Accept both the current and legacy T400 type keys. Existing live databases
+// may use either spelling; pacing must not disappear because of the key name.
+v380T400Type=function(){return (appState.training_test_types||[]).find(row=>["t400_freestyle","t400"].includes(String(row.test_key||"").toLowerCase())&&row.active!==false)||null};
+
+// Restore the large read-only results and standards cache on every restart.
+// v3.7.4 defined the cache but never invoked its hydration path, which allowed
+// standards to disappear after an app close even though they had loaded once.
+async function v3190RestoreHeavyReferenceCache(){
+  try{
+    clearTimeout(v374HeavyCacheTimer);
+    const restored=await v374HydrateHeavyCache();
+    clearTimeout(v374HeavyCacheTimer);
+    const hasHeavy=[...V374_HEAVY_STATE_KEYS].some(key=>(appState[key]||[]).length);
+    if(!restored&&hasHeavy)await v374SaveHeavyCache(appState);
+    if(restored){
+      appState.settings.v3190_heavy_cache_restored_at=Date.now();
+      V3144_TARGET_CACHE?.clear?.();
+      saveState(appState);
+      const view=document.querySelector('.view.active')?.id||'deck';
+      if(view==='deck')v3170PaintBoard?.();else renderView?.(view);
+    }
+    return restored||hasHeavy;
+  }catch(error){console.warn('Results and standards cache restore deferred',error);return false}
+}
+window.v3190RestoreHeavyReferenceCache=v3190RestoreHeavyReferenceCache;
+setTimeout(v3190RestoreHeavyReferenceCache,50);
+
+// v3.19.0 record-context hardening. Every record row must name the exact
+// course and age group; never leave the coach guessing which record applies.
+function v3190RecordAgeLabel(value){
+  const text=String(value??"").trim();
+  if(!text)return "Age not loaded";
+  if(/^\d{1,2}$/.test(text))return `${text}Y`;
+  if(/^\d{1,2}\s*y$/i.test(text))return text.toUpperCase();
+  return text;
+}
+function v3190RecordCourse(value){const course=v3Course(value);return ["SCM","LCM"].includes(course)?course:"Course not loaded"}
+function v3190RecordScope(value){return String(value||"Record").replace(/\s+/g," ").trim()}
+function v3190RecordStandardCandidates(athlete,row={}){
+  const distance=Number(row.distance||row.event_distance||0),stroke=v3Stroke(row.stroke||row.event_stroke||row.event),scope=v3163Norm?.(row.record_scope||row.programme||"")||String(row.record_scope||row.programme||"").toLowerCase(),recordSeconds=Number(row.record_seconds??row.qualifying_seconds??v3Seconds(row.record_time_text||row.record_time||row.qualifying_time_text));
+  return (appState.pathway_standards||[]).filter(standard=>{
+    if(standard.active===false||!(standard.standard_kind==="record"||/record/i.test(String(standard.standard_kind||standard.programme||""))))return false;
+    if(distance&&Number(standard.distance)!==distance)return false;
+    if(stroke&&v3Stroke(standard.stroke)!==stroke)return false;
+    const standardScope=v3163Norm?.(standard.programme||"")||String(standard.programme||"").toLowerCase();
+    if(scope&&standardScope&&scope!==standardScope&&!standardScope.includes(scope)&&!scope.includes(standardScope))return false;
+    if(row.course&&v3Course(standard.course)!==v3Course(row.course))return false;
+    if(row.age_group&&String(standard.age_group||"")!==String(row.age_group))return false;
+    if(Number.isFinite(recordSeconds)&&recordSeconds>0&&Math.abs(Number(standard.qualifying_seconds)-recordSeconds)>.03)return false;
+    if(standard.sex&&athlete.sex&&String(standard.sex).toUpperCase()!==String(athlete.sex).toUpperCase())return false;
+    return true;
+  }).sort((a,b)=>Number(b.progression_order||0)-Number(a.progression_order||0)||Number(a.qualifying_seconds||999999)-Number(b.qualifying_seconds||999999));
+}
+function v3190PbForRecord(athlete,course,distance,stroke){
+  return athleteOfficialPbs(athlete.id).filter(pb=>v3Course(pb.course)===v3Course(course)&&Number(pb.distance)===Number(distance)&&v3Stroke(pb.stroke)===v3Stroke(stroke)).sort((a,b)=>Number(a.result_seconds||999999)-Number(b.result_seconds||999999))[0]||null;
+}
+function v3190RecordRows(athlete){
+  const rows=[];
+  for(const source of athleteRecordRows(athlete)){
+    const standard=v3190RecordStandardCandidates(athlete,source)[0]||null,course=v3190RecordCourse(source.course||standard?.course),age=v3190RecordAgeLabel(source.age_group||standard?.age_group),distance=Number(source.distance||standard?.distance||0),stroke=v3Stroke(source.stroke||standard?.stroke),pb=v3190PbForRecord(athlete,course,distance,stroke);
+    rows.push({kind:"gap",scope:v3190RecordScope(source.record_scope||source.programme||standard?.programme),course,age,distance,stroke,pbTime:source.pb_time||pb?.result_time_text||"—",recordTime:source.record_time_text||source.record_time||standard?.qualifying_time_text||"—",gap:Number(source.gap_seconds??((pb?.result_seconds&&standard?.qualifying_seconds)?Number(pb.result_seconds)-Number(standard.qualifying_seconds):NaN)),points:v3Points(pb),source});
+  }
+  for(const pb of athleteOfficialPbs(athlete.id)){
+    for(const standard of (appState.pathway_standards||[])){
+      if(!(standard.standard_kind==="record"||/record/i.test(String(standard.standard_kind||standard.programme||""))))continue;
+      if(!v3StandardMatches(standard,athlete,v3Course(pb.course),pb.distance,pb.stroke))continue;
+      rows.push({kind:"standard",scope:v3190RecordScope(standard.programme),course:v3190RecordCourse(standard.course),age:v3190RecordAgeLabel(standard.age_group),distance:Number(standard.distance),stroke:v3Stroke(standard.stroke),pbTime:pb.result_time_text||"—",recordTime:standard.qualifying_time_text||v3Time(Number(standard.qualifying_seconds)),gap:Number(pb.result_seconds)-Number(standard.qualifying_seconds),points:v3Points(pb),source:standard});
+    }
+  }
+  for(const achievement of (appState.athlete_achievements||[]).filter(row=>row.athlete_id===athlete.id&&row.active!==false)){
+    const title=String(achievement.badge_label||achievement.title||achievement.programme||"Historical achievement"),ageFromTitle=title.match(/\b(\d{1,2})\s*Y\b/i)?.[1]||"",course=v3190RecordCourse(achievement.course),distance=Number(achievement.distance||0),stroke=v3Stroke(achievement.stroke),pb=v3190PbForRecord(athlete,course,distance,stroke);
+    const cleanScope=title.replace(/\b(?:SCM|LCM)\b/gi,"").replace(/\b\d{1,2}\s*Y\b/gi,"").replace(new RegExp(`\\b${distance}\\s*${String(stroke).replace(/stroke$/i,"")}\\b`,"i"),"").replace(/\s+/g," ").trim();rows.push({kind:"achievement",scope:v3190RecordScope(/record/i.test(cleanScope)?cleanScope:(achievement.programme||"Historical achievement")),course,age:v3190RecordAgeLabel(achievement.age_group||ageFromTitle),distance,stroke,pbTime:pb?.result_time_text||achievement.achievement_time||"—",recordTime:achievement.achievement_time||"—",gap:0,points:v3Points(pb),title,source:achievement});
+  }
+  const unique=new Map();
+  for(const row of rows){
+    const key=[v3163Norm?.(row.scope)||row.scope.toLowerCase(),row.course,row.age,row.distance,v3Stroke(row.stroke),row.recordTime].join("|");
+    const old=unique.get(key);if(!old||old.kind==="standard"&&row.kind==="gap"||old.kind!=="achievement"&&row.kind==="achievement")unique.set(key,row);
+  }
+  return [...unique.values()].sort((a,b)=>(a.kind==="achievement"?0:1)-(b.kind==="achievement"?0:1)||Number(a.gap??999999)-Number(b.gap??999999)||Number(b.points||0)-Number(a.points||0)||a.distance-b.distance||String(a.stroke).localeCompare(String(b.stroke)));
+}
+compactRecordRows=function(athlete){
+  const rows=v3190RecordRows(athlete);if(!rows.length){const manual=profileLines(athlete.records_summary);return manual?`<div class="mini-result"><strong>Coach record notes</strong><span>${escapeHtml(manual)}</span></div>`:'<div class="help">No matching record rows loaded yet.</div>'}
+  return rows.slice(0,12).map(row=>{
+    const event=[row.distance||"",row.stroke||""].filter(Boolean).join(" "),label=[row.scope,row.course,row.age,event].filter(Boolean).join(" · ");
+    if(row.kind==="achievement")return `<div class="mini-result"><strong>${escapeHtml(label)}</strong><span>Historical achievement · ${escapeHtml(row.recordTime)}${row.title&&!v3163Norm(row.title).includes(v3163Norm(row.scope))?` · ${escapeHtml(row.title)}`:""}</span></div>`;
+    const gap=Number(row.gap),gapText=Number.isFinite(gap)?(gap<=0?"record matched/better":`${gap.toFixed(2)}s away`):"gap unavailable";
+    return `<div class="mini-result"><strong>${escapeHtml(label)}</strong><span>PB ${escapeHtml(row.pbTime)} · record ${escapeHtml(row.recordTime)} · ${escapeHtml(gapText)}</span></div>`;
+  }).join("");
+};
+window.v3190Debug.recordRows=v3190RecordRows;
