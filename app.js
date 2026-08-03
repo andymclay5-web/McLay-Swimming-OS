@@ -15759,3 +15759,215 @@ const v3193Style=document.createElement("style");v3193Style.id="v3193Styles";v31
 try{v3192BrandObserver?.disconnect?.()}catch{}
 window.v3193Debug={version:V3193_VERSION,build:V3193_BUILD,parse:v3193ParseBlocks,distance:v3193Distance,review:v3193ReviewDraft,commit:v3192CommitToBoard};
 setTimeout(v3193Startup,0);setTimeout(v3193Startup,500);setTimeout(v3193Startup,1800);setTimeout(v3193Brand,3500);
+
+// =============================================================================
+// McLay Swimming OS v3.19.4 — POOLSIDE BOARD IRONING PASS
+// Protects the verified intake/Board flow while correcting the exact issues
+// observed on the 4 August Tuesday AM phone Board.
+// =============================================================================
+const V3194_VERSION="3.19.4";
+const V3194_BUILD="20260804-board-ironing-protected-flow";
+
+function v3194Text(item){return String(item?.raw||item?.label||item?.instruction||"").trim()}
+function v3194ZoneFromText(text){
+  const value=String(text||"");
+  if(/\bregen(?:eration)?\b/i.test(value))return"Regeneration";
+  if(/\bdev(?:elopment)?\b/i.test(value))return"Development";
+  if(/\b(?:overload|o\s*[/.-]?\s*l)\b/i.test(value))return"Overload";
+  return"";
+}
+function v3194InstructionLine(text){
+  return String(text||"")
+    .replace(/^\s*1\s*[x×]\s*100\s*[-–—:.·]*\s*/i,"")
+    .replace(/^\s*1\s*[-–—:.·]\s*/i,"")
+    .replace(/\s+/g," ").trim();
+}
+function v3194SplitPull(item){
+  const text=v3194Text(item),match=/\b800\s*(?:m\s*)?pull\b/i.exec(text);
+  if(!match||Number(item?.distance)!==100)return null;
+  const before=text.slice(0,match.index).replace(/[·,;:\-\s]+$/g,"").trim();
+  const after=text.slice(match.index).trim();
+  if(!/25\s*max/i.test(before)||!/pull/i.test(after))return null;
+  const first={...item,raw:before,label:before,instruction:before,reps:1,distance:100,runnable:true,line_type:"set",suppress_auto_targets:true,pace_mode:"instruction",race_distance:null,pace_zone:""};
+  const pullLine=after.replace(/^800\s*(?:m\s*)?pull/i,"800 pull").replace(/\s+/g," ").trim();
+  const second={id:uid("block-line"),sort_order:Number(item.sort_order||0)+.5,raw:pullLine,label:pullLine,instruction:pullLine,reps:1,distance:800,cycle:"",stroke:"Freestyle",pace_rest:null,race_distance:null,pace_zone:"",pace_mode:"instruction",suppress_auto_targets:true,runnable:true,line_type:"set"};
+  return[first,second];
+}
+function v3194SanitiseItems(items){
+  const expanded=[];
+  for(const source of v34Array(items)){
+    const item={...source},split=v3194SplitPull(item);
+    if(split)expanded.push(...split);else expanded.push(item);
+  }
+  for(const item of expanded){
+    const text=v3194Text(item),zone=v3194ZoneFromText(text);
+    if(zone){item.pace_zone=zone;item.pace_mode="aerobic";item.race_distance=null;item.pace_rest=Number(item.pace_rest)||Number(text.match(/\b(\d{1,2})s\s*rest\b/i)?.[1])||30}
+    if(/\b(?:with\s+fins?|fins?|hypoxic|underwater)\b/i.test(text)||(/\bmax\b/i.test(text)&&/\beasy\b/i.test(text))){item.suppress_auto_targets=true;item.pace_mode="instruction";item.race_distance=null;item.pace_zone=""}
+  }
+  for(let i=0;i<expanded.length;i++){
+    const parent=expanded[i],text=v3194Text(parent);
+    if(!/^12\s*[x×]\s*100\b/i.test(text)||!/\bfins?\b/i.test(text))continue;
+    const children=[];let rounds=Number(text.match(/\b(\d+)\s*rounds?\b/i)?.[1]||0)||4;
+    const colon=text.match(/(?:rounds?\s*[:.-]?|:)\s*(.+)$/i)?.[1]||"";
+    if(colon&&/25\s*max|underwater/i.test(colon)){
+      for(const part of colon.split(/\s*[;|]\s*/).map(v3194InstructionLine).filter(Boolean))children.push(part);
+    }
+    for(let j=i+1;j<Math.min(expanded.length,i+6)&&children.length<4;j++){
+      const child=expanded[j],childText=v3194Text(child);
+      if(/^\s*4\s*rounds?\b/i.test(childText)){rounds=4;child.board_hidden_child=true;child.runnable=false;child.reps=0;child.distance=null;continue}
+      if(!/^\s*1\s*[x×]\s*100\b/i.test(childText))break;
+      if(!/\b(?:max|easy|underwater)\b/i.test(childText))break;
+      children.push(v3194InstructionLine(childText));
+      child.board_hidden_child=true;child.runnable=false;child.reps=0;child.distance=null;child.line_type="cue";child.suppress_auto_targets=true;
+    }
+    if(!children.length){
+      const inline=text.match(/25\s*max\s*\/\s*75\s*easy[;,.·\s]+75\s*easy\s*\/\s*25\s*underwater[;,.·\s]+25\s*max\s*\/\s*50\s*easy\s*\/\s*25\s*max/i);
+      if(inline)children.push("25 max / 75 easy","75 easy / 25 underwater","25 max / 50 easy / 25 max");
+    }
+    if(children.length){
+      parent.board_compact_group=true;parent.board_rounds=rounds;parent.board_sublines=children.slice(0,4);
+      parent.board_display="12 × 100 with fins";parent.suppress_auto_targets=true;parent.pace_mode="instruction";parent.race_distance=null;parent.pace_zone="";
+      parent.reps=12;parent.distance=100;parent.runnable=true;parent.line_type="set";
+    }
+  }
+  return expanded.map((item,index)=>({...item,sort_order:index+1}));
+}
+function v3194PhantomBlock(block){
+  const text=[block?.title,block?.raw_text,...v34Array(block?.items).map(v3194Text)].filter(Boolean).join(" ");
+  const distance=(v34Array(block?.items)||[]).filter(item=>item?.runnable!==false).reduce((sum,item)=>sum+Number(item?.reps||0)*Number(item?.distance||0),0);
+  return distance===0&&String(block?.block_type||"")==="main_set"&&(/\b4\s*[·x×]\s*400m?\b/i.test(text)||/\b4\s*rounds?\b/i.test(text)&&!/\b(?:25|max|easy|underwater|fins?)\b/i.test(text));
+}
+function v3194SanitiseBlocks(blocks,raw=""){
+  const result=[];
+  for(const source of v34Array(blocks)){
+    const block={...clone(source)},items=v3194SanitiseItems(source.items||[]);
+    block.items=items;
+    if(items.some(item=>item.board_compact_group)&&Number(block.repeat_count)===4){block.repeat_count=1;block.title=String(block.title||"Main set").replace(/\s*[×x]\s*4\s*$/i,"").trim()||"Main set"}
+    block.raw_text=items.filter(item=>!item.board_hidden_child).map(v3194Text).filter(Boolean).join("\n");
+    if(!v3194PhantomBlock(block))result.push(block);
+  }
+  // A pasted board-style transcription can leave a real 800 pull attached to the
+  // final 100 line. Recover it from source if it is still absent after splitting.
+  const source=String(raw||"");
+  if(/\b800\s*(?:m\s*)?pull\b/i.test(source)&&!result.some(block=>v34Array(block.items).some(item=>Number(item?.distance)===800&&/\bpull\b/i.test(v3194Text(item))))){
+    const main=[...result].reverse().find(block=>String(block.block_type)==="main_set");
+    if(main){const hit=source.match(/\b800\s*(?:m\s*)?pull\b[^.\n]*(?:hypoxic[^.\n]*)?/i),line=(hit?.[0]||"800 pull hypoxic 3 / 5 / 7").replace(/\s+/g," ").trim();main.items.push({id:uid("block-line"),sort_order:main.items.length+1,raw:line,label:line,instruction:line,reps:1,distance:800,cycle:"",stroke:"Freestyle",pace_rest:null,race_distance:null,pace_zone:"",pace_mode:"instruction",suppress_auto_targets:true,runnable:true,line_type:"set"});main.raw_text=main.items.filter(item=>!item.board_hidden_child).map(v3194Text).join("\n")}
+  }
+  return result.map((block,index)=>({...block,sort_order:index+1,items:v34Array(block.items).map((item,itemIndex)=>({...item,sort_order:itemIndex+1}))}));
+}
+
+const v3194ParseBase=v3193ParseBlocks;
+v3193ParseBlocks=function(raw){return v3194SanitiseBlocks(v3194ParseBase(raw),raw)};
+v3150ParseBlocks=v3193ParseBlocks;v3126ParseBlocks=v3193ParseBlocks;v3127ParseBlocks=v3193ParseBlocks;v3128ParseBlocks=v3193ParseBlocks;v3107BlocksFromRaw=v3193ParseBlocks;
+const v3194CollectBase=v3192CollectOrBuild;
+v3192CollectOrBuild=function(raw,options={}){const blocks=v3194SanitiseBlocks(v3194CollectBase(raw,options),raw);v3150DraftBlocks=blocks;v35DraftBlocks=blocks;if(options.showPreview)v3150RenderDraft?.();return blocks};
+const v3194BoardBlocksBase=v3170BoardBlocks;
+v3170BoardBlocks=function(session){return v3194SanitiseBlocks(v3194BoardBlocksBase(session),v3123SourceText?.(session)||session?.workout||"")};
+v3125BoardBlocks=v3170BoardBlocks;
+
+// A dash after a distance is ordinary board punctuation, not "400 pace".
+// Only explicit pace language can activate the race calculator.
+v3150EventSpec=function(item,block,session,resolvedStroke){
+  const line=v3129LineText(item),text=[line,block?.title,block?.purpose].filter(Boolean).join(" ");
+  const im=/(?:@|\b)(200|400)\s*(?:im|medley)\s*(?:p|pace)\b/i.exec(text),normal=/(?:@\s*|\b)(50|100|200|400|800|1500)\s*(?:m\s*)?(?:race\s+pace|pace|p)\b/i.exec(text);
+  const eventDistance=Number(item?.race_distance||im?.[1]||normal?.[1]||0),eventStroke=im?"IM":resolvedStroke;
+  return{line,text,eventDistance,eventStroke,repDistance:Number(item?.distance)||0,course:v3Course(item?.pace_course||session?.pool_course||"SCM")};
+};
+const v3194TargetRowsBase=v3140TargetRows;
+v3140TargetRows=function(session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText(item);
+  if(item?.suppress_auto_targets||/\b(?:with\s+fins?|hypoxic)\b/i.test(line)||(/\bmax\b/i.test(line)&&/\beasy\b/i.test(line)))return[];
+  const zone=v3194ZoneFromText(line)||item?.pace_zone;
+  if(zone){const paceItem={...item,pace_mode:"aerobic",pace_zone:zone,race_distance:null,pace_rest:Number(item?.pace_rest)||Number(line.match(/\b(\d{1,2})s\s*rest\b/i)?.[1])||30};return v3194TargetRowsBase(session,block,paceItem,blockIndex,itemIndex)}
+  return v3194TargetRowsBase(session,block,item,blockIndex,itemIndex);
+};
+
+const v3194TargetDetailsBase=v3140TargetDetails;
+v3140TargetDetails=function(session,block,item,blockIndex,itemIndex){if(item?.suppress_auto_targets||item?.board_compact_group)return"";return v3194TargetDetailsBase(session,block,item,blockIndex,itemIndex)};
+const v3194LineHtmlBase=v3140LineHtml;
+v3140LineHtml=function(session,block,item,itemIndex,blockIndex){
+  if(item?.board_hidden_child)return"";
+  if(item?.board_compact_group){
+    const rows=[],range=v3140SendoffRange(rows,item),distance=Number(item.reps||0)*Number(item.distance||0),rounds=Number(item.board_rounds)||4,sublines=v34Array(item.board_sublines);
+    return `<div class="v3140-board-line v3194-round-set" data-v3129-use-line="${blockIndex}:${itemIndex}"><div class="v3194-round-head"><span><strong>${escapeHtml(item.board_display||"12 × 100 with fins")}</strong><small>${rounds} rounds</small></span><div>${range?`<b class="v3140-sendoff-range">${escapeHtml(range)}</b>`:""}${distance?`<em>${distance.toLocaleString()}m</em>`:""}</div></div><div class="v3194-round-bracket">${sublines.map(line=>`<div><b>1 –</b><span>${escapeHtml(v3194InstructionLine(line))}</span></div>`).join("")}</div></div>`;
+  }
+  return v3194LineHtmlBase(session,block,item,itemIndex,blockIndex);
+};
+const v3194PairedBase=v3190PairedLines;
+v3190PairedLines=function(session,block,blockIndex,athlete){
+  if(!v34Array(block?.items).some(item=>item?.board_hidden_child))return v3194PairedBase(session,block,blockIndex,athlete);
+  const items=v34Array(block.items).filter(item=>!item?.board_hidden_child),adapt=athlete?v3180Adaptation(athlete,session,{...block,items},blockIndex):null;let runnableIndex=0;
+  const pairs=items.map((item,itemIndex)=>{if(item?.runnable===false)return `<div class="v3190-pair full">${v3190MainCell(session,block,item,itemIndex,blockIndex)}</div>`;const row=(adapt?.rows||[]).filter(candidate=>!candidate.cue)[runnableIndex++]||null;return `<div class="v3190-pair"><div class="v3190-pair-main">${v3190MainCell(session,block,item,itemIndex,blockIndex)}</div>${athlete?`<div class="v3190-pair-mod">${v3190ModCell(row)}</div>`:""}</div>`}).join("");
+  return{html:pairs,adapt};
+};
+
+function v3194SharedPool(session=selectedSession()){
+  if(!session||String(session.day_part||"").toUpperCase()!=="AM"||!sessionSquads(session).some(value=>squadKey(value)==="national"))return false;
+  const date=new Date(`${session.session_date}T12:00:00`);return date.getDay()===2;
+}
+function v3194PoolMode(session=selectedSession()){
+  if(!v3194SharedPool(session))return"session";
+  const mode=String(appState.settings.v3194_pool_mode||"pool").toLowerCase();return["pool","national","development","fitness"].includes(mode)?mode:"pool";
+}
+function v3194ModeLabel(mode){return({pool:"Pool",national:"National",development:"Development",fitness:"Fit"})[mode]||mode}
+const v3194SessionRosterBase=v3191SessionRoster;
+v3191SessionRoster=function(session=selectedSession()){
+  if(!v3194SharedPool(session))return v3194SessionRosterBase(session);
+  const mode=v3194PoolMode(session),allowed=mode==="pool"?new Set(["national","development","fitness"]):new Set([mode]),participants=v3191ParticipantIds(session),marked=new Set(v3191LiveRows(session).map(row=>row.athlete_id));
+  return(appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!v310AllowedAthlete||v310AllowedAthlete(athlete))&&(allowed.has(squadKey(athlete.squad))||participants.has(athlete.id)||marked.has(athlete.id))).sort(rosterSort);
+};
+allSessionRoster=v3191SessionRoster;v310AllSessionRoster=v3191SessionRoster;
+const v3194ActiveSquadBase=v3172ActiveSquadName;
+v3172ActiveSquadName=function(session=selectedSession()){return v3194SharedPool(session)?v3194ModeLabel(v3194PoolMode(session)):v3194ActiveSquadBase(session)};
+const v3194SquadRosterBase=v3172SquadRoster;
+v3172SquadRoster=function(session=selectedSession(),squad=v3172ActiveSquadName(session)){return v3194SharedPool(session)?v3191SessionRoster(session):v3194SquadRosterBase(session,squad)};
+v3129Roster=function(session=selectedSession()){
+  if(!session)return[];if(!v3194SharedPool(session)){const all=v3191SessionRoster(session),rows=v3191LiveRows(session),ids=new Set(rows.map(row=>row.athlete_id));return(rows.length?all.filter(athlete=>ids.has(athlete.id)):all).sort(rosterSort)}
+  const all=v3191SessionRoster(session),rows=v3191LiveRows(session),ids=new Set(rows.map(row=>row.athlete_id));return(rows.length?all.filter(athlete=>ids.has(athlete.id)):all).sort(rosterSort);
+};
+v3129LaneKey=function(session){const mode=v3194PoolMode(session),attendance=v3191LiveRows(session).map(row=>`${row.athlete_id}:${row.status}`).sort().join("|"),roster=v3191SessionRoster(session).map(a=>a.id).join("|");return`${session?.id||""}:${mode}:${attendance}:${roster}`};
+v382PresentRoster=function(){return v3191LiveRows(selectedSession()).map(row=>v3191Athlete(row.athlete_id)).filter(Boolean)};
+
+function v3194PoolSwitch(session){
+  if(!v3194SharedPool(session))return"";const mode=v3194PoolMode(session);
+  return `<section class="v3194-pool-context"><div><strong>Shared pool block</strong><span>National 5:20–7:00 · Development + Fit 5:30–7:00 · optional extension 7:00–7:15/20</span></div><nav aria-label="Pool squad view">${["pool","national","development","fitness"].map(value=>`<button type="button" data-v3194-pool-mode="${value}" class="${mode===value?"active":""}">${escapeHtml(v3194ModeLabel(value))}</button>`).join("")}</nav></section>`;
+}
+const v3194HeaderBase=v3191Header;
+v3191Header=function(session,blocks,options={}){const html=v3194HeaderBase(session,blocks,options),switcher=v3194PoolSwitch(session);return switcher?html.replace(/(<\/header>)/,`$1${switcher}`):html};
+v3170Header=v3191Header;v3180Header=v3191Header;
+const v3194BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){v3194BindBoardBase(host,session);host?.querySelectorAll?.("[data-v3194-pool-mode]").forEach(button=>button.onclick=()=>{appState.settings.v3194_pool_mode=button.dataset.v3194PoolMode;if(button.dataset.v3194PoolMode!=="pool")appState.settings.selected_squad=v3194ModeLabel(button.dataset.v3194PoolMode);saveState(appState);v3129LaneCache?.clear?.();v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3170PaintBoard?.()})};
+
+// After a verified commit, clear the old scroll snapshot so delayed poolside
+// state restorers cannot pull the coach back into the middle of the prior page.
+const v3194CommitBase=v3192CommitToBoard;
+v3192CommitToBoard=async function(){
+  const saved=await v3194CommitBase();if(!saved)return saved;
+  appState.settings.v3194_pool_mode=v3194SharedPool(saved)?"pool":appState.settings.v3194_pool_mode;
+  appState.settings.v3126_board_mode="whole";appState.settings.v3129_active_block_index=0;
+  try{const ui=v3163ReadUi?.()||{};v3163PersistUi?.({...ui,view:"deck",selected_session_id:saved.id,board_mode:"whole",active_block_index:0,scroll:{...(ui.scroll||{}),deck:0},saved_at:Date.now()},{replaceHistory:true})}catch{}
+  try{v3170WritePoolsideState?.(v3170LivePoolsideState?.({session_id:saved.id,mode:"whole",block_index:0,scroll_top:0})||{session_id:saved.id,mode:"whole",block_index:0,scroll_top:0})}catch{}
+  saveState(appState);window.scrollTo({top:0,left:0,behavior:"auto"});return saved;
+};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3193ReviewDraft(),importedSessionDraft):v3192CommitToBoard()};v3126CommitSelectedSession=v3192CommitToBoard;
+
+function v3194Brand(){
+  const title=`McLay Swimming OS — v${V3194_VERSION} Board Ironing`,sub=`Version ${V3194_VERSION} · protected intake flow · exact board grouping · T400 aerobic lines · shared-pool squad switch`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+try{v3192BrandObserver?.disconnect?.()}catch{}
+for(const name of ["v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand"]){try{globalThis[name]=v3194Brand}catch{}}
+
+const v3194Styles=document.createElement("style");v3194Styles.id="v3194Styles";v3194Styles.textContent=`
+.v3194-pool-context{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:8px 0 10px;padding:10px 12px;border:1px solid #a9c5d2;border-radius:16px;background:#edf7fb}.v3194-pool-context>div{display:grid;gap:2px}.v3194-pool-context strong{font-size:.92rem}.v3194-pool-context span{font-size:.75rem;line-height:1.25;color:#365568}.v3194-pool-context nav{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.v3194-pool-context button{min-height:36px;padding:7px 10px;border-radius:12px;background:#fff;color:#123e59;border:1px solid #8eb2c2;font-weight:800}.v3194-pool-context button.active{background:#123f5d;color:#fff;border-color:#123f5d}
+.v3194-round-set{padding-top:10px!important;padding-bottom:10px!important}.v3194-round-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.v3194-round-head>span{display:grid;gap:1px}.v3194-round-head strong{font-size:1rem}.v3194-round-head small{font-size:.72rem;color:#5b7280;font-weight:750}.v3194-round-head>div{display:flex;align-items:center;gap:8px;white-space:nowrap}.v3194-round-head em{font-style:normal;color:#5b7280;font-weight:800}.v3194-round-bracket{position:relative;margin:8px 0 0 8px;padding:3px 4px 3px 14px;border-left:3px solid #315f75}.v3194-round-bracket:before,.v3194-round-bracket:after{content:"";position:absolute;left:0;width:9px;border-top:3px solid #315f75}.v3194-round-bracket:before{top:0}.v3194-round-bracket:after{bottom:0}.v3194-round-bracket>div{display:grid;grid-template-columns:32px 1fr;gap:2px;padding:3px 0;line-height:1.22}.v3194-round-bracket b{font-weight:900}.v3194-round-bracket span{font-weight:720}
+.v3180-whole-flow .v3140-board-line{padding:10px 0}.v3180-whole-flow .v3140-target-details{margin-top:7px}.v3180-target-groups{gap:5px}.v3180-target-group{padding:7px 9px}.v3190-pair:has(.v3140-board-line:empty){display:none}
+@media(max-width:700px){.v3194-pool-context{align-items:stretch;flex-direction:column}.v3194-pool-context nav{justify-content:flex-start}.v3194-pool-context button{flex:1 1 auto}.v3194-round-head{gap:6px}.v3194-round-bracket>div{grid-template-columns:29px 1fr}.v3180-board-block>header{padding-top:10px;padding-bottom:10px}.v3170-block-cue{padding:8px 12px}.v3170-block-actions{margin-top:8px}}
+`;document.head.appendChild(v3194Styles);
+
+function v3194Startup(){
+  if(appState.settings.v3194_board_ironing_migrated!==true){if(v3194SharedPool(selectedSession()))appState.settings.v3194_pool_mode="pool";appState.settings.v3194_board_ironing_migrated=true;saveState(appState)}
+  v3194Brand();v3129LaneCache?.clear?.();v3129TargetCache?.clear?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
+}
+window.v3194Debug={version:V3194_VERSION,build:V3194_BUILD,sanitise:v3194SanitiseBlocks,parse:v3193ParseBlocks,poolMode:v3194PoolMode,sharedPool:v3194SharedPool};
+setTimeout(v3194Startup,0);setTimeout(v3194Startup,450);setTimeout(v3194Startup,1500);setTimeout(v3194Brand,3500);
