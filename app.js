@@ -16956,3 +16956,203 @@ setTimeout(v3198Brand,3600);setTimeout(v3198Brand,8300);setTimeout(v3198Brand,12
 const v3198VisibilityStyle=document.createElement("style");v3198VisibilityStyle.textContent=`
 .v3198-poolside-composer #sessionImportPreview,.v3198-poolside-composer #saveImportedSessionBtn,.v3198-poolside-composer #runImportedSessionBtn{display:block!important}
 `;document.head.appendChild(v3198VisibilityStyle);
+
+// =============================================================================
+// McLay Swimming OS v3.19.9 — ON-DECK STABILITY + PB RACE PACE
+// Narrow protected pass after the 4 Aug PM live session.
+// Keeps the accepted v3.19.8 paste -> blocks -> Board route, Board layout,
+// T400 aerobic targets, Roll, individual modifications and swimmer pages.
+// Fixes keyboard redraws, makes Capture unmistakable, uses current PB for
+// explicit 100/200/etc race pace, adds quick note/edit access, and keeps
+// Charlotte's delivered work returning to the start end in 50m increments.
+// =============================================================================
+const V3199_VERSION="3.19.9";
+const V3199_BUILD="20260804-on-deck-stability-pb-race-pace";
+let v3199DeferredBoardPaint=false,v3199DeferredFullRender=false,v3199FinishSaveTimer=null;
+
+function v3199ActiveEditable(){
+  const node=document.activeElement;
+  if(!node||!node.matches?.('input,textarea,select,[contenteditable="true"]'))return null;
+  return node.closest?.('#deck,#v3198PoolsideComposer,#v3199QuickNote,#v3199QuickEdit')?node:null;
+}
+function v3199SaveFinishDraftNow(){
+  const finish=document.querySelector('#deck [data-v3180-finish]'),session=selectedSession?.();if(!finish||!session)return;
+  const store=typeof v3197FinishStore==='function'?v3197FinishStore():(appState.settings.v3197_finish_drafts ||= {}),row=store[session.id]||{};
+  row.open=finish.open;row.changed=finish.querySelector('[data-v3180-changed]')?.value||'';row.carry=finish.querySelector('[data-v3180-carry]')?.value||'';row.distance=finish.querySelector('[data-v3180-distance]')?.value||'';store[session.id]=row;
+  try{saveState(appState)}catch{}
+}
+function v3199ReleaseDeferred(){
+  if(v3199ActiveEditable())return;
+  if(v3199DeferredFullRender){v3199DeferredFullRender=false;try{v3199RenderAllBase?.()}catch{}}
+  else if(v3199DeferredBoardPaint){v3199DeferredBoardPaint=false;try{v3199PaintBase?.()}catch{}}
+}
+
+document.addEventListener('focusin',event=>{
+  const target=event.target;if(!target?.matches?.('input,textarea,select,[contenteditable="true"]'))return;
+  if(!target.closest?.('#deck,#v3198PoolsideComposer,#v3199QuickNote,#v3199QuickEdit'))return;
+  document.body.classList.add('v3199-editing');try{v3197HoldInteraction?.(24*60*60*1000)}catch{}
+},true);
+document.addEventListener('focusout',event=>{
+  if(!event.target?.closest?.('#deck,#v3198PoolsideComposer,#v3199QuickNote,#v3199QuickEdit'))return;
+  clearTimeout(v3199FinishSaveTimer);v3199FinishSaveTimer=setTimeout(()=>{v3199SaveFinishDraftNow();if(!v3199ActiveEditable()){document.body.classList.remove('v3199-editing');v3199InteractionRelease();v3199ReleaseDeferred()}},450)
+},true);
+function v3199InteractionRelease(){try{v3197InteractionUntil=Date.now()+250}catch{}}
+// The old Finish listener saved and permitted a redraw on every character.
+// Capture the event first, keep the value local, and persist after a pause.
+document.addEventListener('input',event=>{
+  const target=event.target;if(!target?.closest?.('#deck [data-v3180-finish]'))return;
+  event.stopPropagation();clearTimeout(v3199FinishSaveTimer);v3199FinishSaveTimer=setTimeout(v3199SaveFinishDraftNow,700)
+},true);
+
+const v3199PaintBase=v3170PaintBoard;
+v3170PaintBoard=function(...args){
+  if(v3199ActiveEditable()){v3199DeferredBoardPaint=true;return}
+  const result=v3199PaintBase?.(...args);requestAnimationFrame(v3199EnhanceBoard);return result;
+};
+const v3199RenderAllBase=renderAll;
+renderAll=function(...args){if(v3199ActiveEditable()){v3199DeferredFullRender=true;return}const result=v3199RenderAllBase?.(...args);requestAnimationFrame(v3199EnhanceBoard);return result};
+
+// --- Current-PB race pace ----------------------------------------------------
+function v3199RaceDistance(value){
+  const text=String(value||'').replace(/[–—]/g,' ');
+  const match=text.match(/(?:^|\b)(?:at|to|@)?\s*(50|100|200|400|800|1500)\s*(?:m\s*)?(?:race\s*)?(?:p|pace)\b/i)||text.match(/\b(?:race\s*)?pace\s*(?:for|at|over)?\s*(50|100|200|400|800|1500)\b/i);
+  return match?Number(match[1]):null;
+}
+const v3199DetectedRaceDistanceBase=v382DetectedRaceDistance;
+v382DetectedRaceDistance=function(text){return v3199RaceDistance(text)||v3199DetectedRaceDistanceBase?.(text)};
+const v3199PaceSpecBase=v382PaceSpec;
+v382PaceSpec=function(item,block,session){
+  const base=v3199PaceSpecBase(item,block,session),raceDistance=Number(item?.race_distance)||v3199RaceDistance(v382SetText(item,block));
+  return raceDistance?{...base,mode:'race',raceDistance,source:'pb',repDistance:Number(item?.distance)||base.repDistance}:{...base,source:base.mode==='race'?'pb':base.source};
+};
+const v3199RowTargetBase=v382RowTarget;
+v382RowTarget=function(athlete,spec){
+  if(spec?.mode!=='race')return v3199RowTargetBase(athlete,spec);
+  if(spec.genericAnaerobic&&!Number(spec.raceDistance))return {status:'needs',message:'Choose the race distance'};
+  const course=v3Course(spec.course||'SCM'),distance=Number(spec.raceDistance),stroke=v3Stroke(spec.stroke||'Freestyle'),rep=Number(spec.repDistance||0),pb=v382PbFor(athlete,course,distance,stroke);
+  if(!pb)return {status:'missing',message:`No ${course} ${distance} ${stroke} PB`,method:'Current PB required',source_label:'PB'};
+  const seconds=Number(pb.result_seconds)*(rep/distance);if(!Number.isFinite(seconds)||seconds<=0)return {status:'missing',message:'PB pace could not be calculated',method:'Current PB required',source_label:'PB'};
+  const cycle=Number(spec.cycle)||0,primary=cycle?`${v380Clock(seconds)} on ${v380Clock(cycle)}`:v380Clock(seconds);
+  return {status:'ok',kind:'race',primary,secondary:`Current PB ${v380Clock(pb.result_seconds)} · ${course} ${distance} ${stroke}`,method:'current PB average race pace',source_label:'PB'};
+};
+
+const v3199ParseItemBase=v3198ParseItem;
+v3198ParseItem=function(raw,index=0){
+  const parsed=v3199ParseItemBase(raw,index),race=v3199RaceDistance(raw);if(parsed?.kind==='set'&&parsed.item&&race&&!parsed.item.suppress_auto_targets){parsed.item.race_distance=race;parsed.item.pace_mode='race';parsed.item.pace_source='pb'}return parsed;
+};
+
+function v3199PbRows(session,block,item,blockIndex=0,itemIndex=0){
+  const raceDistance=Number(item?.race_distance)||v3199RaceDistance(v3129LineText?.(item)||item?.raw||'');if(!raceDistance)return[];
+  const plan=typeof v3129LanePlan==='function'?v3129LanePlan(session):{roster:v382PresentRoster(),assignments:new Map()},rows=[],repDistance=Number(item?.distance)||0,course=v3Course(item?.pace_course||session?.pool_course||'SCM');
+  for(const athlete of plan.roster||[]){
+    const resolved=typeof v3140ResolveStroke==='function'?v3140ResolveStroke(athlete,session,block,item,blockIndex,itemIndex):{stroke:v3Stroke(item.stroke||'Freestyle'),source:'Set'},stroke=v3Stroke(resolved.stroke||item.stroke||'Freestyle'),pb=v382PbFor(athlete,course,raceDistance,stroke),targetSeconds=pb&&repDistance?Number(pb.result_seconds)*(repDistance/raceDistance):null,cycleSeconds=Number(item?.cycle)||null;
+    rows.push({athlete,lane:plan.assignments?.get?.(athlete.id)||1,resolved,status:Number.isFinite(targetSeconds)&&targetSeconds>0?'ok':'missing',missing:!(Number.isFinite(targetSeconds)&&targetSeconds>0),targetSeconds:Number.isFinite(targetSeconds)?targetSeconds:null,cycleSeconds,primary:Number.isFinite(targetSeconds)?(cycleSeconds?`${v3140Clock(targetSeconds)} on ${v3140Clock(cycleSeconds)}`:v3140Clock(targetSeconds)):'',secondary:pb?`Current PB ${v3140Clock(pb.result_seconds)} · ${course} ${raceDistance} ${stroke}`:`No ${course} ${raceDistance} ${stroke} PB`,source:'Current PB pace',source_label:'PB'});
+  }
+  return rows;
+}
+const v3199TargetRowsBase=v3140TargetRows;
+v3140TargetRows=function(session,block,item,blockIndex,itemIndex){
+  const zone=typeof v3129Zone==='function'?v3129Zone(item,block):item?.pace_zone,race=Number(item?.race_distance)||v3199RaceDistance(v3129LineText?.(item)||item?.raw||'');
+  if(race&&!zone&&!item?.suppress_auto_targets)return v3199PbRows(session,block,{...item,race_distance:race,pace_mode:'race',pace_source:'pb'},blockIndex,itemIndex);
+  return v3199TargetRowsBase(session,block,item,blockIndex,itemIndex);
+};
+function v3199RaceChips(rows){
+  const ok=rows.filter(row=>!row.missing&&Number.isFinite(row.targetSeconds));if(!ok.length)return rows.length?`<div class="v3199-child-targets missing">${rows.map(row=>`<span><b>${escapeHtml(v3180Initials(row.athlete.full_name))}</b> no PB</span>`).join('')}</div>`:'';
+  const groups=new Map();for(const row of ok){const time=v3140Clock(row.targetSeconds),list=groups.get(time)||[];list.push(row);groups.set(time,list)}
+  return `<div class="v3199-child-targets">${[...groups.entries()].map(([time,list])=>`<span><b>${escapeHtml(list.map(row=>v3180Initials(row.athlete.full_name)).join(' · '))}</b>${escapeHtml(time)} <small>PB</small></span>`).join('')}</div>`;
+}
+const v3199LineHtmlBase=v3140LineHtml;
+v3140LineHtml=function(session,block,item,itemIndex,blockIndex){
+  if(item?.board_hidden_child)return'';
+  if(item?.v3198_group_sublines?.length){
+    const total=Number(item.reps||0)*Number(item.distance||0),repeat=Number(item.v3198_group_repeat)||1,cycle=Number(item.cycle)?`@ ${v3140Clock(item.cycle)}`:'',small=repeat>1?`${repeat} rounds`:item.v3198_group_kind==='distance'?'one grouped block':'grouped set';
+    const sublines=item.v3198_group_sublines.map((line,index)=>{
+      const parsed=v3198ParseItem(line,index),child=parsed?.item?{...parsed.item}:null;if(child&&(!child.stroke||/choice/i.test(child.stroke)))child.stroke=item.stroke||'Freestyle';
+      const match=String(line).match(/^\s*(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\s*(.*)$/i),single=String(line).match(/^\s*(\d{1,4}(?:\.5)?)\s*(.*)$/i),prefix=match?`${match[1]} –`:single?`${single[1]} –`:'–',text=match?String(match[3]||'').replace(/^[-:·\s]+/,'')||`${match[2]}m`:single?String(single[2]||'').replace(/^[-:·\s]+/,''):String(line),rows=child&&v3199RaceDistance(line)?v3199PbRows(session,block,child,blockIndex,itemIndex):[];
+      return {prefix,text,targets:v3199RaceChips(rows)};
+    });
+    return `<div class="v3140-board-line v3194-round-set v3198-group-set" data-v3129-use-line="${blockIndex}:${itemIndex}"><div class="v3194-round-head"><span><strong>${escapeHtml(String(item.raw||item.label||'Grouped set').replace(/\b\d+\s*rounds?\b/i,'').replace(/[-:·\s]+$/,''))}</strong><small>${escapeHtml(small)}</small></span><div>${cycle?`<b class="v3140-sendoff-range">${escapeHtml(cycle)}</b>`:''}${total?`<em>${total.toLocaleString()}m</em>`:''}</div></div><div class="v3194-round-bracket">${sublines.map(row=>`<div class="v3199-group-row"><b>${escapeHtml(row.prefix)}</b><span>${escapeHtml(row.text)}</span>${row.targets}</div>`).join('')}</div></div>`;
+  }
+  return v3199LineHtmlBase(session,block,item,itemIndex,blockIndex);
+};
+
+// --- Charlotte: every delivered line returns to the starting end ------------
+function v3199Charlotte(athlete){return /\bcharlotte\s+murphy\b/i.test(String(athlete?.full_name||''))}
+function v3199RoundRowTo50(row,athlete,session,block,index){
+  if(row?.cue||!Number(row?.distance)||Number(row.distance)%50===0)return row;
+  const parsed=v3170ParseItem?.(row.line,index),item=parsed?.item||parsed;if(!item||!Number(item.distance)||!Number(item.reps))return row;
+  let reps=Number(item.reps),distance=Number(item.distance),best=null;
+  if(reps>1){for(let candidate=1;candidate<=Math.max(20,reps+8);candidate++){const total=candidate*distance;if(total%50!==0)continue;const score=Math.abs(total-Number(row.distance))+(total>Number(row.distance)?12:0);if(!best||score<best.score)best={reps:candidate,distance,total,score}}}
+  if(!best){const total=Math.max(50,Math.round(Number(row.distance)/50)*50);best={reps:1,distance:total,total}}
+  let line=String(row.line||'');if(/^\s*\d+\s*[x×]\s*\d+(?:\.5)?/i.test(line))line=line.replace(/^\s*\d+\s*[x×]\s*\d+(?:\.5)?/i,`${best.reps} × ${best.distance}`);else if(/^\s*\d+(?:\.5)?/i.test(line))line=line.replace(/^\s*\d+(?:\.5)?/i,String(best.total));else line=`${best.total}m · ${line}`;
+  const reparsed=v3170ParseItem?.(line,index),paceItem=reparsed?.item||reparsed;let target=row.target;
+  try{if(paceItem){const resolved=v3140ResolveStroke?.(athlete,session,block,paceItem,0,index),spec=v382PaceSpec(paceItem,block,session),result=v382RowTarget(athlete,{...spec,stroke:resolved?.stroke||spec.stroke});target=result?.status==='ok'?result.primary:''}}catch{}
+  return {...row,line,distance:best.total,target,source:[row.source,'50m-end rule'].filter(Boolean).join(' · ')};
+}
+const v3199AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3199AdaptationBase(athlete,session,block,blockIndex);if(!v3199Charlotte(athlete))return result;
+  const rows=(result?.rows||[]).map((row,index)=>v3199RoundRowTo50(row,athlete,session,block,index)),repeat=Math.max(1,Number(result?.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;
+  return {...result,rows,total,source:[result?.source,'Charlotte 50m-end rule'].filter(Boolean).join(' · ')};
+};
+
+// --- Simple poolside capture + change visibility ----------------------------
+function v3199QuickNoteHtml(session,blockIndex=null){
+  const blocks=v3170BoardBlocks(session),block=Number.isFinite(blockIndex)?blocks[blockIndex]:null,roster=typeof v3129LanePlan==='function'?v3129LanePlan(session).roster:(typeof v382PresentRoster==='function'?v382PresentRoster():[]),squad=typeof v3195Mode==='function'?v3195Mode(session):appState.settings.selected_squad||'Mixed';
+  return `<div id="v3199QuickNote" class="v3199-overlay"><section><header><div><span>Poolside capture</span><strong>${escapeHtml(block?.title||session.title||'Session')}</strong></div><button type="button" data-v3199-close>Close</button></header><label>Attach to<select data-v3199-note-scope><option value="${block?'block':'session'}">${block?'This block':'Whole session'}</option><option value="session">Whole session</option><option value="squad">Current squad / group</option><option value="swimmer">One swimmer</option></select></label><label data-v3199-athlete-row hidden>Swimmer<select data-v3199-note-athlete>${roster.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.full_name)}</option>`).join('')}</select></label><label>Note<textarea data-v3199-note-text autofocus placeholder="What changed, what you saw, or what to carry forward"></textarea></label><div class="v3199-overlay-actions"><button type="button" data-v3199-save-note>Save note</button></div><p data-v3199-note-status>${escapeHtml(block?`Attached to ${block.title}`:`Attached to ${squad}`)}</p></section></div>`;
+}
+function v3199OpenQuickNote(blockIndex=null){
+  const session=selectedSession?.();if(!session)return;document.querySelector('#v3199QuickNote')?.remove();document.body.insertAdjacentHTML('beforeend',v3199QuickNoteHtml(session,blockIndex));const host=$('v3199QuickNote'),scope=host.querySelector('[data-v3199-note-scope]'),athleteRow=host.querySelector('[data-v3199-athlete-row]');
+  host.querySelector('[data-v3199-close]').onclick=()=>host.remove();scope.onchange=()=>{athleteRow.hidden=scope.value!=='swimmer'};host.querySelector('[data-v3199-save-note]').onclick=()=>{
+    const text=host.querySelector('[data-v3199-note-text]').value.trim();if(!text)return host.querySelector('[data-v3199-note-status]').textContent='Add a note first.';
+    const blocks=v3170BoardBlocks(session),block=Number.isFinite(blockIndex)?blocks[blockIndex]:null,scopeValue=scope.value,athleteId=scopeValue==='swimmer'?host.querySelector('[data-v3199-note-athlete]').value:null,squad=typeof v3195Mode==='function'?v3195Mode(session):appState.settings.selected_squad||'Mixed',prefix=scopeValue==='block'?`[Block: ${block?.title||'Current block'}]`:scopeValue==='squad'?`[Group: ${squad}]`:scopeValue==='swimmer'?'[Swimmer note]':'[Session note]';
+    const record={id:uid('capture'),session_id:session.id,athlete_id:athleteId||null,capture_type:'text',text_content:`${prefix} ${text}`,session_block_id:scopeValue==='block'?block?.id||null:null,media_path:null,media_local_id:null,mime_type:'text/plain',created_at:nowIso(),updated_at:nowIso()};upsertLocal('captures',record);queueRecord('captures',record.id);saveState(appState);scheduleFastSync?.();host.querySelector('[data-v3199-note-status]').textContent='Saved.';setTimeout(()=>{host.remove();v3199EnhanceBoard()},250)
+  };
+  requestAnimationFrame(()=>host.querySelector('[data-v3199-note-text]')?.focus());
+}
+function v3199ChangeLog(session){
+  return (appState.captures||[]).filter(c=>c.session_id===session.id&&c.capture_type==='session_change').sort(byUpdated).slice(0,8);
+}
+function v3199EnhanceBoard(){
+  const host=$('v3126WholeView')||document.querySelector('#deck .v3180-whole-flow')?.parentElement,session=selectedSession?.();if(!host||!session)return;
+  host.querySelectorAll('[data-v3129-use-line]').forEach(line=>{if(line.querySelector('[data-v3199-quick-edit]'))return;const key=line.dataset.v3129UseLine,button=document.createElement('button');button.type='button';button.className='v3199-quick-edit';button.dataset.v3199QuickEdit=key;button.textContent='Quick edit';button.onclick=()=>{const fake=document.createElement('button');fake.dataset.v3127EditLine=key;v3127ApplyLiveEdit?.(fake)};(line.querySelector('.v3140-line-row,.v3194-round-head')||line).appendChild(button)});
+  const changes=v3199ChangeLog(session),anchor=host.querySelector('[data-v3180-finish]')||host.querySelector('.v3170-session-actions');let log=host.querySelector('[data-v3199-change-log]');
+  if(changes.length&&!log&&anchor){log=document.createElement('details');log.dataset.v3199ChangeLog='1';log.className='v3199-change-log';log.innerHTML=`<summary><strong>Changes made on deck</strong><span>${changes.length} recorded</span></summary>${changes.map(c=>`<div>${escapeHtml(c.text_content||'Session change')}</div>`).join('')}`;anchor.insertAdjacentElement('beforebegin',log)}else if(log&&!changes)log.remove();
+}
+document.addEventListener('click',event=>{
+  const capture=event.target.closest?.('#deck [data-v3170-capture]');if(!capture)return;event.preventDefault();event.stopImmediatePropagation();const block=Number(capture.dataset.v3180CaptureBlock);v3199OpenQuickNote(Number.isFinite(block)?block:null)
+},true);
+
+// --- Capture session: one blatant overlay, visible transcript ----------------
+function v3199EnhanceComposer(){
+  const card=typeof v3198EnsureMobileComposer==='function'?v3198EnsureMobileComposer():$('v3198PoolsideComposer');if(!card)return null;card.classList.add('v3199-capture-dialog');card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');
+  const head=card.querySelector('.v3198-composer-head strong');if(head&&!head.dataset.v3199Label){head.dataset.v3199Label='1';head.insertAdjacentHTML('beforebegin','<b class="v3199-capture-title">CAPTURE SESSION</b>')}
+  try{v3101InjectSessionDictation?.()}catch{}const body=$('v3198ComposerBody'),dictation=$('v3101SessionDictation'),input=$('sessionPasteInput');if(body&&dictation&&dictation.parentElement!==body)body.insertBefore(dictation,input?.previousElementSibling||input||body.firstChild);
+  if(body&&!$('v3199TranscriptMirror')){const mirror=document.createElement('div');mirror.id='v3199TranscriptMirror';mirror.className='v3199-transcript-mirror';mirror.innerHTML='<strong>Editable transcription</strong><span>Paste, type, or record. The recognised words will appear in the box below.</span>';body.insertBefore(mirror,input?.previousElementSibling||input||body.firstChild)}
+  if(input&&!input.dataset.v3199Mirror){input.dataset.v3199Mirror='1';input.addEventListener('input',()=>{const mirror=$('v3199TranscriptMirror');if(mirror)mirror.querySelector('span').textContent=input.value.trim()?`${input.value.trim().split(/\s+/).length} words captured · check the text below`:'Paste, type, or record. The recognised words will appear in the box below.'})}
+  const close=$('v3198CloseComposer');if(close){close.onclick=()=>{card.hidden=true;document.body.classList.remove('v3199-capture-open')}}return card;
+}
+const v3199OpenComposerBase=v3198OpenComposer;
+v3198OpenComposer=function(options={}){v3199OpenComposerBase?.(options);const card=v3199EnhanceComposer();if(card){card.hidden=false;document.body.classList.add('v3199-capture-open');requestAnimationFrame(()=>$('sessionPasteInput')?.focus())}};
+const v3199InjectEntryBase=v3198InjectBoardEntry;
+v3198InjectBoardEntry=function(){v3199InjectEntryBase?.();document.querySelectorAll('[data-v3198-paste]').forEach(button=>{button.classList.add('v3199-capture-entry');button.innerHTML='<strong>CAPTURE SESSION</strong><span>Paste or dictate → build blocks → put on Board</span>'})};
+
+// Rebind the latest Board after redraws without altering its data flow.
+const v3199BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){v3199BindBoardBase?.(host,session);requestAnimationFrame(v3199EnhanceBoard)};
+
+const v3199Styles=document.createElement('style');v3199Styles.id='v3199Styles';v3199Styles.textContent=`
+.v3199-quick-edit{border:1px solid #9bb8c8!important;background:#f5fafc!important;color:#123f5d!important;border-radius:999px!important;padding:4px 8px!important;min-height:30px!important;font-size:.68rem!important;margin-left:auto!important}.v3199-change-log{margin:12px 0;border:1px solid #aac4d2;border-radius:14px;background:#f7fbfd;padding:10px}.v3199-change-log summary{display:flex;justify-content:space-between;gap:12px}.v3199-change-log>div{padding:7px 0;border-top:1px solid #d8e6ed;font-size:.82rem}.v3199-child-targets{grid-column:2/-1;display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}.v3199-child-targets span{display:inline-flex;gap:5px;align-items:center;background:#eaf4f8;border:1px solid #b6d0dc;border-radius:999px;padding:3px 7px;font-size:.7rem}.v3199-child-targets small{font-size:.58rem;color:#567}.v3199-child-targets.missing span{background:#fff6e8}.v3199-group-row{grid-template-columns:auto minmax(0,1fr)!important}.v3199-overlay{position:fixed;inset:0;z-index:12000;background:rgba(5,25,38,.64);display:grid;place-items:center;padding:12px}.v3199-overlay>section{width:min(560px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;padding:16px;box-shadow:0 20px 70px rgba(0,0,0,.32)}.v3199-overlay header{display:flex;justify-content:space-between;gap:12px;align-items:start}.v3199-overlay header>div{display:grid}.v3199-overlay header span{font-size:.7rem;text-transform:uppercase;color:#567;font-weight:900}.v3199-overlay textarea{min-height:150px}.v3199-overlay-actions{display:grid;margin-top:10px}.v3199-transcript-mirror{display:grid;gap:2px;background:#eef6fa;border:2px solid #8fb6c9;border-radius:12px;padding:10px;margin:8px 0}.v3199-transcript-mirror strong{color:#123f5d}.v3199-transcript-mirror span{font-size:.78rem;color:#496775}.v3199-capture-title{font-size:.72rem;letter-spacing:.08em;color:#b84b1c}.v3199-capture-entry{box-shadow:0 6px 18px rgba(18,63,93,.23)}
+@media(max-width:900px){body.v3199-capture-open{overflow:hidden}.v3199-capture-dialog{display:block!important;position:fixed!important;inset:8px!important;z-index:11000!important;overflow:auto!important;margin:0!important;max-height:none!important;border:3px solid #123f5d!important;box-shadow:0 18px 70px rgba(0,0,0,.38)!important;background:#fff!important;padding:14px!important}.v3199-capture-dialog[hidden]{display:none!important}.v3199-capture-dialog #v3101SessionDictation{display:block!important}.v3199-capture-dialog .session-paste-input{min-height:220px!important}.v3199-capture-dialog .v3198-composer-head{position:sticky;top:-14px;z-index:4;background:#fff;padding:12px 0 9px;border-bottom:1px solid #d6e4eb}.v3199-capture-entry strong{font-size:1.05rem!important}.v3199-capture-entry span{font-size:.78rem!important}.v3199-quick-edit{display:inline-flex!important}}
+`;document.head.appendChild(v3199Styles);
+
+function v3199Brand(){
+  const title=`McLay Swimming OS — v${V3199_VERSION} On-Deck Stability`,sub=`Version ${V3199_VERSION} · protected session input and Board · stable typing · current-PB race pace · quick deck capture`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector('.header-subtitle');if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+try{v3198BrandObserver?.disconnect?.()}catch{}
+for(const name of ['v3198Brand','v3197Brand','v3196Brand','v3195Brand','v3194Brand','v3193Brand','v3192Brand','v3191Brand','v3190Brand','v3180Brand','v3172Brand','v3171Brand','v3170Brand']){try{globalThis[name]=v3199Brand}catch{}}
+const v3199BrandObserver=new MutationObserver(()=>queueMicrotask(v3199Brand));if(document.querySelector('title'))v3199BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3199BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
+function v3199Startup(){v3199Brand();v3199EnhanceComposer();v3198InjectBoardEntry?.();v3199EnhanceBoard()}
+window.v3199Debug={version:V3199_VERSION,build:V3199_BUILD,raceDistance:v3199RaceDistance,pbRows:v3199PbRows,enhance:v3199EnhanceBoard};
+setTimeout(v3199Startup,0);setTimeout(v3199Startup,600);setTimeout(v3199Startup,2200);setTimeout(v3199Brand,6000);
