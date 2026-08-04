@@ -16674,3 +16674,285 @@ for(const name of ["v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Bra
 function v3197Startup(){v3197Brand();v3195EnhanceSquadPlanning?.();if(v3197ViewId()==="deck")v3197PaintNow()}
 window.v3197Debug={version:V3197_VERSION,build:V3197_BUILD,mode:v3195Mode,lead:v3195LeadKey,applySquads:v3197ApplySquads,openNewSession:v3197OpenNewSessionEditor,finishDraft:v3197FinishDraft};
 setTimeout(v3197Startup,0);setTimeout(v3197Startup,650);setTimeout(v3197Brand,2200);
+
+// =============================================================================
+// McLay Swimming OS v3.19.8 — POOLSIDE SESSION ROUTE RESTORE
+// Restores the protected phone workflow:
+// selected session -> paste/type -> optional block review -> verified Board.
+// The long planning/session editor is not part of this poolside route.
+// Existing Roll, Board, swimmer modifications and identified pace targets remain.
+// =============================================================================
+const V3198_VERSION="3.19.8";
+const V3198_BUILD="20260804-poolside-session-route-restore";
+let v3198PendingNewSession=null;
+
+function v3198Phone(){return window.matchMedia?.("(max-width: 900px)")?.matches!==false}
+function v3198SlotTitle(session){
+  if(!session)return"Session";
+  const date=new Date(`${session.session_date||localIsoDate(new Date())}T12:00:00`);
+  const day=Number.isNaN(date.getTime())?"Session":date.toLocaleDateString("en-NZ",{weekday:"short"});
+  return `${day} ${String(session.day_part||v33PartNow?.()||"AM").toUpperCase()}`.trim();
+}
+function v3198SessionTitleNeedsRepair(value){
+  const title=String(value||"").trim();
+  return !title||/^(?:national|development|fitness|fit|intermediate|junior|novice para|mixed)\s+session$/i.test(title);
+}
+function v3198SquadLabel(session){
+  const squads=(typeof v3111ExplicitSquads==="function"?v3111ExplicitSquads(session):sessionSquads(session))||[];
+  return squads.length?squads.map(value=>typeof v3195SquadMeta==="function"?v3195SquadMeta(v3195OperationalSquadKey(value)).short||value:value).join(" + "):"Squads already selected";
+}
+function v3198PrepareIdentity(session,{queue=false}={}){
+  if(!session)return null;
+  if(v3198SessionTitleNeedsRepair(session.title))session.title=v3198SlotTitle(session);
+  if(!String(session.primary_system||"").trim())session.primary_system=typeof v3191DailyObjective==="function"?v3191DailyObjective(session):"";
+  if(!String(session.technical_focus||"").trim())session.technical_focus=typeof v3191SecondaryEmphasis==="function"?v3191SecondaryEmphasis(session,session.primary_system):"";
+  session.updated_at=nowIso();
+  if(queue){upsertLocal("sessions",session);queueRecord("sessions",session.id);saveState(appState)}
+  return session;
+}
+
+function v3198Heading(line){
+  const text=String(line||"").trim().replace(/[–—]/g,"-");
+  const defs=[
+    ["warm_up","Warm-up",/^(?:warm\s*[- ]?up|wu)\b\s*[-:,.]?\s*(.*)$/i],
+    ["pre_set","Pre-set",/^(?:pre\s*[- ]?set|preset)\b\s*[-:,.]?\s*(.*)$/i],
+    ["skill","Skill / preparation",/^(?:skill|skills|technical|preparation|prep)\b\s*[-:,.]?\s*(.*)$/i],
+    ["post_set","Post-set",/^(?:post\s*[- ]?(?:main\s*)?set(?:\s*work)?)\b\s*[-:,.]?\s*(.*)$/i],
+    ["main_set","Main set",/^(?:main\s*[- ]?set|mainset)\b\s*[-:,.]?\s*(.*)$/i],
+    ["warm_down","Warm-down",/^(?:warm\s*[- ]?down|cool\s*[- ]?down|wd)\b\s*[-:,.]?\s*(.*)$/i]
+  ];
+  for(const [type,title,re] of defs){
+    const match=text.match(re);if(!match)continue;
+    let rest=String(match[1]||"").trim(),repeat=1;
+    const round=rest.match(/^(\d+)\s*rounds?\b\s*[-:,.]?\s*(.*)$/i);
+    if(round){repeat=Math.max(1,Number(round[1])||1);rest=String(round[2]||"").trim()}
+    return{type,title,repeat,rest};
+  }
+  return null;
+}
+function v3198NormaliseLine(value){
+  return String(value||"").replace(/\r/g,"").replace(/\u00a0/g," ").replace(/[–—]/g," - ").replace(/\s+/g," ").replace(/^[-•*]+\s*/,"").trim();
+}
+function v3198ParseItem(raw,index=0){
+  let line=v3198NormaliseLine(raw);if(!line)return null;
+  if(/^total\s*[:=-]?\s*[0-9,]+\s*m?\b/i.test(line))return{kind:"ignore"};
+  const repeat=line.match(/^repeat(?:\s+(?:the\s+)?(?:block|set))?\s*(?:[x×]\s*)?(\d+)\s*(?:times?)?\b/i);
+  if(repeat)return{kind:"repeat",count:Math.max(1,Number(repeat[1])||1),raw:line};
+  line=line.replace(/^(\d{1,2})\s+(\d{2,4}(?:\.5)?)\b/,"$1 × $2");
+  line=line.replace(/\bon\s+(\d{2,3})(?![:.\d])/i,(_,clock)=>`on ${String(clock).length===2?`0:${clock}`:`${String(clock).slice(0,-2)}:${String(clock).slice(-2)}`}`);
+  let reps=1,distance=null,tail="",match=line.match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\s*(?:m\b)?\s*(.*)$/i);
+  if(match){reps=Number(match[1]);distance=Number(match[2]);tail=String(match[3]||"").trim()}
+  else{match=line.match(/^(\d{1,4}(?:\.5)?)\s*(?:m\b)?\s*(.*)$/i);if(match&&!/^\d+\s*min(?:ute)?s?\b/i.test(line)){distance=Number(match[1]);tail=String(match[2]||"").trim()}}
+  if(!Number.isFinite(distance)||distance<=0)return{kind:"cue",item:{id:uid("block-line"),sort_order:index+1,raw:line,label:line,reps:0,distance:null,cycle:"",stroke:"Choice",instruction:line,runnable:false,line_type:"cue"}};
+  const cycleMatch=line.match(/(?:\bon\s+|@\s*)(\d{1,2}):(\d{2})(?:\.(\d+))?\b/i),cycle=cycleMatch?Number(cycleMatch[1])*60+Number(cycleMatch[2])+Number(`0.${cycleMatch[3]||0}`):"";
+  const restMatch=line.match(/\b(\d{1,2})\s*(?:s|sec|secs|second|seconds)\s*rest\b/i);
+  const zone=typeof v3127Zone==="function"?v3127Zone(line):"",raceDistance=typeof v3128RaceDistance==="function"?v3128RaceDistance(line):null;
+  const stroke=typeof v3127CanonicalStroke==="function"?v3127CanonicalStroke(tail||line):(typeof inferStrokeFromLine==="function"?inferStrokeFromLine(line):"Choice");
+  const mixed=/\b(?:with\s+fins?|fins?|hypoxic|underwater|FOB)\b/i.test(line)||(/\bmax\b/i.test(line)&&/\beasy\b/i.test(line))||distance<25;
+  return{kind:"set",item:{id:uid("block-line"),sort_order:index+1,raw:line,label:line,reps,distance,cycle,stroke,instruction:tail,runnable:true,line_type:"set",pace_zone:zone||"",race_distance:raceDistance,pace_mode:mixed?"instruction":raceDistance?"race":zone?"aerobic":"auto",pace_rest:restMatch?Number(restMatch[1]):null,suppress_auto_targets:mixed}};
+}
+function v3198GroupItems(items){
+  const out=items.map(item=>({...item}));
+  for(let i=0;i<out.length;i++){
+    const parent=out[i];if(parent?.runnable===false||!Number(parent?.distance)||!Number(parent?.reps))continue;
+    const children=[];let childVolume=0,repeat=1,repeatIndex=-1;
+    for(let j=i+1;j<Math.min(out.length,i+7);j++){
+      const row=out[j],text=String(row?.raw||"");
+      const repeatMatch=text.match(/^repeat\s*(?:[x×]\s*)?(\d+)\s*(?:times?)?/i);
+      if(repeatMatch){repeat=Math.max(1,Number(repeatMatch[1])||1);repeatIndex=j;break}
+      if(row?.runnable===false||!Number(row?.distance)||!Number(row?.reps))break;
+      const sameRepeatDistance=Number(parent.distance)===Number(row.distance);
+      const distanceComposition=Number(parent.reps)===1&&Number(row.distance)<Number(parent.distance)&&/\b(?:with\s+fins?|fins?\s+block|made\s+up\s+of|comprising|as\s+follows)\b/i.test(String(parent.raw||""));
+      if(!sameRepeatDistance&&!distanceComposition)break;
+      children.push(row);childVolume+=Number(row.reps)*Number(row.distance);
+      if(childVolume>=Number(parent.reps)*Number(parent.distance))break;
+    }
+    const parentVolume=Number(parent.reps)*Number(parent.distance),inlineRounds=Number(String(parent.raw||"").match(/\b(\d+)\s*rounds?\b/i)?.[1]||0)||1;
+    if(repeat===1&&inlineRounds>1)repeat=inlineRounds;
+    const matches=children.length>0&&Math.abs(childVolume*repeat-parentVolume)<.01;
+    if(!matches)continue;
+    parent.v3198_group_sublines=children.map(child=>String(child.raw||child.label||child.instruction||""));
+    parent.v3198_group_repeat=repeat;
+    parent.v3198_group_kind=Number(parent.reps)===1?"distance":"repeats";
+    parent.suppress_auto_targets=parent.suppress_auto_targets||children.some(child=>child.suppress_auto_targets)||/\b(?:fins?|max|easy|underwater|FOB)\b/i.test(parent.v3198_group_sublines.join(" "));
+    children.forEach(child=>{child.board_hidden_child=true;child.runnable=false;child.reps=0;child.distance=null;child.line_type="cue"});
+    if(repeatIndex>=0){out[repeatIndex].board_hidden_child=true;out[repeatIndex].runnable=false;out[repeatIndex].reps=0;out[repeatIndex].distance=null;out[repeatIndex].line_type="cue"}
+  }
+  return out.map((item,index)=>({...item,sort_order:index+1}));
+}
+function v3198ParseStructured(raw){
+  const source=String(raw||"").replace(/\r/g,"").trim();if(!source)return[];
+  const lines=source.split("\n").map(v3198NormaliseLine).filter(Boolean);
+  const headingCount=lines.filter(line=>v3198Heading(line)).length;
+  if(!headingCount)return null;
+  const segments=[];let current=null;
+  const begin=heading=>{if(current)segments.push(current);current={type:heading.type,title:heading.title,repeat:heading.repeat||1,lines:[]};if(heading.rest)current.lines.push(heading.rest)};
+  for(const line of lines){const heading=v3198Heading(line);if(heading){begin(heading);continue}if(/^total\s*[:=-]/i.test(line))continue;if(!current)current={type:"main_set",title:"Session",repeat:1,lines:[]};current.lines.push(line)}
+  if(current)segments.push(current);
+  return segments.map((segment,blockIndex)=>{
+    const items=[];
+    for(let i=0;i<segment.lines.length;i++){
+      const parsed=v3198ParseItem(segment.lines[i],i);if(!parsed||parsed.kind==="ignore")continue;
+      if(parsed.kind==="repeat")items.push({id:uid("block-line"),sort_order:items.length+1,raw:`Repeat ${parsed.count} times`,label:`Repeat ${parsed.count} times`,reps:0,distance:null,cycle:"",stroke:"Choice",instruction:`Repeat ${parsed.count} times`,runnable:false,line_type:"cue"});
+      else if(parsed.item)items.push(parsed.item);
+    }
+    const grouped=v3198GroupItems(items),rawText=segment.lines.join("\n"),support=typeof v3107BlockSupport==="function"?v3107BlockSupport(segment.type,segment.title,rawText):{};
+    return{id:uid("draft-block"),block_type:segment.type,title:segment.repeat>1?`${segment.title} ×${segment.repeat}`:segment.title,sort_order:blockIndex+1,items:grouped,raw_text:rawText,purpose:support?.purpose||"",cues:support?.cues||"",keep_together:true,repeat_count:Math.max(1,Number(segment.repeat)||1),source_import:"v3198-structured"};
+  }).filter(block=>block.items.length);
+}
+function v3198ParseBlocks(raw){
+  const structured=v3198ParseStructured(raw);
+  if(structured?.length)return typeof v3194SanitiseBlocks==="function"?v3194SanitiseBlocks(structured,raw):structured;
+  return v3194SanitiseBlocks(v3194ParseBase(raw),raw);
+}
+function v3198Distance(blocks){return v34Array(blocks).reduce((sum,block)=>sum+v34Array(block?.items).filter(item=>item?.runnable!==false).reduce((n,item)=>n+Number(item?.reps||0)*Number(item?.distance||0),0)*Math.max(1,Number(block?.repeat_count)||1),0)}
+
+v3193ParseBlocks=v3198ParseBlocks;
+v3150ParseBlocks=v3198ParseBlocks;v3126ParseBlocks=v3198ParseBlocks;v3127ParseBlocks=v3198ParseBlocks;v3128ParseBlocks=v3198ParseBlocks;v3107BlocksFromRaw=v3198ParseBlocks;
+v3193Distance=v3198Distance;
+estimateDistance=function(text){const blocks=v3198ParseBlocks(text),calculated=v3198Distance(blocks);const explicit=String(text||"").match(/(?:total|planned\s*distance|distance)\s*[:=\-]?\s*([0-9][0-9,]{2,5})\s*m?\b/i),stated=explicit?Number(explicit[1].replace(/,/g,"")):0;return calculated||stated};
+
+const v3198CollectBase=v3192CollectOrBuild;
+v3192CollectOrBuild=function(raw,options={}){
+  const structured=v3198ParseStructured(raw);
+  if(!structured?.length)return v3198CollectBase(raw,options);
+  let blocks=v3198ParseBlocks(raw);v3150DraftSource=String(raw);v3150DraftSourceType=v3126SourceType||"text";v3150DraftBlocks=blocks;v35DraftBlocks=blocks;
+  if(options.showPreview)v3150RenderDraft?.();
+  if(v3198Distance(blocks)<=0)throw new Error("The transcript contains no runnable distance. The session has not been saved.");
+  return blocks;
+};
+
+const v3198LineHtmlBase=v3140LineHtml;
+v3140LineHtml=function(session,block,item,itemIndex,blockIndex){
+  if(item?.board_hidden_child)return"";
+  if(item?.v3198_group_sublines?.length){
+    const total=Number(item.reps||0)*Number(item.distance||0),repeat=Number(item.v3198_group_repeat)||1,cycle=Number(item.cycle)?`@ ${v3140Clock(item.cycle)}`:"",small=repeat>1?`${repeat} rounds`:item.v3198_group_kind==="distance"?"one grouped block":"grouped set";
+    const sublines=item.v3198_group_sublines.map(line=>{const match=String(line).match(/^\s*(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\s*(.*)$/i);if(match)return{prefix:`${match[1]} –`,text:String(match[3]||"").replace(/^[-:·\s]+/,"")||`${match[2]}m`};const single=String(line).match(/^\s*(\d{1,4}(?:\.5)?)\s*(.*)$/i);return single?{prefix:`${single[1]} –`,text:String(single[2]||"").replace(/^[-:·\s]+/,"")}:{prefix:"–",text:String(line)}});
+    return `<div class="v3140-board-line v3194-round-set v3198-group-set" data-v3129-use-line="${blockIndex}:${itemIndex}"><div class="v3194-round-head"><span><strong>${escapeHtml(String(item.raw||item.label||"Grouped set").replace(/\b\d+\s*rounds?\b/i,"").replace(/[-:·\s]+$/,""))}</strong><small>${escapeHtml(small)}</small></span><div>${cycle?`<b class="v3140-sendoff-range">${escapeHtml(cycle)}</b>`:""}${total?`<em>${total.toLocaleString()}m</em>`:""}</div></div><div class="v3194-round-bracket">${sublines.map(row=>`<div><b>${escapeHtml(row.prefix)}</b><span>${escapeHtml(row.text)}</span></div>`).join("")}</div></div>`;
+  }
+  return v3198LineHtmlBase(session,block,item,itemIndex,blockIndex);
+};
+
+function v3198SyncQuickFields(){
+  const target=v3198PendingNewSession||v3192WriteTarget?.()||selectedSession?.();if(!target)return null;
+  v3198PrepareIdentity(target);
+  if($("quickSessionDate"))$("quickSessionDate").value=target.session_date||localIsoDate(new Date());
+  if($("quickSessionPart"))$("quickSessionPart").value=String(target.day_part||"AM").toUpperCase();
+  if($("quickSessionTitle"))$("quickSessionTitle").value="";
+  if($("quickSessionSquads"))$("quickSessionSquads").value=(target.squads||sessionSquads(target)||[]).join(", ");
+  if($("quickSessionLanes"))$("quickSessionLanes").value=target.lane_count||6;
+  if($("quickSessionCourse"))$("quickSessionCourse").value=target.pool_course||"SCM";
+  return target;
+}
+function v3198ArrangeComposer(){
+  const details=$("sessionImportDetails"),body=details?.querySelector(".session-import-body");if(!details||!body)return;
+  const target=v3198SyncQuickFields(),summary=details.querySelector("summary");
+  if(summary){const strong=summary.querySelector("strong"),span=summary.querySelector("span");if(strong)strong.textContent="Paste session";if(span)span.textContent=target?`${v3198SlotTitle(target)} · ${v3198SquadLabel(target)}`:"Select a session first"}
+  const targetCard=$("v3126ImportTarget");if(targetCard&&target){targetCard.innerHTML=`<span>Putting workout onto</span><strong>${escapeHtml(v3198SlotTitle(target))} · ${escapeHtml(v3198SquadLabel(target))}</strong><small>Date, slot, squads, plan and venue are already attached. Paste the workout only.</small>`}
+  const source=body.querySelector(".quick-session-source-row"),input=$("sessionPasteInput"),label=input?.previousElementSibling,parseRow=$("parseSessionBtn")?.closest(".button-row"),preview=$("sessionImportPreview"),result=$("sessionImportResult"),progress=$("v371ComposerProgress"),actions=body.querySelector(".import-save-actions");
+  let anchor=targetCard;
+  for(const node of [source,label,input,parseRow,preview,result,progress,actions]){if(node&&anchor){anchor.insertAdjacentElement("afterend",node);anchor=node}}
+  if(result)result.textContent="Paste the complete session. Review blocks if needed, then put it on the Board.";
+  const paste=$("pasteSessionBtn");if(paste)paste.textContent="Paste from clipboard";
+  const parse=$("parseSessionBtn");if(parse)parse.textContent="Put session on Board";
+  const review=$("saveImportedSessionBtn");if(review)review.textContent="Review blocks";
+  const run=$("runImportedSessionBtn");if(run)run.textContent="Put session on Board";
+  const card=details.closest(".session-import-card");if(card){card.hidden=false;card.style.removeProperty("display")}
+}
+function v3198OpenComposer({clear=false,focus=true}={}){
+  showView?.("deck");v3198ArrangeComposer();const details=$("sessionImportDetails");if(!details)return;
+  details.classList.add("v3198-open");details.open=true;setTimeout(()=>{details.classList.add("v3198-open");details.open=true},80);setTimeout(()=>{details.classList.add("v3198-open");details.open=true},260);if(clear&&$("sessionPasteInput")){$("sessionPasteInput").value="";importedSessionDraft=null;v3150DraftSource="";v3150DraftBlocks=[];v35DraftBlocks=[];v33SetImportMessage("Paste the complete session.","good")}
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{details.closest(".session-import-card")?.scrollIntoView({block:"start",behavior:"auto"});if(focus)$("sessionPasteInput")?.focus()}));
+}
+function v3198InjectBoardEntry(){
+  const host=$("v3126WholeView")||document.querySelector("#deck .v3170-board-host");if(!host)return;
+  const warning=[...host.querySelectorAll(".warning-box")].find(node=>/no workout/i.test(node.textContent||""));
+  if(warning&&!host.querySelector("[data-v3198-paste]")){const button=document.createElement("button");button.type="button";button.className="v3198-paste-board";button.dataset.v3198Paste="1";button.innerHTML="<strong>Paste session</strong><span>Build blocks → put on Board</span>";button.onclick=()=>v3198OpenComposer({focus:true});warning.insertAdjacentElement("afterend",button)}
+  host.querySelectorAll("[data-v3170-edit]").forEach(button=>{button.onclick=event=>{event.preventDefault();event.stopImmediatePropagation();v3198OpenComposer({focus:true})}});
+}
+function v3198BindEntryButtons(){
+  const bind=(id,label)=>{const old=$(id);if(!old||old.dataset.v3198Bound)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.dataset.v3198Bound="1";if(label)fresh.textContent=label;fresh.onclick=event=>{event.preventDefault();event.stopImmediatePropagation();v3198OpenComposer({focus:true})}};
+  bind("deckEditSessionBtn","Paste / replace session");
+  if(v3198Phone()){bind("contextAddSessionBtn",null);const add=$("deckAddSessionBtn");if(add)add.hidden=true}
+}
+
+const v3198WriteTargetBase=v3192WriteTarget;
+v3192WriteTarget=function(){return v3198PendingNewSession||v3198WriteTargetBase()};
+const v3198CommitBase=v3192CommitToBoard;
+v3192CommitToBoard=async function(){
+  let target=v3192WriteTarget(),inserted=false,priorId=appState.settings.selected_session_id;
+  if(!target){v33SetImportMessage("Select the session slot first.","warning");return null}
+  v3198PrepareIdentity(target);
+  if(v3198PendingNewSession&&!appState.sessions.some(row=>row.id===target.id)){upsertLocal("sessions",target);appState.settings.selected_session_id=target.id;inserted=true;saveState(appState)}
+  const saved=await v3198CommitBase();
+  if(saved){v3198PendingNewSession=null;$("sessionImportDetails")?.classList.remove("v3198-open");v3198PrepareIdentity(saved,{queue:true});v3198ArrangeComposer();v3198InjectBoardEntry();return saved}
+  if(inserted){appState.sessions=(appState.sessions||[]).filter(row=>row.id!==target.id);appState.session_blocks=(appState.session_blocks||[]).filter(row=>row.session_id!==target.id);appState.settings.selected_session_id=priorId;saveState(appState)}
+  return null;
+};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3193ReviewDraft(),importedSessionDraft):v3192CommitToBoard()};v3126CommitSelectedSession=v3192CommitToBoard;
+
+const v3198PaintBase=v3170PaintBoard;
+v3170PaintBoard=function(...args){const result=v3198PaintBase?.(...args);requestAnimationFrame(()=>{v3198InjectBoardEntry();v3198BindEntryButtons();v3198ArrangeComposer()});return result};
+const v3198ShowBase=showView;
+showView=function(id){const result=v3198ShowBase(id);if(id==="deck")requestAnimationFrame(()=>{v3198ArrangeComposer();v3198InjectBoardEntry();v3198BindEntryButtons();const target=v3192WriteTarget();if(target&&!String(target.workout||"").trim())$("sessionImportDetails")?.setAttribute("open","")});return result};
+
+function v3198Brand(){
+  const title=`McLay Swimming OS — v${V3198_VERSION} Poolside Session Route`,sub=`Version ${V3198_VERSION} · protected Board and Roll · paste → review blocks → put on Board`;
+  document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=sub;
+}
+const v3198Style=document.createElement("style");v3198Style.id="v3198Styles";v3198Style.textContent=`
+#sessionImportDetails.v3198-open>.session-import-body{display:block!important}.v3198-paste-board{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:14px 16px;border-radius:16px;background:#123f5d;color:#fff;border:0;text-align:left}.v3198-paste-board strong{font-size:1rem}.v3198-paste-board span{font-size:.76rem;opacity:.9}.v3198-group-set .v3194-round-bracket>div{grid-template-columns:auto 1fr}.v3198-group-set .v3194-round-bracket b{min-width:34px}
+@media(max-width:900px){#sessionImportDetails{display:block}#sessionImportDetails>summary{min-height:58px}.session-import-body #v3127ComposerPlan,.session-import-body #v3127NamedSets,.session-import-body .quick-session-meta,.session-import-body #v3101SessionDictation,.session-import-body .quick-photo-row,.session-import-body .quick-photo-preview{display:none!important}.session-import-body>.help{display:none}.session-import-body{padding-top:10px}.quick-session-source-row{grid-template-columns:1fr 1fr!important}.quick-session-source-row #openChatGptBtn{display:none}.session-paste-input{min-height:250px!important;font-size:1rem!important}.import-save-actions{display:grid!important;grid-template-columns:1fr 1.2fr!important;gap:8px}.session-import-card{display:block!important}.session-import-card .v3126-import-target{margin-bottom:9px}.v371-composer-progress{margin-top:8px}.v3198-paste-board{position:relative;z-index:1}}
+`;document.head.appendChild(v3198Style);
+function v3198Startup(){v3198Brand();v3198ArrangeComposer();v3198BindEntryButtons();v3198InjectBoardEntry();const target=v3192WriteTarget();if(target&&!String(target.workout||"").trim()&&v3198Phone())$("sessionImportDetails")?.setAttribute("open","")}
+window.v3198Debug={version:V3198_VERSION,build:V3198_BUILD,parse:v3198ParseBlocks,distance:v3198Distance,open:v3198OpenComposer,prepare:v3198PrepareIdentity};
+setTimeout(v3198Startup,0);setTimeout(v3198Startup,500);setTimeout(v3198Startup,1800);
+
+// Phone-safe composer surface. The real intake controls are moved out of the
+// legacy <details> so older redraw code cannot collapse them while the coach is
+// entering a workout.
+function v3198EnsureMobileComposer(){
+  if(!v3198Phone())return null;
+  let card=$("v3198PoolsideComposer");
+  if(!card){
+    card=document.createElement("article");card.id="v3198PoolsideComposer";card.className="card v3198-poolside-composer";card.hidden=true;
+    card.innerHTML=`<div class="v3198-composer-head"><div><span>Selected session</span><strong id="v3198ComposerTarget">Session</strong></div><button id="v3198CloseComposer" type="button" class="secondary">Close</button></div><p>Paste the workout only. Date, slot, squads, plan and venue are already attached.</p><div id="v3198ComposerBody"></div>`;
+    const importCard=document.querySelector("#deck .session-import-card");importCard?.insertAdjacentElement("afterend",card);
+    $("v3198CloseComposer").onclick=()=>{card.hidden=true};
+  }
+  const body=$("v3198ComposerBody"),target=v3198SyncQuickFields(),targetText=$("v3198ComposerTarget");if(targetText&&target)targetText.textContent=`${v3198SlotTitle(target)} · ${v3198SquadLabel(target)}`;
+  const source=document.querySelector(".quick-session-source-row"),input=$("sessionPasteInput"),label=input?.previousElementSibling,parseRow=$("parseSessionBtn")?.closest(".button-row"),preview=$("sessionImportPreview"),result=$("sessionImportResult"),progress=$("v371ComposerProgress"),actions=document.querySelector(".import-save-actions");
+  for(const node of [source,label,input,parseRow,preview,result,progress,actions])if(node&&node.parentElement!==body)body.appendChild(node);
+  return card;
+}
+const v3198ArrangeComposerBase2=v3198ArrangeComposer;
+v3198ArrangeComposer=function(){v3198ArrangeComposerBase2?.();v3198EnsureMobileComposer()};
+v3198OpenComposer=function({clear=false,focus=true}={}){
+  showView?.("deck");v3198ArrangeComposer();const card=v3198EnsureMobileComposer();if(!card)return;
+  card.hidden=false;
+  if(clear&&$("sessionPasteInput")){$("sessionPasteInput").value="";importedSessionDraft=null;v3150DraftSource="";v3150DraftBlocks=[];v35DraftBlocks=[];v33SetImportMessage("Paste the complete session.","good")}
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{card.scrollIntoView({block:"start",behavior:"auto"});if(focus)$("sessionPasteInput")?.focus()}));
+};
+const v3198CommitUiBase=v3192CommitToBoard;
+v3192CommitToBoard=async function(){const saved=await v3198CommitUiBase();if(saved){const card=$("v3198PoolsideComposer");if(card)card.hidden=true}return saved};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3193ReviewDraft(),importedSessionDraft):v3192CommitToBoard()};v3126CommitSelectedSession=v3192CommitToBoard;
+const v3198PhoneStyle=document.createElement("style");v3198PhoneStyle.textContent=`
+.v3198-poolside-composer{scroll-margin-top:112px}.v3198-composer-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.v3198-composer-head>div{display:grid;gap:2px}.v3198-composer-head span{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#59717e;font-weight:850}.v3198-composer-head strong{font-size:1.05rem}.v3198-poolside-composer>p{margin:7px 0 10px;color:#466270}.v3198-poolside-composer #v3126ImportTarget{display:none!important}
+@media(max-width:900px){#deck>.session-import-card{display:none!important}.v3198-poolside-composer .quick-session-source-row{display:grid!important}.v3198-poolside-composer #sessionImportPreview,.v3198-poolside-composer #sessionImportResult,.v3198-poolside-composer #v371ComposerProgress,.v3198-poolside-composer .import-save-actions{display:block}.v3198-poolside-composer .import-save-actions{display:grid!important;grid-template-columns:1fr 1.25fr!important}.v3198-poolside-composer .session-paste-input{display:block!important;width:100%!important;min-height:260px!important}}
+`;document.head.appendChild(v3198PhoneStyle);
+setTimeout(()=>{v3198ArrangeComposer();v3198InjectBoardEntry();v3198BindEntryButtons()},2300);
+const v3198AdvancedNewSessionBase=v3197OpenNewSessionEditor;
+v3197OpenNewSessionEditor=function(){if(v3198Phone())return v3198OpenComposer({focus:true});return v3198AdvancedNewSessionBase?.()};
+// Keep one deployed version label. Older delayed branding callbacks are allowed
+// to finish, but any attempted rewrite is immediately returned to v3.19.8.
+try{v3196BrandObserver?.disconnect?.()}catch{}try{v3192BrandObserver?.disconnect?.()}catch{}try{v3191BrandObserver?.disconnect?.()}catch{}try{v3190BrandObserver?.disconnect?.()}catch{}try{v3180BrandObserver?.disconnect?.()}catch{}
+v3198Brand=function(){
+  const title=`McLay Swimming OS — v${V3198_VERSION} Poolside Session Route`,sub=`Version ${V3198_VERSION} · protected Board and Roll · paste → review blocks → put on Board`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+};
+for(const name of ["v3197Brand","v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v3198Brand}catch{}}
+const v3198BrandObserver=new MutationObserver(()=>queueMicrotask(v3198Brand));if(document.querySelector("title"))v3198BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3198BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+setTimeout(v3198Brand,3600);setTimeout(v3198Brand,8300);setTimeout(v3198Brand,12300);
+const v3198VisibilityStyle=document.createElement("style");v3198VisibilityStyle.textContent=`
+.v3198-poolside-composer #sessionImportPreview,.v3198-poolside-composer #saveImportedSessionBtn,.v3198-poolside-composer #runImportedSessionBtn{display:block!important}
+`;document.head.appendChild(v3198VisibilityStyle);
