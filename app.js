@@ -16480,3 +16480,197 @@ function v3196Startup(){
 }
 window.v3196Debug={version:V3196_VERSION,build:V3196_BUILD,modification:v3196ModificationFor,rule:v3196ResolveRule,roster:v3195RosterForMode,liveRoster:v3195LiveRoster,setModification:v3196SetModification,toggleHere:v3196ToggleHere,remove:v3196RemoveParticipant};
 setTimeout(v3196Startup,0);setTimeout(v3196Startup,500);setTimeout(v3196Startup,1700);setTimeout(v3196Brand,3600);setTimeout(v3196Brand,8200);setTimeout(v3196Brand,12200);
+
+// =============================================================================
+// McLay Swimming OS v3.19.7 — STABLE BOARD INTERACTIONS
+// Protected patch over v3.19.6. Session intake, parsing, reviewed commit,
+// workout block rendering, identified T400 targets and Roll truth are untouched.
+// This layer only stabilises Board interaction, squad selection and the new-
+// session route requested after the 4 August phone test.
+// =============================================================================
+const V3197_VERSION="3.19.7";
+const V3197_BUILD="20260804-stable-board-interactions";
+
+function v3197ViewId(){return document.querySelector(".view.active")?.id||"deck"}
+function v3197SquadOrder(keys){
+  const wanted=new Set((keys||[]).map(v3195OperationalSquadKey).filter(Boolean));
+  return V3195_SQUADS.map(row=>row.key).filter(key=>wanted.has(key));
+}
+function v3197RawSquadKeys(session=selectedSession()){
+  const result=[];
+  for(const value of sessionSquads(session)||[]){const key=v3195OperationalSquadKey(value);if(key&&!result.includes(key))result.push(key)}
+  return result;
+}
+
+// One session has one valid active squad view. A tab saved on another session
+// can never leak into this one. Mixed remains the safe poolside default.
+v3195Mode=function(session=selectedSession()){
+  const included=new Set(v3195IncludedKeys(session));
+  const saved=String(appState.settings.v3195_squad_mode||"mixed").toLowerCase();
+  if(saved==="mixed")return"mixed";
+  return included.has(saved)?saved:"mixed";
+};
+
+// Lead is explicit when saved, otherwise the first deliberately ordered squad,
+// finally the established highest-squad hierarchy.
+v3195LeadKey=function(session=selectedSession()){
+  const included=v3195IncludedKeys(session),set=new Set(included);
+  const explicit=v3195OperationalSquadKey(session?.lead_squad||"");
+  if(explicit&&set.has(explicit))return explicit;
+  const raw=v3197RawSquadKeys(session).find(key=>set.has(key));
+  return raw||included[0]||"";
+};
+
+function v3197BoardSnapshot(){
+  const active=document.activeElement,finish=active?.closest?.("[data-v3180-finish]"),selector=active?.closest?.(".v3195-included");
+  return {
+    x:window.scrollX||0,y:window.scrollY||0,
+    view:v3197ViewId(),
+    finishOpen:Boolean(document.querySelector("#deck [data-v3180-finish][open]")),
+    selectorOpen:Boolean(document.querySelector("#deck .v3195-included[open]")),
+    focusKey:active?.hasAttribute?.("data-v3180-changed")?"changed":active?.hasAttribute?.("data-v3180-carry")?"carry":active?.hasAttribute?.("data-v3180-distance")?"distance":finish?"finish":selector?"selector":"",
+    selectionStart:Number.isFinite(active?.selectionStart)?active.selectionStart:null,
+    selectionEnd:Number.isFinite(active?.selectionEnd)?active.selectionEnd:null
+  };
+}
+function v3197RestoreBoardSnapshot(snapshot){
+  if(!snapshot||snapshot.view!==v3197ViewId())return;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const finish=document.querySelector("#deck [data-v3180-finish]");if(finish&&snapshot.finishOpen)finish.open=true;
+    const selector=document.querySelector("#deck .v3195-included");if(selector&&snapshot.selectorOpen)selector.open=true;
+    window.scrollTo({left:snapshot.x,top:snapshot.y,behavior:"auto"});
+    const map={changed:"[data-v3180-changed]",carry:"[data-v3180-carry]",distance:"[data-v3180-distance]"},target=map[snapshot.focusKey]?document.querySelector(`#deck ${map[snapshot.focusKey]}`):null;
+    if(target){try{target.focus({preventScroll:true});if(snapshot.selectionStart!==null&&target.setSelectionRange)target.setSelectionRange(snapshot.selectionStart,snapshot.selectionEnd)}catch{}}
+  }));
+}
+
+let v3197InteractionUntil=0,v3197DeferredPaint=null,v3197ForcePaint=false;
+function v3197HoldInteraction(ms=1100){v3197InteractionUntil=Math.max(v3197InteractionUntil,Date.now()+ms)}
+function v3197IsProtectedInteraction(){
+  const active=document.activeElement;
+  return v3197ViewId()==="deck"&&Date.now()<v3197InteractionUntil&&Boolean(active?.closest?.("[data-v3180-finish],.v3195-included,.v3195-plan-squads"));
+}
+const v3197PaintBoardBase=v3170PaintBoard;
+v3170PaintBoard=function(){
+  if(!v3197ForcePaint&&v3197IsProtectedInteraction()){
+    clearTimeout(v3197DeferredPaint);v3197DeferredPaint=setTimeout(()=>v3170PaintBoard(),Math.max(160,v3197InteractionUntil-Date.now()+40));return;
+  }
+  const snapshot=v3197BoardSnapshot();v3197PaintBoardBase?.();v3197RestoreBoardSnapshot(snapshot);
+};
+function v3197PaintNow(){v3197ForcePaint=true;try{v3170PaintBoard?.()}finally{v3197ForcePaint=false}}
+function v3197StableContextRender(){const snapshot=v3197BoardSnapshot();renderActiveContext?.();v3197RestoreBoardSnapshot(snapshot)}
+
+v3195SetMode=function(mode,{render=true}={}){
+  const session=selectedSession(),included=new Set(v3195IncludedKeys(session));
+  if(mode!=="mixed"&&!included.has(mode))return updateStatus("That squad is not included in this session","error");
+  appState.settings.v3195_squad_mode=mode;
+  if(mode!=="mixed")appState.settings.selected_squad=v3195SquadMeta(mode).label;
+  saveState(appState);v3195ClearBoardCaches?.();
+  if(!render)return;
+  const view=v3197ViewId();
+  if(view==="attendance")renderAttendance?.();
+  if(view==="deck")v3197PaintNow();
+  v3197StableContextRender();
+};
+
+function v3197SquadSelectorHtml(session){
+  const included=new Set(v3195IncludedKeys(session)),lead=v3195LeadKey(session),summary=[...included].map(key=>v3195SquadMeta(key).short).join(" + ")||"Choose";
+  const options=V3195_SQUADS.filter(row=>included.has(row.key)).map(row=>`<option value="${row.key}" ${row.key===lead?"selected":""}>${escapeHtml(row.label)}</option>`).join("");
+  return `<details class="v3195-included v3197-included"><summary><strong>Squads in this session</strong><span>${escapeHtml(summary)}</span></summary><div class="v3195-included-grid">${V3195_SQUADS.map(row=>`<label class="${included.has(row.key)?"checked":""}"><input type="checkbox" data-v3195-include="${row.key}" ${included.has(row.key)?"checked":""}><span>${escapeHtml(row.label)}</span><small>Roster and Board tab</small></label>`).join("")}<label class="v3197-lead-label"><span>Lead squad</span><select data-v3197-lead>${options}</select></label><div class="v3197-squad-actions"><button type="button" data-v3197-apply-squads>Apply squads</button><button type="button" class="secondary" data-v3197-close-squads>Close</button></div></div><p>Changes apply once. Other Board controls stay where they are.</p></details>`;
+}
+v3195SquadSelector=v3197SquadSelectorHtml;
+
+function v3197SyncLeadOptions(selector){
+  const checked=[...selector.querySelectorAll("[data-v3195-include]:checked")].map(input=>input.dataset.v3195Include),select=selector.querySelector("[data-v3197-lead]"),prior=select?.value;
+  if(!select)return;select.innerHTML=V3195_SQUADS.filter(row=>checked.includes(row.key)).map(row=>`<option value="${row.key}">${escapeHtml(row.label)}</option>`).join("");
+  if(checked.includes(prior))select.value=prior;else if(checked.length)select.value=checked[0];
+}
+async function v3197ApplySquads(session,selector){
+  const checked=[...selector.querySelectorAll("[data-v3195-include]:checked")].map(input=>input.dataset.v3195Include);
+  if(!checked.length)return updateStatus("Keep at least one squad in the session","error");
+  const lead=selector.querySelector("[data-v3197-lead]")?.value||v3197SquadOrder(checked)[0],ordered=[lead,...v3197SquadOrder(checked).filter(key=>key!==lead)];
+  session.squads=ordered.map(key=>v3195SquadMeta(key).label);session.lead_squad=v3195SquadMeta(lead).label;session.updated_at=nowIso();queueRecord("sessions",session.id);
+  const current=v3195Mode(session);if(current!=="mixed"&&!checked.includes(current))appState.settings.v3195_squad_mode="mixed";
+  saveState(appState);v3195ClearBoardCaches?.();selector.open=false;v3197PaintNow();v3197StableContextRender();renderAttendance?.();updateStatus(`Session squads saved · lead ${v3195SquadMeta(lead).label}`,"good");
+  syncIfPossible().catch(error=>console.warn("Squad inclusion sync deferred",error));
+}
+v3195SaveIncludedSquads=v3197ApplySquads;
+
+// Finish-session draft survives any unavoidable Board repaint. Outcome buttons,
+// typing and details state update locally and do not trigger a page rebuild.
+function v3197FinishStore(){if(!appState.settings.v3197_finish_drafts)appState.settings.v3197_finish_drafts={};return appState.settings.v3197_finish_drafts}
+function v3197FinishDraft(session,blocks){
+  const store=v3197FinishStore(),review=v3180FinishReview(session),total=v3170Total(blocks),row=store[session.id]||{};
+  return {open:Boolean(row.open),changed:row.changed??review.what_changed??"",carry:row.carry??review.carry_forward??"",distance:row.distance??(Number(review.actual_distance||total)||"")};
+}
+v3180FinishPanel=function(session,blocks,{open=false}={}){
+  const plan=v3180PlanData(session),saved=appState.settings.v3180_finish_outcomes?.[session.id]||{},draft=v3197FinishDraft(session,blocks),isOpen=open||draft.open;
+  return `<details class="v3180-finish" data-v3180-finish ${isOpen?"open":""}><summary><span><strong>Finish session</strong><small>One minute · today → week → season</small></span><b>${isOpen?"−":"＋"}</b></summary><div class="v3180-finish-body"><div class="v3180-finish-question"><span>Today</span><strong>${escapeHtml(plan.today)}</strong>${v3180OutcomeButtons("today",saved.today)}</div><div class="v3180-finish-question"><span>Week</span><strong>${escapeHtml(plan.week)}</strong>${v3180OutcomeButtons("week",saved.week)}</div><div class="v3180-finish-question"><span>Season</span><strong>${escapeHtml(plan.season)}</strong>${v3180OutcomeButtons("season",saved.season)}</div><label>What changed?<textarea data-v3180-changed placeholder="One line is enough">${escapeHtml(draft.changed)}</textarea></label><label>Carry into the next session<textarea data-v3180-carry>${escapeHtml(draft.carry)}</textarea></label><label>Actual distance<input data-v3180-distance type="number" inputmode="numeric" value="${escapeHtml(draft.distance)}"></label><div class="v3180-finish-actions"><button type="button" data-v3180-finish-capture="audio">🎙 Audio</button><button type="button" class="secondary" data-v3180-finish-capture="photo">📷 Photo</button><button type="button" class="secondary" data-v3180-finish-capture="video">🎥 Video</button></div><button type="button" class="v3180-complete" data-v3180-complete>Save & finish session</button><div class="help" data-v3180-finish-status></div></div></details>`;
+};
+
+const v3197SaveFinishBase=v3180SaveFinish;
+v3180SaveFinish=async function(host,session){
+  await v3197SaveFinishBase(host,session);
+  if(v3191IsCompleted?.(session)){delete v3197FinishStore()[session.id];saveState(appState)}
+};
+
+const v3197BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){
+  v3197BindBoardBase?.(host,session);
+  const selector=host?.querySelector?.(".v3195-included");
+  if(selector){
+    selector.querySelectorAll("[data-v3195-include]").forEach(input=>{input.onchange=null;input.addEventListener("change",()=>{v3197HoldInteraction();input.closest("label")?.classList.toggle("checked",input.checked);v3197SyncLeadOptions(selector)})});
+    selector.querySelector("[data-v3197-lead]")?.addEventListener("change",()=>v3197HoldInteraction());
+    selector.querySelector("[data-v3197-apply-squads]")?.addEventListener("click",()=>v3197ApplySquads(session,selector));
+    selector.querySelector("[data-v3197-close-squads]")?.addEventListener("click",()=>{selector.open=false});
+    selector.addEventListener("toggle",()=>v3197HoldInteraction(selector.open?1800:300));
+  }
+  const finish=host?.querySelector?.("[data-v3180-finish]");
+  if(finish){
+    const saveDraft=()=>{const row=v3197FinishStore()[session.id]||{};row.open=finish.open;row.changed=finish.querySelector("[data-v3180-changed]")?.value||"";row.carry=finish.querySelector("[data-v3180-carry]")?.value||"";row.distance=finish.querySelector("[data-v3180-distance]")?.value||"";v3197FinishStore()[session.id]=row;saveState(appState)};
+    finish.addEventListener("toggle",()=>{v3197HoldInteraction(finish.open?2200:400);saveDraft()});
+    finish.addEventListener("input",()=>{v3197HoldInteraction(1800);saveDraft()});
+    finish.addEventListener("change",()=>{v3197HoldInteraction(1200);saveDraft()});
+    finish.addEventListener("pointerdown",()=>v3197HoldInteraction(1200),true);
+    finish.querySelectorAll("[data-v3180-outcome]").forEach(button=>button.addEventListener("click",()=>{v3197HoldInteraction(1000);saveDraft()}));
+  }
+};
+
+// Stable explicit squad multi-select in the desktop/new-session editor. The
+// selected lead is written first in the existing squads field, preserving the
+// current save path and avoiding any parser/input changes.
+function v3197RepairPlanSquadInput(input){
+  if(!input)return;const host=input.nextElementSibling?.classList?.contains("v3195-plan-squads")?input.nextElementSibling:null;if(!host)return;
+  input.hidden=true;const keys=new Set(String(input.value||"").split(/\s*(?:,|\+|\/|&|\band\b)\s*/i).map(v3195OperationalSquadKey).filter(Boolean)),raw=[...keys],lead=raw[0]||v3197SquadOrder(raw)[0]||"national";
+  host.classList.add("v3197-plan-squads");host.innerHTML=`<strong>Squads captured by this session</strong><div>${V3195_SQUADS.map(row=>`<label><input type="checkbox" data-v3197-plan="${row.key}" ${keys.has(row.key)?"checked":""}><span>${escapeHtml(row.label)}</span></label>`).join("")}</div><label class="v3197-plan-lead"><span>Lead squad</span><select data-v3197-plan-lead>${V3195_SQUADS.filter(row=>keys.has(row.key)).map(row=>`<option value="${row.key}" ${row.key===lead?"selected":""}>${escapeHtml(row.label)}</option>`).join("")}</select></label><small>Checked squads share this session. The lead is written first; stand-alone work stays in its own session.</small>`;
+  const sync=()=>{const checked=[...host.querySelectorAll("[data-v3197-plan]:checked")].map(box=>box.dataset.v3197Plan),select=host.querySelector("[data-v3197-plan-lead]"),prior=select?.value;if(select){select.innerHTML=V3195_SQUADS.filter(row=>checked.includes(row.key)).map(row=>`<option value="${row.key}">${escapeHtml(row.label)}</option>`).join("");if(checked.includes(prior))select.value=prior;else if(checked.length)select.value=checked[0]}const chosen=select?.value||checked[0],ordered=[chosen,...v3197SquadOrder(checked).filter(key=>key!==chosen)].filter(Boolean);input.value=ordered.map(key=>v3195SquadMeta(key).label).join(", ")};
+  host.onchange=()=>{v3197HoldInteraction(1000);sync()};sync();input._v3195Sync=()=>v3197RepairPlanSquadInput(input);
+}
+const v3197EnhanceSquadPlanningBase=v3195EnhanceSquadPlanning;
+v3195EnhanceSquadPlanning=function(){v3197EnhanceSquadPlanningBase?.();v3197RepairPlanSquadInput($("quickSessionSquads"));v3197RepairPlanSquadInput($("editSessionSquads"))};
+
+function v3197OpenNewSessionEditor(){
+  try{if(document.body.classList.contains("v3170-editing"))v3170CloseEditor?.()}catch{}
+  showView("sessions");fillSessionEditor?.(null);queueMicrotask(()=>{v3195EnhanceSquadPlanning?.();const date=$("editSessionDate");if(date&&!date.value)date.value=localIsoDate(new Date());window.scrollTo({top:0,behavior:"auto"});date?.focus?.({preventScroll:true})});
+}
+document.addEventListener("click",event=>{
+  const button=event.target.closest?.("#contextAddSessionBtn,#deckAddSessionBtn,#manageAddSessionBtn");if(!button)return;
+  event.preventDefault();event.stopImmediatePropagation();v3197OpenNewSessionEditor();
+},true);
+
+// Only the global context bar and bottom navigation remain sticky on phones.
+// Board mode, squad and finish controls stay in normal document flow.
+const v3197Styles=document.createElement("style");v3197Styles.id="v3197Styles";v3197Styles.textContent=`
+.v3197-squad-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px}.v3197-lead-label{display:grid!important;grid-template-columns:1fr!important;gap:5px!important;background:#eef5f8!important}.v3197-lead-label select{min-height:40px}.v3197-plan-lead{display:grid;grid-template-columns:auto minmax(150px,1fr);align-items:center;gap:8px}.v3197-plan-lead span{font-size:.72rem;font-weight:850;color:#496775}.v3197-plan-lead select{min-height:40px}.v3180-finish{scroll-margin-top:120px}
+@media(max-width:900px){.v3195-board-context{position:static!important}.v3195-included{position:static!important}.v3195-included-grid,.v3195-included>p{position:static!important;inset:auto!important;width:100%!important;box-shadow:none!important;margin-top:7px!important;border-radius:12px!important}.v3195-included>p{border:1px solid #91adbb!important}.v3170-tabs{position:static!important;top:auto!important}.v3197-plan-lead{grid-template-columns:1fr}.v3197-squad-actions{grid-template-columns:1fr}.v3180-finish textarea,.v3180-finish input{scroll-margin-top:110px}}
+`;document.head.appendChild(v3197Styles);
+
+function v3197Brand(){
+  const title=`McLay Swimming OS — v${V3197_VERSION} Stable Board`,sub=`Version ${V3197_VERSION} · protected session input · stable Finish session · one squad truth · reliable new-session squad selection`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+try{v3196BrandObserver?.disconnect?.()}catch{}
+for(const name of ["v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v3197Brand}catch{}}
+function v3197Startup(){v3197Brand();v3195EnhanceSquadPlanning?.();if(v3197ViewId()==="deck")v3197PaintNow()}
+window.v3197Debug={version:V3197_VERSION,build:V3197_BUILD,mode:v3195Mode,lead:v3195LeadKey,applySquads:v3197ApplySquads,openNewSession:v3197OpenNewSessionEditor,finishDraft:v3197FinishDraft};
+setTimeout(v3197Startup,0);setTimeout(v3197Startup,650);setTimeout(v3197Brand,2200);
