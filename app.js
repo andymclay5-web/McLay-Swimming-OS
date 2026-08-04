@@ -16204,3 +16204,279 @@ function v3195Startup(){
 }
 window.v3195Debug={version:V3195_VERSION,build:V3195_BUILD,included:v3195IncludedKeys,mode:v3195Mode,roster:v3195RosterForMode,liveRoster:v3195LiveRoster,setAttendance:v3195WriteAttendance,removeParticipant:v3195RemoveParticipant,repairAlex:v3195RepairAlexHanson};
 setTimeout(v3195Startup,0);setTimeout(v3195Startup,500);setTimeout(v3195Startup,1600);setTimeout(v3195Brand,3600);
+
+// =============================================================================
+// McLay Swimming OS v3.19.6 — ROLL TRUTH + IDENTIFIED TARGETS
+// Protected patch over v3.19.5. Session intake, parser, reviewed commit and the
+// Board block renderer are intentionally untouched. This layer only repairs:
+// one-tap attendance truth, session-specific swimmer modifications, extra
+// swimmer removal, and athlete-owned pace labels.
+// =============================================================================
+const V3196_VERSION="3.19.6";
+const V3196_BUILD="20260804-roll-truth-identified-targets";
+const V3196_MOD_PREFIX="[Poolside modification v3.19.6] ";
+const V3196_MODS=[
+  {code:"",label:"No modification",short:""},
+  {code:"volume_2_3",label:"Reduced volume — ⅔",short:"⅔ volume",ratio:2/3},
+  {code:"volume_1_2",label:"Reduced volume — ½",short:"½ volume",ratio:.5},
+  {code:"no_pull",label:"No pull",short:"No pull"},
+  {code:"kick_only",label:"Kick only",short:"Kick only"},
+  {code:"no_kick",label:"No kick",short:"No kick"},
+  {code:"pull_only",label:"Pull only",short:"Pull only"},
+  {code:"no_breast_kick",label:"No breaststroke kick",short:"No breast kick"},
+  {code:"no_fins",label:"No fins",short:"No fins"},
+  {code:"shoulder_no_pull",label:"Shoulder — no pull",short:"Shoulder · no pull"},
+  {code:"shoulder_kick_only",label:"Shoulder — kick only",short:"Shoulder · kick only"},
+  {code:"knee_no_kick",label:"Knee — no kick",short:"Knee · no kick"},
+  {code:"ankle_no_fins",label:"Ankle — no fins",short:"Ankle · no fins"},
+  {code:"custom",label:"Custom instruction…",short:"Custom"}
+];
+function v3196ModMeta(code){return V3196_MODS.find(row=>row.code===code)||V3196_MODS[0]}
+function v3196ParseModificationNote(note){
+  const text=String(note||"").trim();
+  if(!text.startsWith(V3196_MOD_PREFIX))return null;
+  try{const parsed=JSON.parse(text.slice(V3196_MOD_PREFIX.length));return parsed&&typeof parsed==="object"?parsed:null}catch{return null}
+}
+function v3196ModificationFor(athlete,session=selectedSession()){
+  if(!athlete||!session)return null;
+  const row=attendanceFor(session.id,athlete.id),parsed=v3196ParseModificationNote(row?.note);
+  if(parsed?.code)return {...v3196ModMeta(parsed.code),...parsed};
+  if(v3191Modified(row?.status))return {code:"custom",label:"Modified session",short:"Modified",text:"Modified session"};
+  return null;
+}
+function v3196ModificationText(mod){return String(mod?.text||mod?.label||v3196ModMeta(mod?.code).label||"").trim()}
+function v3196ResolveRule(mod){
+  if(!mod)return null;
+  const text=v3196ModificationText(mod).toLowerCase(),code=String(mod.code||"");
+  if(code&&code!=="custom")return code;
+  if(/shoulder/.test(text)&&/(kick\s*only|legs?\s*only)/.test(text))return"shoulder_kick_only";
+  if(/shoulder/.test(text)&&/(no\s*pull|avoid\s*pull)/.test(text))return"shoulder_no_pull";
+  if(/knee/.test(text)&&/(no\s*kick|avoid\s*kick)/.test(text))return"knee_no_kick";
+  if(/ankle/.test(text)&&/(no\s*fins?|avoid\s*fins?)/.test(text))return"ankle_no_fins";
+  if(/(?:two\s*thirds|2\s*\/\s*3|⅔|66\s*%)/.test(text))return"volume_2_3";
+  if(/(?:half|1\s*\/\s*2|½|50\s*%)/.test(text))return"volume_1_2";
+  if(/kick\s*only|legs?\s*only/.test(text))return"kick_only";
+  if(/pull\s*only|arms?\s*only/.test(text))return"pull_only";
+  if(/no\s*breast(?:stroke)?\s*kick|avoid\s*breast(?:stroke)?\s*kick/.test(text))return"no_breast_kick";
+  if(/no\s*fins?|avoid\s*fins?/.test(text))return"no_fins";
+  if(/no\s*pull|avoid\s*pull/.test(text))return"no_pull";
+  if(/no\s*kick|avoid\s*kick/.test(text))return"no_kick";
+  return"custom";
+}
+function v3196HasTemporaryModification(athlete,session=selectedSession()){return Boolean(v3196ModificationFor(athlete,session))}
+function v3196HasAnyModification(athlete,session=selectedSession()){
+  if(!athlete||!session)return false;
+  if(v3196HasTemporaryModification(athlete,session))return true;
+  try{if(v3131SavedAdaptationText?.(athlete,session)?.text)return true}catch{}
+  try{if(v3142HasPermanentBaseline?.(athlete))return true}catch{}
+  try{if(v3106ActiveModification?.(athlete,session.session_date))return true}catch{}
+  return /\b(modif|adapt|injur|return|reduced|restriction|separate|join)\b/i.test(String(athlete.modifications||""));
+}
+function v3196SetAttendanceNote(session,athleteId,note){
+  const current=attendanceFor(session.id,athleteId),stamp=nowIso(),record={
+    id:attendanceId(session.id,athleteId),session_id:session.id,athlete_id:athleteId,
+    status:v3191Here(current?.status)?"present":"absent",note:String(note||""),
+    created_at:current?.created_at||stamp,updated_at:stamp
+  };
+  for(const row of (appState.attendance||[]).filter(item=>item.session_id===session.id&&item.athlete_id===athleteId&&item.id!==record.id)){
+    appState.attendance=appState.attendance.filter(item=>item.id!==row.id);if(row.id)queueDelete?.("attendance",row.id)
+  }
+  upsertLocal("attendance",record);queueRecord("attendance",record.id);saveState(appState);scheduleFastSync?.();v3195ClearBoardCaches?.();return record;
+}
+function v3196SetModification(session,athleteId,code,text=""){
+  if(!session||!athleteId)return null;
+  const athlete=v3191Athlete(athleteId);if(!athlete)return null;
+  if(!code){
+    const row=v3195WriteAttendance(session,athleteId,v3191Here(attendanceFor(session.id,athleteId)?.status)?"present":"absent");
+    row.note="";row.updated_at=nowIso();queueRecord("attendance",row.id);saveState(appState);v3195ClearBoardCaches?.();return row;
+  }
+  v3195WriteAttendance(session,athleteId,"present");
+  const payload={code,text:String(text||v3196ModMeta(code).label).trim(),updated_at:nowIso()};
+  return v3196SetAttendanceNote(session,athleteId,`${V3196_MOD_PREFIX}${JSON.stringify(payload)}`);
+}
+function v3196ToggleHere(session,athleteId){
+  const here=v3191Here(attendanceFor(session.id,athleteId)?.status);
+  return v3195WriteAttendance(session,athleteId,here?"absent":"present");
+}
+function v3196DeleteAttendance(session,athleteId){
+  for(const row of (appState.attendance||[]).filter(item=>item.session_id===session.id&&item.athlete_id===athleteId)){
+    appState.attendance=appState.attendance.filter(item=>item.id!==row.id);if(row.id)queueDelete?.("attendance",row.id)
+  }
+}
+async function v3196RemoveParticipant(athleteId){
+  const session=selectedSession();if(!session||!athleteId)return;
+  for(const row of (appState.session_participants||[]).filter(item=>item.session_id===session.id&&item.athlete_id===athleteId)){
+    appState.session_participants=appState.session_participants.filter(item=>item.id!==row.id);if(row.id)queueDelete?.("session_participants",row.id)
+  }
+  v3196DeleteAttendance(session,athleteId);saveState(appState);v3195ClearBoardCaches?.();renderAttendance?.();v3170PaintBoard?.();updateStatus("Swimmer removed from this session","good");
+  syncIfPossible().catch(error=>console.warn("Participant removal sync deferred",error));
+}
+v3195RemoveParticipant=v3196RemoveParticipant;v3191RemoveParticipant=v3196RemoveParticipant;
+
+// Included squads define the normal Roll. Only live attendance or an explicit
+// participant keeps an extra swimmer attached. An old absent row can no longer
+// resurrect a removed extra.
+v3195RosterForMode=function(session=selectedSession(),mode=v3195Mode(session)){
+  if(!session)return[];
+  const included=new Set(v3195IncludedKeys(session)),participants=v3191ParticipantIds(session),live=new Set(v3191LiveRows(session).map(row=>row.athlete_id));
+  const visible=athlete=>{
+    const key=v3195OperationalSquadKey(athlete.squad),attached=participants.has(athlete.id)||live.has(athlete.id),scheduled=included.has(key)&&athlete.is_visitor!==true;
+    return mode==="mixed"?(scheduled||attached):(key===mode&&(scheduled||attached));
+  };
+  return (appState.athletes||[]).filter(athlete=>athlete.active!==false&&(!v310AllowedAthlete||v310AllowedAthlete(athlete))&&visible(athlete)).sort(rosterSort);
+};
+v3195RollStarted=function(session=selectedSession()){return Boolean(session&&v3191LiveRows(session).length)};
+v3195LiveRoster=function(session=selectedSession(),mode=v3195Mode(session)){
+  const ids=new Set(v3191LiveRows(session).map(row=>row.athlete_id));return v3195RosterForMode(session,mode).filter(athlete=>ids.has(athlete.id)).sort(rosterSort);
+};
+
+function v3196ModificationOptions(athlete,selected=""){
+  const suggested=v3195OperationalSquadKey(athlete?.squad)==="intermediate"?"volume_2_3":v3195OperationalSquadKey(athlete?.squad)==="junior"?"volume_1_2":"";
+  return V3196_MODS.map(row=>`<option value="${row.code}" ${row.code===selected?"selected":""}>${escapeHtml(row.label)}${row.code&&row.code===suggested?" · suggested":""}</option>`).join("");
+}
+renderAttendance=function(){
+  const session=selectedSession(),host=$("attendanceList");if(!session||!host)return;
+  const mode=v3195Mode(session),roster=v3195RosterForMode(session,mode),live=v3191LiveRows(session),participantIds=v3191ParticipantIds(session),included=new Set(v3195IncludedKeys(session));
+  if($("attendanceHeading"))$("attendanceHeading").textContent=`${v3195SlotLabel(session)} · ${v3195ModeLabel(mode)} · ${live.length} here`;
+  const rows=roster.map(athlete=>{
+    const here=v3191Here(attendanceFor(session.id,athlete.id)?.status),mod=v3196ModificationFor(athlete,session),selected=mod?.code||"",added=participantIds.has(athlete.id),baseline=!mod&&(()=>{try{return Boolean(v3142HasPermanentBaseline?.(athlete))}catch{return false}})();
+    return `<div class="attendance-row v3195-roll-row v3196-roll-row ${here?"here":"unmarked"}" data-athlete-id="${escapeHtml(athlete.id)}"><div><strong>${escapeHtml(athlete.full_name)}</strong><small>${escapeHtml(v3195SquadMeta(athlete.squad).label)}${added?" · extra":""}${baseline?" · standing version":""}</small></div><div class="v3196-roll-controls"><button type="button" class="v3196-here ${here?"active":""}" data-v3196-here aria-pressed="${here}"><span>${here?"✓":""}</span>Here</button><label><span>Modify</span><select data-v3196-mod>${v3196ModificationOptions(athlete,selected)}</select></label>${mod?`<small class="v3196-mod-note">${escapeHtml(v3196ModificationText(mod))}</small>`:""}${added?`<button type="button" class="secondary v3195-remove" data-v3196-remove="${escapeHtml(athlete.id)}">Remove</button>`:""}</div></div>`;
+  }).join("")||'<div class="help v3195-empty">No swimmers in this squad for this session.</div>';
+  const allNames=(appState.athletes||[]).filter(row=>row.active!==false).sort((a,b)=>a.full_name.localeCompare(b.full_name));
+  host.innerHTML=`<section class="v3195-roll-head v3196-roll-head"><div><span>Live roll</span><strong>${escapeHtml(v3180AttendanceSummary(session).label)}</strong></div>${v3195SquadTabs(session,{scope:"roll"})}</section><details class="v3195-add-extra"><summary><strong>Add additional / extra</strong><span>Choose an existing member or type a new swimmer</span></summary><div class="v3195-extra-grid"><label>Name<input id="v3195ExtraName" type="search" list="v3195AthleteNames" placeholder="Start typing a swimmer"><datalist id="v3195AthleteNames">${allNames.map(athlete=>`<option value="${escapeHtml(athlete.full_name)}">${escapeHtml(athlete.squad||"")}</option>`).join("")}</datalist></label><label>Squad<select id="v3195ExtraSquad">${V3195_SQUADS.map(row=>`<option value="${row.key}" ${row.key===(mode==="mixed"?v3195LeadKey(session):mode)?"selected":""}>${escapeHtml(row.label)}</option>`).join("")}</select></label><button type="button" data-v3196-add>Add Here</button></div></details><div class="v3195-roll-list">${rows}</div>`;
+  host.onclick=event=>{
+    const modeButton=event.target.closest("[data-v3195-mode]");if(modeButton){v3195SetMode(modeButton.dataset.v3195Mode);return}
+    const hereButton=event.target.closest("[data-v3196-here]");if(hereButton){const athleteId=hereButton.closest("[data-athlete-id]")?.dataset.athleteId;if(!athleteId)return;v3196ToggleHere(session,athleteId);renderAttendance();v3170PaintBoard?.();return}
+    const remove=event.target.closest("[data-v3196-remove]");if(remove){v3196RemoveParticipant(remove.dataset.v3196Remove);return}
+    const add=event.target.closest("[data-v3196-add]");if(add){v3195AddTypedExtra("present");return}
+  };
+  host.onchange=event=>{
+    const select=event.target.closest("[data-v3196-mod]");if(!select)return;
+    const athleteId=select.closest("[data-athlete-id]")?.dataset.athleteId;if(!athleteId)return;
+    let code=select.value,text=v3196ModMeta(code).label;
+    if(code==="custom"){
+      const prior=v3196ModificationText(v3196ModificationFor(v3191Athlete(athleteId),session));
+      const entered=window.prompt("Describe the swimmer-specific modification",prior&&prior!=="Custom instruction…"?prior:"");
+      if(entered===null){renderAttendance();return}text=String(entered).trim();if(!text){code=""}
+    }
+    v3196SetModification(session,athleteId,code,text);renderAttendance();v3170PaintBoard?.();
+  };
+};
+setActiveRosterAttendance=function(status){
+  const session=selectedSession();if(!session)return;const present=v3191Here(status);
+  for(const athlete of v3195RosterForMode(session,v3195Mode(session))){
+    const record=v3195WriteAttendance(session,athlete.id,present?"present":"absent");
+    if(!present&&record?.note){record.note="";record.updated_at=nowIso();queueRecord("attendance",record.id)}
+  }
+  saveState(appState);v3195ClearBoardCaches?.();renderAttendance();v3170PaintBoard?.();updateStatus(present?`${v3195ModeLabel(v3195Mode(session))} marked here`:`${v3195ModeLabel(v3195Mode(session))} cleared · 0 here`,"good");
+};
+
+// Attendance is the single source of truth. An unmarked swimmer is absent. A
+// modification is a separate instruction attached to a swimmer who is Here.
+v3180AttendanceSummary=function(session){
+  const rows=v3191LiveRows(session),modified=rows.filter(row=>v3196HasAnyModification(v3191Athlete(row.athlete_id),session)),initials=v3191InitialList(rows),compact=initials.length<=5?initials.join(" · "):`${initials.slice(0,4).join(" · ")} +${initials.length-4}`;
+  const modText=modified.length?` · modified ${modified.map(row=>v3180Initials(v3191Athlete(row.athlete_id)?.full_name||"")).join(" ")}`:"";
+  return {rows,modified,names:rows.map(row=>v3191Athlete(row.athlete_id)?.full_name).filter(Boolean),label:rows.length?`${rows.length} here${compact?` · ${compact}`:""}${modText}`:"0 here · unmarked is absent"};
+};
+v3170RollState=function(session){const data=v3180AttendanceSummary(session);return{started:data.rows.length>0,here:data.rows.length,expected:v3195RosterForMode(session,v3195Mode(session)).length,modified:data.modified.length,label:data.label}};
+v3180ModifiedAthletes=function(session){
+  if(!session)return[];const liveIds=new Set(v3191LiveRows(session).map(row=>row.athlete_id)),modeIds=new Set(v3195RosterForMode(session,v3195Mode(session)).map(row=>row.id));
+  return (appState.athletes||[]).filter(athlete=>athlete.active!==false&&liveIds.has(athlete.id)&&modeIds.has(athlete.id)&&v3196HasAnyModification(athlete,session)).sort(rosterSort);
+};
+v3172ModifiedAthletes=v3180ModifiedAthletes;v3140ModifiedColumns=v3180ModifiedAthletes;
+
+// Squad membership now controls grouping and visibility only. Reduced volume
+// is an individual Roll modification, never a silent blanket squad rule.
+v3111DefaultRatio=function(){return 1};
+v3195BoardContext=function(session){
+  const included=v3195IncludedKeys(session),lead=v3195LeadKey(session);
+  return `<section class="v3195-board-context"><div class="v3195-slot"><strong>${escapeHtml(v3195SlotLabel(session))}</strong><span>Lead ${escapeHtml(v3195SquadMeta(lead).label||"not set")} · individual modifications from Roll</span></div>${v3195SquadTabs(session,{scope:"board"})}${v3195SquadSelector(session)}</section>`;
+};
+v3195SquadSelector=function(session){
+  const included=new Set(v3195IncludedKeys(session));
+  return `<details class="v3195-included"><summary><strong>Squads in this session</strong><span>${[...included].map(key=>v3195SquadMeta(key).short).join(" + ")||"Choose"}</span></summary><div class="v3195-included-grid">${V3195_SQUADS.map(row=>`<label class="${included.has(row.key)?"checked":""}"><input type="checkbox" data-v3195-include="${row.key}" ${included.has(row.key)?"checked":""}><span>${escapeHtml(row.label)}</span><small>Roster and Board tab</small></label>`).join("")}</div><p>Checked squads share this session. Volume or injury changes are applied to individual swimmers from Roll.</p></details>`;
+};
+
+// Session-specific reduced-volume presets use the established adaptation engine.
+// Permanent McKenzie/para versions remain untouched when no temporary Roll rule
+// is selected.
+const v3196ProfileBase=v3180Profile;
+v3180Profile=function(athlete){
+  const base=v3196ProfileBase(athlete),session=selectedSession(),mod=v3196ModificationFor(athlete,session),rule=v3196ResolveRule(mod),ratio=rule==="volume_2_3"?2/3:rule==="volume_1_2"?.5:null;
+  if(!ratio)return base;
+  const profile={...(base?.profile||{}),default_volume_ratio:ratio,profile_label:v3196ModificationText(mod)||`${Math.round(ratio*100)}% session`};
+  return {...(base||{}),ratio,profile,label:profile.profile_label};
+};
+function v3196VolumePrefix(line){
+  const text=String(line||"").trim(),match=text.match(/^\s*((?:\d+\s*[x×]\s*)?\d+)(?:m)?\b/i);return match?.[1]?.replace(/x/i,"×")||"";
+}
+function v3196RestrictedLine(line,rule,mod){
+  const text=String(line||"").trim(),prefix=v3196VolumePrefix(text),rest=prefix?text.slice(text.toLowerCase().indexOf(prefix.toLowerCase())+prefix.length).replace(/^\s*m?\s*[-–—:]?\s*/,""):text;
+  const withPrefix=body=>[prefix,body].filter(Boolean).join(" — ");
+  if(rule==="no_pull"||rule==="shoulder_no_pull"){
+    if(/\bpull(?:ing)?\b|\bpaddles?\b/i.test(text))return withPrefix(`${rest.replace(/\bpull(?:ing)?\b/ig,"kick").replace(/\bpaddles?\b/ig,"").replace(/\s+/g," ").trim()||"kick only"} · no pull`);
+    return text;
+  }
+  if(rule==="kick_only"||rule==="shoulder_kick_only")return withPrefix(`${rest.replace(/\b(?:pull(?:ing)?|swim(?:ming)?|freestyle|backstroke|breaststroke|butterfly|fly)\b/ig,"kick").replace(/\s+/g," ").trim()||"kick only"} · kick only`);
+  if(rule==="no_kick"||rule==="knee_no_kick")return withPrefix(`${rest.replace(/\b(?:kick(?:ing)?|with\s+fins?|fins?|underwater|breaststroke|breast)\b/ig,"pull").replace(/\s+/g," ").trim()||"pull only"} · no kick`);
+  if(rule==="pull_only")return withPrefix(`${rest.replace(/\b(?:kick(?:ing)?|swim(?:ming)?|freestyle|backstroke|breaststroke|butterfly|fly|with\s+fins?|fins?)\b/ig,"pull").replace(/\s+/g," ").trim()||"pull only"} · pull only`);
+  if(rule==="no_breast_kick"&&/\bbreast(?:stroke)?\b|breast\s*kick/i.test(text))return withPrefix(`${rest.replace(/\bbreast(?:stroke)?(?:\s*kick)?\b/ig,"freestyle or pull")} · no breaststroke kick`);
+  if((rule==="no_fins"||rule==="ankle_no_fins")&&/\bfins?\b/i.test(text))return text.replace(/\bwith\s+fins?\b/ig,"without fins").replace(/\bfins?\b/ig,"no fins");
+  if(rule==="custom"&&v3196ModificationText(mod))return `${text} · ${v3196ModificationText(mod)}`;
+  return text;
+}
+const v3196AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3196AdaptationBase(athlete,session,block,blockIndex),mod=v3196ModificationFor(athlete,session),rule=v3196ResolveRule(mod);
+  if(!mod||!rule||rule==="volume_2_3"||rule==="volume_1_2")return result;
+  let changed=false;const rows=(result?.rows||[]).map(row=>{
+    if(row.cue)return row;const line=v3196RestrictedLine(row.line,rule,mod);if(line===row.line)return row;changed=true;return {...row,line,target:"",source:v3196ModificationText(mod)||v3196ModMeta(rule).label};
+  });
+  if(!changed&&rule==="custom")return result;
+  return {...result,rows,sharedTarget:"",source:v3196ModificationText(mod)||v3196ModMeta(rule).label};
+};
+
+// Athlete-derived pace is never labelled ALL. ALL is reserved for an explicit
+// common coach send-off. Matching athlete targets may be grouped, but their
+// initials remain visible.
+v3140TargetDetails=function(session,block,item,blockIndex,itemIndex){
+  const rows=v3140TargetRows(session,block,item,blockIndex,itemIndex);if(!rows.length)return"";
+  const coachShared=rows.every(row=>!Number.isFinite(Number(row.targetSeconds))&&Number(row.cycleSeconds)>0&&/coach send-off|explicit session send-off/i.test(String(row.source||row.source_label||row.secondary||"")));
+  const groups=new Map();
+  for(const row of rows){
+    const key=coachShared?"coach-shared":[row.missing?"missing":v3140TargetTime(row)||"",Number(row.cycleSeconds)||0,row.source||row.source_label||row.resolved?.source||"Target"].join("|");
+    const list=groups.get(key)||[];list.push(row);groups.set(key,list);
+  }
+  const body=[...groups.values()].map(list=>{
+    const first=list[0],label=coachShared?"ALL":list.map(row=>v3180Initials(row.athlete.full_name)).join(" · "),target=first.missing?"No individual target":v3140TargetTime(first),cycle=Number(first.cycleSeconds)?`@ ${v3140Clock(first.cycleSeconds)}`:"",source=first.source||first.source_label||first.resolved?.source||"Target";
+    return `<div class="v3180-target-group"><b>${escapeHtml(label)}</b><strong>${escapeHtml([target,cycle].filter(Boolean).join(" · ")||"Coach target")}</strong><small>${escapeHtml(source)}</small></div>`;
+  }).join("");
+  const identity=coachShared?"shared coach send-off":`${rows.length} identified swimmer${rows.length===1?"":"s"}`;
+  return `<details class="v3140-target-details v3180-target-details" data-v3140-detail="${escapeHtml(v3140LineKey(block,item,blockIndex,itemIndex))}"><summary><span>Times & cues</span><small>${escapeHtml(identity)}</small></summary><div class="v3180-target-groups">${body}</div></details>`;
+};
+
+function v3196MigrateAttendance(){
+  let changed=false;
+  for(const row of appState.attendance||[]){
+    if(!v3191Modified(row.status))continue;const athlete=v3191Athlete(row.athlete_id),session=(appState.sessions||[]).find(item=>item.id===row.session_id);row.status="present";
+    if(!v3196ParseModificationNote(row.note)&&athlete&&session&&!(()=>{try{return Boolean(v3142HasPermanentBaseline?.(athlete))}catch{return false}})())row.note=`${V3196_MOD_PREFIX}${JSON.stringify({code:"custom",text:"Modified session",updated_at:nowIso()})}`;
+    row.updated_at=nowIso();queueRecord("attendance",row.id);changed=true;
+  }
+  if(changed)saveState(appState);return changed;
+}
+function v3196Brand(){
+  const title=`McLay Swimming OS — v${V3196_VERSION} Roll Truth`,sub=`Version ${V3196_VERSION} · protected session input · one-tap Roll · individual modifications · identified pace targets`;
+  if(document.title!==title)document.title=title;const subtitle=document.querySelector(".header-subtitle");if(subtitle&&subtitle.textContent!==sub)subtitle.textContent=sub;
+}
+try{v3192BrandObserver?.disconnect?.()}catch{}try{v3191BrandObserver?.disconnect?.()}catch{}try{v3190BrandObserver?.disconnect?.()}catch{}try{v3180BrandObserver?.disconnect?.()}catch{}try{v3172BrandObserver?.disconnect?.()}catch{}
+const v3196BrandObserver=new MutationObserver(()=>queueMicrotask(v3196Brand));if(document.querySelector("title"))v3196BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3196BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+for(const name of ["v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand","v3163Brand","v3151Brand","v3150Brand"]){try{globalThis[name]=v3196Brand}catch{}}
+const v3196Styles=document.createElement("style");v3196Styles.id="v3196Styles";v3196Styles.textContent=`
+.v3196-roll-row{grid-template-columns:minmax(150px,.75fr) minmax(250px,1.25fr)!important}.v3196-roll-controls{display:grid;grid-template-columns:auto minmax(155px,1fr) auto;gap:7px;align-items:center}.v3196-here{min-height:42px;display:flex;align-items:center;justify-content:center;gap:5px;background:#fff;color:#17445d;border:1px solid #8cacbb}.v3196-here span{display:inline-grid;place-items:center;width:19px;height:19px;border:2px solid currentColor;border-radius:5px;font-size:.76rem}.v3196-here.active{background:#236d4a;color:#fff;border-color:#236d4a}.v3196-roll-controls label{display:grid;grid-template-columns:auto minmax(130px,1fr);align-items:center;gap:6px}.v3196-roll-controls label>span{font-size:.7rem;font-weight:850;color:#496775}.v3196-roll-controls select{min-height:42px;padding:7px}.v3196-mod-note{grid-column:2/4;color:#795d14!important;font-weight:750}.v3196-roll-head strong{color:#153e56}.v3180-target-group>b{min-width:44px}.v3180-target-group strong{font-variant-numeric:tabular-nums}
+@media(max-width:700px){.v3196-roll-row{grid-template-columns:1fr!important}.v3196-roll-controls{grid-template-columns:auto minmax(0,1fr)}.v3196-roll-controls label{grid-template-columns:1fr}.v3196-roll-controls label>span{display:none}.v3196-mod-note{grid-column:1/3}.v3196-roll-controls .v3195-remove{grid-column:1/3}.v3196-here{min-width:88px}}
+`;document.head.appendChild(v3196Styles);
+function v3196Startup(){
+  v3196MigrateAttendance();v3191DedupeAttendance?.({queue:true});v3195RepairAlexHanson?.();v3195EnhanceSquadPlanning?.();v3196Brand();v3195ClearBoardCaches?.();renderAttendance?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
+}
+window.v3196Debug={version:V3196_VERSION,build:V3196_BUILD,modification:v3196ModificationFor,rule:v3196ResolveRule,roster:v3195RosterForMode,liveRoster:v3195LiveRoster,setModification:v3196SetModification,toggleHere:v3196ToggleHere,remove:v3196RemoveParticipant};
+setTimeout(v3196Startup,0);setTimeout(v3196Startup,500);setTimeout(v3196Startup,1700);setTimeout(v3196Brand,3600);setTimeout(v3196Brand,8200);setTimeout(v3196Brand,12200);
