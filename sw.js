@@ -1,6 +1,6 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-20-0-session-truth-20260805";
-const CORE=["./","./index.html","./styles.css?v=20260805-core3200","./app.js?v=20260805-core3200","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-20-0-2-stable-board-pb-recovery-20260805";
+const CORE=["./","./index.html","./styles.css?v=20260805-core32002","./app.js?v=20260805-core32002","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);for(const url of CORE){const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(!response.ok)throw new Error(`Core cache failed ${url}: ${response.status}`);await cache.put(request,response.clone())}await self.skipWaiting()})()));
 self.addEventListener("activate",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
 self.addEventListener("message",event=>{if(event.data==="SKIP_WAITING")self.skipWaiting()});

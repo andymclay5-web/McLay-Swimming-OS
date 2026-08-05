@@ -17452,3 +17452,318 @@ v3140LineHtml=function(session,block,item,itemIndex,blockIndex){
   const rows=v3199PbRows(session,block,{...item,race_distance:race,pace_mode:"race",pace_source:"pb",suppress_auto_targets:false},blockIndex,itemIndex);
   return `<div class="v3200-race-line">${html}${v3199RaceChips(rows)}</div>`;
 };
+
+// =============================================================================
+// McLay Swimming OS v3.20.0.1 — Poolside target truth hotfix
+// Narrow protected patch on top of v3.20.0.
+// - Board restores only the PB rows needed for the swimmers in the water.
+// - Race pace without a named stroke resolves to each swimmer's #1 points stroke.
+// - Swimmers explicitly locked as IM use IM PB logic for 100/200/400/800 pace.
+// - Aerobic work without a named stroke remains Freestyle.
+// - Lee T400 results can be recorded and resolved by stroke without new SQL;
+//   the stroke is stored in the existing metadata JSON.
+// Existing Board, Roll, Capture, Quick edit, Finish Session and aerobic
+// coefficient calculations are not rewritten.
+// =============================================================================
+const V32001_VERSION="3.20.0.1";
+const V32001_BUILD="20260805-poolside-target-truth-hotfix";
+const V32001_T400_STROKES=["Freestyle","Backstroke","Breaststroke","Butterfly","IM"];
+const V32001_IM_RACE_DISTANCES=new Set([100,200,400,800]);
+
+function v32001RawLine(item){return [item?.raw,item?.instruction,item?.label].filter(Boolean).join(" ").trim()}
+function v32001ExplicitStroke(value){
+  const text=String(value||"");
+  if(/\b(?:individual\s+medley|medley|IM)\b/i.test(text))return "IM";
+  if(/\b(?:butterfly|fly)\b/i.test(text))return "Butterfly";
+  if(/\b(?:backstroke|back)\b/i.test(text))return "Backstroke";
+  if(/\b(?:breaststroke|breast)\b/i.test(text))return "Breaststroke";
+  if(/\b(?:freestyle|free)\b/i.test(text))return "Freestyle";
+  return "";
+}
+function v32001SavedStroke(item){
+  const saved=v3Stroke(item?.pace_stroke||"");
+  return V32001_T400_STROKES.includes(saved)?saved:"";
+}
+function v32001T400Stroke(row){
+  const stroke=v3Stroke(row?.metadata?.stroke||row?.stroke||"");
+  return V32001_T400_STROKES.includes(stroke)?stroke:"Freestyle";
+}
+function v32001SelectedT400Stroke(){
+  const stroke=v3Stroke(appState.settings.v32001_t400_stroke||"Freestyle");
+  return V32001_T400_STROKES.includes(stroke)?stroke:"Freestyle";
+}
+function v32001ActiveT400Stroke(){
+  const stroke=v3Stroke($("liveStroke")?.value||v32001SelectedT400Stroke());
+  return V32001_T400_STROKES.includes(stroke)?stroke:v32001SelectedT400Stroke();
+}
+
+// -----------------------------------------------------------------------------
+// Stroke truth: named stroke > coach override > written #1 token > locked IM >
+// best points stroke. Aerobic lines with no named stroke are Freestyle.
+// -----------------------------------------------------------------------------
+const v32001ResolveStrokeBase=v3140ResolveStroke;
+v3140ResolveStroke=function(athlete,session,block,item,blockIndex,itemIndex){
+  const prior=v32001ResolveStrokeBase(athlete,session,block,item,blockIndex,itemIndex);
+  if(prior?.overridden)return prior;
+  const line=v32001RawLine(item),saved=v32001SavedStroke(item),explicit=saved||v32001ExplicitStroke(line),token=v3140StrokeToken(line),race=Number(item?.race_distance)||v3199RaceDistance(line)||v3129RaceDistance(item),zone=v3129Zone(item,block),lineKey=prior?.lineKey||v3140LineKey(block,item,blockIndex,itemIndex);
+  if(explicit)return {stroke:explicit,token:"",source:saved?"Saved stroke":"Stroke specified",lineKey};
+  if(token)return prior;
+  if(race){
+    if(v3140IsImSwimmer(athlete)&&V32001_IM_RACE_DISTANCES.has(Number(race)))return {stroke:"IM",token:"",source:"Locked IM",lineKey,im_locked:true};
+    return {stroke:v3140BestStroke(athlete),token:"",source:"Best points",lineKey};
+  }
+  if(zone)return {stroke:"Freestyle",token:"",source:"Aerobic default",lineKey};
+  return prior;
+};
+
+// Race pace never borrows a T400. Aerobic work uses a stroke-specific T400,
+// defaulting to Freestyle only when the set does not name a stroke.
+const v32001DirectLeeBase=v3129DirectLeeTarget;
+v3129DirectLeeTarget=function(athlete,item,block){
+  if(v3129RaceDistance(item))return null;
+  const line=v32001RawLine(item),stroke=v32001SavedStroke(item)||v32001ExplicitStroke(line)||"Freestyle",anchor=v380T400Anchor(athlete.id,stroke);
+  if(!anchor)return null;
+  const repDistance=Number(item?.distance)||100,zone=v3129Zone(item,block),rest=v3129Rest(item),explicitCycle=v3129ExplicitCycle(item);
+  if(!zone)return null;
+  const seconds=v380PaceValue(Number(anchor.result_seconds),repDistance,zone,rest||10);
+  if(!Number.isFinite(seconds)||seconds<=0)return null;
+  const cycle=explicitCycle||v380RoundUp(seconds+(rest||10),5);
+  const sourceLabel=stroke==="Freestyle"?"Lee T400":`Lee T400 ${stroke}`;
+  return {status:"ok",source:sourceLabel,targetSeconds:seconds,cycleSeconds:cycle,primary:`${v3129Clock(seconds)} on ${v3129Clock(cycle)}`,secondary:`${sourceLabel} ${v3129Clock(anchor.result_seconds)}`};
+};
+
+// -----------------------------------------------------------------------------
+// Stroke-specific T400 rows. Existing rows are Freestyle unless metadata says
+// otherwise, so all historical Freestyle anchors remain valid unchanged.
+// -----------------------------------------------------------------------------
+v380ResultRows=function(athleteId,stroke="Freestyle"){
+  const type=v380T400Type(),wanted=v3Stroke(stroke||"Freestyle")||"Freestyle";
+  return (appState.training_test_results||[]).filter(row=>row.test_type_id===type?.id&&(!athleteId||row.athlete_id===athleteId)&&v32001T400Stroke(row)===wanted).sort((a,b)=>Number(a.result_seconds)-Number(b.result_seconds)||String(b.result_date||"").localeCompare(String(a.result_date||"")));
+};
+v380T400Anchor=function(athleteId,stroke="Freestyle"){return v380ResultRows(athleteId,stroke).find(row=>row.valid_for_anchor!==false)||null};
+v380HistoryHtml=function(athlete,stroke="Freestyle"){
+  const rows=v380ResultRows(athlete?.id,stroke).slice().sort((a,b)=>String(b.result_date||"").localeCompare(String(a.result_date||"")));
+  if(!rows.length)return `<div class="help">No matched T400 ${escapeHtml(stroke)} result yet.</div>`;
+  const valid=rows.filter(row=>row.valid_for_anchor!==false),fastest=valid.length?Math.min(...valid.map(row=>Number(row.result_seconds))):NaN;
+  return rows.map(row=>`<div class="v380-history-row ${Number(row.result_seconds)===fastest?"anchor":""}"><div><strong>${v380Clock(row.result_seconds)}</strong><span>${escapeHtml(v380Period(row))}${row.pool_course?` · ${escapeHtml(row.pool_course)}`:" · course not stated"}</span></div><div>${Number(row.result_seconds)===fastest?'<span class="badge">Current anchor</span>':""}<small>${escapeHtml(row.source_label||row.source_type||"Training")}</small></div></div>`).join("");
+};
+
+const v32001RowTargetBase=v382RowTarget;
+v382RowTarget=function(athlete,spec){
+  if(spec?.mode!=="aerobic")return v32001RowTargetBase(athlete,spec);
+  const stroke=V32001_T400_STROKES.includes(v3Stroke(spec.stroke))?v3Stroke(spec.stroke):"Freestyle",anchor=v380T400Anchor(athlete.id,stroke);
+  if(!anchor)return {status:"missing",message:`No matched T400 ${stroke} anchor`};
+  const target=v382AerobicTarget(Number(anchor.result_seconds),spec.repDistance,spec.zone,spec.rest);if(!target)return {status:"missing",message:`No ${spec.repDistance}m coefficient available`};
+  const cycle=spec.cycle||v380RoundUp(target.seconds+spec.rest,5),actualRest=cycle-target.seconds;
+  const sourceLabel=stroke==="Freestyle"?"Lee T400":`Lee T400 ${stroke}`;
+  return {status:"ok",kind:"aerobic",primary:`${v380Clock(target.seconds)} on ${v380Clock(cycle)}`,secondary:`${spec.zone} · ${sourceLabel} ${v380Clock(anchor.result_seconds)} · ${Math.max(0,actualRest).toFixed(actualRest<10?1:0)}s rest`,method:target.method,source_label:sourceLabel};
+};
+
+// Any new live T400 row inherits the stroke selected for the timing run before
+// it is queued. Imported historical rows are not relabelled.
+const v32001UpsertLocalBase=upsertLocal;
+upsertLocal=function(table,record){
+  let row=record;
+  if(table==="training_test_results"&&record?.test_type_id===v380T400Type()?.id&&/T400 timing window|Manual .*T400/i.test(String(record?.source_label||""))){
+    row={...record,metadata:{...(record.metadata||{}),stroke:v3Stroke(record?.metadata?.stroke||v32001ActiveT400Stroke())||"Freestyle"}};
+  }
+  return v32001UpsertLocalBase(table,row);
+};
+
+v380SaveManualResult=async function(){
+  const type=v380T400Type(),athlete=v380SelectedTestAthlete(),date=$("v380ResultDate")?.value,time=v3Seconds($("v380ResultTime")?.value),stroke=v3Stroke($("v32001T400StrokeSelect")?.value||v32001SelectedT400Stroke())||"Freestyle";
+  if(!type)return alert("Run the T400 SQL migration and sync first.");
+  if(!athlete||!date||!Number.isFinite(time))return alert("Choose a swimmer, date and valid time.");
+  appState.settings.v32001_t400_stroke=stroke;
+  const row={id:uid("training-test"),test_type_id:type.id,athlete_id:athlete.id,source_swimmer_name:athlete.full_name,match_name:athlete.full_name,result_seconds:time,result_date:date,date_precision:"day",result_period:date.slice(0,7),pool_course:$("v380ResultCourse")?.value||null,start_type:"Push",valid_for_anchor:true,source_type:"training",source_label:`Manual ${stroke} T400`,source_page:null,session_id:selectedSession()?.id||null,notes:"",metadata:{after_warm_up:true,stroke},created_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("training_test_results",row);queueRecord("training_test_results",row.id);saveState(appState);
+  let cloudSaved=true;try{await syncIfPossible()}catch(error){cloudSaved=false;console.warn("T400 saved locally; cloud retry retained",error)}
+  updateStatus(`${athlete.full_name} ${stroke} T400 saved${cloudSaved?"":" locally — cloud pending"}`,cloudSaved?"good":"normal");v380RenderTestSets();renderDeckAthleteBrief?.();
+};
+
+v380OpenT400Timing=function(){
+  const type=v380T400Type(),stroke=v32001SelectedT400Stroke();if(!type)return alert("Run the T400 SQL migration and sync first.");
+  appState.settings.active_training_test_type_id=type.id;saveState(appState);showView("times");$("liveSetLabel").value=`Timed 400 ${stroke}`;$("liveReps").value=1;$("liveDistance").value="400";$("liveStroke").value=stroke;$("liveCycle").value="10:00";if($("liveTestSet"))$("liveTestSet").value="";resetLiveRoster();resetLiveSet();renderLiveBoard();v380TimingBanner();
+};
+
+v380RenderTestSets=function(){
+  const section=$("testsets");if(!section)return;const type=v380T400Type(),athlete=v380SelectedTestAthlete(),stroke=v32001SelectedT400Stroke(),anchor=v380T400Anchor(athlete?.id,stroke),all=(appState.training_test_results||[]).filter(row=>row.test_type_id===type?.id),matched=all.filter(row=>row.athlete_id),unmatched=all.length-matched.length,anchors=new Set(matched.filter(row=>row.valid_for_anchor!==false).map(row=>`${row.athlete_id}|${v32001T400Stroke(row)}`)).size;
+  section.innerHTML=`<div class="view-heading"><div><h2>Test sets &amp; training speeds</h2><p>Lee T400 is stored by stroke. Unspecified aerobic work continues to use Freestyle.</p></div><button id="v380OpenTimingBtn" type="button">Time a T400</button></div>
+  <div class="v380-summary-grid"><article><span>Imported history</span><strong>${all.length}</strong><small>${matched.length} matched · ${unmatched} awaiting a roster match</small></article><article><span>Current anchors</span><strong>${anchors}</strong><small>Fastest valid result per swimmer and stroke</small></article><article><span>Model</span><strong>${type?"Active":"SQL required"}</strong><small>10s rest · 30s rest · continuous</small></article></div>
+  <div class="two-column v380-test-layout"><article class="card"><div class="eyebrow">Timed 400</div><h3>Lee T400 · ${escapeHtml(stroke)}</h3><p>Choose the stroke before timing or saving. No stroke-specific result means no substituted Freestyle target.</p><label>Stroke</label><select id="v32001T400StrokeSelect" class="large-select">${V32001_T400_STROKES.map(value=>`<option ${value===stroke?"selected":""}>${escapeHtml(value)}</option>`).join("")}</select><label>Swimmer</label><select id="v380AthleteSelect" class="large-select">${v380ActiveAthletes().map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===athlete?.id?"selected":""}>${escapeHtml(a.full_name)} — ${escapeHtml(a.squad||"")}</option>`).join("")}</select>${anchor?`<div class="v380-anchor-card"><span>Current fastest ${escapeHtml(stroke)} anchor</span><strong>${v380Clock(anchor.result_seconds)}</strong><small>${escapeHtml(v380Period(anchor))} · push start${anchor.pool_course?` · ${escapeHtml(anchor.pool_course)}`:" · source course not stated"}</small></div>`:`<div class="warning-box">No matched T400 ${escapeHtml(stroke)} result for this swimmer.</div>`}<div class="button-row"><button id="v380OpenTimingBtn2" type="button">Open ${escapeHtml(stroke)} T400 timing</button></div><details><summary><strong>Add a result manually</strong><span>Any valid post-warm-up push-start 400 counts</span></summary><div class="form-grid v380-manual"><div><label>Date</label><input id="v380ResultDate" type="date" value="${localIsoDate(new Date())}"></div><div><label>Time</label><input id="v380ResultTime" inputmode="decimal" placeholder="4:29.2"></div><div><label>Course</label><select id="v380ResultCourse"><option value="">Not stated</option><option value="SCM">SCM / 25m</option><option value="LCM">LCM / 50m</option></select></div></div><button id="v380SaveResultBtn" type="button">Save ${escapeHtml(stroke)} T400 result</button></details></article>
+  <article class="card"><div class="eyebrow">Result history</div><h3>${escapeHtml(athlete?.full_name||"Swimmer")} · ${escapeHtml(stroke)}</h3><div id="v380ResultHistory">${v380HistoryHtml(athlete,stroke)}</div></article></div>
+  ${anchor?`<article class="card"><div class="card-heading"><div><div class="eyebrow">Aerobic training speeds</div><h3>${escapeHtml(athlete.full_name)} · ${escapeHtml(stroke)} anchor ${v380Clock(anchor.result_seconds)}</h3></div></div><details open><summary><strong>10-second rest model</strong><span>Pace plus rest, cycle rounded up to 5 seconds</span></summary>${v380PaceTable(Number(anchor.result_seconds),10)}</details><details><summary><strong>30-second rest model</strong><span>Pace plus rest, cycle rounded up to 5 seconds</span></summary>${v380PaceTable(Number(anchor.result_seconds),30)}</details><details><summary><strong>Continuous 600–1200m</strong><span>Master-sheet continuous swimming calculations</span></summary>${v380ContinuousTable(Number(anchor.result_seconds))}</details></article>`:""}
+  <article class="card"><div class="eyebrow">Later refinement</div><h3>IM 100 splits</h3><p>The 400 IM total is usable tonight. Fly, back, breast and free 100 splits can be added later for more specific medley-leg guidance.</p></article>`;
+  const choose=$("v380AthleteSelect");if(choose)choose.onchange=()=>{appState.settings.selected_training_test_athlete_id=choose.value;appState.settings.selected_athlete_id=choose.value;saveState(appState);v380RenderTestSets()};
+  const strokeSelect=$("v32001T400StrokeSelect");if(strokeSelect)strokeSelect.onchange=()=>{appState.settings.v32001_t400_stroke=strokeSelect.value;saveState(appState);v380RenderTestSets()};
+  for(const id of ["v380OpenTimingBtn","v380OpenTimingBtn2"]){const button=$(id);if(button)button.onclick=v380OpenT400Timing}
+  const save=$("v380SaveResultBtn");if(save)save.onclick=v380SaveManualResult;
+};
+renderTestSets=v380RenderTestSets;
+
+// -----------------------------------------------------------------------------
+// Calm Board PB hydration. v3.10.4 intentionally kept all heavy results off
+// Deck; that also kept race PBs out of the target resolver. Restore only the
+// swimmers currently in the water, then repaint once with the existing Board
+// snapshot/scroll protection.
+// -----------------------------------------------------------------------------
+const v32001BoardHydratedKeys=new Set();let v32001BoardHydrateTimer=null,v32001BoardHydrateRun=null;
+function v32001RowKey(table,row){
+  if(table==="results_pb_board")return row.id||row.race_result_id||`${row.athlete_id}|${v3Course(row.course)}|${row.distance}|${v3Stroke(row.stroke)}|${row.pb_seconds||row.result_seconds||row.pb_time||""}`;
+  if(table==="results_event_history")return row.result_id||row.id||`${row.athlete_id}|${row.result_date}|${row.distance}|${v3Stroke(row.stroke)}|${row.result_time_seconds||row.result_seconds||""}`;
+  return row.id||row.duplicate_key||`${row.athlete_id}|${row.result_date}|${row.distance}|${v3Stroke(row.stroke)}|${row.result_seconds||""}`;
+}
+function v32001MergeBoardRows(table,incoming,ids){
+  const rows=(incoming||[]).filter(row=>ids.has(String(row.athlete_id||"")));if(!rows.length)return false;
+  const current=Array.isArray(appState[table])?appState[table]:[],map=new Map(current.map(row=>[v32001RowKey(table,row),row]));let changed=false;
+  for(const row of rows){const clean=typeof stripCloudFields==="function"?stripCloudFields(row):row,key=v32001RowKey(table,clean),prior=map.get(key);if(!prior||JSON.stringify(prior)!==JSON.stringify(clean)){map.set(key,clean);changed=true}}
+  if(changed)appState[table]=[...map.values()];return changed;
+}
+function v32001BoardRoster(){
+  const session=selectedSession?.();if(!session)return {session:null,ids:new Set(),key:""};
+  const roster=(typeof v3129LanePlan==="function"?v3129LanePlan(session)?.roster:typeof selectedRoster==="function"?selectedRoster():[])||[],ids=new Set(roster.map(row=>String(row.id)).filter(Boolean));
+  return {session,ids,key:`${session.id}|${[...ids].sort().join(",")}`};
+}
+async function v32001FetchBoardRows(ids){
+  if(!ids.size||!cloudReady?.())return false;let changed=false;const org=encodeURIComponent(appState.settings.organisation_id||"");
+  const tasks=[];for(const athleteId of ids){const ath=encodeURIComponent(athleteId);tasks.push(["results_pb_board",`/rest/v1/results_pb_board?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],["coach_results",`/rest/v1/coach_results?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}&excluded_from_pb=neq.true&order=result_date.desc`])}
+  const settled=await Promise.allSettled(tasks.map(async([table,path])=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);try{return [table,await cloudFetch(path,{signal:controller.signal})]}finally{clearTimeout(timer)}}));
+  for(const result of settled)if(result.status==="fulfilled"){const [table,rows]=result.value;changed=v32001MergeBoardRows(table,rows,ids)||changed}
+  return changed;
+}
+async function v32001HydrateBoardTargets({cloud=true,paint=true,force=false}={}){
+  if(v32001BoardHydrateRun)return v32001BoardHydrateRun;
+  const context=v32001BoardRoster();if(!context.session||!context.ids.size)return false;
+  const haveEveryPb=[...context.ids].every(id=>(appState.results_pb_board||[]).some(row=>String(row.athlete_id)===id));
+  if(!force&&haveEveryPb){v32001BoardHydratedKeys.add(context.key);return true;}
+  v32001BoardHydrateRun=(async()=>{let changed=false;try{
+    try{const cached=await v3103ReadHeavyCache?.(),payload=cached?.payload||{};for(const table of ["results_pb_board","coach_results","results_event_history"])changed=v32001MergeBoardRows(table,payload[table],context.ids)||changed}catch(error){console.warn("Board PB cache restore deferred",error)}
+    const missing=new Set([...context.ids].filter(id=>!(appState.results_pb_board||[]).some(row=>String(row.athlete_id)===id)));
+    if(cloud&&missing.size)try{changed=await v32001FetchBoardRows(missing)||changed}catch(error){if(error?.name!=="AbortError")console.warn("Board PB cloud refresh deferred",error)}
+    v32001BoardHydratedKeys.add(context.key);
+    if(changed){saveState(appState);v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3195ClearBoardCaches?.();window.v374ScheduleHeavyCache?.(appState);if(paint&&(document.querySelector(".view.active")?.id||"deck")==="deck"){const snapshot=typeof v3197BoardSnapshot==="function"?v3197BoardSnapshot():null;(typeof v3197PaintNow==="function"?v3197PaintNow:v3170PaintBoard)?.();if(snapshot&&typeof v3197RestoreBoardSnapshot==="function")v3197RestoreBoardSnapshot(snapshot)}}
+    return changed||haveEveryPb;
+  }finally{v32001BoardHydrateRun=null}})();return v32001BoardHydrateRun;
+}
+function v32001ScheduleBoardTargets(delay=900){clearTimeout(v32001BoardHydrateTimer);v32001BoardHydrateTimer=setTimeout(()=>{const run=()=>v32001HydrateBoardTargets().catch(error=>console.warn("Board targets retained from current cache",error));if(typeof requestIdleCallback==="function")requestIdleCallback(run,{timeout:2200});else run()},delay)}
+const v32001PaintBoardBase=v3170PaintBoard;
+v3170PaintBoard=function(){const result=v32001PaintBoardBase?.();v32001ScheduleBoardTargets(1200);return result};
+
+// -----------------------------------------------------------------------------
+// Version label and a single quiet startup target restore. No extra scrolling,
+// visibility or pageshow handlers are added by this hotfix.
+// -----------------------------------------------------------------------------
+function v32001Brand(){
+  const title=`McLay Swimming OS — v${V32001_VERSION} Poolside Target Truth`,subtitle=`v${V32001_VERSION} · protected Board · #1/IM PB pace · stroke T400`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+}
+try{v3200BrandObserver?.disconnect?.()}catch{}
+for(const name of ["v3200Brand","v3199Brand","v3198Brand","v3197Brand","v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v32001Brand}catch{}}
+const v32001BrandObserver=new MutationObserver(()=>queueMicrotask(v32001Brand));if(document.querySelector("title"))v32001BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v32001BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+window.v32001Debug={version:V32001_VERSION,build:V32001_BUILD,explicitStroke:v32001ExplicitStroke,t400Stroke:v32001T400Stroke,selectedT400Stroke:v32001SelectedT400Stroke,hydrateBoardTargets:v32001HydrateBoardTargets,boardRoster:v32001BoardRoster};
+setTimeout(()=>{v32001Brand();v32001ScheduleBoardTargets(0)},5200);
+
+// =============================================================================
+// McLay Swimming OS v3.20.0.2 — Immediate Board stability + roster PB recovery
+// Narrow hotfix on top of v3.20.0.1.
+// - removes repeated startup/resume scroll restoration that made the phone dart;
+// - refreshes Supabase auth on the observed 403 claim timestamp failure;
+// - loads Board PBs once per active roster, early, without a repaint loop;
+// - leaves session parsing, Board controls, Roll, Capture, Quick edit, Finish
+//   Session and the approved aerobic calculations unchanged.
+// =============================================================================
+const V32002_VERSION="3.20.0.2";
+const V32002_BUILD="20260805-immediate-board-stability-pb-recovery";
+
+// One calm scroll restore only. Older layers asked for the same stored position
+// repeatedly at 0/60/180/420/900/1500ms and again on pageshow/visibility. Those
+// repeated calls are collapsed here, and any real user touch wins immediately.
+let v32002LastUserInput=0;
+let v32002ScrollFrame=0;
+let v32002PendingScroll=null;
+function v32002MarkUserInput(){v32002LastUserInput=Date.now();try{v3170MarkUser?.("v32002-user-input")}catch{}}
+for(const type of ["pointerdown","touchstart","wheel","keydown"]){
+  window.addEventListener(type,v32002MarkUserInput,{capture:true,passive:type!=="keydown"});
+}
+function v32002ApplyScroll(top,left=0){
+  const target=Math.max(0,Math.round(Number(top)||0));
+  v32002PendingScroll={top:target,left:Math.max(0,Math.round(Number(left)||0))};
+  if(v32002ScrollFrame)cancelAnimationFrame(v32002ScrollFrame);
+  v32002ScrollFrame=requestAnimationFrame(()=>{
+    v32002ScrollFrame=0;
+    const pending=v32002PendingScroll;v32002PendingScroll=null;
+    if(!pending)return;
+    if(Date.now()-v32002LastUserInput<2500)return;
+    if((document.querySelector(".view.active")?.id||"deck")!=="deck")return;
+    if(document.body.classList.contains("v3170-editing")||$("v3170Drawer"))return;
+    if(Math.abs((window.scrollY||0)-pending.top)<2&&Math.abs((window.scrollX||0)-pending.left)<2)return;
+    window.scrollTo({top:pending.top,left:pending.left,behavior:"auto"});
+  });
+}
+v3170RestoreScroll=function(top){v32002ApplyScroll(top,0)};
+
+// Preserve open panels/focus after a Board repaint without forcing the page
+// through a chain of old scroll positions.
+v3197RestoreBoardSnapshot=function(snapshot){
+  if(!snapshot||snapshot.view!==v3197ViewId())return;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const finish=document.querySelector("#deck [data-v3180-finish]");if(finish&&snapshot.finishOpen)finish.open=true;
+    const selector=document.querySelector("#deck .v3195-included");if(selector&&snapshot.selectorOpen)selector.open=true;
+    v32002ApplyScroll(snapshot.y,snapshot.x);
+    const map={changed:"[data-v3180-changed]",carry:"[data-v3180-carry]",distance:"[data-v3180-distance]"};
+    const target=map[snapshot.focusKey]?document.querySelector(`#deck ${map[snapshot.focusKey]}`):null;
+    if(target){try{target.focus({preventScroll:true});if(snapshot.selectionStart!==null&&target.setSelectionRange)target.setSelectionRange(snapshot.selectionStart,snapshot.selectionEnd)}catch{}}
+  }));
+};
+
+// The live sync error has been "403 claim timestamp check failed". The older
+// retry recognised 401/expired-token wording but not this Supabase response.
+const v32002CloudFetchBase=cloudFetch;
+cloudFetch=async function(path,options={}){
+  try{return await v32002CloudFetchBase(path,options)}catch(error){
+    const message=String(error?.message||error);
+    if(/claim timestamp check failed|jwt claim|\b403\b/i.test(message)){
+      await v3103RefreshAuth(true);
+      return v32002CloudFetchBase(path,options);
+    }
+    throw error;
+  }
+};
+
+// Hydrate only the swimmers on the current Board, once per roster. Cache rows
+// are merged first; cloud PB/coach-result rows follow after auth is valid. This
+// prevents "PB unavailable" being caused by heavy results staying unloaded,
+// while also preventing every Board paint from launching another fetch/repaint.
+const v32002RosterHydrated=new Set();
+const v32002RosterScheduled=new Set();
+let v32002HydrateTimer=null;
+v32001ScheduleBoardTargets=function(delay=250){
+  const context=v32001BoardRoster?.();
+  if(!context?.key||!context.ids?.size)return;
+  if(v32002RosterHydrated.has(context.key)||v32002RosterScheduled.has(context.key))return;
+  v32002RosterScheduled.add(context.key);
+  clearTimeout(v32002HydrateTimer);
+  v32002HydrateTimer=setTimeout(async()=>{
+    try{
+      await v32001HydrateBoardTargets({cloud:false,paint:false,force:true});
+      try{await v3103EnsureCloudSession()}catch(error){console.warn("Board PB auth refresh deferred",error)}
+      await v32001HydrateBoardTargets({cloud:true,paint:true,force:true});
+    }catch(error){console.warn("Board PB recovery retained current local rows",error)}
+    finally{v32002RosterScheduled.delete(context.key);v32002RosterHydrated.add(context.key)}
+  },Math.max(0,Number(delay)||0));
+};
+
+function v32002Brand(){
+  const title=`McLay Swimming OS — v${V32002_VERSION} Stable Board`;
+  const subtitle=`v${V32002_VERSION} · immediate stable Board · roster PB recovery · protected aerobic logic`;
+  if(document.title!==title)document.title=title;
+  const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+}
+try{v32001BrandObserver?.disconnect?.()}catch{}
+for(const name of ["v32001Brand","v3200Brand","v3199Brand","v3198Brand","v3197Brand","v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v32002Brand}catch{}}
+const v32002BrandObserver=new MutationObserver(()=>queueMicrotask(v32002Brand));
+if(document.querySelector("title"))v32002BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v32002BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v32002Debug={version:V32002_VERSION,build:V32002_BUILD,hydrate:v32001HydrateBoardTargets,roster:v32001BoardRoster};
+setTimeout(()=>{v32002Brand();v32001ScheduleBoardTargets(0)},120);
