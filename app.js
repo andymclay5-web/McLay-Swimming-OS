@@ -18497,3 +18497,282 @@ const v3203BrandObserver=new MutationObserver(()=>queueMicrotask(v3203Brand));if
 function v3203Startup(){v3203Array("adaptation_learning_events");v3203Array("session_adaptations");v3203Array("athlete_adaptation_rules");v3203Brand();renderAttendance?.();if((document.querySelector(".view.active")?.id||"deck")==="deck"){v3201RequestBoardPaint?.(false);setTimeout(v3203DecorateBoard,100)}}
 window.v3203Debug={version:V3203_VERSION,build:V3203_BUILD,purpose:v3203Purpose,setContext:v3203SetContext,rollContext:v3203RollContext,events:v3203Events,pending:v3203PendingContexts,rules:v3203PatternRules,badge:v3203BadgeState,resolveUntil:v3203ResolveUntil,saveIndividualEdit:v3203SaveIndividualEdit};
 setTimeout(v3203Startup,0);setTimeout(v3203Startup,650);setTimeout(v3203Brand,2200);
+
+// =============================================================================
+// McLay Swimming OS v3.20.4 — Stability and Test Truth
+// Evidence-led correction over v3.20.3.
+// - repairs instruction/round parsing and existing malformed Board structures;
+// - makes Roll attendance the only timing roster source;
+// - scopes standing adaptations by squad/date (Ruby remains standard in Int);
+// - rebuilds Times around T400 / saved tests / new test set;
+// - removes the v3.20.3 self-triggering Board observer and layout churn;
+// - blocks learning while session structure is not trustworthy.
+// =============================================================================
+const V3204_VERSION="3.20.4";
+const V3204_BUILD="20260806-stability-test-truth";
+
+function v3204Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3204Key(value){return v3204Text(value).toLowerCase().normalize?.("NFD").replace?.(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"")||""}
+function v3204SessionSource(session){return v3204Text(typeof v3123SourceText==="function"?v3123SourceText(session):session?.workout||"")}
+function v3204PresentRows(session=selectedSession()){
+  if(!session)return[];
+  const rows=typeof v3191LiveRows==="function"?v3191LiveRows(session):(appState.attendance||[]).filter(row=>row.session_id===session.id);
+  return rows.filter(row=>typeof v3191Here==="function"?v3191Here(row.status):["present","modified","late"].includes(String(row.status||"").toLowerCase()));
+}
+function v3204PresentAthletes(session=selectedSession()){
+  const seen=new Set();return v3204PresentRows(session).map(row=>typeof v3191Athlete==="function"?v3191Athlete(row.athlete_id):(appState.athletes||[]).find(a=>a.id===row.athlete_id)).filter(a=>a&&!seen.has(a.id)&&seen.add(a.id)).sort(rosterSort);
+}
+
+// -----------------------------------------------------------------------------
+// 1. Parser correction. Numeric coaching instructions are cues, not metres.
+// Standalone N Rounds applies forward to the runnable work that follows.
+// -----------------------------------------------------------------------------
+const v3204ParseItemBase=v3198ParseItem;
+function v3204CueReason(line){
+  const text=v3198NormaliseLine?.(line)||v3204Text(line);
+  if(/^\d{1,2}\s*rounds?\s*:?[.]?$/i.test(text))return"forward_rounds";
+  if(/^round\s*\d+\b/i.test(text))return"round_modifier";
+  if(/^\d{1,2}\s*(?:s|sec|secs|second|seconds)\s*rest\b/i.test(text))return"rest_instruction";
+  if(/^\d+(?:\.\d+)?\s*m?\s+underwater\b/i.test(text)&&/(?:easy|to\s+wall|breakout|max)/i.test(text))return"within_length_instruction";
+  if(/^\d{1,2}\s+[a-z][^\d\n]*\/\s*\d{1,2}\s+[a-z]/i.test(text))return"pattern_instruction";
+  if(/^\d{1,2}\s+(?:build|fast|easy|strong|smooth|choice|pull|fins?)\s*(?:\/|$)/i.test(text)&&!/^\d{2,4}\s+(?:easy|choice|pull)\b/i.test(text))return"pattern_instruction";
+  if(/^(?:long|short)\s+course\s+session$/i.test(text))return"course_note";
+  return"";
+}
+function v3204CueItem(line,index=0,extra={}){
+  const text=v3198NormaliseLine?.(line)||v3204Text(line);
+  return{id:uid("block-line"),sort_order:index+1,raw:text,label:text,reps:0,distance:null,cycle:"",stroke:"Choice",instruction:text,runnable:false,line_type:"cue",...extra};
+}
+v3198ParseItem=function(raw,index=0){
+  const line=v3198NormaliseLine?.(raw)||v3204Text(raw),reason=v3204CueReason(line);
+  if(reason==="forward_rounds")return{kind:"forward_repeat",count:Math.max(1,Number(line.match(/^\s*(\d+)/)?.[1])||1),raw:line,item:v3204CueItem(`— ${Number(line.match(/^\s*(\d+)/)?.[1])||1} ROUNDS`,index,{v3200_scope_marker:true,v3200_scope_type:"forward_rounds",v3200_scope_count:Number(line.match(/^\s*(\d+)/)?.[1])||1})};
+  if(reason)return{kind:"cue",item:v3204CueItem(line,index,{v3204_cue_reason:reason})};
+  return v3204ParseItemBase(raw,index);
+};
+v3170ParseItem=v3198ParseItem;
+
+function v3204BuildCanonical(raw){
+  const segments=v3200Segments(raw);if(!segments.length)return[];
+  const blocks=segments.map((segment,blockIndex)=>{
+    const items=[];let forwardRepeat=1;
+    segment.paragraphs.forEach((paragraph,paragraphIndex)=>{
+      const paragraphItems=[];let backwardChunkStart=0;
+      for(let lineIndex=0;lineIndex<paragraph.length;lineIndex++){
+        const parsed=v3198ParseItem(paragraph[lineIndex],lineIndex);if(!parsed||parsed.kind==="ignore")continue;
+        if(parsed.kind==="forward_repeat"){
+          // The existing scoped-line renderer draws one clean round heading
+          // before the first multiplied line. Do not add a second cue row.
+          forwardRepeat=Math.max(1,Number(parsed.count)||1);
+          backwardChunkStart=paragraphItems.length;continue;
+        }
+        if(parsed.kind==="repeat"){
+          for(let k=backwardChunkStart;k<paragraphItems.length;k++)v3200ApplyMultiplier(paragraphItems[k],parsed.count,"repeat");
+          paragraphItems.push(v3200Cue(`Repeat ×${parsed.count} times`,paragraphItems.length,{v3200_scope_marker:true,v3200_scope_type:"repeat",v3200_scope_count:parsed.count}));
+          backwardChunkStart=paragraphItems.length;continue;
+        }
+        if(!parsed.item)continue;
+        const item={...parsed.item};
+        if(item.runnable!==false&&forwardRepeat>1){v3200ApplyMultiplier(item,forwardRepeat,"heading");item.v3204_forward_rounds=forwardRepeat}
+        paragraphItems.push(item);
+      }
+      if(segment.headingRepeat>1&&paragraphIndex===0){
+        paragraphItems.forEach(item=>{if(item.runnable!==false)v3200ApplyMultiplier(item,segment.headingRepeat,"heading")});
+      }
+      items.push(...paragraphItems);
+    });
+    v3200CollapseExplicitGroups(items);
+    const support=typeof v3107BlockSupport==="function"?v3107BlockSupport(segment.type,segment.title,segment.rawLines.join("\n")):{};
+    return{id:uid("draft-block"),block_type:segment.type,title:segment.title,sort_order:blockIndex+1,items:items.map((item,index)=>({...item,sort_order:index+1})),raw_text:segment.rawLines.join("\n"),purpose:support?.purpose||"",cues:support?.cues||"",keep_together:true,repeat_count:1,source_import:"v3204-canonical",v3200_heading_repeat:segment.headingRepeat,v3200_scope_resolved:true};
+  }).filter(block=>block.items.length);
+  const cleaned=blocks.filter((block,index)=>{
+    const distance=v3200BlockDistance(block),generic=/^session$/i.test(v3204Text(block.title));
+    if(distance>0)return true;
+    if(generic&&blocks.length>1)return false;
+    return v34Array(block.items).some(item=>item.runnable!==false)||v34Array(block.items).some(item=>!item.v3204_cue_reason||item.v3204_cue_reason!=="course_note");
+  });
+  return v3200ReconcileExplicit(cleaned,v3200ExplicitTotal(raw));
+}
+v3200BuildCanonical=v3204BuildCanonical;
+const v3204ParseBlocksBase=v3200ParseBlocks;
+v3200ParseBlocks=function(raw){
+  const canonical=v3204BuildCanonical(raw),explicit=v3200ExplicitTotal(raw),canonicalTotal=v3200Distance(canonical);
+  if(explicit&&v3200Close(canonicalTotal,explicit))return canonical;
+  if(canonical.length)return canonical;
+  return v3204ParseBlocksBase(raw);
+};
+v3198ParseBlocks=v3200ParseBlocks;v3193ParseBlocks=v3200ParseBlocks;v3150ParseBlocks=v3200ParseBlocks;v3126ParseBlocks=v3200ParseBlocks;v3127ParseBlocks=v3200ParseBlocks;v3128ParseBlocks=v3200ParseBlocks;v3107BlocksFromRaw=v3200ParseBlocks;
+
+function v3204InvalidLockedItem(item){
+  if(!item||item.runnable===false)return false;
+  const text=v3204Text(item.raw||item.label||item.instruction);
+  return Boolean(v3204CueReason(text))||(/^\d{1,2}\s*rounds?/i.test(text))||(/\bunderwater\b/i.test(text)&&Number(item.distance)<25&&!/^\d+\s*[x×]/i.test(text));
+}
+function v3204InvalidLockedBlocks(blocks){return v34Array(blocks).some(block=>v34Array(block?.items).some(v3204InvalidLockedItem))||v34Array(blocks).some((block,index)=>index===0&&/^session$/i.test(v3204Text(block?.title))&&v3200BlockDistance(block)===0&&blocks.length>1)}
+const v3204BoardBlocksBase=v3170BoardBlocks;
+v3170BoardBlocks=function(session){
+  if(!session)return[];
+  const base=v3204BoardBlocksBase?.(session)||[],source=v3204SessionSource(session),fresh=source?v3200ParseBlocks(source):[],baseBad=v3204InvalidLockedBlocks(base),freshTotal=v3200Distance(fresh),baseTotal=v3200Distance(base),explicit=v3200ExplicitTotal(source),saved=Number(session.planned_distance||0);
+  const freshTrusted=fresh.length&&freshTotal>0&&(baseBad||(explicit&&v3200Close(freshTotal,explicit))||(saved&&v3200Close(freshTotal,saved))||freshTotal>baseTotal);
+  if(freshTrusted){return fresh.map((block,index)=>({...block,id:base[index]?.id||block.id,v3204_repaired_from_locked:baseBad||!v3200Close(baseTotal,freshTotal)}))}
+  return base.length?base:fresh;
+};
+v3170BlockDistance=v3200BlockDistance;v3170Total=v3200Distance;
+
+function v3204SessionIntegrity(session=selectedSession()){
+  if(!session)return{ok:false,total:0,reason:"No active session"};
+  const source=v3204SessionSource(session),blocks=v3170BoardBlocks(session),total=v3200Distance(blocks),invalid=v3204InvalidLockedBlocks(blocks),explicit=v3200ExplicitTotal(source);
+  const mismatch=Boolean(explicit&&!v3200Close(total,explicit));
+  return{ok:Boolean(blocks.length&&total>0&&!invalid&&!mismatch),total,explicit,invalid,mismatch,reason:invalid?"Coaching instructions are still being counted as distance":mismatch?`Parsed ${total}m but source says ${explicit}m`:total<=0?"No runnable distance":"Verified"};
+}
+function v3204RepairSession(session){
+  const integrity=v3204SessionIntegrity(session);if(!integrity.ok)return integrity;
+  if(Number(session.planned_distance)!==Number(integrity.total)){session.planned_distance=Number(integrity.total);session.updated_at=nowIso();queueRecord?.("sessions",session.id);saveState(appState)}
+  return integrity;
+}
+
+// -----------------------------------------------------------------------------
+// 2. Standing modification activation. The profile can exist without applying.
+// Ruby Stace is standard in Intermediate and activates for Development only.
+// -----------------------------------------------------------------------------
+const v3204RawBaselineRecord=v3142BaselineRecord;
+function v3204ProfileApplicable(record,athlete,session=selectedSession()){
+  if(!record||record.active===false)return false;
+  const date=v3204Text(session?.session_date),from=v3204Text(record.effective_from),to=v3204Text(record.effective_to);
+  if(from&&date&&date<from)return false;if(to&&date&&date>to)return false;
+  const allowed=Array.isArray(record.activation_squads)?record.activation_squads.map(v3195OperationalSquadKey).filter(Boolean):v3204Text(record.activation_squads).split(/[,|]/).map(v3195OperationalSquadKey).filter(Boolean);
+  if(allowed.length){
+    const activeMode=v3195OperationalSquadKey(typeof v3195Mode==="function"?v3195Mode(session):activeSquad()),athleteSquad=v3195OperationalSquadKey(athlete?.squad),sessionKeys=(sessionSquads(session)||[]).map(v3195OperationalSquadKey);
+    if(!allowed.includes(activeMode)&&!allowed.includes(athleteSquad)&&!sessionKeys.some(key=>allowed.includes(key)))return false;
+    // A mixed/scheduled Development session may include Ruby while her home
+    // squad still reads Intermediate. The active Board mode decides applicability.
+    if(allowed.includes("development")&&activeMode!=="development"&&!sessionKeys.includes("development"))return false;
+  }
+  return record.activation_mode!=="manual";
+}
+v3142BaselineProfile=function(athlete,session=selectedSession()){
+  if(!athlete)return null;const record=v3204RawBaselineRecord(athlete);if(!v3204ProfileApplicable(record,athlete,session))return null;
+  const profile=typeof v37ProfileForAthlete==="function"?v37ProfileForAthlete(athlete):null;return profile?{...profile,profile:record}:null;
+};
+v3142HasPermanentBaseline=function(athlete,session=selectedSession()){return Boolean(v3204ProfileApplicable(v3204RawBaselineRecord(athlete),athlete,session))};
+v3142HasActiveAdaptation=function(athlete,session){
+  if(!athlete||!session)return false;
+  if(typeof v3131SavedAdaptationText==="function"&&v3131SavedAdaptationText(athlete,session)?.text)return true;
+  if(v3142HasPermanentBaseline(athlete,session))return true;
+  const active=typeof v3106ActiveModification==="function"?v3204Text(v3106ActiveModification(athlete,session.session_date)):"";if(active)return true;
+  return /\b(modif|adapt|injur|return|reduced|restriction|separate|join)\b/i.test(v3204Text(athlete.modifications));
+};
+v3141HasActiveAdaptation=v3142HasActiveAdaptation;
+function v3204SeedRubyScope(){
+  const ruby=(appState.athletes||[]).find(a=>v3204Key(a.full_name)==="rubystace");if(!ruby)return false;
+  const record=v3204RawBaselineRecord(ruby);if(!record)return false;
+  const desired=["development"],same=record.activation_mode==="squad"&&JSON.stringify(record.activation_squads||[])===JSON.stringify(desired);
+  if(same)return false;record.activation_mode="squad";record.activation_squads=desired;record.activation_note="Dormant while Ruby trains in Intermediate; activate when she is training with Development or the coach explicitly applies an individual edit.";record.updated_at=nowIso();queueRecord?.("athlete_adaptation_profiles",record.id);saveState(appState);return true;
+}
+v3180ModifiedAthletes=function(session){
+  if(!session)return[];const map=new Map();for(const row of v3204PresentRows(session)){
+    const athlete=typeof v3191Athlete==="function"?v3191Athlete(row.athlete_id):(appState.athletes||[]).find(a=>a.id===row.athlete_id);if(!athlete)continue;
+    const explicit=typeof v3196HasAnyModification==="function"?v3196HasAnyModification(athlete,session):typeof v3196ModificationFor==="function"&&Boolean(v3196ModificationFor(athlete,session));
+    if(explicit||v3142HasActiveAdaptation(athlete,session))map.set(athlete.id,athlete);
+  }return [...map.values()].sort(rosterSort);
+};
+v3172ModifiedAthletes=v3180ModifiedAthletes;v3140ModifiedColumns=v3180ModifiedAthletes;
+
+// -----------------------------------------------------------------------------
+// 3. Roll is the one timing truth. No Roll means no timing roster.
+// -----------------------------------------------------------------------------
+timingRoster=function(){
+  const session=selectedSession();return v3204PresentAthletes(session).sort((a,b)=>v3LaneAssignment(session?.id,a)-v3LaneAssignment(session?.id,b)||rosterSort(a,b));
+};
+renderLaneAssignmentEditor=function(){
+  const host=$("laneAssignmentEditor"),session=selectedSession();if(!host||!session)return;const roster=v3204PresentAthletes(session),count=Math.max(1,Math.min(8,Number($("liveLaneCount")?.value||session.lane_count||8)));
+  if(!roster.length){host.innerHTML='<div class="warning-box">Take the Roll first. Only swimmers marked Here can be timed.</div>';return}
+  host.innerHTML=`<details class="v3204-lane-editor"><summary><strong>${roster.length} swimmers · ${count} lanes</strong><span>Lane assignments</span></summary><div class="lane-editor-grid">${roster.map(a=>`<label class="lane-editor-athlete"><strong>${escapeHtml(a.full_name)}</strong><select data-lane-athlete="${escapeHtml(a.id)}">${Array.from({length:count},(_,i)=>`<option value="${i+1}" ${v3LaneAssignment(session.id,a)===i+1?"selected":""}>Lane ${i+1}</option>`).join("")}</select></label>`).join("")}</div><button id="saveLaneAssignmentsBtn" class="secondary" type="button">Save lanes</button></details>`;
+  host.querySelectorAll("[data-lane-athlete]").forEach(el=>el.onchange=()=>{const athlete=(appState.athletes||[]).find(a=>a.id===el.dataset.laneAthlete),existing=(appState.session_lane_assignments||[]).find(x=>x.session_id===session.id&&x.athlete_id===athlete.id),record={id:existing?.id||uid("lane"),session_id:session.id,athlete_id:athlete.id,lane_number:Number(el.value),lane_order:athlete.timing_order||null,updated_at:nowIso()};upsertLocal("session_lane_assignments",record);queueRecord("session_lane_assignments",record.id);saveState(appState);resetLiveRoster();renderLiveBoard()});
+  $("saveLaneAssignmentsBtn")?.addEventListener("click",async()=>{await syncIfPossible();updateStatus("Lane assignments saved","good")});
+};
+
+function v3204LaneCount(session,roster){return Math.max(1,Math.min(8,Number(session?.lane_count)||8))}
+function v3204SeedTimedTest({distance=400,stroke="Freestyle",label=`${distance} ${stroke}`,kind="saved",testSetId=""}={}){
+  const session=selectedSession();if(!session)return updateStatus("Choose a session first","error");const roster=v3204PresentAthletes(session);if(!roster.length)return updateStatus("Take the Roll first — no swimmers are marked Here","error");
+  const cleanStroke=v3Stroke(stroke)||stroke,laneCount=v3204LaneCount(session,roster),order=v3201LaneOrder(laneCount),seeded=roster.map(athlete=>({athlete,benchmark:v3201TestBenchmark(athlete,distance,cleanStroke)})).sort((a,b)=>{const av=Number.isFinite(a.benchmark.seconds)?a.benchmark.seconds:Infinity,bv=Number.isFinite(b.benchmark.seconds)?b.benchmark.seconds:Infinity;return av-bv||rosterSort(a.athlete,b.athlete)}),heatLength=600;
+  seeded.forEach((row,index)=>{const heat=Math.floor(index/laneCount)+1,lane=order[index%laneCount],existing=(appState.session_lane_assignments||[]).find(x=>x.session_id===session.id&&x.athlete_id===row.athlete.id),record={id:existing?.id||`lane-${session.id}-${row.athlete.id}`,session_id:session.id,athlete_id:row.athlete.id,lane_number:lane,lane_order:index+1,updated_at:nowIso()};upsertLocal("session_lane_assignments",record);queueRecord("session_lane_assignments",record.id);row.heat=heat;row.lane=lane;row.offset=(heat-1)*heatLength});
+  appState.settings.v3201_test_mode={distance:Number(distance),stroke:cleanStroke,label,lane_count:laneCount,heat_length:heatLength,kind,test_set_id:testSetId||null,seeded:seeded.map(row=>({athlete_id:row.athlete.id,seconds:row.benchmark.seconds,source:row.benchmark.source,heat:row.heat,lane:row.lane,offset:row.offset}))};
+  appState.settings.v3204_timing_mode={kind,label,stroke:cleanStroke,distance:Number(distance),test_set_id:testSetId||null};
+  appState.settings.active_training_test_type_id=kind==="t400"&&v380T400Type?.()?v380T400Type().id:"";
+  if(kind==="t400")appState.settings.v32001_t400_stroke=cleanStroke;
+  session.lane_count=Math.max(Number(session.lane_count)||0,laneCount);session.updated_at=nowIso();queueRecord("sessions",session.id);saveState(appState);
+  $("liveSetLabel").value=label;$("liveReps").value=kind==="t400"?1:Math.max(1,Number((appState.test_sets||[]).find(t=>t.id===testSetId)?.reps)||1);$("liveDistance").value=String(distance);$("liveStroke").value=cleanStroke;$("liveCycle").value=kind==="t400"?"10:00":((appState.test_sets||[]).find(t=>t.id===testSetId)?.interval_text||"1:00");$("liveWaveGap").value="0";$("liveLaneCount").value=String(laneCount);if($("liveTestSet"))$("liveTestSet").value=testSetId||"";
+  liveRunning=false;liveStartedAt=0;liveAccumulated=0;if(liveAnimation)cancelAnimationFrame(liveAnimation);liveChannels=seeded.map((row,index)=>({index,athlete_id:row.athlete.id,offset:row.offset,cycle:$("liveCycle").value,finishes:[],splits:{},lastRep:0,v3201_heat:row.heat,v3201_seed:row.benchmark.seconds,v3201_seed_source:row.benchmark.source}));
+  const grid=$("liveChannelGrid");if(grid){grid.innerHTML="";grid.dataset.rosterKey=""}v3204RenderTimesShell();renderLiveBoard();renderLaneAssignmentEditor();v3201EnhanceTimingCards?.();scheduleFastSync?.();updateStatus(`${label} ready · ${seeded.length} swimmer${seeded.length===1?"":"s"} from the Roll`,`good`);
+}
+v3201SeedTimedTest=v3204SeedTimedTest;
+
+// -----------------------------------------------------------------------------
+// 4. Clear Test page: T400 + stroke, saved tests, or new test set.
+// -----------------------------------------------------------------------------
+function v3204SavedTests(){return (appState.test_sets||[]).filter(t=>t.active!==false&&!/\bt\s*400\b|timed\s*400/i.test(v3204Text(t.name))).sort((a,b)=>v3204Text(a.name).localeCompare(v3204Text(b.name)))}
+function v3204CreateTestSetModal(){
+  document.querySelector("#v3204TestModal")?.remove();document.body.insertAdjacentHTML("beforeend",`<div id="v3204TestModal" class="v3202-modal"><div class="v3202-dialog v3204-test-dialog"><header><div><span class="eyebrow">New saved test set</span><h3>Create reusable test</h3></div><button type="button" class="secondary" data-close>Close</button></header><label>Name<input data-name placeholder="e.g. 8 × 50 best average"></label><div class="form-grid"><label>Reps<input data-reps type="number" min="1" value="8"></label><label>Distance<select data-distance><option>25</option><option selected>50</option><option>75</option><option>100</option><option>200</option><option>400</option></select></label><label>Stroke<select data-stroke>${["Freestyle","Backstroke","Breaststroke","Butterfly","IM","Kick"].map(x=>`<option>${x}</option>`).join("")}</select></label><label>Cycle<input data-cycle value="1:00"></label></div><label>Purpose / measurement<textarea data-description placeholder="What is this test measuring?"></textarea></label><div class="button-row"><button type="button" data-save>Save & load</button></div><p class="help" data-status></p></div></div>`);
+  const modal=$("v3204TestModal");modal.querySelector("[data-close]").onclick=()=>modal.remove();modal.querySelector("[data-save]").onclick=async()=>{const name=v3204Text(modal.querySelector("[data-name]").value),reps=Math.max(1,Number(modal.querySelector("[data-reps]").value)||1),distance=Number(modal.querySelector("[data-distance]").value)||50,stroke=modal.querySelector("[data-stroke]").value,interval_text=v3204Text(modal.querySelector("[data-cycle]").value)||"1:00",description=v3204Text(modal.querySelector("[data-description]").value);if(!name)return modal.querySelector("[data-status]").textContent="Name the test set first.";const record={id:uid("test"),name,category:"Saved test set",description,distance,stroke,reps,interval_text,recovery_text:"",equipment:[],measurement_types:[],squad_versions:{},adapted_versions:{},segments:[],active:true,updated_at:nowIso()};upsertLocal("test_sets",record);queueRecord("test_sets",record.id);appState.settings.selected_test_set_id=record.id;saveState(appState);try{await syncIfPossible()}catch(error){console.warn("New test set saved locally; sync pending",error)}modal.remove();v3204RenderTimesShell();v3204SeedTimedTest({distance,stroke,label:name,kind:"saved",testSetId:record.id})};
+}
+function v3204EnsureTestChooser(){
+  const times=$("times"),card=times?.querySelector(".live-set-card");if(!times||!card)return null;let chooser=$("v3204TestChooser");if(!chooser){chooser=document.createElement("article");chooser.id="v3204TestChooser";chooser.className="card v3204-test-chooser";card.insertAdjacentElement("beforebegin",chooser)}
+  const saved=v3204SavedTests(),present=v3204PresentAthletes(),mode=appState.settings.v3204_timing_mode||null;
+  if(mode){
+    chooser.innerHTML=`<div class="v3204-active-test"><div><span>Active timing</span><strong>${escapeHtml(mode.label||`${mode.distance} ${mode.stroke}`)}</strong><small>${present.length} swimmer${present.length===1?"":"s"} from the Roll · ${escapeHtml(mode.kind==="t400"?"T400 history":"Saved test set")}</small></div><button type="button" class="secondary" data-clear-test>Change test</button></div>`;
+    chooser.querySelector("[data-clear-test]").onclick=()=>{appState.settings.v3204_timing_mode=null;appState.settings.v3201_test_mode=null;appState.settings.active_training_test_type_id="";saveState(appState);resetLiveSet?.();resetLiveRoster();v3204RenderTimesShell()};
+    return chooser;
+  }
+  chooser.innerHTML=`<div class="card-heading"><div><div class="eyebrow">Choose the timing task</div><h3>Test selection</h3></div><span class="badge">${present.length} Here</span></div><div class="v3204-test-grid"><section><strong>T400 test</strong><span>Choose the stroke, then load only the swimmers marked Here.</span><label>Stroke<select data-t400-stroke>${["Freestyle","Backstroke","Breaststroke","Butterfly","IM"].map(value=>`<option ${value===(appState.settings.v32001_t400_stroke||"Freestyle")?"selected":""}>${value}</option>`).join("")}</select></label><button type="button" data-run-t400>Load T400 from Roll</button></section><section><strong>Saved test sets</strong><span>Reusable tests are kept separate from T400 history.</span><label>Test<select data-saved-test><option value="">Choose saved test</option>${saved.map(test=>`<option value="${escapeHtml(test.id)}">${escapeHtml(test.name)} · ${test.reps||1} × ${test.distance||"?"} ${escapeHtml(test.stroke||"")}</option>`).join("")}</select></label><button type="button" class="secondary" data-run-saved ${saved.length?"":"disabled"}>Load saved test</button></section><section><strong>New test set</strong><span>Create a reusable set without opening the long management page.</span><button type="button" class="secondary" data-new-test>New test set</button><button type="button" class="secondary" data-manual-tools>Manual fallback</button></section></div>${mode?`<div class="v3204-active-test"><span>Active</span><strong>${escapeHtml(mode.label||`${mode.distance} ${mode.stroke}`)}</strong><button type="button" class="secondary" data-clear-test>Change test</button></div>`:""}`;
+  chooser.querySelector("[data-run-t400]").onclick=()=>{const stroke=chooser.querySelector("[data-t400-stroke]").value;v3204SeedTimedTest({distance:400,stroke,label:`T400 ${stroke}`,kind:"t400"})};
+  chooser.querySelector("[data-run-saved]").onclick=()=>{const id=chooser.querySelector("[data-saved-test]").value,test=(appState.test_sets||[]).find(t=>t.id===id);if(!test)return updateStatus("Choose a saved test set","error");v3204SeedTimedTest({distance:Number(test.distance)||50,stroke:test.stroke||"Freestyle",label:test.name,kind:"saved",testSetId:test.id})};
+  chooser.querySelector("[data-new-test]").onclick=v3204CreateTestSetModal;
+  chooser.querySelector("[data-manual-tools]").onclick=()=>{appState.settings.v3204_manual_open=!appState.settings.v3204_manual_open;saveState(appState);v3204RenderTimesShell()};
+  chooser.querySelector("[data-clear-test]")?.addEventListener("click",()=>{appState.settings.v3204_timing_mode=null;appState.settings.v3201_test_mode=null;appState.settings.active_training_test_type_id="";saveState(appState);resetLiveSet?.();resetLiveRoster();v3204RenderTimesShell()});
+  return chooser;
+}
+function v3204RenderTimesShell(){
+  const times=$("times"),card=times?.querySelector(".live-set-card");if(!times||!card)return;v3204EnsureTestChooser();const mode=appState.settings.v3204_timing_mode||null,manual=Boolean(appState.settings.v3204_manual_open),setup=$("v3201TimedTestSetup"),manualDetails=times.querySelector(".manual-timing-tools"),savedCard=$("timedSetList")?.closest("article.card"),setupGrid=card.querySelector(".live-setup-grid"),rosterRow=card.querySelector(".timing-roster-row");if(setup)setup.remove();card.hidden=!mode;if(manualDetails){manualDetails.hidden=!manual;manualDetails.open=manual}if(savedCard)savedCard.hidden=!(appState.timed_sets||[]).some(row=>row.session_id===selectedSession()?.id);if(setupGrid){let advanced=$("v3204AdvancedSetup");if(!advanced){advanced=document.createElement("details");advanced.id="v3204AdvancedSetup";advanced.className="v3204-advanced-setup";advanced.innerHTML='<summary><strong>Advanced setup</strong><span>Cycle, waves and lanes</span></summary><div data-body></div>';setupGrid.parentNode.insertBefore(advanced,setupGrid);advanced.querySelector("[data-body]").appendChild(setupGrid);if(rosterRow)advanced.querySelector("[data-body]").appendChild(rosterRow)}advanced.hidden=!mode}
+  const heading=card.querySelector(".card-heading h3");if(heading)heading.textContent=mode?.label||"Active set timing";const copy=times.querySelector(".view-heading p");if(copy)copy.textContent="Choose T400, a saved test set, or create a new one. The Roll controls who appears.";renderLaneAssignmentEditor();
+}
+v3201RenderTimingSetup=function(){v3204RenderTimesShell()};
+
+// Keep timing controls in document flow. During a running watch update text and
+// channel values only; no page/roster rebuild is allowed unless the roster key changes.
+let v3204LastChannelPaint=0;
+renderLiveBoard=function(timestamp=performance.now()){
+  if(liveRunning&&timestamp-v3204LastChannelPaint<100){liveAnimation=requestAnimationFrame(renderLiveBoard);return}v3204LastChannelPaint=timestamp;
+  const elapsed=liveElapsedMs()/1000,cycle=liveMasterCycle(),reps=liveReps(),rep=Math.floor(elapsed/cycle)+1,inRep=elapsed-(rep-1)*cycle;if($("liveElapsed"))$("liveElapsed").textContent=formatSeconds(elapsed);if($("liveRep"))$("liveRep").textContent=`${Math.min(rep,reps)} / ${reps}`;if($("liveCountdown"))$("liveCountdown").textContent=rep>reps?"Complete":formatSeconds(Math.max(0,cycle-inRep));if($("liveSetStatus"))$("liveSetStatus").textContent=liveRunning?"Running":elapsed>0?"Paused":"Ready";
+  renderLiveChannels();document.body.classList.toggle("v3204-timing-running",liveRunning);if(liveRunning)liveAnimation=requestAnimationFrame(renderLiveBoard);
+};
+
+// -----------------------------------------------------------------------------
+// 5. Learning safety and repaint stability.
+// -----------------------------------------------------------------------------
+try{v3203BoardObserver?.disconnect?.()}catch{}
+const v3204OpenLearningBase=v3202OpenLearning;
+v3202OpenLearning=function(session,index){const integrity=v3204SessionIntegrity(session);if(!integrity.ok)return updateStatus(`Learning paused: ${integrity.reason}`,"error");return v3204OpenLearningBase?.(session,index)};
+const v3204SaveIndividualEditBase=v3203SaveIndividualEdit;
+v3203SaveIndividualEdit=function(args){const integrity=v3204SessionIntegrity(args?.session||selectedSession());if(!integrity.ok){updateStatus(`Individual learning paused: ${integrity.reason}`,"error");return null}return v3204SaveIndividualEditBase?.(args)};
+function v3204DecorateIntegrity(){
+  const session=selectedSession(),integrity=v3204SessionIntegrity(session),deck=$("deck");if(!deck)return;deck.querySelectorAll("[data-v3202-learn]").forEach(button=>{button.disabled=!integrity.ok;button.title=integrity.ok?"Record a coaching change":`Unavailable: ${integrity.reason}`});let warning=$("v3204IntegrityWarning");if(!integrity.ok){if(!warning){warning=document.createElement("div");warning.id="v3204IntegrityWarning";warning.className="warning-box v3204-integrity-warning";(deck.querySelector("#v3126WholeView")||deck.firstElementChild)?.prepend(warning)}warning.innerHTML=`<strong>Session structure needs repair</strong><br>${escapeHtml(integrity.reason)}. Learning is paused.`}else warning?.remove();
+}
+const v3204BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){const result=v3204BindBoardBase?.(host,session);requestAnimationFrame(()=>{v3203DecorateBoard?.();v3204DecorateIntegrity()});return result};
+
+// Strong phone layout: no target overlap, no sticky action panel covering fields.
+const v3204Styles=document.createElement("style");v3204Styles.id="v3204Styles";v3204Styles.textContent=`
+#v3204TestChooser{margin-bottom:12px}.v3204-test-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.v3204-test-grid>section{display:grid;gap:8px;align-content:start;border:1px solid #bfd2dc;border-radius:14px;padding:12px;background:#f8fbfc}.v3204-test-grid>section>strong{font-size:1rem;color:#123f5d}.v3204-test-grid>section>span{font-size:.78rem;color:#607985;line-height:1.35}.v3204-test-grid label{display:grid;gap:5px}.v3204-active-test{margin-top:10px;display:flex;gap:10px;align-items:center;padding:10px 12px;background:#eaf6ef;border:1px solid #8ec4a3;border-radius:12px}.v3204-active-test span{font-size:.68rem;text-transform:uppercase;font-weight:900;color:#49715a}.v3204-active-test strong{flex:1}.v3204-advanced-setup{margin:10px 0;border:1px solid #c6d9e2;border-radius:12px}.v3204-advanced-setup>summary,.v3204-lane-editor>summary{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer}.v3204-advanced-setup>[data-body]{padding:0 10px 10px}.v3204-test-dialog{max-width:560px}.live-master-actions{position:static!important;bottom:auto!important;z-index:auto!important;box-shadow:none!important;margin-top:10px!important}.v3201-test-setup{display:none!important}.v3180-target-groups{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important}.v3180-target-group{display:grid!important;grid-template-columns:minmax(38px,auto) minmax(0,1fr)!important;grid-template-areas:"who target" "who source"!important;gap:2px 8px!important;min-width:0!important;overflow:hidden!important}.v3180-target-group>b{grid-area:who;align-self:start;min-width:0!important;white-space:normal!important}.v3180-target-group>strong{grid-area:target;min-width:0!important;white-space:normal!important;overflow-wrap:anywhere!important}.v3180-target-group>small{grid-area:source;min-width:0!important;white-space:normal!important;overflow-wrap:anywhere!important}.v3140-target-details,.v3140-target-details *{box-sizing:border-box!important;min-width:0}.v3190-pair{grid-template-columns:minmax(0,56fr) minmax(0,44fr)!important}.v3190-pair-main,.v3190-pair-mod{overflow:hidden!important}.v3204-integrity-warning{margin:10px 0}.manual-timing-tools[hidden]{display:none!important}.mobile-nav{scrollbar-width:none!important}.mobile-nav::-webkit-scrollbar{display:none!important}.v3204-active-test>div{display:grid;gap:2px;min-width:0;flex:1}.v3204-active-test small{font-size:.75rem;color:#58727e;white-space:normal}
+@media(max-width:760px){.v3204-test-grid{grid-template-columns:1fr}.v3204-active-test{align-items:flex-start;flex-wrap:wrap}.v3204-active-test button{width:100%}.v3190-pair{grid-template-columns:minmax(0,1fr)!important}.v3190-pair-mod{border-left:0!important;border-top:3px solid #d49c27!important}.v3180-target-group{grid-template-columns:42px minmax(0,1fr)!important}.live-setup-grid{grid-template-columns:1fr 1fr!important}.lane-editor-grid{grid-template-columns:1fr!important}}
+`;document.head.appendChild(v3204Styles);
+
+function v3204Brand(){const title=`McLay Swimming OS — v${V3204_VERSION} Stability`;const subtitle=`v${V3204_VERSION} · session truth · Roll-linked tests · conditional modifications · calm phone rendering`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle}
+try{v3203BrandObserver?.disconnect?.()}catch{}
+for(const name of ["v3203Brand","v3202Brand","v3201Brand","v32002Brand","v32001Brand","v3200Brand"]){try{globalThis[name]=v3204Brand}catch{}}
+const v3204BrandObserver=new MutationObserver(()=>queueMicrotask(v3204Brand));if(document.querySelector("title"))v3204BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3204BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+function v3204Startup(){
+  v3204SeedRubyScope();for(const session of appState.sessions||[])v3204RepairSession(session);v3204Brand();v3204RenderTimesShell();renderAttendance?.();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(false);setTimeout(v3204DecorateIntegrity,120);
+}
+window.v3204Debug={version:V3204_VERSION,build:V3204_BUILD,cueReason:v3204CueReason,parse:v3200ParseBlocks,integrity:v3204SessionIntegrity,present:v3204PresentAthletes,profileApplicable:v3204ProfileApplicable,seedTest:v3204SeedTimedTest,renderTimes:v3204RenderTimesShell};
+setTimeout(v3204Startup,0);setTimeout(v3204Startup,700);setTimeout(v3204Brand,2400);
