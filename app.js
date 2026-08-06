@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260803-board3192",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3207",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -19319,3 +19319,354 @@ const v3206BrandObserver=new MutationObserver(()=>queueMicrotask(v3206Brand));if
 function v3206Startup(){v3206Brand();try{const session=(appState.sessions||[]).find(row=>row.id===appState.settings.selected_session_id)||selectedSession?.();if(session){const integrity=v3204SessionIntegrity?.(session);if(integrity?.ok&&Number(session.planned_distance)!==Number(integrity.total)){session.planned_distance=Number(integrity.total);session.updated_at=nowIso();queueRecord?.("sessions",session.id);saveState(appState)}}}catch(error){console.warn("v3.20.6 integrity migration",error)}v3206RestorePoolsideState();v3107UpdateWakeLock?.();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(true)}
 window.v3206Debug={version:V3206_VERSION,build:V3206_BUILD,parse:v3206ParseBlocks,targets:v3206RacePaceRows,conversion:v3206LcmToScmConversion,persist:v3206PersistBlocks,applyGroupEdit:v3206ApplyGroupEdit,saveState:v3206SavePoolsideState,restoreState:v3206RestorePoolsideState,missed:v3206MissedWork};
 setTimeout(v3206Startup,0);setTimeout(v3206Startup,700);setTimeout(v3206Brand,2200);
+
+// =============================================================================
+// McLay Swimming OS v3.20.7 — Sync + Board Truth
+// Correction-only layer over v3.20.6. Protects the compact Board, Roll, Times,
+// Tests, Capture, Finish Session and planning while repairing real-device load,
+// phone/desktop sync, canonical live edits and pace/adaptation evidence.
+// =============================================================================
+const V3207_VERSION="3.20.7";
+const V3207_BUILD="20260807-sync-board-truth";
+const V3207_EXPECTED_BUILD="3.20.7-sync-board-truth-20260807";
+const V3207_SYNC_RETRY_CODES=/claim timestamp check failed|jwt claim|invalid jwt|expired|token|unauthori[sz]ed|\b401\b|\b403\b/i;
+
+function v3207Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3207Norm(value){return v3207Text(value).replace(/[–—]/g,"-").replace(/\s+/g," ").toLowerCase()}
+function v3207Now(){return typeof nowIso==="function"?nowIso():new Date().toISOString()}
+function v3207Clone(value){try{return clone(value)}catch{return JSON.parse(JSON.stringify(value))}}
+function v3207Clock(value){return typeof v3206Clock==="function"?v3206Clock(value):(typeof formatSeconds==="function"?formatSeconds(value):String(value))}
+function v3207Stroke(value){return typeof v3206Stroke==="function"?v3206Stroke(value):(typeof v3Stroke==="function"?v3Stroke(value):v3207Text(value))}
+
+// -----------------------------------------------------------------------------
+// A. Build visibility + deterministic service-worker takeover.
+// The phone must prove which bytes it is running before acceptance starts.
+// -----------------------------------------------------------------------------
+function v3207BuildBadge(){
+  let badge=document.getElementById("v3207BuildBadge");
+  const cluster=document.querySelector(".status-cluster");
+  if(!cluster)return null;
+  if(!badge){badge=document.createElement("span");badge.id="v3207BuildBadge";badge.className="badge";cluster.appendChild(badge)}
+  badge.textContent=`v${V3207_VERSION}`;badge.title=V3207_EXPECTED_BUILD;badge.dataset.build=V3207_EXPECTED_BUILD;return badge;
+}
+function v3207Brand(){
+  const title=`McLay Swimming OS — v${V3207_VERSION} Sync + Board Truth`;
+  const subtitle=`v${V3207_VERSION} · sync recovery · canonical live Board · race evidence · protected features`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3207_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3207_EXPECTED_BUILD)}catch{}
+  v3207BuildBadge();
+}
+async function v3207RegisterWorker(){
+  if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
+  try{
+    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3207",{updateViaCache:"none"});
+    await registration.update();
+    if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING");
+  }catch(error){console.warn("v3.20.7 service worker update",error)}
+}
+try{v3206BrandObserver?.disconnect?.()}catch{}
+const v3207BrandObserver=new MutationObserver(()=>queueMicrotask(v3207Brand));
+if(document.querySelector("title"))v3207BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v3207BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+// -----------------------------------------------------------------------------
+// B. Sync recovery. Preserve every pending local record. Refresh auth for both
+// REST and Storage 401/403 errors, compact duplicate pending rows, then push
+// before pulling. Phone and desktop recheck on visibility/focus.
+// -----------------------------------------------------------------------------
+function v3207AuthError(error){return V3207_SYNC_RETRY_CODES.test(String(error?.message||error||""))}
+function v3207CompactPending(){
+  const map=new Map();for(const item of (appState.pending||[])){if(!item?.table||!item?.id)continue;map.set(`${item.table}|${item.id}`,item)}
+  const compact=[...map.values()];if(compact.length!==(appState.pending||[]).length){appState.pending=compact;saveState(appState)}return compact;
+}
+const v3207CloudFetchBase=cloudFetch;
+cloudFetch=async function(path,options={}){
+  try{if(typeof v3103RefreshAuth==="function")await v3103RefreshAuth(false);return await v3207CloudFetchBase(path,options)}
+  catch(error){if(!v3207AuthError(error))throw error;if(typeof v3103RefreshAuth!=="function")throw error;await v3103RefreshAuth(true);return v3207CloudFetchBase(path,options)}
+};
+
+const v3207UploadCaptureBase=uploadCaptureMedia;
+uploadCaptureMedia=async function(capture){
+  if(!capture?.media_local_id||capture?.media_path)return capture;
+  const upload=async()=>{
+    if(typeof v3103RefreshAuth==="function")await v3103RefreshAuth(false);
+    const item=await getMediaBlob(capture.media_local_id);if(!item?.blob)return capture;
+    const config=getConfig(),auth=getAuth(),org=appState.settings.organisation_id;if(!config.supabaseUrl||!config.supabaseAnonKey||!auth?.access_token)throw new Error("Cloud is not signed in.");
+    const safeName=(item.name||"media").replace(/[^a-zA-Z0-9._-]+/g,"-");const path=`${org}/${capture.session_id}/${capture.id}-${safeName}`;
+    const response=await fetch(`${config.supabaseUrl}/storage/v1/object/${config.mediaBucket}/${encodeURI(path)}`,{method:"POST",headers:{apikey:config.supabaseAnonKey,Authorization:`Bearer ${auth.access_token}`,"Content-Type":item.blob.type||"application/octet-stream","x-upsert":"true"},body:item.blob});
+    if(!response.ok){const text=await response.text();const error=new Error(`Media upload failed (${response.status}): ${text}`);error.status=response.status;throw error}
+    capture.media_path=path;capture.updated_at=v3207Now();upsertLocal("captures",capture);saveState(appState);return capture;
+  };
+  try{return await upload()}catch(error){if(!v3207AuthError(error))throw error;if(typeof v3103RefreshAuth!=="function")throw error;await v3103RefreshAuth(true);return upload()}
+};
+
+function v3207SetSyncTruth({success=false,error=null,table=""}={}){
+  const stamp=v3207Now();
+  const legacy=appState.settings.v36_sync||(appState.settings.v36_sync={});legacy.last_attempt=stamp;
+  const detailed=typeof v3111SyncState==="function"?v3111SyncState():(appState.settings.v3111_sync||(appState.settings.v3111_sync={}));detailed.last_attempt=stamp;
+  if(success){legacy.last_success=stamp;legacy.last_error="";legacy.last_error_table="";detailed.last_success=stamp;detailed.last_contact=stamp;detailed.last_error=""}
+  if(error){const message=String(error?.message||error);legacy.last_error=message;legacy.last_error_table=table||error?.syncTable||"";detailed.last_error=message}
+  saveState(appState);
+}
+async function v3207RepairSync({render=true}={}){
+  if(!getAuth()?.access_token)throw new Error("Sign in once on this device before repairing sync.");
+  const snapshot=typeof v3197BoardSnapshot==="function"?v3197BoardSnapshot():null,selectedBefore=appState.settings.selected_session_id||"",squadBefore=appState.settings.selected_squad||"",pastBefore=appState.settings.v3191_viewing_past_session_id||"";
+  try{
+    if(typeof v3103RefreshAuth==="function")await v3103RefreshAuth(true);
+    if(!appState.settings.organisation_id)await ensureOrganisation();
+    v3207CompactPending();v3207SetSyncTruth();
+    // Use the latest non-destructive sync engine when available. It pushes local
+    // pending rows first, retains failures locally, then pulls the cloud truth.
+    let ok=true;if(typeof v3111RunSync==="function")ok=await v3111RunSync({pull:"full"});else{await pushPending();await pullCloud()}
+    // Sync must never navigate the coach away from the Board they were using.
+    if(selectedBefore&&(appState.sessions||[]).some(row=>row.id===selectedBefore)){appState.settings.selected_session_id=selectedBefore;if(squadBefore)appState.settings.selected_squad=squadBefore;if(pastBefore)appState.settings.v3191_viewing_past_session_id=pastBefore;saveState(appState)}
+    const left=(appState.pending||[]).length;
+    // A successful authenticated pass clears stale auth/timestamp diagnostics from
+    // earlier attempts. Non-auth data failures stay visible until they truly pass.
+    if(left===0&&ok!==false&&Array.isArray(appState.settings.v3111_sync_failures)){appState.settings.v3111_sync_failures=appState.settings.v3111_sync_failures.filter(row=>!v3207AuthError(row?.message));saveState(appState)}
+    const failures=v34Array(appState.settings.v3111_sync_failures).length;
+    if(left===0&&failures===0&&ok!==false)v3207SetSyncTruth({success:true});
+    else if(left||failures)v3207SetSyncTruth({error:new Error(`${left} pending · ${failures} sync issue${failures===1?"":"s"}`)});
+    if(render){renderAll?.();if(snapshot&&typeof v3197RestoreBoardSnapshot==="function")v3197RestoreBoardSnapshot(snapshot)}
+    const clean=left===0&&failures===0;updateStatus(clean?"Phone/desktop sync aligned":`${left} pending · ${failures} sync issue${failures===1?"":"s"}`,clean?"good":"error");v36RenderSyncDetails?.();v3111RenderSyncDetails?.();return{pending:left,failures,ok:clean};
+  }catch(error){v3207SetSyncTruth({error,table:error?.syncTable||""});v36RenderSyncDetails?.();v3111RenderSyncDetails?.();throw error}
+}
+const v3207SyncNowBase=syncNow;
+syncNow=async function(){try{return await v3207RepairSync({render:true})}catch(error){updateStatus(`${(appState.pending||[]).length} pending · sync error`,`error`);throw error}};
+syncIfPossible=async function(){if(!cloudReady()){renderMode?.();v36RenderSyncDetails?.();v3111RenderSyncDetails?.();return false}try{return await v3207RepairSync({render:false})}catch(error){console.error(error);updateStatus(`${(appState.pending||[]).length} pending · sync error`,`error`);return false}};
+
+function v3207AttachSyncAction(host){if(!host)return;let bar=host.querySelector(".v3207-sync-actions");if(!bar){bar=document.createElement("div");bar.className="button-row v3207-sync-actions";bar.innerHTML=`<button type="button" data-v3207-repair-sync>Repair & sync now</button><span class="help" data-v3207-sync-build>${V3207_EXPECTED_BUILD}</span>`;host.appendChild(bar)}const button=bar.querySelector("[data-v3207-repair-sync]");button.onclick=async()=>{button.disabled=true;button.textContent="Repairing…";try{const result=await v3207RepairSync({render:true});button.textContent=result.ok?"Synced":"Review pending"}catch(error){button.textContent="Retry sync";updateStatus(error.message||"Sync repair failed","error")}finally{button.disabled=false}}}
+const v3207RenderSyncBase=v36RenderSyncDetails;
+v36RenderSyncDetails=function(){v3207RenderSyncBase?.();v3207AttachSyncAction($("v36SyncDetails"))};
+const v3207RenderDetailedSyncBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;
+if(v3207RenderDetailedSyncBase)v3111RenderSyncDetails=function(){v3207RenderDetailedSyncBase();v3207AttachSyncAction($("v3111SyncDetails"))};
+let v3207FocusSyncTimer=null;function v3207ScheduleFocusSync(delay=900){clearTimeout(v3207FocusSyncTimer);v3207FocusSyncTimer=setTimeout(()=>{if(document.visibilityState!=="visible"||!navigator.onLine||!cloudReady())return;syncIfPossible().catch?.(()=>{})},delay)}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")v3207ScheduleFocusSync(700)});window.addEventListener("focus",()=>v3207ScheduleFocusSync(700));window.addEventListener("online",()=>v3207ScheduleFocusSync(250));
+
+// -----------------------------------------------------------------------------
+// C. Canonical block editor. Every structured-block edit becomes the visible
+// Board truth, updates workout text + totals, and survives sync/reload.
+// -----------------------------------------------------------------------------
+function v3207BlockHeading(block){const type=String(block?.block_type||"");return type==="warm_up"?"Warm-up":type==="pre_set"?"Pre-set":type==="main_set"?"Main set":type==="post_set"?"Post-main set":type==="warm_down"?"Warm-down":block?.title||"Other"}
+function v3207BlockRepeat(block){
+  const explicit=Math.max(1,Number(block?.repeat_count)||1);if(explicit>1)return explicit;
+  const heading=Math.max(1,Number(block?.v3200_heading_repeat)||1);if(heading>1)return heading;
+  const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false);
+  const multipliers=runnable.map(item=>Math.max(1,Number(item?.v3204_forward_rounds)||Number(item?.v3200_heading_repeat)||Number(item?.v3200_repeat_count)||Number(item?.v3200_multiplier)||1));
+  if(!multipliers.length||!multipliers.some(n=>n>1))return 1;
+  return multipliers.every(n=>n===multipliers[0])?multipliers[0]:1
+}
+function v3207BlockText(block){
+  const lines=v34Array(block?.items).sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)).map(item=>v3207Text(item.raw||item.label||item.instruction)).filter(Boolean);
+  const repeat=v3207BlockRepeat(block),hasRound=lines.some(line=>/^\s*\d+\s*(?:rounds?|x\s*rounds?)\b/i.test(line));
+  if(repeat>1&&!hasRound)lines.unshift(`${repeat} Rounds:`);
+  return [v3207BlockHeading(block),...lines].join("\n")
+}
+function v3207WorkoutFromBlocks(blocks){return blocks.map(v3207BlockText).filter(Boolean).join("\n\n")}
+function v3207ParseEditorBlock(type,title,text,old=null){
+  const heading=type==="warm_up"?"Warm-up":type==="pre_set"?"Pre-set":type==="main_set"?"Main set":type==="post_set"?"Post-main set":type==="warm_down"?"Warm-down":title||"Other";
+  let body=String(text||"").trim();
+  const oldRepeat=v3207BlockRepeat(old),hasRound=/^\s*\d+\s*(?:rounds?|x\s*rounds?)\b/im.test(body);
+  // The structured editor historically displayed only child lines, so preserve a
+  // parent round multiplier even when the coach adds/changes a line in that block.
+  if(oldRepeat>1&&!hasRound)body=`${oldRepeat} Rounds:\n${body}`;
+  const parsed=v3206ParseBlocks?.(`${heading}\n${body}`)||[];let block=parsed.find(row=>row.block_type===type)||parsed[0];
+  if(!block){const items=String(text||"").split(/\r?\n/).map((line,index)=>v3198ParseItem?.(line,index)?.item).filter(Boolean);block={block_type:type,title:title||heading,items,raw_text:String(text||"")}}
+  const id=old?.id||block.id||uid("block");return{...block,id,block_type:type,title:title||block.title||heading,session_id:old?.session_id||null,sort_order:old?.sort_order,items:v34Array(block.items).map((item,index)=>({...item,id:old?.items?.[index]?.id||item.id||uid("block-line"),sort_order:index+1})),source_import:"v3207_block_editor",notes:old?.notes||"Protected block editor",status:old?.status||"planned",updated_at:v3207Now()};
+}
+function v3207CommitBlocks(session,blocks,{source="v3207_block_editor",note="Structured Board edit"}={}){
+  if(!session)return null;const ordered=blocks.slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));const prior=v3206StoredBlocks?.(session.id)||v32SessionBlocks?.(session.id)||[];const keep=new Set();
+  ordered.forEach((block,index)=>{const rec={...block,id:block.id||prior[index]?.id||uid("block"),session_id:session.id,sort_order:index+1,source_import:source,notes:block.notes||note,status:block.status||"planned",items:v34Array(block.items).map((item,i)=>({...item,id:item.id||uid("block-line"),sort_order:i+1})),updated_at:v3207Now()};keep.add(rec.id);upsertLocal("session_blocks",rec);queueRecord("session_blocks",rec.id);ordered[index]=rec});
+  for(const old of prior)if(!keep.has(old.id)){appState.session_blocks=appState.session_blocks.filter(row=>row.id!==old.id);queueDelete("session_blocks",old.id)}
+  session.workout=v3207WorkoutFromBlocks(ordered);session.sets=typeof extractStructuredSets==="function"?extractStructuredSets(session.workout):session.sets;session.planned_distance=v3200Distance?.(ordered)||0;session.updated_at=v3207Now();upsertLocal("sessions",session);queueRecord("sessions",session.id);
+  if(!appState.settings.v3150_locked_session_structures)appState.settings.v3150_locked_session_structures={};appState.settings.v3150_locked_session_structures[session.id]={approved_at:v3207Now(),distance:session.planned_distance,source};saveState(appState);scheduleFastSync?.();v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true);return ordered;
+}
+function v3207StoredBlocksAreRecent(session,stored){if(!session||!stored?.length||v3204InvalidLockedBlocks?.(stored))return false;const newest=Math.max(...stored.map(row=>Date.parse(row.updated_at||0)||0)),sessionTime=Date.parse(session.updated_at||0)||0,total=v3200Distance?.(stored)||0;return total>0&&newest>=sessionTime&&stored.some(block=>v34Array(block.items).some(item=>v3207Text(item?.raw||item?.instruction)))}
+function v3207CanonicalStoredBlocks(session){const stored=v3206StoredBlocks?.(session.id)||[];if(!stored.length||v3204InvalidLockedBlocks?.(stored))return[];const tagged=stored.some(block=>["v3206_live_edit","v3207_block_editor","v3207_workout_editor"].includes(String(block.source_import||"")));return tagged||v3207StoredBlocksAreRecent(session,stored)?stored:[]}
+const v3207BoardBlocksBase=v3170BoardBlocks;
+v3170BoardBlocks=function(session){if(!session)return[];const stored=v3207CanonicalStoredBlocks(session);if(stored.length)return stored.map(block=>({...block,items:v34Array(block.items).map(item=>({...item}))}));return v3207BoardBlocksBase?.(session)||[]};
+v3125BoardBlocks=v3170BoardBlocks;
+
+v32SaveSessionBlock=async function(){
+  const session=appState.sessions.find(s=>s.id===($("editSessionId")?.value||selectedSession()?.id));if(!session)return alert("Choose or save the session first.");
+  const old=appState.session_blocks.find(b=>b.id===$("sessionBlockId").value),type=$("sessionBlockType").value,text=$("sessionBlockItems").value;if(!v3207Text(text))return alert("Add at least one set line.");
+  const current=(v3206StoredBlocks?.(session.id)||v32SessionBlocks(session.id)).map(row=>v3207Clone(row));let blocks=current.slice();const parsed=v3207ParseEditorBlock(type,$("sessionBlockTitle").value.trim(),text,old);parsed.session_id=session.id;parsed.notes=$("sessionBlockNotes").value.trim()||parsed.notes;
+  const idx=old?blocks.findIndex(row=>row.id===old.id):-1;if(idx>=0){parsed.sort_order=blocks[idx].sort_order;blocks[idx]=parsed}else{parsed.sort_order=blocks.length+1;blocks.push(parsed)}
+  blocks=v3207CommitBlocks(session,blocks);v32FillBlockEditor?.(blocks.find(row=>row.id===parsed.id)||parsed);renderAll?.();updateStatus(`Session block saved · Board now ${Number(session.planned_distance||0).toLocaleString()}m`,`good`);
+};
+const v3207DeleteSessionBlockBase=v32DeleteSessionBlock;
+v32DeleteSessionBlock=async function(id=$("sessionBlockId")?.value){const block=appState.session_blocks.find(row=>row.id===id);if(!block)return;const session=appState.sessions.find(row=>row.id===block.session_id);if(!session)return;if(!confirm(`Delete ${block.title||v32BlockLabel(block.block_type)}?`))return;const blocks=(v3206StoredBlocks?.(session.id)||[]).filter(row=>row.id!==id).map(v3207Clone);v3207CommitBlocks(session,blocks);if($("sessionBlockEditor"))$("sessionBlockEditor").hidden=true;renderAll?.();updateStatus("Session block deleted and Board recalculated","good")};
+const v3207DuplicateSessionBlockBase=v32DuplicateSessionBlock;
+v32DuplicateSessionBlock=async function(id=$("sessionBlockId")?.value){const block=appState.session_blocks.find(row=>row.id===id);if(!block)return;const session=appState.sessions.find(row=>row.id===block.session_id);if(!session)return;const blocks=(v3206StoredBlocks?.(session.id)||[]).map(v3207Clone),idx=blocks.findIndex(row=>row.id===id),copy={...v3207Clone(block),id:uid("block"),title:`${block.title} copy`,items:v34Array(block.items).map(item=>({...v3207Clone(item),id:uid("block-line")})),source_import:"v3207_block_editor",updated_at:v3207Now()};blocks.splice(idx+1,0,copy);v3207CommitBlocks(session,blocks);v32FillBlockEditor?.(copy);renderAll?.()};
+const v3207MoveBlockBase=v32MoveBlock;
+v32MoveBlock=async function(id,direction){const block=appState.session_blocks.find(row=>row.id===id);if(!block)return;const session=appState.sessions.find(row=>row.id===block.session_id);if(!session)return;const blocks=(v3206StoredBlocks?.(session.id)||[]).map(v3207Clone),i=blocks.findIndex(row=>row.id===id),j=i+direction;if(i<0||j<0||j>=blocks.length)return;[blocks[i],blocks[j]]=[blocks[j],blocks[i]];v3207CommitBlocks(session,blocks);renderAll?.()};
+
+// Desktop workout editor now rebuilds the same canonical blocks that Board uses.
+const v3207DesktopSaveBase=typeof v361SaveDesktopSession==="function"?v361SaveDesktopSession:null;
+v361SaveDesktopSession=async function(useNow=false){
+  const existing=appState.sessions.find(s=>s.id===$("editSessionId").value),linkedSeason=appState.season_plans.find(s=>s.id===$("editSessionSeasonPlan")?.value),linkedWeek=appState.weekly_plans.find(w=>w.id===$("editSessionWeeklyPlan")?.value),workout=$("editSessionWorkout").value;
+  const record={id:existing?.id||uid("session"),session_date:$("editSessionDate").value,day_part:$("editSessionPart").value,venue:$("editSessionVenue").value.trim(),title:$("editSessionTitle").value.trim(),squads:$("editSessionSquads").value.split(",").map(x=>x.trim()).filter(Boolean),planned_distance:0,primary_system:$("editSessionSystem").value.trim(),technical_focus:$("editSessionTechnical").value.trim(),season_plan_id:$("editSessionSeasonPlan")?.value||null,weekly_plan_id:$("editSessionWeeklyPlan")?.value||null,lane_count:Math.max(1,Math.min(12,Number($("editSessionLaneCount")?.value||1))),pool_course:$("editSessionPoolCourse")?.value||"SCM",season_name:linkedSeason?.name||$("editSessionSeason").value.trim(),week_start:linkedWeek?.week_start||$("editSessionWeekStart").value||null,week_phase:linkedWeek?.phase||$("editSessionWeekPhase").value.trim(),week_objective:linkedWeek?.objective||$("editSessionWeekObjective").value.trim(),week_carry_forward:linkedWeek?.carry_forward||$("editSessionWeekCarry").value.trim(),plan_cue:$("editSessionPlanCue").value.trim(),next_session_cue:$("editSessionNextCue").value.trim(),workout,sets:typeof extractStructuredSets==="function"?extractStructuredSets(workout):[],step_number:existing?.step_number||null,previous_session_id:existing?.previous_session_id||null,status:existing?.status||"planned",updated_at:v3207Now()};
+  if(!record.session_date||!record.title)return alert("Date and title are required.");upsertLocal("sessions",record);queueRecord("sessions",record.id);
+  const parsed=v3206ParseBlocks?.(workout)||[];if(parsed.length&&!v3204InvalidLockedBlocks?.(parsed))v3207CommitBlocks(record,parsed.map((block,index)=>({...block,id:(v3206StoredBlocks?.(record.id)||[])[index]?.id||block.id,source_import:"v3207_workout_editor"})),{source:"v3207_workout_editor",note:"Workout editor"});else{record.planned_distance=Number($("editSessionDistance").value||estimateDistance?.(workout)||0);upsertLocal("sessions",record);queueRecord("sessions",record.id);saveState(appState)}
+  if(useNow){appState.settings.selected_session_id=record.id;appState.settings.selected_squad=sessionSquads(record)[0]||"";saveState(appState)}fillSessionEditor?.(record);renderAll?.();scheduleFastSync?.();if(useNow){showView?.("deck");v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true);updateStatus("Session and blocks saved and open on Board","good")}else updateStatus("Session and structured blocks saved","good");
+};
+for(const [id,useNow] of [["saveSessionBtn",false],["saveSessionAndUseBtn",true]]){const old=$(id);if(old){const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener("click",()=>v361SaveDesktopSession(useNow))}}
+
+// -----------------------------------------------------------------------------
+// D. Stroke + race evidence truth.
+// Explicit stroke wins. #1 is highest valid WA/WAP/PWAP scoring stroke. Pace
+// without a stroke defaults to Free for aerobic work and #1 for anaerobic work.
+// -----------------------------------------------------------------------------
+function v3207IsPara(athlete){return Boolean(v3207Text(athlete?.current_s_class||athlete?.current_sb_class||athlete?.current_sm_class))}
+function v3207PointRow(athlete){
+  const allowed=new Set(["Freestyle","Backstroke","Breaststroke","Butterfly"]),rows=(typeof v3150RaceRows==="function"?v3150RaceRows(athlete):[]).filter(row=>allowed.has(v3207Stroke(row.stroke)));
+  const para=v3207IsPara(athlete);const scored=rows.map(row=>{let points=0,label="";if(para){for(const key of ["world_para_points","para_points","wps_points","world_para_swimming_points","pwap_points","wap_points"]){const n=Number(row?.[key]);if(Number.isFinite(n)&&n>points){points=n;label="WAP/PWAP"}}try{const hit=v32PointsFor?.(row,athlete);if(Number(hit?.value)>points&&/para/i.test(hit?.label||"")){points=Number(hit.value);label="WAP/PWAP"}}catch{}}else{for(const key of ["wa_points","world_aquatics_points","fina_points","aqua_points","points","point_score","points_value","pb_points"]){const n=Number(row?.[key]);if(Number.isFinite(n)&&n>points){points=n;label="WA"}}try{const hit=v32PointsFor?.(row,athlete);if(Number(hit?.value)>points){points=Number(hit.value);label=hit.label||"WA"}}catch{}}return{row,points,label}}).filter(x=>x.points>0).sort((a,b)=>b.points-a.points||Number(a.row.result_seconds)-Number(b.row.result_seconds));
+  return scored[0]||null;
+}
+function v3207PrimaryStroke(athlete){const best=v3207PointRow(athlete);if(best)return{stroke:v3207Stroke(best.row.stroke),source:`Highest ${best.label||"points"} · ${Math.round(best.points)} pts`,points:best.points,hasEvidence:true};const fallback=typeof v3140BestStroke==="function"?v3140BestStroke(athlete,{excludeFree:false}):"";return{stroke:v3207Stroke(fallback),source:fallback?"Best available result/profile evidence":"Stroke needed",points:0,hasEvidence:Boolean(fallback)}}
+function v3207ExplicitStroke(line){const text=v3207Text(line);if(/#\s*1\b/i.test(text))return{token:"primary",stroke:""};const m=text.match(/\b(freestyle|free|backstroke|back|breaststroke|breast|butterfly|fly|individual medley|medley|im)\b/i);return m?{token:"explicit",stroke:v3207Stroke(m[1])}:null}
+function v3207AnaerobicContext(session,block,item){
+  const text=v3207Norm([session?.primary_system,block?.purpose,block?.title,item?.raw,item?.instruction].filter(Boolean).join(" "));
+  // Explicit anaerobic language wins; then explicit aerobic language. Word
+  // boundaries matter because "anaerobic" contains the letters "aerobic".
+  // Bare words such as "power" and "capacity" are not classification evidence.
+  if(/\banaerobic\b|race\s*pace|sprint|max(?:imum)?|finishing\s*speed/.test(text))return true;
+  if(/\baerobic\b|regeneration|development|threshold|overload|t400|recovery/.test(text))return false;
+  return false
+}
+function v3207ResolvePaceStroke(athlete,session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText?.(item)||item?.raw||item?.instruction||"",explicit=v3207ExplicitStroke(line);if(explicit?.token==="explicit")return{stroke:explicit.stroke,token:"explicit",source:"Written stroke",hasEvidence:true};if(explicit?.token==="primary"){const best=v3207PrimaryStroke(athlete);return{...best,token:"primary",lineKey:v3140LineKey?.(block,item,blockIndex,itemIndex)}}
+  const isPace=/\b(?:pace|\d+\s*p\b|race\s*pace)\b/i.test(line)||Number(item?.race_distance)>0;if(isPace){if(v3207AnaerobicContext(session,block,item)){const best=v3207PrimaryStroke(athlete);return{...best,token:"primary",source:`No stroke written · anaerobic → #1 · ${best.source}`}}return{stroke:"Freestyle",token:"default_aerobic",source:"No stroke written · aerobic → Freestyle",hasEvidence:true}}
+  const base=v3140ResolveStroke?.(athlete,session,block,item,blockIndex,itemIndex)||{};return{...base,stroke:v3207Stroke(base.stroke||item?.stroke),source:base.source||"Written/default activity",hasEvidence:Boolean(base.stroke||item?.stroke)};
+}
+v3206ResolveRaceStroke=v3207ResolvePaceStroke;
+
+const V3207_SNZ_CONVERSION_SOURCE="Swimming NZ Conversion Times · current official table · retrieved 2026-08-07";
+const V3207_SNZ_CONVERSION_URL="https://www.swimmingnz.org/_files/ugd/ec0271_4af37d9369a74773a04dabbaf168bd6c.pdf";
+const V3207_SNZ_CONVERSIONS=[
+  [50,"Freestyle",0.85],[50,"Backstroke",0.85],[50,"Butterfly",0.70],[50,"Breaststroke",1.00],
+  [100,"Freestyle",1.70],[100,"Backstroke",1.70],[100,"Butterfly",1.40],[100,"Breaststroke",2.00],
+  [200,"Freestyle",3.40],[200,"Backstroke",3.40],[200,"Butterfly",2.80],[200,"Breaststroke",4.00],[200,"IM",3.40],
+  [400,"Freestyle",6.80],[400,"IM",6.80],[800,"Freestyle",13.60],[1500,"Freestyle",25.50]
+].map(([distance,stroke,seconds])=>({id:`snz-current-${distance}-${stroke.toLowerCase().replace(/[^a-z]+/g,"-")}`,from_course:"SCM",to_course:"LCM",distance,stroke,multiplier:1,seconds_adjustment:seconds,effective_year:2026,active:true,label:V3207_SNZ_CONVERSION_SOURCE,source_name:V3207_SNZ_CONVERSION_SOURCE,source_url:V3207_SNZ_CONVERSION_URL,source_status:"official"}));
+function v3207InstallOfficialConversions(){
+  const existing=v34Array(appState.xlr8_course_conversions),map=new Map(existing.map(row=>[row.id||`${row.from_course}|${row.to_course}|${row.distance}|${row.stroke}`,row]));
+  for(const row of V3207_SNZ_CONVERSIONS)map.set(row.id,row);appState.xlr8_course_conversions=[...map.values()];saveState(appState);window.v374ScheduleHeavyCache?.(appState);return true
+}
+function v3207EnsureCourseConversions(){
+  // Keep an offline copy of the current official Swimming NZ table so an LCM PB
+  // can still be converted after a poolside restart or during a cloud outage.
+  v3207InstallOfficialConversions();
+  if(!cloudReady())return Promise.resolve(true);
+  return cloudFetch("/rest/v1/xlr8_course_conversions?select=*&active=eq.true").then(rows=>{if(Array.isArray(rows)&&rows.length){const local=v34Array(appState.xlr8_course_conversions),map=new Map(local.map(row=>[row.id||`${row.from_course}|${row.to_course}|${row.distance}|${row.stroke}`,row]));for(const raw of rows){const copy={...raw};delete copy.organisation_id;delete copy.created_by;map.set(copy.id||`${copy.from_course}|${copy.to_course}|${copy.distance}|${copy.stroke}`,copy)}appState.xlr8_course_conversions=[...map.values()];v3207InstallOfficialConversions()}return true}).catch(error=>{console.warn("Cloud conversion rows unavailable; using embedded official Swimming NZ table",error);return true});
+}
+
+// -----------------------------------------------------------------------------
+// E. Race-pace + John Pike start truth. Exact SCM PB is first choice. If the
+// matching SCM PB is absent, a verified Swimming NZ LCM→SCM conversion may
+// provide the anchor. Generic race pace uses the existing John Pike SCM model.
+// Dive 15 uses the John Pike 100m opening shape scaled so its first race 50
+// equals the swimmer's verified/converted 50m PB; it is labelled as an estimate,
+// because the supplied workbook has no standalone 50m event model.
+// -----------------------------------------------------------------------------
+function v3207LcmToScmConversion(athlete,distance,stroke,lcmPb){
+  const age=v3206Age?.(athlete),sex=v3206Sex?.(athlete),rows=v34Array(appState.xlr8_course_conversions).filter(row=>v3206ActiveConversion?.(row)!==false&&v3Course?.(row.from_course||"SCM")==="SCM"&&v3Course?.(row.to_course||"LCM")==="LCM"&&(!row.age||Number(row.age)===Number(age))&&(!row.sex||v3106Sex?.(row.sex)===sex)&&(!row.distance||Number(row.distance)===Number(distance))&&(!row.stroke||v3207Stroke(row.stroke)===stroke));
+  rows.sort((a,b)=>Number(b.effective_year||0)-Number(a.effective_year||0)||Number(String(b.id||"").startsWith("snz-current-"))-Number(String(a.id||"").startsWith("snz-current-"))||Number(Boolean(b.distance))+Number(Boolean(b.stroke))-Number(Boolean(a.distance))-Number(Boolean(a.stroke)));
+  const row=rows[0];if(!row)return null;const multiplier=Number(row.multiplier??1),adjust=Number(row.seconds_adjustment??row.adjustment_seconds??0),lcm=Number(lcmPb?.result_seconds??lcmPb?.pb_seconds??v3206PbSeconds?.(lcmPb));if(!Number.isFinite(lcm)||!Number.isFinite(multiplier)||multiplier<=0||!Number.isFinite(adjust))return null;const seconds=(lcm-adjust)/multiplier;if(!Number.isFinite(seconds)||seconds<=0)return null;return{seconds,row,source:row.label||row.source_name||"Swimming NZ Conversion Times"}
+}
+v3206LcmToScmConversion=v3207LcmToScmConversion;
+function v3207ExactPbAny(athlete,course,distance,stroke){const rows=typeof v3150RaceRows==="function"?v3150RaceRows(athlete):[];return rows.filter(row=>v3Course?.(row.course)===course&&Number(row.distance)===Number(distance)&&v3207Stroke(row.stroke)===stroke).sort((a,b)=>Number(a.result_seconds)-Number(b.result_seconds))[0]||null}
+function v3207RaceAnchor(athlete,course,distance,stroke){
+  let pb=v3207ExactPbAny(athlete,course,distance,stroke),seconds=pb?Number(pb.result_seconds):null,source=pb?`${course} ${distance} ${stroke} PB`:"";
+  if(!pb&&course==="SCM"){const lcm=v3207ExactPbAny(athlete,"LCM",distance,stroke),converted=lcm&&typeof v3206LcmToScmConversion==="function"?v3206LcmToScmConversion(athlete,distance,stroke,lcm):null;if(converted){pb=lcm;seconds=converted.seconds;source=`LCM ${distance} ${stroke} PB → SCM · ${converted.source}`}}
+  return Number.isFinite(seconds)&&seconds>0?{pb,seconds,source}:null;
+}
+function v3207RacePaceRows(session,block,item,blockIndex=0,itemIndex=0){
+  const line=v3129LineText?.(item)||item?.raw||"",raceDistance=Number(item?.race_distance)||v3199RaceDistance?.(line)||v3129RaceDistance?.(item);if(!raceDistance)return[];
+  const plan=typeof v3129LanePlan==="function"?v3129LanePlan(session):{roster:v3204PresentAthletes?.(session)||[],assignments:new Map()},repDistance=Number(item?.distance)||0,course=v3Course?.(item?.pace_course||session?.pool_course||"SCM")||"SCM",cycleSeconds=Number(item?.cycle)||v3129ExplicitCycle?.(item)||null,rows=[];
+  for(const athlete of plan.roster||[]){
+    const resolved=v3207ResolvePaceStroke(athlete,session,block,item,blockIndex,itemIndex),stroke=v3207Stroke(resolved.stroke),anchor=stroke?v3207RaceAnchor(athlete,course,raceDistance,stroke):null;let target=null;
+    if(anchor&&repDistance){if(course==="SCM"&&typeof v3150TargetFromTotal==="function"){target=v3150TargetFromTotal(anchor.seconds,{sex:v3150Sex?.(athlete)||v3206Sex?.(athlete),eventDistance:raceDistance,eventStroke:stroke,repDistance,line,resolvedStroke:stroke})}if(!target)target={seconds:anchor.seconds*(repDistance/raceDistance),method:"Estimated average fallback"}}
+    const targetSeconds=Number(target?.seconds),missing=!stroke||!Number.isFinite(targetSeconds)||targetSeconds<=0,missingWhy=!stroke?"Resolve #1 stroke before setting pace":`No ${course} ${raceDistance} ${stroke} PB${course==="SCM"?" and no verified LCM→SCM conversion available":""}`;
+    rows.push({athlete,lane:plan.assignments?.get?.(athlete.id)||1,resolved,status:missing?"missing":"ok",missing,targetSeconds:missing?null:targetSeconds,cycleSeconds,primary:missing?"Coach target needed":cycleSeconds?`${v3207Clock(targetSeconds)} on ${v3207Clock(cycleSeconds)}`:v3207Clock(targetSeconds),secondary:missing?missingWhy:`${anchor.source} · ${target.method||"race-pace model"}`,source:anchor?.source||"",source_label:missing?"Target needed":anchor.source,method:target?.method||""});
+  }return rows;
+}
+v3206RacePaceRows=v3207RacePaceRows;
+
+function v3207Dive15Target(athlete,session,block,item,blockIndex,itemIndex){
+  const best=v3207PrimaryStroke(athlete),stroke=best.stroke,course=v3Course?.(session?.pool_course||"SCM")||"SCM";if(!stroke)return null;const anchor=v3207RaceAnchor(athlete,course,50,stroke);
+  if(!anchor)return{athlete,resolved:{...best,stroke,token:"primary"},missing:true,targetSeconds:null,cycleSeconds:null,secondary:`No ${course} 50 ${stroke} PB${course==="SCM"?" and no verified LCM→SCM conversion available":""}`,source_label:"Target needed"};
+  const sex=v3150Sex?.(athlete)||v3206Sex?.(athlete),model=v3150ModelFor?.(sex,100,stroke);if(!model||!Number(model.parts?.[0]))return{athlete,resolved:{...best,stroke,token:"primary"},missing:true,targetSeconds:null,cycleSeconds:null,secondary:`No John Pike 100 ${stroke} start model available`,source_label:"Target needed"};
+  // Scale the supplied 100m opening distribution so its first race 50 equals
+  // this swimmer's actual 50m PB. This respects the John Pike dive-to-25/start
+  // shape without claiming the workbook contains a separate 50m event model.
+  const equivalent100=anchor.seconds/Number(model.parts[0]),profile=v3150FiftyProfile?.(equivalent100,sex,100,stroke),target=profile?v3150Cumulative?.(profile,15):null;if(!Number.isFinite(target)||target<=0)return null;
+  return{athlete,resolved:{...best,stroke,token:"primary"},missing:false,targetSeconds:target,cycleSeconds:null,secondary:`${anchor.source} · John Pike start-shape estimate from 50 PB`,source_label:anchor.source,method:"John Pike start-shape estimate"};
+}
+const v3207TargetRowsBase=v3205TargetRows;
+v3205TargetRows=function(session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText?.(item)||item?.raw||"";if(/^\s*\d+\s*[x×]\s*(?:dive\s*)?starts?\b/i.test(line)&&/\b15\s*m\b/i.test(line)){const plan=typeof v3129LanePlan==="function"?v3129LanePlan(session):{roster:v3204PresentAthletes?.(session)||[]};return (plan.roster||[]).map(athlete=>v3207Dive15Target(athlete,session,block,item,blockIndex,itemIndex)).filter(Boolean)}
+  const race=Number(item?.race_distance)||v3199RaceDistance?.(line);if(race&&!item?.suppress_auto_targets)return v3207RacePaceRows(session,block,{...item,race_distance:race},blockIndex,itemIndex);
+  return v3207TargetRowsBase?.(session,block,item,blockIndex,itemIndex)||[];
+};
+
+// -----------------------------------------------------------------------------
+// F. Adaptation safety. T400 is only evidence for genuine aerobic work; quality,
+// drill, recovery and warm-down lines stay free of fabricated pace targets.
+// Generated ordinary distances snap to complete 25m lengths; deliberate short
+// starts/finishes/underwater work keep their written distance.
+// -----------------------------------------------------------------------------
+function v3207LineText(item){return v3207Text(item?.raw||item?.instruction||item?.label)}
+function v3207T400Eligible(session,block,item){const text=v3207Norm([block?.title,block?.purpose,v3207LineText(item)].join(" "));if(/dive|start|finish|last\s*10|max|sprint|drill|kick|warm[- ]?down|choice|5\s*hr|recovery|regeneration|paddles|fins\s*max|mid[- ]?pool|underwater/.test(text))return false;return /aerobic|development|threshold|overload|t400|critical|steady|swim/.test(text)}
+function v3207ShortWork(item){const text=v3207LineText(item);return /\b(?:10|12\.5|15|20)\s*m\b|dive|start|finish|underwater|breakout|mid[- ]?pool/i.test(text)}
+function v3207SnapDistance(distance,item){const d=Number(distance)||0;if(!d||v3207ShortWork(item))return d;return Math.max(25,Math.round(d/25)*25)}
+function v3207ReplaceDistanceInLine(line,newDistance){const text=v3207Text(line);if(!text)return text;return text.replace(/^(\s*\d+\s*[x×]\s*)\d+(?:\.5)?\s*m?\b/i,`$1${newDistance}`).replace(/^(\s*1\s*[x×]\s*)\d+(?:\.5)?\b/i,`$1${newDistance}`)}
+const v3207AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3207AdaptationBase?.(athlete,session,block,blockIndex);if(!result)return result;const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let rIndex=-1;
+  for(let i=0;i<rows.length;i++){if(rows[i]?.cue)continue;rIndex++;const item=runnable[rIndex];if(!item)continue;const explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,rIndex,v34Array(block?.items).indexOf(item));if(!explicit&&v3206LongRestQuality?.(item)){rows[i]={...rows[i],line:v3207LineText(item),distance:Number(item.reps||1)*Number(item.distance||0),target:"",source:"Same as main · quality/long-rest work"};continue}
+    if(!v3207T400Eligible(session,block,item)&&!explicit)rows[i].target="";
+    const parsed=v3170ParseItem?.(rows[i].line||"",v34Array(block?.items).indexOf(item));const pitem=parsed?.item||parsed,distance=Number(pitem?.distance);if(distance&&!v3207ShortWork(item)){const snapped=v3207SnapDistance(distance,item);if(snapped!==distance){rows[i].line=v3207ReplaceDistanceInLine(rows[i].line,snapped);const reparsed=v3170ParseItem?.(rows[i].line||"",v34Array(block?.items).indexOf(item)),ri=reparsed?.item||reparsed;rows[i].distance=(Number(ri?.reps)||1)*(Number(ri?.distance)||snapped);rows[i].source=[rows[i].source,"complete 25m pool lengths"].filter(Boolean).join(" · ")}}
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;return{...result,rows,total,repeat};
+};
+
+// -----------------------------------------------------------------------------
+// G. Main Board shows delivered group edits as the line itself. The previous
+// plan is a small reference below; individual differences remain directly under
+// the matching line. No second Times & cues disclosure.
+// -----------------------------------------------------------------------------
+function v3207LineHtml(session,block,group,blockIndex){
+  const {item,itemIndex,runnableIndex,attachments}=group,raw=v3207LineText(item),rest=attachments.filter(x=>x.kind==="rest").map(x=>x.text),patterns=attachments.filter(x=>x.kind==="pattern").map(x=>x.text),rounds=attachments.filter(x=>x.kind==="round").map(x=>x.text.replace(/^Round\s*/i,"R")),other=attachments.filter(x=>!["rest","pattern","round"].includes(x.kind)).map(x=>x.text),targets=v3205TargetRows(session,block,item,blockIndex,itemIndex),detail=v3206TargetDetails?.(session,block,item,blockIndex,itemIndex)||v3205TargetDetails?.(session,block,item,blockIndex,itemIndex)||"",t400=v3205T400Spec?.(item,block),tab=t400?"Time ›":targets.length?`${targets.length} target${targets.length===1?"":"s"} ›`:"Open ›",inlineRest=rest.length?`<span class="v3205-inline-rest">${escapeHtml(rest.join(" · "))}</span>`:"",sub=[...patterns,...rounds,...other].filter(Boolean).join(" · "),planned=item?.planned_raw&&v3207Norm(item.planned_raw)!==v3207Norm(raw)?`<small class="v3207-planned-line">Planned: ${escapeHtml(item.planned_raw)}</small>`:"";
+  return `<article class="v3205-board-line v3206-board-line v3207-board-line" data-v3205-line="${blockIndex}:${itemIndex}"><div class="v3206-line-shell"><details><summary><span class="v3205-line-copy"><strong>${escapeHtml(raw)}</strong>${inlineRest}${sub?`<small>${escapeHtml(sub)}</small>`:""}${planned}</span><span class="v3205-open-tab">${escapeHtml(tab)}</span></summary><div class="v3205-line-open">${detail||'<p class="help">No individual target is required for this line.</p>'}<div class="v3205-line-actions"><button type="button" data-v3205-time-line="${blockIndex}:${itemIndex}">${t400?`Time T400 ${escapeHtml(t400.stroke)}`:"Time this line"}</button><button type="button" class="secondary" data-v3205-capture-line="${blockIndex}:${itemIndex}">Capture</button></div></div></details><button type="button" class="secondary v3206-edit-button" data-v3206-edit-line="${blockIndex}:${itemIndex}" aria-label="Edit or modify ${escapeHtml(raw)}">Edit</button></div>${t400?v3205T400Pbs?.(session,t400.stroke)||"":""}${v3205ModifiedLine(session,block,blockIndex,runnableIndex)}</article>`;
+}
+v3205LineHtml=v3207LineHtml;v3191BlockCard=v3205BlockCard;v3190BlockCard=v3205BlockCard;v3180BlockCard=v3205BlockCard;v3170BlockCard=function(session,block,index){return v3205BlockCard(session,block,index,{whole:false})};
+
+// -----------------------------------------------------------------------------
+// H. Individual time-window check. Longer cycles are allowed, but the app records
+// how much time must be recovered within the same round and warns until another
+// individual edit balances it (for example 200 5HR -> 100 5HR).
+// -----------------------------------------------------------------------------
+function v3207CycleSeconds(text,item=null){const raw=v3207Text(text),m=raw.match(/(?:on|@)\s*(\d{1,2}:\d{2}(?:\.\d+)?|\d{2,3}(?:\.\d+)?)(?:\b|$)/i);if(m)return Number(v3Seconds?.(m[1]))||null;return Number(item?.cycle)||v3129ExplicitCycle?.(item)||null}
+function v3207RepsDistance(text,item=null){const parsed=v3170ParseItem?.(text,0),p=parsed?.item||parsed||item;return{reps:Number(p?.reps)||Number(item?.reps)||1,distance:Number(p?.distance)||Number(item?.distance)||0}}
+function v3207EditWindowImpact(item,changedText){const oldCycle=v3207CycleSeconds(v3207LineText(item),item),newCycle=v3207CycleSeconds(changedText,item),rd=v3207RepsDistance(changedText,item);if(!oldCycle||!newCycle||!rd.reps)return 0;return (newCycle-oldCycle)*rd.reps}
+const v3207SaveIndividualBase=v3203SaveIndividualEdit;
+v3203SaveIndividualEdit=function(args){const result=v3207SaveIndividualBase?.(args);if(!result)return result;const impact=v3207EditWindowImpact(args.item,args.changedText),edit=result.edit;if(edit){edit.v3207_window_impact_seconds=impact;edit.v3207_window_status=Math.abs(impact)<5?"balanced":"balance_required";result.row.evidence_snapshot={...(result.row.evidence_snapshot||{}),v3203_individual_edits:v34Array(result.row.evidence_snapshot?.v3203_individual_edits).map(row=>row.id===edit.id?edit:row)};upsertLocal("session_adaptations",result.row);queueRecord("session_adaptations",result.row.id);if(Math.abs(impact)>=5){const capture={id:uid("capture"),session_id:args.session.id,athlete_id:args.athlete.id,capture_type:"session_change",text_content:`[Group-window check] ${args.athlete.full_name}: ${impact>0?"adds":"saves"} about ${Math.abs(Math.round(impact))}s in this set. Balance within the same round so the swimmer rejoins the group.`,session_block_id:args.block.id||null,created_at:v3207Now(),updated_at:v3207Now()};upsertLocal("captures",capture);queueRecord("captures",capture.id)}saveState(appState);scheduleFastSync?.()}return result};
+
+// -----------------------------------------------------------------------------
+// I. Startup: repair wrong stored distance from canonical blocks, hydrate verified
+// course conversions after auth, then paint once. No storage clearing.
+// -----------------------------------------------------------------------------
+const v3207Styles=document.createElement("style");v3207Styles.id="v3207Styles";v3207Styles.textContent=`
+#v3207BuildBadge{font-weight:900}.v3207-planned-line{display:block;margin-top:3px;color:#72838b;font-size:.65rem;font-weight:600}.v3207-sync-actions{margin-top:.6rem;align-items:center}.v3207-sync-actions .help{overflow-wrap:anywhere}.v3207-board-line .v3140-target-details{display:none!important}
+`;
+document.head.appendChild(v3207Styles);
+
+async function v3207Startup(){
+  v3207Brand();await v3207RegisterWorker();
+  try{const session=(appState.sessions||[]).find(row=>row.id===appState.settings.selected_session_id)||selectedSession?.();if(session){const stored=v3206StoredBlocks?.(session.id)||[];if(stored.length&&!stored.some(block=>["v3206_live_edit","v3207_block_editor","v3207_workout_editor"].includes(String(block.source_import||"")))&&v3207StoredBlocksAreRecent(session,stored)){v3207CommitBlocks(session,stored.map(row=>({...v3207Clone(row),source_import:"v3207_block_editor"})),{source:"v3207_block_editor",note:"Recovered recent Edit Blocks changes"})}const blocks=v3170BoardBlocks(session),total=v3200Distance?.(blocks)||0;if(total&&Number(session.planned_distance)!==Number(total)){session.planned_distance=total;session.updated_at=v3207Now();upsertLocal("sessions",session);queueRecord("sessions",session.id);saveState(appState)}}}catch(error){console.warn("v3.20.7 total repair",error)}
+  v3207EnsureCourseConversions().then(()=>{v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)});
+  v3206RestorePoolsideState?.();v3107UpdateWakeLock?.();v3195ClearBoardCaches?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(true);v36RenderSyncDetails?.();if(cloudReady()&&(appState.pending||[]).length)v3207ScheduleFocusSync(250);
+}
+window.v3207Debug={version:V3207_VERSION,build:V3207_BUILD,expectedBuild:V3207_EXPECTED_BUILD,repairSync:v3207RepairSync,compactPending:v3207CompactPending,primaryStroke:v3207PrimaryStroke,resolvePaceStroke:v3207ResolvePaceStroke,dive15:v3207Dive15Target,commitBlocks:v3207CommitBlocks,parseEditorBlock:v3207ParseEditorBlock,t400Eligible:v3207T400Eligible,snapDistance:v3207SnapDistance,ensureConversions:v3207EnsureCourseConversions,conversion:v3207LcmToScmConversion,windowImpact:v3207EditWindowImpact};
+setTimeout(()=>v3207Startup().catch(error=>console.warn("v3.20.7 startup",error)),0);setTimeout(v3207Brand,900);setTimeout(v3207Brand,2600);
