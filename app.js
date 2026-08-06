@@ -18776,3 +18776,229 @@ function v3204Startup(){
 }
 window.v3204Debug={version:V3204_VERSION,build:V3204_BUILD,cueReason:v3204CueReason,parse:v3200ParseBlocks,integrity:v3204SessionIntegrity,present:v3204PresentAthletes,profileApplicable:v3204ProfileApplicable,seedTest:v3204SeedTimedTest,renderTimes:v3204RenderTimesShell};
 setTimeout(v3204Startup,0);setTimeout(v3204Startup,700);setTimeout(v3204Brand,2400);
+
+
+// =============================================================================
+// McLay Swimming OS v3.20.5 — Coach Board and Deck Timing Truth
+// Correction-only layer over v3.20.4. Existing planning, athlete, adaptation,
+// evidence, capture, Finish Session and pace engines remain in place.
+// =============================================================================
+const V3205_VERSION="3.20.5";
+const V3205_BUILD="20260806-coach-board-deck-timing-truth";
+
+function v3205Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3205Stroke(value){const raw=v3Stroke?.(value)||v3205Text(value);if(/^free/i.test(raw))return"Freestyle";if(/^back/i.test(raw))return"Backstroke";if(/^breast/i.test(raw))return"Breaststroke";if(/^butter|^fly/i.test(raw))return"Butterfly";if(/^im|medley/i.test(raw))return"IM";return raw||"Freestyle"}
+function v3205Clock(value){if(!Number.isFinite(Number(value)))return"—";return typeof v380Clock==="function"?v380Clock(Number(value)):formatSeconds(Number(value))}
+function v3205Initials(athlete){if(athlete?.initials)return athlete.initials;return v3205Text(athlete?.full_name).split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase()||"?"}
+function v3205RoundCount(block){const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false);return Math.max(1,...runnable.map(item=>Number(item?.v3204_forward_rounds||item?.v3200_scope_count||0)).filter(Number.isFinite))}
+function v3205CueKind(item){const reason=item?.v3204_cue_reason||v3204CueReason?.(v3205Text(item?.raw||item?.instruction||item?.label))||"";if(reason==="rest_instruction")return"rest";if(reason==="pattern_instruction")return"pattern";if(reason==="round_modifier")return"round";return reason||"cue"}
+function v3205BoardGroups(block){
+  const groups=[],orphans=[];let runnableIndex=0;
+  v34Array(block?.items).forEach((item,itemIndex)=>{
+    if(item?.runnable!==false){groups.push({item,itemIndex,runnableIndex:runnableIndex++,attachments:[]});return}
+    const cue={item,itemIndex,kind:v3205CueKind(item),text:v3205Text(item?.raw||item?.instruction||item?.label)};
+    if(groups.length&&["rest","pattern","round","within_length_instruction"].includes(cue.kind))groups.at(-1).attachments.push(cue);else if(cue.text&&!/^(?:—\s*)?\d+\s*rounds?/i.test(cue.text))orphans.push(cue);
+  });
+  return{groups,orphans};
+}
+function v3205TargetRows(session,block,item,blockIndex,itemIndex){try{return v34Array(v3140TargetRows?.(session,block,item,blockIndex,itemIndex))}catch{return[]}}
+function v3205UsableTargetRows(rows){return rows.filter(row=>row&&row.status!=="missing"&&!/target needed|no matched|no time/i.test(v3205Text(row.primary||row.message||"")))}
+function v3205TargetDetails(session,block,item,blockIndex,itemIndex){
+  const rows=v3205TargetRows(session,block,item,blockIndex,itemIndex),usable=v3205UsableTargetRows(rows);if(!usable.length)return"";
+  let html="";try{html=v3140TargetDetails?.(session,block,item,blockIndex,itemIndex)||""}catch{}
+  return html.replace(/<details\b([^>]*)\sopen(?:="[^"]*")?([^>]*)>/i,"<details$1$2>");
+}
+function v3205T400Spec(item,block){
+  const text=[v3205Text(item?.raw||item?.instruction||item?.label),v3205Text(block?.title),v3205Text(block?.purpose)].join(" ");
+  if(!/\bt\s*400\b|\b(?:timed|test|time\s*trial)\b[^\n]{0,35}\b400\b|\b400\b[^\n]{0,35}\b(?:timed|test|time\s*trial)\b/i.test(text))return null;
+  const strokeMatch=text.match(/\b(freestyle|free|backstroke|back|breaststroke|breast|butterfly|fly|im|medley)\b/i);return{distance:400,stroke:v3205Stroke(strokeMatch?.[1]||"Freestyle")};
+}
+function v3205T400Pbs(session,stroke){
+  const athletes=v3204PresentAthletes?.(session)||[];if(!athletes.length)return"";
+  return `<div class="v3205-pb-strip" aria-label="Current T400 best times">${athletes.map(athlete=>{const anchor=v380T400Anchor?.(athlete.id,stroke);return `<span title="${escapeHtml(athlete.full_name)}"><b>${escapeHtml(v3205Initials(athlete))}</b><em>${anchor?v3205Clock(anchor.result_seconds):"NT"}</em></span>`}).join("")}</div>`;
+}
+function v3205ModifiedLine(session,block,blockIndex,runnableIndex){
+  const athletes=v3180ModifiedAthletes?.(session)||[];if(!athletes.length)return"";
+  const rows=athletes.map(athlete=>{let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}const row=v34Array(adapt?.rows).filter(x=>!x?.cue)[runnableIndex];if(!row)return"";return `<div class="v3205-mod-row"><b>${escapeHtml(v3205Initials(athlete))}</b><span>${escapeHtml(row.line||"Same as main")}</span>${row.target?`<em>${escapeHtml(row.target)}</em>`:""}</div>`}).filter(Boolean).join("");
+  return rows?`<div class="v3205-mod-rail">${rows}</div>`:"";
+}
+function v3205LineHtml(session,block,group,blockIndex){
+  const {item,itemIndex,runnableIndex,attachments}=group,raw=v3205Text(item?.raw||item?.instruction||item?.label),rest=attachments.filter(x=>x.kind==="rest").map(x=>x.text),patterns=attachments.filter(x=>x.kind==="pattern").map(x=>x.text),rounds=attachments.filter(x=>x.kind==="round").map(x=>x.text.replace(/^Round\s*/i,"R")),other=attachments.filter(x=>!["rest","pattern","round"].includes(x.kind)).map(x=>x.text),targets=v3205TargetRows(session,block,item,blockIndex,itemIndex),usable=v3205UsableTargetRows(targets),detail=v3205TargetDetails(session,block,item,blockIndex,itemIndex),t400=v3205T400Spec(item,block),tab=t400?"Time ›":usable.length?`${usable.length} target${usable.length===1?"":"s"} ›`:"Open ›";
+  const inlineRest=rest.length?`<span class="v3205-inline-rest">${escapeHtml(rest.join(" · "))}</span>`:"";
+  const sub=[...patterns,...rounds,...other].filter(Boolean).join(" · ");
+  return `<article class="v3205-board-line" data-v3205-line="${blockIndex}:${itemIndex}"><details><summary><span class="v3205-line-copy"><strong>${escapeHtml(raw)}</strong>${inlineRest}${sub?`<small>${escapeHtml(sub)}</small>`:""}</span><span class="v3205-open-tab">${escapeHtml(tab)}</span></summary><div class="v3205-line-open">${detail||'<p class="help">No individual target is required for this line.</p>'}<div class="v3205-line-actions"><button type="button" data-v3205-time-line="${blockIndex}:${itemIndex}">${t400?`Time T400 ${escapeHtml(t400.stroke)}`:"Time this line"}</button><button type="button" class="secondary v3199-quick-edit" data-v3199-quick-edit="${blockIndex}:${itemIndex}" data-v3205-edit-line="${blockIndex}:${runnableIndex}">Quick edit</button><button type="button" class="secondary" data-v3205-capture-line="${blockIndex}:${itemIndex}">Capture</button></div></div></details>${t400?v3205T400Pbs(session,t400.stroke):""}${v3205ModifiedLine(session,block,blockIndex,runnableIndex)}</article>`;
+}
+function v3205BlockCard(session,block,index,{whole=false}={}){
+  const model=v3205BoardGroups(block),rounds=v3205RoundCount(block),cue=[block?.purpose,block?.cues].filter(Boolean).join(" · "),modified=v3180ModifiedAthletes?.(session)||[];
+  const footer=`<div class="v3205-block-actions"><button type="button" class="secondary" data-v3170-capture data-v3180-capture-block="${index}">Capture block</button><button type="button" class="secondary" data-v3170-source>Source</button>${modified.length?`<button type="button" class="secondary" data-v3202-learn="${index}">Learn change</button>`:""}<button type="button" class="secondary" data-v3202-finish-here="${index}">Finish here</button></div>`;
+  return `<section class="v3170-current-card v3180-board-block v3205-board-block ${whole?"whole":"current"}" data-v3180-block="${index}"><header><button type="button" class="v3180-block-title" data-v3170-block="${index}"><span>${index+1}. ${escapeHtml(v32BlockLabel(block.block_type))}</span><h3>${escapeHtml(block.title||v32BlockLabel(block.block_type))}</h3></button><strong>${v3170BlockDistance(block).toLocaleString()}m</strong></header>${cue?`<div class="v3170-block-cue">${escapeHtml(cue)}</div>`:""}${rounds>1?`<div class="v3205-round-head"><strong>${rounds} rounds</strong><span>${Math.round(v3170BlockDistance(block)/rounds).toLocaleString()}m each</span></div>`:""}${model.orphans.length?`<div class="v3205-orphan-cues">${model.orphans.map(x=>`<span>${escapeHtml(x.text)}</span>`).join("")}</div>`:""}<div class="v3205-board-lines">${model.groups.map(group=>v3205LineHtml(session,block,group,index)).join("")||`<pre>${escapeHtml(block.raw_text||"No set lines")}</pre>`}</div>${footer}</section>`;
+}
+
+// Replace only the Board card renderer; all surrounding Board, Roll, plan,
+// capture, adaptation and Finish Session pathways remain the existing ones.
+v3191BlockCard=v3205BlockCard;v3190BlockCard=v3205BlockCard;v3180BlockCard=v3205BlockCard;v3170BlockCard=function(session,block,index){return v3205BlockCard(session,block,index,{whole:false})};
+
+function v3205LoadLineTiming(session,blockIndex,itemIndex){
+  const block=v3170BoardBlocks(session)[blockIndex],item=v34Array(block?.items)[itemIndex];if(!block||!item)return;
+  const t400=v3205T400Spec(item,block);showView("times");
+  if(t400){v3204SeedTimedTest({distance:400,stroke:t400.stroke,label:`T400 ${t400.stroke}`,kind:"t400"});return}
+  v32LoadLiveLine?.(item);appState.settings.v3204_timing_mode={kind:"workout",label:v3205Text(item.raw||item.instruction||"Workout line"),stroke:v3205Stroke(item.stroke||"Freestyle"),distance:Number(item.distance)||50,test_set_id:null};saveState(appState);v3204RenderTimesShell?.();
+}
+const v3205BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){
+  const result=v3205BindBoardBase?.(host,session);const blocks=v3170BoardBlocks(session);
+  host?.querySelectorAll?.("[data-v3205-time-line]").forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();const [b,i]=button.dataset.v3205TimeLine.split(":").map(Number);v3205LoadLineTiming(session,b,i)});
+  host?.querySelectorAll?.("[data-v3199-quick-edit]").forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();const [blockIndex,runnableIndex]=String(button.dataset.v3205EditLine||"").split(":").map(Number),canonical=v34Array(v3123SessionBlocks?.(session)?.[blockIndex]?.items),indices=canonical.map((item,index)=>item?.runnable!==false?index:null).filter(Number.isInteger),canonicalIndex=(indices[runnableIndex]??Number(String(button.dataset.v3199QuickEdit||"0:0").split(":")[1]))||0,fake=document.createElement("button");fake.dataset.v3127EditLine=`${blockIndex}:${canonicalIndex}`;v3127ApplyLiveEdit?.(fake)});
+  host?.querySelectorAll?.("[data-v3205-capture-line]").forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();const [b]=button.dataset.v3205CaptureLine.split(":").map(Number),stored=(typeof v311SessionBlocksFor==="function"?v311SessionBlocksFor(session):[])[b];v3140OpenCapture?.({sessionId:session.id,blockId:stored?.id||null})});
+  requestAnimationFrame(()=>v3205CloseNestedTargetDetails(host));return result;
+};
+function v3205CloseNestedTargetDetails(host=document){host?.querySelectorAll?.(".v3205-line-open .v3140-target-details").forEach(details=>{details.open=false})}
+
+// -----------------------------------------------------------------------------
+// Deck timing: exact-test PB seeding, one heat at a time, eight compact lane
+// timers, one Start All action, per-swimmer Lap and Finish, automatic save.
+// -----------------------------------------------------------------------------
+function v3205Mode(){return appState.settings?.v3204_timing_mode||null}
+function v3205TestMode(){return ["t400","saved"].includes(v3205Mode()?.kind)}
+function v3205CurrentHeat(){const spec=appState.settings?.v3201_test_mode||{},max=Math.max(1,...v34Array(spec.seeded).map(x=>Number(x.heat)||1));return Math.max(1,Math.min(max,Number(appState.settings?.v3205_current_heat)||1))}
+function v3205HeatCount(){const spec=appState.settings?.v3201_test_mode||{};return Math.max(1,...v34Array(spec.seeded).map(x=>Number(x.heat)||1))}
+function v3205HeatRows(){const spec=appState.settings?.v3201_test_mode||{},heat=v3205CurrentHeat();return v34Array(spec.seeded).filter(row=>(Number(row.heat)||1)===heat).sort((a,b)=>Number(a.lane)-Number(b.lane))}
+function v3205ChannelIndex(athleteId){return liveChannels.findIndex(channel=>channel.athlete_id===athleteId)}
+function v3205StopMasterKeepResults(){liveRunning=false;liveStartedAt=0;liveAccumulated=0;if(liveAnimation)cancelAnimationFrame(liveAnimation);if($("liveStartBtn")){$("liveStartBtn").disabled=false;$("liveStartBtn").textContent="Start All"}if($("livePauseBtn")){$("livePauseBtn").disabled=true;$("livePauseBtn").textContent="Pause"}releaseWakeLock?.()}
+function v3205SelectHeat(heat){v3205StopMasterKeepResults();appState.settings.v3205_current_heat=Math.max(1,Math.min(v3205HeatCount(),Number(heat)||1));saveState(appState);const grid=$("liveChannelGrid");if(grid){grid.innerHTML="";grid.dataset.rosterKey=""}renderLiveBoard()}
+function v3205SeedRow(athleteId){return v34Array(appState.settings?.v3201_test_mode?.seeded).find(row=>row.athlete_id===athleteId)||null}
+function v3205PlausibleFinish(mode,finish){const value=Number(finish);if(!Number.isFinite(value)||value<=0)return false;if(mode?.kind==="t400")return value>=120&&value<=1200;return value<=14400}
+function v3205PbStatus(channel,row){
+  const prior=Number(channel?.v3205_pb_before ?? row?.seconds),finish=Number(channel?.v3205_finish_time ?? channel?.finishes?.[0]?.time);
+  if(channel?.v3205_saving)return"Saving…";if(channel?.v3205_save_error)return"Saved locally";if(Number.isFinite(finish)&&!v3205PlausibleFinish(v3205Mode(),finish))return"Check time";
+  if(Number.isFinite(finish)&&Number.isFinite(prior)){const delta=finish-prior;if(delta<0)return`PB −${Math.abs(delta).toFixed(1)}s`;if(Math.abs(delta)<.05)return"Equals PB";return`+${delta.toFixed(1)}s`}
+  if(Number.isFinite(finish))return"First time";return Number.isFinite(prior)?`PB ${v3205Clock(prior)}`:"PB NT";
+}
+function v3205BuildTestGrid(){
+  const grid=$("liveChannelGrid");if(!grid)return;ensureLiveChannels?.();const rows=v3205HeatRows(),laneCount=8,rowByLane=new Map(rows.map(row=>[Number(row.lane),row])),heat=v3205CurrentHeat(),count=v3205HeatCount(),key=`${v3205Mode()?.kind}|${heat}|${rows.map(r=>`${r.athlete_id}:${r.lane}`).join("|")}`;
+  if(grid.dataset.rosterKey!==key){
+    grid.innerHTML=`<div class="v3205-heat-head"><button type="button" class="secondary" data-v3205-prev-heat ${heat<=1?"disabled":""}>‹</button><div><span>Current heat</span><strong>Heat ${heat} of ${count}</strong></div><button type="button" class="secondary" data-v3205-next-heat ${heat>=count?"disabled":""}>›</button></div><div class="v3205-timer-grid">${Array.from({length:laneCount},(_,i)=>i+1).map(lane=>{const row=rowByLane.get(lane),athlete=row?(appState.athletes||[]).find(a=>a.id===row.athlete_id):null,index=athlete?v3205ChannelIndex(athlete.id):-1;return row&&athlete?`<article class="v3205-timer" data-live-channel="${index}" data-athlete-id="${escapeHtml(athlete.id)}"><header><b>L${lane}</b><strong>${escapeHtml(athlete.full_name)}</strong></header><div class="v3205-pb-status">${escapeHtml(v3205PbStatus(liveChannels[index],row))}</div><div class="live-channel-clock">0.0</div><div class="v3205-timer-actions"><button type="button" class="secondary live-split">Lap</button><button type="button" class="live-finish">Finish</button></div><div class="live-channel-log"></div></article>`:`<article class="v3205-timer empty"><header><b>L${lane}</b><strong>Empty</strong></header><div class="v3205-pb-status">—</div><div class="live-channel-clock">—</div></article>`}).join("")}</div>`;
+    grid.dataset.rosterKey=key;grid.querySelector("[data-v3205-prev-heat]")?.addEventListener("click",()=>v3205SelectHeat(heat-1));grid.querySelector("[data-v3205-next-heat]")?.addEventListener("click",()=>v3205SelectHeat(heat+1));
+    grid.querySelectorAll(".v3205-timer[data-live-channel]").forEach(card=>{const index=Number(card.dataset.liveChannel);card.querySelector(".live-split").onclick=()=>recordLiveSplit(index);card.querySelector(".live-finish").onclick=()=>recordLiveFinish(index)});
+  }
+  rows.forEach(row=>{const index=v3205ChannelIndex(row.athlete_id),channel=liveChannels[index],card=grid.querySelector(`[data-athlete-id="${CSS.escape(row.athlete_id)}"]`);if(!channel||!card)return;const state=liveChannelState(channel),finish=Number(channel.v3205_finish_time ?? channel.finishes?.[0]?.time),finished=Number.isFinite(finish);card.classList.toggle("finished",finished);card.classList.toggle("pb",Boolean(channel.v3205_is_pb));card.querySelector(".live-channel-clock").textContent=finished?v3205Clock(finish):(state.started?v3205Clock(state.time):"0.0");card.querySelector(".v3205-pb-status").textContent=v3205PbStatus(channel,row);const lap=card.querySelector(".live-split"),done=card.querySelector(".live-finish");lap.disabled=!liveRunning||!state.started||finished;done.disabled=!liveRunning||!state.started||finished;const splits=v34Array(channel.splits?.[1]);card.querySelector(".live-channel-log").textContent=splits.length?`Laps ${splits.map(v3205Clock).join(" · ")}`:""});
+}
+const v3205RenderLiveChannelsBase=renderLiveChannels;
+renderLiveChannels=function(){if(v3205TestMode())return v3205BuildTestGrid();return v3205RenderLiveChannelsBase?.()};
+
+const v3205SeedTimedTestBase=v3204SeedTimedTest;
+v3204SeedTimedTest=function(args={}){const result=v3205SeedTimedTestBase?.(args);appState.settings.v3205_current_heat=1;for(const row of v34Array(appState.settings?.v3201_test_mode?.seeded))row.offset=0;for(const channel of liveChannels){channel.offset=0;channel.v3205_finished=false;channel.v3205_finish_time=null;channel.v3205_is_pb=false;channel.v3205_saved=false;channel.v3205_save_error=false;channel.v3205_pb_before=Number(v3205SeedRow(channel.athlete_id)?.seconds)}saveState(appState);const grid=$("liveChannelGrid");if(grid){grid.innerHTML="";grid.dataset.rosterKey=""}v3205PrepareTimingUi();renderLiveBoard();return result};
+v3201SeedTimedTest=v3204SeedTimedTest;
+
+function v3205PrepareTimingUi(){
+  const mode=v3205Mode(),test=v3205TestMode(),times=$("times"),card=times?.querySelector(".live-set-card");if(!card)return;
+  document.body.classList.toggle("v3205-test-timing",test);if($("liveStartBtn"))$("liveStartBtn").textContent=test?"Start All":"Start set";if($("liveSaveBtn"))$("liveSaveBtn").hidden=test;if($("livePauseBtn"))$("livePauseBtn").hidden=test;if($("liveResetBtn"))$("liveResetBtn").textContent=test?"Reset heat":"Reset";
+  const help=card.querySelector(":scope > .help");if(help)help.textContent=test?"Start the heat once. Tap Lap or Finish beside each swimmer. Each finish saves automatically.":"The active session and squad roster loads automatically.";
+  const heading=card.querySelector(".card-heading h3");if(heading&&mode)heading.textContent=mode.label;
+}
+const v3205RenderTimesShellBase=v3204RenderTimesShell;
+v3204RenderTimesShell=function(){const result=v3205RenderTimesShellBase?.();v3205PrepareTimingUi();return result};
+
+const v3205ResetLiveSetBase=resetLiveSet;
+resetLiveSet=function(){if(!v3205TestMode())return v3205ResetLiveSetBase?.();const rows=v3205HeatRows(),ids=new Set(rows.map(r=>r.athlete_id));v3205StopMasterKeepResults();for(const channel of liveChannels)if(ids.has(channel.athlete_id)){channel.finishes=[];channel.splits={};channel.lastRep=0;channel.v3205_finished=false;channel.v3205_finish_time=null;channel.v3205_is_pb=false;channel.v3205_saved=false;channel.v3205_save_error=false;channel.v3205_pb_before=Number(v3205SeedRow(channel.athlete_id)?.seconds)}const grid=$("liveChannelGrid");if(grid){grid.innerHTML="";grid.dataset.rosterKey=""}renderLiveBoard()};
+
+const v3205RecordFinishBase=recordLiveFinish;
+recordLiveFinish=function(index){const channel=liveChannels[index];if(v3205TestMode()&&channel?.v3205_finished)return;v3205RecordFinishBase?.(index);if(!v3205TestMode()||!channel?.finishes?.length)return;const result=channel.finishes.slice().sort((a,b)=>a.rep-b.rep)[0];channel.v3205_finished=true;channel.v3205_finish_time=Number(result.time);channel.v3205_pb_before=Number.isFinite(Number(channel.v3205_pb_before))?Number(channel.v3205_pb_before):Number(v3205SeedRow(channel.athlete_id)?.seconds);channel.v3205_valid_time=v3205PlausibleFinish(v3205Mode(),channel.v3205_finish_time);channel.v3205_is_pb=channel.v3205_valid_time&&(!Number.isFinite(channel.v3205_pb_before)||channel.v3205_finish_time<channel.v3205_pb_before);v3205AutoSaveChannel(index).catch(error=>{channel.v3205_saving=false;channel.v3205_save_error=true;console.error(error);renderLiveBoard()});renderLiveBoard()};
+
+async function v3205AutoSaveChannel(index){
+  const channel=liveChannels[index],session=selectedSession(),mode=v3205Mode(),athlete=(appState.athletes||[]).find(a=>a.id===channel?.athlete_id),finish=Number(channel?.v3205_finish_time);if(!channel||!session||!mode||!athlete||!Number.isFinite(finish)||channel.v3205_saved)return;
+  channel.v3205_saving=true;renderLiveBoard();const stroke=v3205Stroke(mode.stroke||$("liveStroke")?.value||"Freestyle"),distance=Number(mode.distance||$("liveDistance")?.value||400),splits=v34Array(channel.splits?.[1]).map(Number).filter(Number.isFinite),stamp=nowIso(),timedId=`timed-${session.id}-${mode.kind}-${athlete.id}-${Math.round(finish*1000)}`;
+  if(!(appState.timed_sets||[]).some(row=>row.id===timedId)){const timed={id:timedId,session_id:session.id,athlete_id:athlete.id,distance,stroke,set_label:`${mode.label} · Heat ${v3205CurrentHeat()} · Lane ${v3LaneAssignment(session.id,athlete)}`,send_off:"",times:[finish],average:finish,best:finish,spread:0,lane_number:v3LaneAssignment(session.id,athlete),test_set_id:mode.test_set_id||null,test_set_attempt_id:null,created_at:stamp,updated_at:stamp};upsertLocal("timed_sets",timed);queueRecord("timed_sets",timed.id)}
+  if(mode.kind==="saved"&&mode.test_set_id){const id=`attempt-${session.id}-${mode.test_set_id}-${athlete.id}-${Math.round(finish*1000)}`;if(!(appState.test_set_attempts||[]).some(row=>row.id===id)){const attempt={id,test_set_id:mode.test_set_id,session_id:session.id,athlete_id:athlete.id,lane_number:v3LaneAssignment(session.id,athlete),times:[finish],metrics:{average:finish,best:finish,spread:0,splits},notes:"Auto-saved from eight-lane deck timing",created_at:stamp,updated_at:stamp};upsertLocal("test_set_attempts",attempt);queueRecord("test_set_attempts",attempt.id)}}
+  if(mode.kind==="t400"){
+    const type=v380T400Type?.();if(type){const id=`training-test-${session.id}-${athlete.id}-${stroke}-${Math.round(finish*1000)}`;if(!(appState.training_test_results||[]).some(row=>row.id===id)){const row={id,test_type_id:type.id,athlete_id:athlete.id,source_swimmer_name:athlete.full_name,match_name:athlete.full_name,result_seconds:finish,result_date:session.session_date,date_precision:"day",result_period:String(session.session_date||"").slice(0,7),pool_course:session.pool_course||"SCM",start_type:"Push",valid_for_anchor:v3205PlausibleFinish(mode,finish),source_type:"training",source_label:"T400 timing window",source_page:null,session_id:session.id,notes:v3205PlausibleFinish(mode,finish)?"Auto-saved on Finish":"Auto-saved on Finish · implausible time excluded from anchor",metadata:{after_warm_up:true,stroke,splits,heat:v3205CurrentHeat(),lane:v3LaneAssignment(session.id,athlete)},created_at:stamp,updated_at:stamp};upsertLocal("training_test_results",row);queueRecord("training_test_results",row.id)}}
+  }
+  channel.v3205_saved=true;channel.v3205_saving=false;saveState(appState);try{V3144_TARGET_CACHE?.clear?.()}catch{}try{v3129TargetCache?.clear?.()}catch{}try{v3195ClearBoardCaches?.()}catch{}syncIfPossible?.().catch(error=>{channel.v3205_save_error=true;console.warn("Result saved locally; cloud retry queued",error)});renderLiveBoard();
+}
+
+// Start All starts only the visible heat and keeps other heats untouched.
+const v3205BindLiveSetBase=bindLiveSet;
+bindLiveSet=function(){v3205BindLiveSetBase?.();if(!$("liveStartBtn"))return;const baseStart=$("liveStartBtn").onclick;$("liveStartBtn").onclick=async()=>{if(!v3205TestMode())return baseStart?.();if(liveRunning)return;const ids=new Set(v3205HeatRows().map(row=>row.athlete_id));for(const channel of liveChannels)if(ids.has(channel.athlete_id)){channel.offset=0;if(!channel.v3205_finished){channel.finishes=[];channel.splits={};channel.lastRep=0}}liveAccumulated=0;liveStartedAt=performance.now();liveRunning=true;$("liveStartBtn").disabled=true;await keepScreenAwake?.();renderLiveBoard()};};
+// bindLiveSet ran earlier during startup; replace the existing handlers now.
+setTimeout(()=>bindLiveSet(),0);
+
+// -----------------------------------------------------------------------------
+// Session input context: useful prompts beside the writing box, never a wizard.
+// -----------------------------------------------------------------------------
+function v3205SameSquad(a,b){const aa=new Set(sessionSquads(a).map(squadKey)),bb=new Set(sessionSquads(b).map(squadKey));return [...aa].some(x=>bb.has(x))}
+function v3205LastReview(session){const prior=(appState.sessions||[]).filter(s=>s.id!==session?.id&&String(s.session_date||"")<=String(session?.session_date||"")&&v3205SameSquad(s,session)).sort((a,b)=>String(b.session_date||"").localeCompare(String(a.session_date||""))||String(b.day_part||"").localeCompare(String(a.day_part||"")))[0];if(!prior)return null;const review=(appState.session_reviews||[]).filter(r=>r.session_id===prior.id).sort(byUpdated)[0];return{session:prior,review}}
+function v3205NextSession(session){return (appState.sessions||[]).filter(s=>s.id!==session?.id&&String(s.session_date||"")>=String(session?.session_date||"")&&v3205SameSquad(s,session)&&String(s.status||"").toLowerCase()!=="completed").sort((a,b)=>String(a.session_date||"").localeCompare(String(b.session_date||""))||String(a.day_part||"").localeCompare(String(b.day_part||"")))[0]||null}
+function v3205ComposerContext(){
+  const target=(typeof v3192WriteTarget==="function"?v3192WriteTarget():selectedSession())||selectedSession();if(!target)return"";let plan={};try{plan=v3180PlanData?.(target)||{}}catch{}const prior=v3205LastReview(target),next=v3205NextSession(target),carry=v3205Text(prior?.review?.carry_forward||prior?.review?.carry||prior?.review?.next_session||target.week_carry_forward||target.plan_cue),upcoming=(appState.pathway_meets||[]).filter(m=>String(m.start_date||m.meet_date||"")>=String(target.session_date||"")).sort((a,b)=>String(a.start_date||a.meet_date||"").localeCompare(String(b.start_date||b.meet_date||"")))[0];
+  const items=[
+    ["Session",plan.today||target.primary_system||"Purpose not entered"],
+    ["This week",plan.week||target.week_objective||"Weekly plan not entered"],
+    ["Season",plan.season||target.season_name||"Season priority not entered"],
+    ["Carryover",carry||"No carryover recorded"],
+    ["Coming up",upcoming?.name||upcoming?.meet_name||(next?`${formatDate(next.session_date)} ${next.day_part||""} · ${next.title||sessionSquads(next).join(" + ")}`:"Nothing linked yet")]
+  ];return `<section id="v3205ComposerContext" class="v3205-composer-context"><header><strong>Keep in mind</strong><span>Context only · write the session normally</span></header>${items.map(([label,value])=>`<div><b>${escapeHtml(label)}</b><span>${escapeHtml(v3205Text(value))}</span></div>`).join("")}</section>`;
+}
+function v3205InjectComposerContext(){const body=$("sessionImportDetails")?.querySelector(".session-import-body"),input=$("sessionPasteInput");if(!body||!input)return;document.querySelectorAll("#v3205ComposerContext").forEach(node=>node.remove());const label=input.closest("label");if(label)label.insertAdjacentHTML("beforebegin",v3205ComposerContext());else input.insertAdjacentHTML("beforebegin",v3205ComposerContext());const meta=body.querySelector(".quick-session-meta");if(meta)meta.hidden=true;const summary=$("sessionImportDetails")?.querySelector("summary span");if(summary)summary.textContent="Write, paste, dictate or photograph the session";}
+const v3205ConfigureComposerBase=v3126ConfigureComposer;
+v3126ConfigureComposer=function(){const result=v3205ConfigureComposerBase?.();v3205InjectComposerContext();return result};
+const v3205OpenComposerBase=v33OpenSessionComposer;
+v33OpenSessionComposer=function(options={}){const result=v3205OpenComposerBase?.(options);v3205InjectComposerContext();return result};
+
+// -----------------------------------------------------------------------------
+// Styling is appended so the correction is isolated and reversible.
+// -----------------------------------------------------------------------------
+const v3205Styles=document.createElement("style");v3205Styles.id="v3205Styles";v3205Styles.textContent=`
+.v3170-board-host,.v3205-board-block{overflow-anchor:none}.v3205-board-block{padding:0!important;overflow:hidden}.v3205-board-block>header{padding:8px 12px!important;margin:0!important}.v3205-board-block .v3170-block-cue{margin:0 12px 5px!important;padding:4px 7px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.74rem!important;line-height:1.2!important}.v3205-round-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 12px;background:#eaf2f6;border-top:1px solid #c9d9e1;border-bottom:1px solid #c9d9e1}.v3205-round-head strong{font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;color:#143f59}.v3205-round-head span{font-size:.78rem;color:#55717f}.v3205-board-lines{display:grid}.v3205-board-line{border-bottom:1px solid #d7e2e7;background:#fff}.v3205-board-line>details>summary{list-style:none;display:flex;align-items:stretch;justify-content:space-between;gap:8px;cursor:pointer;min-height:44px}.v3205-board-line>details>summary::-webkit-details-marker{display:none}.v3205-line-copy{display:grid;gap:3px;align-content:center;padding:6px 7px 6px 12px;min-width:0}.v3205-line-copy strong{font-size:1rem;line-height:1.22;color:#173e56;overflow-wrap:anywhere}.v3205-line-copy small{font-size:.78rem;line-height:1.25;color:#5b727e}.v3205-inline-rest{display:inline-flex;width:max-content;font-size:.74rem;font-weight:900;color:#8d4b13;background:#fff0dc;border:1px solid #e4b77e;border-radius:999px;padding:2px 7px}.v3205-open-tab{display:grid;place-items:center;flex:0 0 78px;padding:8px 7px;background:#e3eff4;color:#164a68;font-size:.75rem;font-weight:900;text-align:center;border-left:1px solid #bfd3dc}.v3205-board-line details[open] .v3205-open-tab{background:#174d6b;color:white}.v3205-line-open{padding:9px 12px 12px;background:#f7fafb;border-top:1px solid #d7e2e7}.v3205-line-open>.v3140-target-details{margin:0 0 8px!important}.v3205-line-actions{display:flex;gap:7px;flex-wrap:wrap}.v3205-line-actions button{min-height:34px;padding:7px 10px}.v3205-pb-strip{display:flex;gap:5px;flex-wrap:wrap;padding:7px 12px;background:#eef7f1;border-top:1px solid #c9dfd0}.v3205-pb-strip span{display:inline-flex;align-items:center;gap:4px;background:white;border:1px solid #b9d2c1;border-radius:999px;padding:3px 7px}.v3205-pb-strip b{font-size:.69rem;color:#486b55}.v3205-pb-strip em{font-style:normal;font-weight:900;font-size:.78rem;color:#174d35}.v3205-mod-rail{display:grid;gap:3px;padding:6px 12px;background:#fff8e7;border-top:1px solid #edd8a7}.v3205-mod-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:6px;align-items:start}.v3205-mod-row b{color:#8a5b00}.v3205-mod-row span,.v3205-mod-row em{font-size:.76rem}.v3205-mod-row em{font-style:normal;font-weight:900}.v3205-block-actions{display:flex;gap:6px;flex-wrap:wrap;padding:5px 10px;background:#f6f9fa}.v3205-block-actions button{min-height:27px;padding:4px 7px;font-size:.69rem}.v3205-orphan-cues{display:flex;gap:6px;flex-wrap:wrap;padding:7px 12px;background:#fafcfd}.v3205-orphan-cues span{font-size:.75rem;color:#59717d}
+.v3205-test-timing #v3204AdvancedSetup,.v3205-test-timing #laneAssignmentEditor,.v3205-test-timing .live-master-board,.v3205-test-timing .timing-roster-row{display:none!important}.v3205-test-timing .live-set-card{padding:8px!important}.v3205-test-timing #liveChannelGrid{display:block!important}.v3205-test-timing .live-set-card>.card-heading{margin-bottom:6px}.v3205-test-timing .live-set-card>.card-heading .eyebrow{display:none}.v3205-test-timing .live-master-actions{display:grid!important;grid-template-columns:2fr 1fr;gap:7px;margin-top:7px!important}.v3205-test-timing #liveStartBtn{grid-column:1;font-size:1.05rem;min-height:45px}.v3205-test-timing #liveResetBtn{grid-column:2;min-height:45px}.v3205-test-timing #livePauseBtn,.v3205-test-timing #liveSaveBtn{display:none!important}.v3205-heat-head{display:grid;grid-template-columns:42px 1fr 42px;gap:7px;align-items:center;margin:2px 0 7px}.v3205-heat-head>div{text-align:center;display:grid}.v3205-heat-head span{font-size:.65rem;text-transform:uppercase;color:#6a7e88;font-weight:900}.v3205-heat-head strong{font-size:.9rem}.v3205-heat-head button{min-height:34px;padding:4px}.v3205-timer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.v3205-timer{display:grid;grid-template-rows:auto auto auto auto auto;gap:2px;min-width:0;padding:6px;border:1px solid #bfd2db;border-radius:10px;background:#f9fbfc}.v3205-timer header{display:grid;grid-template-columns:25px minmax(0,1fr);gap:4px;align-items:center}.v3205-timer header b{display:grid;place-items:center;background:#164c6a;color:white;border-radius:6px;min-height:23px;font-size:.72rem}.v3205-timer header strong{font-size:.72rem;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v3205-pb-status{font-size:.64rem;font-weight:900;color:#526d79;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v3205-timer .live-channel-clock{font-size:1.18rem!important;line-height:1.1!important;font-variant-numeric:tabular-nums;color:#123f5d}.v3205-timer-actions{display:grid;grid-template-columns:1fr 1.15fr;gap:4px}.v3205-timer-actions button{min-height:30px;padding:4px;font-size:.7rem}.v3205-timer .live-channel-log{font-size:.58rem;line-height:1.1;min-height:.7em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#59717c}.v3205-timer.finished{background:#edf7f0;border-color:#79b68b}.v3205-timer.pb{background:#fff7d8;border-color:#d5a927;box-shadow:inset 0 0 0 1px #d5a927}.v3205-timer.pb .v3205-pb-status{color:#7a5600}.v3205-timer.empty{opacity:.45}.v3205-timer.empty .live-channel-clock{color:#8aa0aa}
+.v3205-composer-context{display:grid;gap:0;border:1px solid #bed2dc;border-radius:12px;overflow:hidden;background:#f8fbfc;margin:8px 0 10px}.v3205-composer-context header{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;background:#e7f1f5}.v3205-composer-context header strong{font-size:.88rem;color:#174a65}.v3205-composer-context header span{font-size:.68rem;color:#647a84}.v3205-composer-context>div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;padding:6px 10px;border-top:1px solid #dce7eb}.v3205-composer-context b{font-size:.7rem;text-transform:uppercase;color:#607884}.v3205-composer-context span{font-size:.79rem;line-height:1.25;color:#274b5d}
+@media(max-width:430px){.v3205-board-line>details>summary{min-height:42px}.v3205-open-tab{flex-basis:68px;font-size:.69rem}.v3205-line-copy strong{font-size:.94rem}.v3205-timer-grid{gap:4px}.v3205-timer{padding:5px}.v3205-timer .live-channel-clock{font-size:1.08rem!important}.v3205-test-timing .mobile-nav{display:none!important}.v3205-test-timing main{padding-bottom:4px!important}.v3205-test-timing .view-heading{margin-bottom:5px!important}.v3205-test-timing #times>.view-heading p{display:none}.v3205-test-timing #v3204TestChooser{margin-bottom:5px}.v3205-test-timing #v3204TestChooser .v3204-active-test{padding:6px 8px;margin-top:0}.v3205-test-timing #v3204TestChooser .v3204-active-test button{width:auto!important}.v3205-test-timing .live-set-card>.help{display:none}.v3205-composer-context>div{grid-template-columns:64px minmax(0,1fr)}}
+`;document.head.appendChild(v3205Styles);
+
+function v3205Brand(){const title=`McLay Swimming OS — v${V3205_VERSION} Coach Truth`;const subtitle=`v${V3205_VERSION} · compact Board · exact test seeding · eight-lane auto-save timing`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=`3.20.5-coach-board-deck-timing-truth-20260806`}
+try{v3204BrandObserver?.disconnect?.()}catch{}
+const v3205BrandObserver=new MutationObserver(()=>queueMicrotask(v3205Brand));if(document.querySelector("title"))v3205BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3205BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+function v3205Startup(){v3205Brand();v3205InjectComposerContext();v3205PrepareTimingUi();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(false);setTimeout(()=>v3205CloseNestedTargetDetails(document),150)}
+window.v3205Debug={version:V3205_VERSION,build:V3205_BUILD,groups:v3205BoardGroups,rounds:v3205RoundCount,t400:v3205T400Spec,heatRows:v3205HeatRows,autoSave:v3205AutoSaveChannel,composer:v3205ComposerContext};
+setTimeout(v3205Startup,0);setTimeout(v3205Startup,650);setTimeout(v3205Brand,2200);
+
+// Final Board paint authority. Older compatibility layers may briefly repaint an
+// earlier Board after a workout or attendance change. Re-apply the protected
+// v3.20.5 Board synchronously without moving the page or disturbing active input.
+let v3205PaintFrame=0,v3205PaintTimer=null,v3205Painting=false,v3205BoardRevision=0;
+const v3205ClearBoardCachesBase=v3195ClearBoardCaches;
+v3195ClearBoardCaches=function(){v3205BoardRevision+=1;return v3205ClearBoardCachesBase?.(...arguments)};
+function v3205BoardInputActive(){const active=document.activeElement;if(!active||!/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))return false;return Boolean(active.closest?.("[data-v3180-finish],.v3195-included,.session-import-card,#v3202LearnModal,dialog"))}
+function v3205StableRows(name,predicate=()=>true){return v34Array(appState?.[name]).filter(predicate).slice().sort((a,b)=>String(a?.id||"").localeCompare(String(b?.id||"")))}
+function v3205Hash(value){let hash=2166136261;for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619)}return(hash>>>0).toString(36)}
+function v3205BoardRenderKey(session){
+  const roster=v34Array(typeof v3191SessionRoster==="function"?v3191SessionRoster(session):[]),present=v34Array(typeof v3204PresentAthletes==="function"?v3204PresentAthletes(session):[]),modified=v34Array(typeof v3180ModifiedAthletes==="function"?v3180ModifiedAthletes(session):[]),athleteIds=new Set([...roster,...present,...modified].map(row=>String(row?.id||"")).filter(Boolean)),sessionId=String(session?.id||"");
+  const athleteRow=row=>athleteIds.has(String(row?.athlete_id||row?.id||"")),sessionRow=row=>String(row?.session_id||"")===sessionId;
+  const payload={revision:v3205BoardRevision,mode:v3126Mode?.()||appState?.settings?.v3126_board_mode||"deck",active:Number(appState?.settings?.v3129_active_block_index)||0,squad:appState?.settings?.v3195_squad_mode||appState?.settings?.selected_squad||"",session,athletes:v34Array(appState?.athletes).filter(row=>athleteIds.has(String(row?.id||""))),attendance:v3205StableRows("attendance",sessionRow),blocks:v3205StableRows("session_blocks",sessionRow),adaptations:v3205StableRows("session_adaptations",sessionRow),profiles:v3205StableRows("athlete_adaptation_profiles",athleteRow),rules:v3205StableRows("athlete_adaptation_rules",athleteRow),learning:v3205StableRows("adaptation_learning_events",row=>sessionRow(row)||athleteRow(row)),reviews:v3205StableRows("session_reviews",sessionRow),lanes:v3205StableRows("session_lane_assignments",sessionRow),training:v3205StableRows("training_test_results",athleteRow),timed:v3205StableRows("timed_sets",row=>sessionRow(row)||athleteRow(row)),coach:v3205StableRows("coach_results",athleteRow),history:v3205StableRows("results_event_history",athleteRow),pbs:v3205StableRows("results_pb_board",athleteRow),goals:v3205StableRows("race_goals",athleteRow)};
+  return`${sessionId}:${payload.mode}:${v3205Hash(JSON.stringify(payload))}`;
+}
+function v3205ModeHosts(mode){const whole=$("v3126WholeView"),active=$("v3126ActiveView"),plan=$("v3170PlanView"),chosen=mode==="whole"?whole:mode==="plan"?plan:active;return{whole,active,plan,chosen}}
+function v3205ApplyModeVisibility(mode){const {whole,active,plan,chosen}=v3205ModeHosts(mode);if(whole)whole.hidden=mode!=="whole";if(active)active.hidden=mode!=="deck";if(plan)plan.hidden=mode!=="plan";const keep=new Set([whole,active,plan].filter(Boolean));document.querySelectorAll("#deck .deck-grid>article,#deck .deck-grid>details").forEach(node=>{if(!node.classList.contains("deck-hero")&&!keep.has(node))node.hidden=true});for(const id of ["v311BoardCore","v3105DeckContext","v310SessionAttendance","v3121MissingPlan"])if($(id))$(id).hidden=true;const anchor=$("v3126BoardTabs");if(anchor&&chosen)anchor.insertAdjacentElement("afterend",chosen)}
+function v3205PaintBoardNow({allowWhileInput=false}={}){
+  if(v3205Painting||(document.querySelector(".view.active")?.id||"deck")!=="deck")return;
+  if(!allowWhileInput&&v3205BoardInputActive()){clearTimeout(v3205PaintTimer);v3205PaintTimer=setTimeout(()=>v3205PaintBoardNow(),700);return}
+  const session=selectedSession?.();if(!session)return;const snapshot=typeof v3197BoardSnapshot==="function"?v3197BoardSnapshot():null;
+  v3205Painting=true;
+  try{
+    v3170Migrate?.();const mode=v3126Mode?.()||"deck",key=v3205BoardRenderKey(session);v3170EnsureTabs?.(session);const current=v3205ModeHosts(mode).chosen,valid=Boolean(current&&current.dataset.v3205RenderKey===key&&(mode==="plan"||current.querySelector(".v3205-board-block")));
+    if(!valid){v3170ApplyMode?.(session);for(const host of [$("v3126WholeView"),$("v3126ActiveView"),$("v3170PlanView")])if(host)host.dataset.v3205RenderKey=key}else v3205ApplyModeVisibility(mode);
+    v3170CompactContext?.();v3205Brand();v3204DecorateIntegrity?.();v3205CloseNestedTargetDetails(document)
+  }finally{v3205Painting=false}
+  if(snapshot&&typeof v3197RestoreBoardSnapshot==="function")v3197RestoreBoardSnapshot(snapshot);
+}
+function v3205RequestBoardTruth(delay=0){
+  if(v3205PaintFrame)cancelAnimationFrame(v3205PaintFrame);clearTimeout(v3205PaintTimer);
+  if(delay>0){v3205PaintTimer=setTimeout(()=>v3205PaintBoardNow(),delay);return}
+  v3205PaintBoardNow();v3205PaintFrame=requestAnimationFrame(()=>{v3205PaintFrame=0;v3205PaintBoardNow()});
+}
+const v3205BoardStateBase=v3121RenderBoardState;
+v3121RenderBoardState=function(){if((document.querySelector(".view.active")?.id||"deck")!=="deck")return v3205BoardStateBase?.();v3205RequestBoardTruth();return undefined};
+const v3205PaintRequestBase=v3201RequestBoardPaint;
+v3201RequestBoardPaint=function(force=false){if((document.querySelector(".view.active")?.id||"deck")!=="deck")return v3205PaintRequestBase?.(force);v3205RequestBoardTruth(force?0:80);return undefined};
+v3170PaintBoard=function(){return v3201RequestBoardPaint(false)};
+v3197PaintNow=function(){return v3201RequestBoardPaint(true)};
+setTimeout(()=>v3205RequestBoardTruth(),40);setTimeout(()=>v3205RequestBoardTruth(),900);
