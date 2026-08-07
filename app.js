@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3207",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -19359,7 +19359,7 @@ function v3207Brand(){
 async function v3207RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
   try{
-    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3207",{updateViaCache:"none"});
+    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});
     await registration.update();
     if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING");
   }catch(error){console.warn("v3.20.7 service worker update",error)}
@@ -19670,3 +19670,125 @@ async function v3207Startup(){
 }
 window.v3207Debug={version:V3207_VERSION,build:V3207_BUILD,expectedBuild:V3207_EXPECTED_BUILD,repairSync:v3207RepairSync,compactPending:v3207CompactPending,primaryStroke:v3207PrimaryStroke,resolvePaceStroke:v3207ResolvePaceStroke,dive15:v3207Dive15Target,commitBlocks:v3207CommitBlocks,parseEditorBlock:v3207ParseEditorBlock,t400Eligible:v3207T400Eligible,snapDistance:v3207SnapDistance,ensureConversions:v3207EnsureCourseConversions,conversion:v3207LcmToScmConversion,windowImpact:v3207EditWindowImpact};
 setTimeout(()=>v3207Startup().catch(error=>console.warn("v3.20.7 startup",error)),0);setTimeout(v3207Brand,900);setTimeout(v3207Brand,2600);
+
+// =============================================================================
+// McLay Swimming OS v3.20.8 — Stable Test Platform Sync Repair
+// Correction-only layer over v3.20.7. No new coaching features.
+// Repairs the exact live phone queue shown 7 Aug 2026 without clearing local data:
+// - legacy session_blocks schema compatibility (raw_text/purpose/cues not required in cloud);
+// - attendance upsert uses the real (session_id, athlete_id) unique key;
+// - capture/transcription parent links recover only when the referenced local parent is gone;
+// - non-database capture subtypes are synced as text while their full text is preserved;
+// - sync diagnostics identify the actual shipping build.
+// =============================================================================
+const V3208_VERSION="3.20.8";
+const V3208_BUILD="20260807-stable-test-platform-sync-repair";
+const V3208_EXPECTED_BUILD="3.20.8-stable-test-platform-sync-repair-20260807";
+
+function v3208SessionBlockLegacyPayload(record){
+  const full=cloudRow("session_blocks",record),keys=["id","organisation_id","session_id","block_type","title","sort_order","items","notes","status","source_transcription_id","updated_at","created_by"],out={};
+  for(const key of keys)if(full[key]!==undefined)out[key]=full[key];
+  return out;
+}
+function v3208MissingSessionBlockColumn(error){return /could not find the ['\"][^'\"]+['\"] column of ['\"]session_blocks['\"] in the schema cache|pgrst204/i.test(String(error?.message||error||""))}
+function v3208HasLocalBlock(id){return !id||(appState.session_blocks||[]).some(row=>row.id===id)}
+function v3208HasLocalCapture(id){return !id||(appState.captures||[]).some(row=>row.id===id)}
+function v3208CapturePayload(record){
+  const row=cloudRow("captures",record),type=String(row.capture_type||"text").toLowerCase();
+  if(!["text","voice","photo","video"].includes(type))row.capture_type="text";
+  if(row.session_block_id&&!v3208HasLocalBlock(row.session_block_id))row.session_block_id=null;
+  return row;
+}
+function v3208TranscriptionPayload(record){
+  const row=cloudRow("session_transcriptions",record);
+  if(row.capture_id&&!v3208HasLocalCapture(row.capture_id))row.capture_id=null;
+  if(row.session_block_id&&!v3208HasLocalBlock(row.session_block_id))row.session_block_id=null;
+  return row;
+}
+function v3208CloudPayload(table,record){
+  if(table==="session_blocks"&&appState.settings.v3208_legacy_session_blocks===true)return v3208SessionBlockLegacyPayload(record);
+  if(table==="captures")return v3208CapturePayload(record);
+  if(table==="session_transcriptions")return v3208TranscriptionPayload(record);
+  return cloudRow(table,record);
+}
+function v3208ConflictTarget(table){return ["session_lane_assignments","attendance"].includes(table)?"session_id,athlete_id":"id"}
+function v3208FkError(error,constraint){return String(error?.message||error||"").includes(constraint)}
+async function v3208PostRecord(item,record){
+  const conflict=v3208ConflictTarget(item.table),url=`/rest/v1/${item.table}?on_conflict=${conflict}`,options=payload=>({method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(payload)});
+  let payload=v3208CloudPayload(item.table,record);
+  try{return await cloudFetch(url,options(payload))}
+  catch(error){
+    if(item.table==="session_blocks"&&v3208MissingSessionBlockColumn(error)){
+      appState.settings.v3208_legacy_session_blocks=true;saveState(appState);
+      return cloudFetch(url,options(v3208SessionBlockLegacyPayload(record)));
+    }
+    if(item.table==="captures"&&v3208FkError(error,"captures_session_block_id_fkey")&&record.session_block_id&&!v3208HasLocalBlock(record.session_block_id)){
+      payload={...v3208CapturePayload(record),session_block_id:null};return cloudFetch(url,options(payload));
+    }
+    if(item.table==="session_transcriptions"&&v3208FkError(error,"session_transcriptions_capture_id_fkey")&&record.capture_id&&!v3208HasLocalCapture(record.capture_id)){
+      payload={...v3208TranscriptionPayload(record),capture_id:null};return cloudFetch(url,options(payload));
+    }
+    if(item.table==="session_transcriptions"&&v3208FkError(error,"session_transcriptions_session_block_id_fkey")&&record.session_block_id&&!v3208HasLocalBlock(record.session_block_id)){
+      payload={...v3208TranscriptionPayload(record),session_block_id:null};return cloudFetch(url,options(payload));
+    }
+    throw error;
+  }
+}
+
+// Parent-before-child, row-isolated sync. This replaces only the transport loop;
+// Board/session state and all local records stay untouched.
+v3111PushPending=async function(){
+  if(!cloudReady())return {successes:0,failures:0};
+  try{v3123DedupeLaneAssignments?.()}catch{}
+  const priority={athletes:1,season_plans:2,weekly_plans:3,squad_programmes:4,squad_timetable_slots:5,sessions:6,session_lane_assignments:7,session_blocks:8,test_sets:9,attendance:10,captures:11,timed_sets:12,test_set_attempts:13,session_reviews:14,session_transcriptions:15};
+  let successes=0,failures=0;
+  for(const item of [...(appState.pending||[])].sort((a,b)=>(priority[a.table]||99)-(priority[b.table]||99))){
+    if(typeof V331_OPTIONAL_CLOUD_TABLES!=="undefined"&&V331_OPTIONAL_CLOUD_TABLES.has(item.table)&&v331UnavailableTables().has(item.table)){v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error:new Error("Optional cloud table is unavailable; record is safely retained on this device.")});failures++;continue}
+    try{
+      if(item.action==="delete")await cloudFetch(`/rest/v1/${item.table}?id=eq.${encodeURIComponent(item.id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+      else{
+        const record=appState[item.table]?.find(row=>row.id===item.id);if(!record){v3111Acknowledge(item);successes++;continue}
+        if(item.table==="captures")await uploadCaptureMedia(record);
+        await v3208PostRecord(item,record);
+      }
+      v3111Acknowledge(item);successes++;
+    }catch(error){
+      const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):"";if(missing===item.table&&typeof v331MarkTableUnavailable==="function"&&v331MarkTableUnavailable(item.table,error)){}
+      v3111RecordFailure({phase:"push",table:item.table,id:item.id,action:item.action,error});failures++;console.warn("v3.20.8 sync row retained",item,error);
+    }
+  }
+  saveState(appState);return {successes,failures};
+};
+pushPending=v3111PushPending;
+
+function v3208BuildBadge(){
+  const cluster=document.querySelector(".status-cluster");if(!cluster)return null;const badges=[...cluster.querySelectorAll("#v3207BuildBadge,#v3208BuildBadge")];let badge=badges[0];
+  if(!badge){badge=document.createElement("span");badge.className="badge";cluster.appendChild(badge)}for(const extra of badges.slice(1))extra.remove();
+  badge.id="v3207BuildBadge";badge.textContent=`v${V3208_VERSION}`;badge.title=V3208_EXPECTED_BUILD;badge.dataset.build=V3208_EXPECTED_BUILD;return badge;
+}
+function v3208Brand(){
+  const title=`McLay Swimming OS — v${V3208_VERSION} Stable Test Platform`,subtitle=`v${V3208_VERSION} · v3.20.7 coaching fixes retained · phone/desktop sync repair · no feature additions`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3208_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3208_EXPECTED_BUILD)}catch{}v3208BuildBadge();
+}
+async function v3208RegisterWorker(){
+  if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.8 service worker update",error)}
+}
+try{v3207BrandObserver?.disconnect?.()}catch{}
+try{v3207RegisterWorker=v3208RegisterWorker}catch{}
+try{v3207Brand=v3208Brand}catch{}
+const v3208BrandObserver=new MutationObserver(()=>queueMicrotask(v3208Brand));if(document.querySelector("title"))v3208BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3208BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".status-cluster"))v3208BrandObserver.observe(document.querySelector(".status-cluster"),{childList:true,subtree:true,characterData:true});
+
+const v3208RenderDetailedSyncBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;
+if(v3208RenderDetailedSyncBase)v3111RenderSyncDetails=function(){
+  v3208RenderDetailedSyncBase();const build=document.querySelector("[data-v3207-sync-build]");if(build)build.textContent=V3208_EXPECTED_BUILD;
+  const copy=document.getElementById("v3111CopySync");if(copy)copy.onclick=async()=>{const failures=v3111Failures(),text=`McLay Swimming ${V3208_EXPECTED_BUILD}\n${v3111SyncSummary()}\n`+failures.map(f=>`${f.phase} ${f.table} ${f.id||""}: ${f.message}`).join("\n");try{await navigator.clipboard.writeText(text);updateStatus("Sync details copied","good")}catch{alert(text)}};
+};
+
+function v3208Startup(){
+  v3208Brand();v3208RegisterWorker();v3207CompactPending?.();v36RenderSyncDetails?.();v3111RenderSyncDetails?.();
+  if(cloudReady()&&(appState.pending||[]).length)setTimeout(()=>syncIfPossible?.().catch?.(()=>{}),350);
+}
+window.v3208Debug={version:V3208_VERSION,build:V3208_EXPECTED_BUILD,legacyBlock:v3208SessionBlockLegacyPayload,capturePayload:v3208CapturePayload,transcriptionPayload:v3208TranscriptionPayload,conflict:v3208ConflictTarget,post:v3208PostRecord};
+setTimeout(v3208Startup,0);setTimeout(v3208Brand,1000);setTimeout(v3208Brand,3000);
