@@ -1,7 +1,7 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-20-10-poolside-foreground-freeze-repair-20260807";
-const BUILD="3.20.10-poolside-foreground-freeze-repair-20260807";
-const CORE=["./","./index.html","./styles.css?v=20260807-core3210","./app.js?v=20260807-core3210","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-20-11-final-stability-parser-pacing-modification-20260807";
+const BUILD="3.20.11-final-stability-parser-pacing-modification-20260807";
+const CORE=["./","./index.html","./styles.css?v=20260807-core3211","./app.js?v=20260807-core3211","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
 async function fetchFresh(request){return fetch(request,{cache:"no-store"})}
 self.addEventListener("install",event=>event.waitUntil((async()=>{

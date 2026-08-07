@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -12606,7 +12606,7 @@ v3143Brand=v3144Brand;v3142Brand=v3144Brand;v3141Brand=v3144Brand;v3140Brand=v31
 // McLay Swimming OS v3.15.0 — coaching workflow + race-planning rollout
 // Installed baseline retained: v3.14.5 Board. This patch adds the approved
 // draft-first session intake, canonical structured blocks, automatic mixed
-// Monday-AM roster, plan hierarchy, John Pike SCM race planning, smarter
+// Monday-AM roster, plan hierarchy, Race pace model SCM race planning, smarter
 // modified work and phone-safe target presentation.
 // =============================================================================
 const V3150_VERSION="3.15.0";
@@ -12664,7 +12664,7 @@ v3140BestStroke=function(athlete,{excludeFree=false}={}){
   return excludeFree?"Backstroke":"Freestyle";
 };
 
-// John Pike Short Course Race Planning Calculator percentages supplied by coach.
+// Race pace model Short Course Race Planning Calculator percentages supplied by coach.
 const V3150_RACE_MODEL={
   M:{
     Freestyle:{100:{parts:[.4754,.5246],unit:50,dive25:.4554},200:{parts:[.2334,.2532,.2570,.2564],unit:50,dive25:.4487},400:{parts:[.2431,.2550,.2547,.2478],unit:100,dive50:.4798},1500:{parts:[.1970,.2012,.2013,.2014,.1991],unit:300,dive50:.1543}},
@@ -12925,7 +12925,7 @@ v3140TargetDetails=function(session,block,item,blockIndex,itemIndex,providedRows
 const v3150PopulateAthleteSectionBase=v3144PopulateAthleteSection;
 v3144PopulateAthleteSection=function(details,athlete){if(details?.dataset?.v3144AthleteDetail==="gaps"&&!(appState.pathway_standards||[]).length){details.dataset.loaded="1";const body=details.querySelector(".v3144-athlete-detail-body");if(body)body.innerHTML='<div class="help">No active standards file is loaded. PBs and coaching information remain available.</div>';return}return v3150PopulateAthleteSectionBase(details,athlete)};
 
-function v3150Brand(){document.title=`McLay Swimming OS — v${V3150_VERSION} Coaching Rollout`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3150_VERSION} · draft-first dictation · mixed-squad Roll · John Pike SCM race planning · phone-safe targets`}
+function v3150Brand(){document.title=`McLay Swimming OS — v${V3150_VERSION} Coaching Rollout`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3150_VERSION} · draft-first dictation · mixed-squad Roll · Race pace model SCM race planning · phone-safe targets`}
 v3144Brand=v3150Brand;v3143Brand=v3150Brand;v3142Brand=v3150Brand;v3141Brand=v3150Brand;v3140Brand=v3150Brand;
 window.v3150Debug={parse:v3150ParseBlocks,total:v3150DraftTotal,model:v3150TargetFromTotal,fifties:v3150FiftyProfile,buildDraft:v3150BuildDraft,version:V3150_VERSION};
 
@@ -19359,7 +19359,7 @@ function v3207Brand(){
 async function v3207RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
   try{
-    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});
+    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});
     await registration.update();
     if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING");
   }catch(error){console.warn("v3.20.7 service worker update",error)}
@@ -19562,10 +19562,10 @@ function v3207EnsureCourseConversions(){
 }
 
 // -----------------------------------------------------------------------------
-// E. Race-pace + John Pike start truth. Exact SCM PB is first choice. If the
+// E. Race-pace + Race pace model start truth. Exact SCM PB is first choice. If the
 // matching SCM PB is absent, a verified Swimming NZ LCM→SCM conversion may
-// provide the anchor. Generic race pace uses the existing John Pike SCM model.
-// Dive 15 uses the John Pike 100m opening shape scaled so its first race 50
+// provide the anchor. Generic race pace uses the existing Race pace model SCM model.
+// Dive 15 uses the Race pace model 100m opening shape scaled so its first race 50
 // equals the swimmer's verified/converted 50m PB; it is labelled as an estimate,
 // because the supplied workbook has no standalone 50m event model.
 // -----------------------------------------------------------------------------
@@ -19596,12 +19596,12 @@ v3206RacePaceRows=v3207RacePaceRows;
 function v3207Dive15Target(athlete,session,block,item,blockIndex,itemIndex){
   const best=v3207PrimaryStroke(athlete),stroke=best.stroke,course=v3Course?.(session?.pool_course||"SCM")||"SCM";if(!stroke)return null;const anchor=v3207RaceAnchor(athlete,course,50,stroke);
   if(!anchor)return{athlete,resolved:{...best,stroke,token:"primary"},missing:true,targetSeconds:null,cycleSeconds:null,secondary:`No ${course} 50 ${stroke} PB${course==="SCM"?" and no verified LCM→SCM conversion available":""}`,source_label:"Target needed"};
-  const sex=v3150Sex?.(athlete)||v3206Sex?.(athlete),model=v3150ModelFor?.(sex,100,stroke);if(!model||!Number(model.parts?.[0]))return{athlete,resolved:{...best,stroke,token:"primary"},missing:true,targetSeconds:null,cycleSeconds:null,secondary:`No John Pike 100 ${stroke} start model available`,source_label:"Target needed"};
+  const sex=v3150Sex?.(athlete)||v3206Sex?.(athlete),model=v3150ModelFor?.(sex,100,stroke);if(!model||!Number(model.parts?.[0]))return{athlete,resolved:{...best,stroke,token:"primary"},missing:true,targetSeconds:null,cycleSeconds:null,secondary:`No Race pace model 100 ${stroke} start model available`,source_label:"Target needed"};
   // Scale the supplied 100m opening distribution so its first race 50 equals
-  // this swimmer's actual 50m PB. This respects the John Pike dive-to-25/start
+  // this swimmer's actual 50m PB. This respects the Race pace model dive-to-25/start
   // shape without claiming the workbook contains a separate 50m event model.
   const equivalent100=anchor.seconds/Number(model.parts[0]),profile=v3150FiftyProfile?.(equivalent100,sex,100,stroke),target=profile?v3150Cumulative?.(profile,15):null;if(!Number.isFinite(target)||target<=0)return null;
-  return{athlete,resolved:{...best,stroke,token:"primary"},missing:false,targetSeconds:target,cycleSeconds:null,secondary:`${anchor.source} · John Pike start-shape estimate from 50 PB`,source_label:anchor.source,method:"John Pike start-shape estimate"};
+  return{athlete,resolved:{...best,stroke,token:"primary"},missing:false,targetSeconds:target,cycleSeconds:null,secondary:`${anchor.source} · Race pace model start-shape estimate from 50 PB`,source_label:anchor.source,method:"Race pace model start-shape estimate"};
 }
 const v3207TargetRowsBase=v3205TargetRows;
 v3205TargetRows=function(session,block,item,blockIndex,itemIndex){
@@ -19773,7 +19773,7 @@ function v3208Brand(){
 }
 async function v3208RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
-  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.8 service worker update",error)}
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.8 service worker update",error)}
 }
 try{v3207BrandObserver?.disconnect?.()}catch{}
 try{v3207RegisterWorker=v3208RegisterWorker}catch{}
@@ -19945,7 +19945,7 @@ function v3209Brand(){
 }
 async function v3209RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
-  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.9 service worker update",error)}
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.9 service worker update",error)}
 }
 try{v3208BrandObserver?.disconnect?.()}catch{}
 try{v3208Brand=v3209Brand}catch{}
@@ -20081,7 +20081,7 @@ function v3210Brand(){
 }
 async function v3210RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
-  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3210",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.10 service worker update",error)}
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.10 service worker update",error)}
 }
 try{v3209BrandObserver?.disconnect?.()}catch{}
 try{v3209Brand=v3210Brand}catch{}
@@ -20094,3 +20094,202 @@ v3210OnVisible();setTimeout(()=>{v3210Brand();v3210RegisterWorker()},0);setTimeo
 // Ensure startup callbacks from 3.20.7/3.20.8 resolve to the one current worker.
 try{v3208RegisterWorker=v3210RegisterWorker}catch{}
 try{v3207RegisterWorker=v3210RegisterWorker}catch{}
+
+
+// =============================================================================
+// McLay Swimming OS v3.20.11 — Final Stability / Parser / Pacing / Modification
+// Correction-only layer over v3.20.10. This closes issues observed on the 7 Aug
+// test platform: missing repeated recovery in the Friday main set, modified-
+// swimmer fallback ratios/operational pool-end rounding, full Race pace model
+// segment derivation, and one-tap Board stroke override with immediate refresh.
+// No new planning/reporting workflow is introduced here.
+// =============================================================================
+const V3211_VERSION="3.20.11";
+const V3211_BUILD="20260807-final-stability-parser-pacing-modification";
+const V3211_EXPECTED_BUILD="3.20.11-final-stability-parser-pacing-modification-20260807";
+
+function v3211Text(value){return String(value??"").trim()}
+function v3211Key(value){return v3211Text(value).toLowerCase().normalize?.("NFD").replace?.(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"")||""}
+function v3211Ratio(athlete){const key=v3211Key(athlete?.full_name);if(key==="charlottemurphy")return .5;if(key==="mckenziedrage")return 2/3;return null}
+function v3211PoolLength(session){return (v3Course?.(session?.pool_course||"SCM")||"SCM")==="LCM"?50:25}
+function v3211SameEnd(session,reps,distance){const pool=v3211PoolLength(session),lengths=(Number(reps)||0)*(Number(distance)||0)/pool;return Number.isInteger(lengths)&&lengths%2===0}
+function v3211PatternUnit(line){
+  const text=v3211Text(line);let unit=0;
+  for(const match of text.matchAll(/\b(\d+)\s*(?:drill|swim|kick|scull|pull)\s*\/\s*(\d+)\s*(?:drill|swim|kick|scull|pull)\b/ig))unit=Math.max(unit,Number(match[1])+Number(match[2]));
+  return unit;
+}
+function v3211HasRepPattern(block,reps){
+  const text=v34Array(block?.items).map(row=>v3211Text(row?.raw||row?.instruction||row?.label)).join("\n");let hits=0;
+  for(let i=1;i<=Number(reps||0);i++)if(new RegExp(`(?:^|\\b)(?:R|Round\\s*)${i}(?:\\b|\\s*[·.:-])`,"i").test(text))hits++;
+  return Number(reps)>1&&hits>=Number(reps);
+}
+function v3211FallbackChoice(athlete,session,block,item){
+  const ratio=v3211Ratio(athlete);if(!ratio)return null;
+  const reps=Math.max(1,Number(item?.reps)||1),distance=Math.max(0,Number(item?.distance)||0);if(!distance)return null;
+  const target=reps*distance*ratio,sequence=Math.max(0,Number(v3191SequenceLength?.(v3129LineText?.(item)||item?.raw||"")||0)),patternUnit=v3211PatternUnit(v3129LineText?.(item)||item?.raw||""),preserveReps=v3211HasRepPattern(block,reps);
+  let repOptions=[];
+  if(preserveReps)repOptions=[reps];
+  else if(reps===1)repOptions=[1];
+  else if(sequence>1){for(let n=sequence;n<=reps;n+=sequence)repOptions.push(n)}
+  else{for(let n=1;n<=reps;n++)repOptions.push(n)}
+  if(!repOptions.length)repOptions=[reps];
+  const step=25,distOptions=[];
+  if(reps>1&&!preserveReps)distOptions.push(distance);
+  else{for(let d=step;d<=distance;d+=step){if(patternUnit&&d%patternUnit!==0)continue;distOptions.push(d)}if(!distOptions.includes(distance)&&(!patternUnit||distance%patternUnit===0))distOptions.push(distance)}
+  const candidates=[];
+  for(const r of repOptions)for(const d of distOptions){if(!v3211SameEnd(session,r,d))continue;const volume=r*d;candidates.push({reps:r,distance:d,volume,diff:Math.abs(volume-target),repPenalty:r===reps?0:1,distancePenalty:d===distance?0:1,over:volume>target?1:0})}
+  if(!candidates.length)return null;
+  candidates.sort((a,b)=>a.diff-b.diff||a.repPenalty-b.repPenalty||a.distancePenalty-b.distancePenalty||a.over-b.over||b.distance-a.distance||b.reps-a.reps);
+  return candidates[0];
+}
+function v3211ReplaceWorkKeepDetail(line,reps,distance){return typeof v3151ReplaceWork==="function"?v3151ReplaceWork(line,reps,distance):v3211Text(line).replace(/^\s*\d+\s*[x×]\s*\d+(?:\.5)?/i,`${reps} × ${distance}`)}
+function v3211SpecificModel(session,block,item){
+  const line=v3129LineText?.(item)||item?.raw||"";
+  if(Number(item?.race_distance)||v3199RaceDistance?.(line))return true;
+  if(v3206LongRestQuality?.(item))return true;
+  if(/\b(?:dive|race\s*start|from\s+blocks?|last\s+\d+(?:\.5)?\s*m?|finish|turn|push\s*start|max(?:imum)?)\b/i.test(line)&&!/\bfins?\b/i.test(line))return true;
+  return Boolean(v3207T400Eligible?.(session,block,item));
+}
+function v3211LegacyTargetForbidden(line){return /\b(?:choice|kick|drill|5\s*HR|warm[- ]?down|recovery|regeneration|paddles?|underwater)\b/i.test(line)||/\bfins?\b[^\n]*\bmax(?:imum)?\b/i.test(line)}
+
+// Restore the simple athlete-owned fallback only when no stronger pacing model
+// or coach edit applies.  The ratio is a guide; complete coaching patterns and
+// finishing at the correct pool end outrank mathematically exact percentages.
+const v3211AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3211AdaptationBase?.(athlete,session,block,blockIndex);if(!result||v3211Ratio(athlete)==null)return result;
+  const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let rIndex=-1;
+  for(let i=0;i<rows.length;i++){
+    if(rows[i]?.cue)continue;rIndex++;const item=runnable[rIndex];if(!item)continue;
+    const originalLine=v3129LineText?.(item)||item?.raw||"";if(v3211LegacyTargetForbidden(originalLine))rows[i].target="";
+    const explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,rIndex,v34Array(block?.items).indexOf(item));if(explicit||v3211SpecificModel(session,block,item))continue;
+    const choice=v3211FallbackChoice(athlete,session,block,item);if(!choice)continue;
+    rows[i].line=v3211ReplaceWorkKeepDetail(rows[i].line||v3129LineText(item),choice.reps,choice.distance);
+    rows[i].distance=choice.volume;rows[i].target="";rows[i].source=[rows[i].source,v3211Ratio(athlete)===.5?"½ fallback":"⅔ fallback","pool-end / pattern guard"].filter(Boolean).join(" · ");
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;return{...result,rows,total,repeat};
+};
+
+// Race pace model cumulative curve. The opening 25 uses the supplied start
+// percentage; later sub-50 distances interpolate within the relevant modelled
+// race segment. That makes starts, finishes, named 25s and turn windows usable
+// without pretending the source contains measurements it does not contain.
+function v3211RaceCumulative(profile,distance){
+  if(!profile?.fifties?.length)return 0;let d=Math.max(0,Number(distance)||0),seconds=0;
+  if(d<=0)return 0;
+  const first50=Number(profile.fifties[0])||0,dive25=Number(profile.dive25);
+  if(d<=50){if(Number.isFinite(dive25)&&dive25>0){if(d<=25)return dive25*(d/25);return dive25+(first50-dive25)*((d-25)/25)}return first50*(d/50)}
+  seconds=first50;d-=50;let index=1;
+  while(d>0&&index<profile.fifties.length){const take=Math.min(50,d);seconds+=(Number(profile.fifties[index])||0)*(take/50);d-=take;index++}
+  return seconds;
+}
+v3150Cumulative=v3211RaceCumulative;
+
+function v3211OrdinalNumber(token){const t=v3211Text(token).toLowerCase(),word={first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8};return word[t]||Number(t.replace(/(?:st|nd|rd|th)$/,""))||null}
+function v3211NamedSegment(line,eventDistance,repDistance){
+  const text=v3211Text(line).toLowerCase(),max=Math.max(0,Number(eventDistance)||0),defaultLength=Math.max(0,Number(repDistance)||0);
+  const last=text.match(/\blast\s+(5|10|15|20|25|35|50|65|75|100)\s*m?\b/);if(last){const length=Number(last[1]);return{start:Math.max(0,max-length),length,label:`last ${length}m`,derived:length<50}}
+  const first=text.match(/\bfirst\s+(5|10|15|20|25|35|50|65|75|100)\s*m?\b/);if(first){const length=Number(first[1]);return{start:0,length,label:`first ${length}m`,derived:length!==25&&length!==50}}
+  const ordinal=text.match(/\b(\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth)\s*(25|50|100)\s*m?\b/);if(ordinal){const index=v3211OrdinalNumber(ordinal[1]),length=Number(ordinal[2]),start=(index-1)*length;if(index&&start<max)return{start,length:Math.min(length,max-start),label:`${ordinal[1]} ${length}m`,derived:length<50||(length===50&&start>0)}}
+  const pair=text.match(/(\d+(?:\.5)?)\s*m?\s*(?:in|into)\s*(?:\+|\/|and)\s*(\d+(?:\.5)?)\s*m?\s*(?:out|off)/i),inOnly=text.match(/(\d+(?:\.5)?)\s*m?\s*(?:in|into)(?:\s+the)?\s+turn/i),outOnly=text.match(/(\d+(?:\.5)?)\s*m?\s*(?:out|off)(?:\s+of)?\s+(?:the\s+)?turn/i);
+  if(pair||inOnly||outOnly||/\bturn\b/.test(text)){
+    const explicit=text.match(/\bturn\s*#?\s*(\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+turn\b/),turnIndex=explicit?Number(explicit[1]||explicit[2]):null;
+    let turnDistance=turnIndex?turnIndex*25:Math.round((max/2)/25)*25;turnDistance=Math.max(25,Math.min(Math.max(25,max-25),turnDistance));
+    const inD=pair?Number(pair[1]):inOnly?Number(inOnly[1]):0,outD=pair?Number(pair[2]):outOnly?Number(outOnly[1]):0;
+    if(inD||outD)return{start:Math.max(0,turnDistance-inD),length:Math.min(max,turnDistance+outD)-Math.max(0,turnDistance-inD),label:`${inD?`${inD}m in`:""}${inD&&outD?" + ":""}${outD?`${outD}m out`:""} turn`,derived:true,turn:true};
+  }
+  if(/\b(?:goal\s+medal\s+finish|race\s+quality\s+finish|finish)\b/.test(text)&&defaultLength>0&&defaultLength<=25&&!/\bfins?\b/.test(text))return{start:Math.max(0,max-defaultLength),length:defaultLength,label:`last ${defaultLength}m`,derived:true};
+  return null;
+}
+v3150NamedSegment=v3211NamedSegment;
+
+v3150TargetFromTotal=function(total,{sex,eventDistance,eventStroke,repDistance,line,resolvedStroke}){
+  const profile=v3150FiftyProfile?.(total,sex,eventDistance,eventStroke);if(!profile)return null;
+  const text=v3211Text(line).toLowerCase(),named=v3211NamedSegment(text,eventDistance,repDistance),isIm=eventStroke==="IM",push=/\bpush(?:\s*start)?\b/.test(text),dive=/\bdive|race\s*start|from\s+blocks?\b/.test(text);
+  if(named){const seconds=v3211RaceCumulative(profile,named.start+named.length)-v3211RaceCumulative(profile,named.start);return{seconds,method:named.turn?"Race pace model · turn-window estimate":named.derived?"Race pace model · derived segment":"Race pace model · race segment",label:named.label}}
+  if(dive){const distance=Math.min(Number(repDistance)||0,Number(eventDistance)||0);return{seconds:v3211RaceCumulative(profile,distance),method:"Race pace model · start segment",label:`dive ${distance}m`}}
+  if(push&&Number(repDistance)>0&&Number(repDistance)<=50){const push50=v3150PushFirst50?.(profile);if(Number.isFinite(push50)&&push50>0)return{seconds:push50*(Number(repDistance)/50),method:"Race pace model · push-start estimate",label:`push ${repDistance}m`}}
+  if(/\bmax(?:imum)?\b/.test(text)&&Number(repDistance)>0&&Number(repDistance)<=50){const distance=Number(repDistance),diveSeconds=v3211RaceCumulative(profile,distance),push50=v3150PushFirst50?.(profile),pushSeconds=Number.isFinite(push50)&&push50>0?push50*(distance/50):null;if(Number.isFinite(diveSeconds)&&diveSeconds>0&&Number.isFinite(pushSeconds)&&pushSeconds>0)return{seconds:(diveSeconds+pushSeconds)/2,method:"Race pace model · dive/push blend",label:`max ${distance}m`}}
+  if(isIm&&eventDistance===200){const index=v3150ImStrokeIndex?.(resolvedStroke);if(index==null)return null;let pace50=profile.fifties[index];if(index===0){const push50=v3150PushFirst50?.(profile);if(push50!=null)pace50=push50}return{seconds:pace50*(repDistance/50),method:`Race pace model · 200 IM ${resolvedStroke} leg`,label:`${resolvedStroke} leg`}}
+  if(isIm&&eventDistance===400){const index=v3150ImStrokeIndex?.(resolvedStroke);if(index==null)return null;const first=profile.fifties[index*2],second=profile.fifties[index*2+1],pace50=index===0?second:(first+second)/2;return{seconds:pace50*(repDistance/50),method:`Race pace model · 400 IM ${resolvedStroke} average`,label:`${resolvedStroke} 400 IM pace`}}
+  const nonDive=profile.fifties.slice(1),pace50=nonDive.length?nonDive.reduce((a,b)=>a+b,0)/nonDive.length:null;if(!pace50)return null;
+  return{seconds:pace50*(repDistance/50),method:"Race pace model · non-dive average",label:`${eventDistance} pace`};
+};
+
+function v3211LineKey(block,item,blockIndex,itemIndex){return v3140LineKey?.(block,item,blockIndex,itemIndex)||`${block?.id||blockIndex}:${item?.id||itemIndex}`}
+const v3211ResolvePaceBase=v3207ResolvePaceStroke;
+v3207ResolvePaceStroke=function(athlete,session,block,item,blockIndex,itemIndex){
+  const lineKey=v3211LineKey(block,item,blockIndex,itemIndex),line=v3129LineText?.(item)||item?.raw||"",override=v3140StrokeOverride?.(athlete,session,block,lineKey);if(override?.stroke)return{stroke:v3207Stroke?.(override.stroke)||override.stroke,token:"override",source:"Coach override",lineKey,overridden:true,hasEvidence:true};
+  const explicit=v3207ExplicitStroke?.(line);if(!explicit&&v3211RaceSegmentLine(item,line)){const best=v3207PrimaryStroke?.(athlete)||{};if(best.stroke)return{...best,stroke:best.stroke,token:"primary",source:`Race segment → #1 · ${best.source||"best points"}`,lineKey,hasEvidence:true}}
+  const result=v3211ResolvePaceBase?.(athlete,session,block,item,blockIndex,itemIndex)||{};return{...result,lineKey:result.lineKey||lineKey,token:result.token||((result.stroke)?"editable":"")};
+};
+const v3211ResolveStrokeBase=v3140ResolveStroke;
+v3140ResolveStroke=function(athlete,session,block,item,blockIndex,itemIndex){const lineKey=v3211LineKey(block,item,blockIndex,itemIndex),override=v3140StrokeOverride?.(athlete,session,block,lineKey);if(override?.stroke)return{stroke:v3207Stroke?.(override.stroke)||override.stroke,token:"override",source:"Coach override",lineKey,overridden:true,hasEvidence:true};const result=v3211ResolveStrokeBase?.(athlete,session,block,item,blockIndex,itemIndex)||{};return{...result,lineKey:result.lineKey||lineKey,token:result.token||((result.stroke)?"editable":"")}};
+
+function v3211SessionRaceDistance(session){
+  const values=new Set();for(const block of (v3170BoardBlocks?.(session)||[]))for(const item of v34Array(block?.items)){const line=v3129LineText?.(item)||item?.raw||"",race=Number(item?.race_distance)||Number(v3199RaceDistance?.(line)||0);if([100,200,400,800,1500].includes(race))values.add(race)}
+  return values.size===1?[...values][0]:null;
+}
+function v3211RaceSegmentLine(item,line){if(/\bfins?\b/i.test(line))return false;if(/\bdive|race\s*start|from\s+blocks?|\blast\s+(?:5|10|15|20|25|35|50|65|75|100)\s*m?|\b(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth)\s*(?:25|50|100)\s*m?|\bturn\b|\bpush(?:\s*start)?\b|goal\s+medal\s+finish|race\s+quality\s+finish/i.test(line))return true;return /\bmax(?:imum)?\b/i.test(line)&&Number(item?.distance)>0&&Number(item.distance)<=50}
+function v3211FallbackStartRows(session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText?.(item)||item?.raw||"",plan=typeof v3129LanePlan==="function"?v3129LanePlan(session):{roster:v3204PresentAthletes?.(session)||[],assignments:new Map()},repDistance=Number(item?.distance)||15,rows=[];
+  for(const athlete of plan.roster||[]){const resolved=v3207ResolvePaceStroke(athlete,session,block,item,blockIndex,itemIndex),stroke=v3207Stroke?.(resolved.stroke)||resolved.stroke,anchor=stroke?v3207RaceAnchor?.(athlete,"SCM",50,stroke):null,sex=v3150Sex?.(athlete)||v3206Sex?.(athlete),model=stroke?v3150ModelFor?.(sex,100,stroke):null;let target=null;if(anchor&&model?.parts?.[0]){const equivalent100=anchor.seconds/Number(model.parts[0]),profile=v3150FiftyProfile?.(equivalent100,sex,100,stroke);if(profile)target=v3211RaceCumulative(profile,Math.min(repDistance,50))}const missing=!stroke||!Number.isFinite(target)||target<=0;rows.push({athlete,lane:plan.assignments?.get?.(athlete.id)||1,resolved,missing,status:missing?"missing":"ok",targetSeconds:missing?null:target,cycleSeconds:Number(item?.cycle)||v3129ExplicitCycle?.(item)||null,secondary:missing?`No SCM 50 ${stroke||"stroke"} PB for start estimate`:`${anchor.source} · Race pace model · start estimate from 50 PB`,source_label:missing?"Target needed":anchor.source,method:"Race pace model · start estimate"})}
+  return rows;
+}
+const v3211TargetRowsBase=v3205TargetRows;
+v3205TargetRows=function(session,block,item,blockIndex,itemIndex){
+  const line=v3129LineText?.(item)||item?.raw||"",explicit=Number(item?.race_distance)||Number(v3199RaceDistance?.(line)||0);
+  if(explicit&&!item?.suppress_auto_targets)return v3207RacePaceRows?.(session,block,{...item,race_distance:explicit},blockIndex,itemIndex)||[];
+  if(v3211RaceSegmentLine(item,line)){
+    const inferred=v3211SessionRaceDistance(session);if(inferred)return v3207RacePaceRows?.(session,block,{...item,race_distance:inferred,suppress_auto_targets:false,pace_mode:"race"},blockIndex,itemIndex)||[];
+    if(/\bdive|race\s*start|from\s+blocks?/i.test(line))return v3211FallbackStartRows(session,block,item,blockIndex,itemIndex);
+  }
+  return v3211TargetRowsBase?.(session,block,item,blockIndex,itemIndex)||[];
+};
+
+// Every target stroke is an on-Board control. The current/default choice is
+// selected when the chooser opens; "This line" is the default scope so a single
+// stroke tap changes the live target and repaints immediately. Block/session
+// scope remains available when deliberately selected first.
+const v3211SaveStrokeBase=v3140SaveStrokeOverride;
+v3140SaveStrokeOverride=function(args){const out=v3211SaveStrokeBase?.(args);try{V3144_TARGET_CACHE?.clear?.();v3129TargetCache?.clear?.();v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}catch{}return out};
+v3140OpenStrokeChooser=function(button){
+  v3140CloseStrokeChooser?.();const athlete=(appState.athletes||[]).find(row=>row.id===button.dataset.v3140StrokeAthlete),session=selectedSession?.();if(!athlete||!session)return;
+  let scope="line";const current=button.dataset.v3140StrokeCurrent||"AUTO",overlay=document.createElement("div");overlay.id="v3140StrokeChooser";overlay.className="v3140-stroke-overlay";
+  overlay.innerHTML=`<div class="v3140-stroke-dialog v3211-stroke-dialog"><button type="button" class="v3140-dialog-close" data-v3140-close>×</button><span class="eyebrow">Change stroke on the fly</span><h3>${escapeHtml(athlete.full_name)}</h3><p>Tap a stroke to apply it immediately. <strong>This line</strong> is selected by default.</p><div class="v3211-scope-row"><button data-v3211-scope="line" class="active">This line</button><button data-v3211-scope="block">This block</button><button data-v3211-scope="session">Whole session</button></div><div class="v3140-stroke-options"><button data-v3211-choice="AUTO" class="${current==="AUTO"?"active":""}">Auto</button>${V3140_STROKES.map(stroke=>`<button data-v3211-choice="${stroke}" class="${stroke===current?"active":""}">${escapeHtml(stroke.replace("stroke",""))}</button>`).join("")}</div><small>Targets refresh from the newly selected stroke without changing the swimmer's permanent #1.</small></div>`;document.body.appendChild(overlay);
+  overlay.querySelectorAll("[data-v3211-scope]").forEach(node=>node.onclick=()=>{scope=node.dataset.v3211Scope;overlay.querySelectorAll("[data-v3211-scope]").forEach(x=>x.classList.toggle("active",x===node))});
+  overlay.querySelectorAll("[data-v3211-choice]").forEach(node=>node.onclick=()=>v3140SaveStrokeOverride({athleteId:athlete.id,sessionId:session.id,blockId:button.dataset.v3140StrokeBlock||null,lineKey:button.dataset.v3140StrokeLine||null,stroke:node.dataset.v3211Choice,scope}));
+  overlay.querySelector("[data-v3140-close]").onclick=v3140CloseStrokeChooser;overlay.onclick=event=>{if(event.target===overlay)v3140CloseStrokeChooser?.()};
+};
+
+// Exact 7 Aug parser regression repair: the live Friday session can contain the
+// 3-round 4x25 + 4x15 main block but be missing its 200, 5 HR line, leaving the
+// Board at 4,140m / Main set 480m. Restore only that unmistakable broken shape.
+function v3211RepairFridayMain(){
+  let repaired=false;for(const session of appState.sessions||[]){
+    if(session?.session_date!=="2026-08-07"||!sessionSquads?.(session)?.some?.(name=>squadKey?.(name)==="national"))continue;
+    const blocks=(v3206StoredBlocks?.(session.id)||[]).map(block=>v3207Clone?.(block)||JSON.parse(JSON.stringify(block)));if(!blocks.length)continue;
+    const total=Number(v3200Distance?.(blocks)||0),main=blocks.find(block=>block?.block_type==="main_set"||/main\s*set/i.test(block?.title||""));if(!main)continue;
+    const mainText=v34Array(main.items).map(item=>v3211Text(item?.raw||item?.instruction||item?.label)).join("\n"),mainDistance=Number(v3170BlockDistance?.(main)||v3128BlockDistance?.(main)||0);
+    if(!/4\s*[x×]\s*25[^\n]*100\s*pace/i.test(mainText)||!/4\s*[x×]\s*15[^\n]*(?:mid[- ]?pool|medal\s+finish)/i.test(mainText)||/200\s*,?\s*5\s*HR/i.test(mainText))continue;
+    if(!(total===4140||mainDistance===480))continue;
+    const body=[...v34Array(main.items).map(item=>v3211Text(item?.raw||item?.instruction||item?.label)).filter(Boolean),"200, 5 HR"].join("\n"),parsed=v3207ParseEditorBlock?.("main_set",main.title||"Main set",body,main);if(!parsed)continue;
+    const index=blocks.findIndex(block=>block.id===main.id);blocks[index]=parsed;v3207CommitBlocks?.(session,blocks,{source:"v3211_parser_repair",note:"Restore missing repeated 200, 5 HR"});appState.settings.v3211_friday_main_repaired=true;saveState(appState);repaired=true;
+  }return repaired;
+}
+
+function v3211ClearResolvedAttendanceIssue(){
+  if((appState.pending||[]).some(item=>item.table==="attendance"))return false;const before=v34Array(appState.settings.v3111_sync_failures).length;
+  appState.settings.v3111_sync_failures=v34Array(appState.settings.v3111_sync_failures).filter(row=>!(row?.table==="attendance"&&/duplicate key value violates unique constraint[\s\S]*attendance_session_id_athlete_id_key/i.test(row?.message||"")));
+  const changed=v34Array(appState.settings.v3111_sync_failures).length!==before;if(changed){const state=v3111SyncState?.();if(state&&!(appState.pending||[]).length&&!v34Array(appState.settings.v3111_sync_failures).length){state.last_success=nowIso();state.last_error=""}saveState(appState)}return changed;
+}
+
+const v3211Styles=document.createElement("style");v3211Styles.id="v3211Styles";v3211Styles.textContent=`.v3211-scope-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}.v3211-scope-row button.active,.v3211-stroke-dialog .v3140-stroke-options button.active{outline:3px solid rgba(26,91,121,.18);border-color:#1b607f;background:#e9f4f8}.v3211-stroke-dialog .v3140-stroke-options button{min-height:42px}`;document.head.appendChild(v3211Styles);
+
+function v3211Brand(){const title=`McLay Swimming OS — v${V3211_VERSION} Final Stability Patch`,subtitle=`v${V3211_VERSION} · parser truth · Race pace model segments · CM ½ / MD ⅔ fallback · on-Board stroke refresh`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3211_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3211_EXPECTED_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3211_VERSION}`;badge.dataset.build=V3211_EXPECTED_BUILD;badge.title=V3211_EXPECTED_BUILD}}
+async function v3211RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3211",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.11 service worker update",error)}}
+try{v3210BrandObserver?.disconnect?.()}catch{}try{v3210Brand=v3211Brand}catch{}try{v3210RegisterWorker=v3211RegisterWorker}catch{}try{v3209Brand=v3211Brand}catch{}try{v3209RegisterWorker=v3211RegisterWorker}catch{}try{v3208RegisterWorker=v3211RegisterWorker}catch{}try{v3207RegisterWorker=v3211RegisterWorker}catch{}
+const v3211BrandObserver=new MutationObserver(()=>queueMicrotask(v3211Brand));if(document.querySelector("title"))v3211BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3211BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+function v3211Startup(){const repaired=v3211RepairFridayMain(),cleared=v3211ClearResolvedAttendanceIssue();v3211Brand();v3211RegisterWorker();if(repaired||cleared){v36RenderSyncDetails?.();v3111RenderSyncDetails?.();setTimeout(()=>{v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)},5400)}}
+window.v3211Debug={version:V3211_VERSION,build:V3211_EXPECTED_BUILD,ratio:v3211Ratio,fallback:v3211FallbackChoice,sameEnd:v3211SameEnd,cumulative:v3211RaceCumulative,segment:v3211NamedSegment,sessionRaceDistance:v3211SessionRaceDistance,repairFriday:v3211RepairFridayMain,clearAttendanceIssue:v3211ClearResolvedAttendanceIssue};
+setTimeout(v3211Startup,0);setTimeout(v3211Brand,900);setTimeout(v3211Brand,3000);setTimeout(()=>{v3211RepairFridayMain();v3211ClearResolvedAttendanceIssue();v3211Brand()},5600);
