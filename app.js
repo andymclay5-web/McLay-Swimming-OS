@@ -2435,7 +2435,7 @@ fillSessionEditor(selectedSession());
 // v3.12.9 final poolside render selects Deck once after all patches load.
 readSharedText();
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
+  window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();registration.waiting?.postMessage("SKIP_WAITING")}catch(error){console.warn("Service worker update",error)}});
 }
 /* v3.10.2: startup cloud pull deferred; local UI opens first. */
 
@@ -19359,7 +19359,7 @@ function v3207Brand(){
 async function v3207RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
   try{
-    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});
+    const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});
     await registration.update();
     if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING");
   }catch(error){console.warn("v3.20.7 service worker update",error)}
@@ -19773,7 +19773,7 @@ function v3208Brand(){
 }
 async function v3208RegisterWorker(){
   if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
-  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3208",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.8 service worker update",error)}
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.8 service worker update",error)}
 }
 try{v3207BrandObserver?.disconnect?.()}catch{}
 try{v3207RegisterWorker=v3208RegisterWorker}catch{}
@@ -19792,3 +19792,305 @@ function v3208Startup(){
 }
 window.v3208Debug={version:V3208_VERSION,build:V3208_EXPECTED_BUILD,legacyBlock:v3208SessionBlockLegacyPayload,capturePayload:v3208CapturePayload,transcriptionPayload:v3208TranscriptionPayload,conflict:v3208ConflictTarget,post:v3208PostRecord};
 setTimeout(v3208Startup,0);setTimeout(v3208Brand,1000);setTimeout(v3208Brand,3000);
+
+
+// =============================================================================
+// McLay Swimming OS v3.20.9 — Interruption Resume Repair
+// Correction-only layer over v3.20.8. No coaching logic or UI feature additions.
+// Fixes the real Android failure observed after a phone call: returning to the
+// poolside app could leave a blank/frozen browser surface instead of restoring
+// the same Board. Older append-only layers registered several visibility/page
+// resume callbacks; this layer makes those callbacks converge on one restore,
+// delays cloud work until the Board is visible again, and provides one guarded
+// shell recovery if Android discarded or hid the active view.
+// =============================================================================
+const V3209_VERSION="3.20.9";
+const V3209_BUILD="20260807-interruption-resume-repair";
+const V3209_EXPECTED_BUILD="3.20.9-interruption-resume-repair-20260807";
+const V3209_RESUME_RELOAD_KEY="mclay_v3209_resume_reload_at";
+
+let v3209WasHidden=document.visibilityState==="hidden";
+let v3209HiddenAt=v3209WasHidden?Date.now():0;
+let v3209ResumeScheduled=false;
+let v3209ResumeApplying=false;
+let v3209ResumeTimer=null;
+let v3209DeferredSync=false;
+let v3209SyncHoldUntil=0;
+let v3209LastResumeAt=0;
+let v3209ResumeReason="";
+
+// Keep exact pre-fix implementations so normal in-app actions remain unchanged.
+const v3209Restore3206Base=v3206RestorePoolsideState;
+const v3209Restore3170Base=v3170RestorePoolsideState;
+const v3209Paint3170Base=v3170PaintBoard;
+const v3209SyncBase=syncIfPossible;
+
+function v3209ResumeGuard(){return !v3209ResumeApplying&&(v3209WasHidden||v3209ResumeScheduled)}
+function v3209ShellExists(){return Boolean(document.body&&document.getElementById("deck")&&document.querySelector(".view"))}
+function v3209ActiveView(){return document.querySelector(".view.active")?.id||""}
+function v3209SafeReloadOnce(){
+  let last=0;try{last=Number(sessionStorage.getItem(V3209_RESUME_RELOAD_KEY)||0)}catch{}
+  if(Date.now()-last<15000)return false;
+  try{sessionStorage.setItem(V3209_RESUME_RELOAD_KEY,String(Date.now()))}catch{}
+  location.reload();return true;
+}
+function v3209OpenSavedPanels(state){
+  for(const key of state?.open_lines||[]){
+    try{const node=document.querySelector(`[data-v3205-line="${CSS.escape(key)}"] details`);if(node)node.open=true}catch{}
+  }
+  const finish=document.querySelector("[data-v3180-finish]");if(finish&&state?.finish_open)finish.open=true;
+}
+function v3209RestoreBoardOnce(){
+  if(document.visibilityState!=="visible")return false;
+  if(!v3209ShellExists())return v3209SafeReloadOnce();
+  const state=typeof v3206ReadState==="function"?v3206ReadState():null;
+  const savedSessionId=state?.session_id||appState.settings.selected_session_id;
+  const session=(appState.sessions||[]).find(row=>row.id===savedSessionId)||selectedSession?.();
+  if(!session){
+    // The shell is intact but local session state may still be hydrating. Render
+    // the existing local app once; do not navigate to a different session.
+    try{renderAll?.()}catch(error){console.warn("v3.20.9 resume render deferred",error)}
+    return true;
+  }
+  appState.settings.selected_session_id=session.id;
+  if(v3191IsCompleted?.(session))appState.settings.v3191_viewing_past_session_id=session.id;
+  if(state?.selected_squad)appState.settings.selected_squad=state.selected_squad;
+  if(state?.mode)appState.settings.v3126_board_mode=state.mode;
+  if(Number.isFinite(Number(state?.active_block_index)))appState.settings.v3129_active_block_index=Number(state.active_block_index)||0;
+  saveState(appState);
+  try{showView?.("deck")}catch{}
+  try{v3195ClearBoardCaches?.()}catch{}
+  try{v3201RequestBoardPaint?.(true)}catch(error){console.warn("v3.20.9 Board repaint deferred",error)}
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    v3209OpenSavedPanels(state);
+    const y=Math.max(0,Number(state?.scroll_y)||0);
+    if(Math.abs((window.scrollY||0)-y)>2)window.scrollTo({top:y,left:0,behavior:"auto"});
+    try{v3107UpdateWakeLock?.()}catch{}
+    // If an older handler left all views hidden, repair the active view once.
+    if(!v3209ActiveView()){
+      try{showView?.("deck");v3201RequestBoardPaint?.(true)}catch{}
+    }
+  }));
+  return true;
+}
+async function v3209ApplyResume(reason="resume"){
+  if(document.visibilityState!=="visible")return false;
+  if(v3209ResumeApplying)return true;
+  v3209ResumeApplying=true;v3209ResumeScheduled=false;v3209ResumeReason=reason;v3209SyncHoldUntil=Date.now()+1400;
+  clearTimeout(v3209ResumeTimer);v3209ResumeTimer=null;
+  try{
+    v3209RestoreBoardOnce();
+    v3209LastResumeAt=Date.now();
+    // Keep cloud work away from the first visible paint after a call/app switch.
+    setTimeout(()=>{
+      if(document.visibilityState!=="visible"||!navigator.onLine||!cloudReady?.())return;
+      if(v3209DeferredSync||(appState.pending||[]).length){v3209DeferredSync=false;v3209SyncBase?.().catch?.(()=>{})}
+    },1600);
+    setTimeout(()=>{
+      if(document.visibilityState!=="visible")return;
+      if(!v3209ShellExists()){v3209SafeReloadOnce();return}
+      if(!v3209ActiveView())try{showView?.("deck");v3201RequestBoardPaint?.(true)}catch{}
+    },700);
+  }finally{
+    v3209WasHidden=false;v3209ResumeApplying=false;
+  }
+  return true;
+}
+function v3209ScheduleResume(reason="resume",delay=70){
+  if(document.visibilityState!=="visible")return false;
+  v3209ResumeScheduled=true;v3209ResumeReason=reason;
+  clearTimeout(v3209ResumeTimer);
+  v3209ResumeTimer=setTimeout(()=>v3209ApplyResume(reason),Math.max(0,Number(delay)||0));
+  return true;
+}
+
+// Anonymous legacy listeners cannot be removed safely from this append-only app,
+// so their dynamically-resolved functions are gated during a genuine resume.
+v3206RestorePoolsideState=function(options={}){
+  if(v3209ResumeGuard()){v3209ScheduleResume("legacy-v3206",70);return true}
+  return v3209Restore3206Base?.(options);
+};
+v3170RestorePoolsideState=function(state,options={}){
+  if(v3209ResumeGuard()){v3209ScheduleResume("legacy-v3170-restore",70);return true}
+  return v3209Restore3170Base?.(state,options);
+};
+v3170PaintBoard=function(){
+  if(v3209ResumeGuard()){v3209ScheduleResume("legacy-v3170-paint",70);return}
+  return v3209Paint3170Base?.();
+};
+syncIfPossible=async function(...args){
+  if(v3209ResumeGuard()||Date.now()<v3209SyncHoldUntil){v3209DeferredSync=true;return{deferred:true,resume:true}}
+  return v3209SyncBase?.(...args);
+};
+
+function v3209MarkHidden(reason){
+  v3209WasHidden=true;v3209HiddenAt=Date.now();v3209ResumeReason=reason;
+  try{v3206SavePoolsideState?.()}catch{}
+  try{v3170SavePoolsideState?.()}catch{}
+  try{window.v374FlushLocalState?.()}catch{}
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){v3209MarkHidden("visibility-hidden");return}
+  if(v3209WasHidden)v3209ScheduleResume("visibility-visible",90);
+});
+window.addEventListener("pagehide",()=>v3209MarkHidden("pagehide"));
+window.addEventListener("pageshow",event=>{if(v3209WasHidden||event.persisted)v3209ScheduleResume(event.persisted?"pageshow-bfcache":"pageshow",60)});
+window.addEventListener("focus",()=>{if(v3209WasHidden||Date.now()-v3209HiddenAt<15000)v3209ScheduleResume("window-focus",100)});
+
+function v3209Brand(){
+  const title=`McLay Swimming OS — v${V3209_VERSION} Interruption Resume Repair`,subtitle=`v${V3209_VERSION} · stable 3.20.8 platform · phone-call/app-switch resume repair · no feature additions`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3209_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3209_EXPECTED_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3209_VERSION}`;badge.dataset.build=V3209_EXPECTED_BUILD;badge.title=V3209_EXPECTED_BUILD}
+}
+async function v3209RegisterWorker(){
+  if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3209",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.9 service worker update",error)}
+}
+try{v3208BrandObserver?.disconnect?.()}catch{}
+try{v3208Brand=v3209Brand}catch{}
+try{v3208RegisterWorker=v3209RegisterWorker}catch{}
+const v3209BrandObserver=new MutationObserver(()=>queueMicrotask(v3209Brand));
+if(document.querySelector("title"))v3209BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v3209BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3209Debug={version:V3209_VERSION,build:V3209_EXPECTED_BUILD,save:()=>v3209MarkHidden("debug-save"),resume:(reason="debug-resume")=>{v3209WasHidden=true;return v3209ScheduleResume(reason,0)},shell:v3209ShellExists,lastResume:()=>v3209LastResumeAt,reason:()=>v3209ResumeReason};
+setTimeout(()=>{v3209Brand();v3209RegisterWorker()},0);setTimeout(v3209Brand,900);setTimeout(v3209Brand,2600);
+
+// =============================================================================
+// McLay Swimming OS v3.20.10 — Poolside Foreground Freeze Repair
+// Correction-only layer over v3.20.9. No coaching features or Board redesign.
+// Live Android evidence: the app became interactive after return, then froze a
+// few seconds later. The remaining delayed work was background result hydration,
+// automatic cloud sync and full Board re-rendering after those jobs completed.
+// This layer keeps the poolside Board local-first and foreground-safe: while the
+// Board is visible, background jobs may hydrate/cache data but may not trigger a
+// full Board rebuild or automatic cloud pass. Explicit Repair & sync remains
+// available from Sync/Settings. Return from a phone call restores the existing
+// DOM first and repaints only if the Board shell is genuinely missing.
+// =============================================================================
+const V3210_VERSION="3.20.10";
+const V3210_BUILD="20260807-poolside-foreground-freeze-repair";
+const V3210_EXPECTED_BUILD="3.20.10-poolside-foreground-freeze-repair-20260807";
+let v3210DeferredCloud=false;
+let v3210DeferredPaint=false;
+let v3210ResumeHoldUntil=0;
+
+function v3210ActiveView(){return document.querySelector(".view.active")?.id||""}
+function v3210PoolsideForeground(){return document.visibilityState==="visible"&&v3210ActiveView()==="deck"}
+function v3210BoardDomReady(){
+  const deck=document.getElementById("deck");
+  if(!deck||v3210ActiveView()!=="deck")return false;
+  return Boolean(deck.querySelector("#v3126WholeView,.v3127-session-grid,[data-v3170-block],.v3127-board-line,.v3205-board-line,.v3180-block,.session-block-card"));
+}
+
+// 1. Hydrate PB/result cache without rebuilding the live Board underneath the coach.
+const v3210HydrateResultsBase=typeof v3103HydrateResults==="function"?v3103HydrateResults:null;
+if(v3210HydrateResultsBase)v3103HydrateResults=async function(options={}){
+  const safe={...(options||{})};
+  if(v3210PoolsideForeground())safe.render=false;
+  return v3210HydrateResultsBase(safe);
+};
+
+// 2. Poolside edits remain durable locally, but automatic cloud passes cannot take
+// over the main thread / rebuild the Board while the coach is looking at it.
+const v3210ScheduleBackgroundBase=typeof v3103ScheduleBackgroundSync==="function"?v3103ScheduleBackgroundSync:null;
+if(v3210ScheduleBackgroundBase){
+  v3103ScheduleBackgroundSync=function(delay=900,pull=false){
+    if(v3210PoolsideForeground()){v3210DeferredCloud=true;return false}
+    return v3210ScheduleBackgroundBase(delay,pull);
+  };
+  window.v3103ScheduleBackgroundSync=v3103ScheduleBackgroundSync;
+}
+const v3210ScheduleFocusBase=typeof v3207ScheduleFocusSync==="function"?v3207ScheduleFocusSync:null;
+if(v3210ScheduleFocusBase)v3207ScheduleFocusSync=function(delay=900){
+  if(v3210PoolsideForeground()){v3210DeferredCloud=true;return false}
+  return v3210ScheduleFocusBase(delay);
+};
+const v3210SyncPossibleBase=syncIfPossible;
+syncIfPossible=async function(...args){
+  if(v3210PoolsideForeground()){v3210DeferredCloud=true;return{deferred:true,poolside:true}}
+  return v3210SyncPossibleBase?.(...args);
+};
+scheduleFastSync=function(){
+  if(v3210PoolsideForeground()){v3210DeferredCloud=true;return true}
+  return v3103ScheduleBackgroundSync?.(350,false);
+};
+
+// 3. Suppress delayed automatic repaints for a short settle window only when a
+// usable Board is already on screen. User-triggered work after the window uses
+// the existing protected renderer unchanged.
+const v3210BoardPaintBase=typeof v3201RequestBoardPaint==="function"?v3201RequestBoardPaint:null;
+if(v3210BoardPaintBase)v3201RequestBoardPaint=function(force=false){
+  if(Date.now()<v3210ResumeHoldUntil&&v3210BoardDomReady()){v3210DeferredPaint=true;return true}
+  return v3210BoardPaintBase(force);
+};
+
+// 4. Phone-call/app-switch return: preserve the DOM that Android kept. Do not
+// clear caches or rebuild the entire Board merely because visibility changed.
+const v3210RestoreResumeBase=typeof v3209RestoreBoardOnce==="function"?v3209RestoreBoardOnce:null;
+if(v3210RestoreResumeBase)v3209RestoreBoardOnce=function(){
+  if(document.visibilityState!=="visible")return false;
+  if(typeof v3209ShellExists==="function"&&!v3209ShellExists())return v3210RestoreResumeBase();
+  if(!v3210BoardDomReady())return v3210RestoreResumeBase();
+  const state=typeof v3206ReadState==="function"?v3206ReadState():null;
+  const savedSessionId=state?.session_id||appState.settings.selected_session_id;
+  const session=(appState.sessions||[]).find(row=>row.id===savedSessionId);
+  if(session){
+    appState.settings.selected_session_id=session.id;
+    if(state?.selected_squad)appState.settings.selected_squad=state.selected_squad;
+    if(state?.mode)appState.settings.v3126_board_mode=state.mode;
+    if(Number.isFinite(Number(state?.active_block_index)))appState.settings.v3129_active_block_index=Number(state.active_block_index)||0;
+  }
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    try{v3209OpenSavedPanels?.(state)}catch{}
+    const y=Math.max(0,Number(state?.scroll_y)||0);
+    if(Math.abs((window.scrollY||0)-y)>2)window.scrollTo({top:y,left:0,behavior:"auto"});
+    try{v3107UpdateWakeLock?.()}catch{}
+  }));
+  return true;
+};
+
+function v3210OnHidden(){v3210ResumeHoldUntil=0;try{v3206SavePoolsideState?.()}catch{}try{v3170SavePoolsideState?.()}catch{}}
+function v3210OnVisible(){
+  // Five seconds covers the delayed hydration/conversion/sync callbacks that
+  // previously landed a few seconds after the app looked usable.
+  v3210ResumeHoldUntil=Date.now()+5000;
+  setTimeout(()=>{v3210ResumeHoldUntil=0;v3210DeferredPaint=false},5200);
+}
+document.addEventListener("visibilitychange",()=>document.visibilityState==="hidden"?v3210OnHidden():v3210OnVisible());
+window.addEventListener("pageshow",()=>v3210OnVisible());
+
+// If the coach deliberately leaves the Board, deferred cloud work may resume.
+document.addEventListener("click",event=>{
+  const nav=event.target?.closest?.("[data-view]");
+  if(!nav)return;
+  const target=nav.dataset.view;
+  if(target&&target!=="deck"&&v3210DeferredCloud){
+    v3210DeferredCloud=false;
+    setTimeout(()=>{if(!v3210PoolsideForeground())v3210SyncPossibleBase?.().catch?.(()=>{})},700);
+  }
+},true);
+
+function v3210Brand(){
+  const title=`McLay Swimming OS — v${V3210_VERSION} Stable Poolside`;
+  const subtitle=`v${V3210_VERSION} · 3.20.9 resume retained · foreground freeze repair · no feature additions`;
+  if(document.title!==title)document.title=title;
+  const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3210_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3210_EXPECTED_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3210_VERSION}`;badge.dataset.build=V3210_EXPECTED_BUILD;badge.title=V3210_EXPECTED_BUILD}
+}
+async function v3210RegisterWorker(){
+  if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
+  try{const registration=await navigator.serviceWorker.register("./sw.js?v=20260807-core3210",{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.10 service worker update",error)}
+}
+try{v3209BrandObserver?.disconnect?.()}catch{}
+try{v3209Brand=v3210Brand}catch{}
+try{v3209RegisterWorker=v3210RegisterWorker}catch{}
+const v3210BrandObserver=new MutationObserver(()=>queueMicrotask(v3210Brand));
+if(document.querySelector("title"))v3210BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v3210BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3210Debug={version:V3210_VERSION,build:V3210_EXPECTED_BUILD,poolside:v3210PoolsideForeground,boardReady:v3210BoardDomReady,deferredCloud:()=>v3210DeferredCloud,resumeHold:()=>v3210ResumeHoldUntil};
+v3210OnVisible();setTimeout(()=>{v3210Brand();v3210RegisterWorker()},0);setTimeout(v3210Brand,900);setTimeout(v3210Brand,3000);
+// Ensure startup callbacks from 3.20.7/3.20.8 resolve to the one current worker.
+try{v3208RegisterWorker=v3210RegisterWorker}catch{}
+try{v3207RegisterWorker=v3210RegisterWorker}catch{}
