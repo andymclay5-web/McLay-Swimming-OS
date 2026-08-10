@@ -20530,3 +20530,160 @@ const v3212BrandObserver=new MutationObserver(()=>queueMicrotask(v3212Brand));if
 function v3212Startup(){const repaired=v3212RepairTuesdayFixture();v3212Brand();v3212RegisterWorker();const ui=v3212ReadUiState();if(ui?.view&&ui.view!=="deck"&&$(ui.view)&&v3212ActiveView()!==ui.view)showView(ui.view);if(v3212ActiveView()==="reports")v3212RenderSessionReport();if(repaired){v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}setTimeout(()=>{if(v3212BootDeferredCloud&&document.visibilityState==="visible"&&navigator.onLine&&cloudReady?.()){v3212BootDeferredCloud=false;v3212SyncBase?.().catch?.(()=>{})}},V3212_BOOT_QUIET_MS+400)}
 window.v3212Debug={version:V3212_VERSION,build:V3212_EXPECTED_BUILD,cueOnly:v3212CueOnly,repairTuesday:v3212RepairTuesdayFixture,t400Eligible:v3207T400Eligible,sessionReport:v3212SelectedSessionReportHtml,uiState:v3212ReadUiState,saveUi:v3212SaveUiState};
 setTimeout(v3212Startup,0);setTimeout(v3212Brand,800);setTimeout(v3212Brand,2600);setTimeout(()=>{v3212Brand();if(v3212ActiveView()==="reports")v3212RenderSessionReport()},5200);
+
+// =============================================================================
+// McLay Swimming OS v3.20.13 — Modification Truth + PB-ready Poolside Repair
+// 11 Aug 2026. Correction layer over v3.20.12 from live Tue AM use.
+// Keep the main Board dominant; compact modified work; use aerobic evidence
+// silently unless the written set is target-driven; protect short max quality;
+// enforce pool-end alignment; apply confirmed athlete constraints; make present
+// swimmer initials a one-tap coaching/capture context; repair numbered child
+// cues generally rather than only in one Tuesday fixture.
+// =============================================================================
+const V3213_VERSION="3.20.13";
+const V3213_EXPECTED_BUILD="3.20.13-modification-truth-pb-ready-20260811";
+const V3213_CORE="20260811-core3213";
+
+function v3213Text(value){return String(value??"").trim()}
+function v3213Key(value){return v3213Text(value).toLowerCase().normalize?.("NFD").replace?.(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"")||""}
+function v3213Line(item){return v3213Text(v3129LineText?.(item)||item?.raw||item?.instruction||item?.label)}
+function v3213Work(line){const m=v3213Text(line).match(/^\s*(\d+)\s*[x×]\s*(\d+(?:\.5)?)/i);return m?{reps:Number(m[1]),distance:Number(m[2])}:null}
+function v3213ReplaceWork(line,reps,distance){return v3213Text(line).replace(/^\s*\d+\s*[x×]\s*\d+(?:\.5)?/i,`${reps} × ${distance}`)}
+function v3213ExplicitEdit(athlete,session,block,blockIndex,runnableIndex,item){try{return v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,runnableIndex,v34Array(block?.items).indexOf(item))||null}catch{return null}}
+
+// 1. General parser / stored-block truth. Numbered pattern children describe the
+// parent set and must never contribute standalone metres.
+function v3213RepairStoredCueMeters(){
+  let sessionsChanged=0;
+  for(const session of appState.sessions||[]){
+    const stored=(v3206StoredBlocks?.(session.id)||[]).map(v3212Clone);if(!stored.length)continue;
+    let changed=false;
+    for(const block of stored){
+      block.items=v34Array(block.items).map((item,index)=>{
+        const raw=v3213Line(item);if(!raw)return item;
+        if(v3212CueOnly?.(raw)&&(item?.runnable!==false||Number(item?.distance)||Number(item?.reps))){changed=true;return{...item,runnable:false,reps:0,distance:null,cycle:"",line_type:"cue",v3212_child_cue:true,v3213_child_cue:true,sort_order:index+1}}
+        return{...item,sort_order:index+1};
+      });
+      if(changed)block.raw_text=v34Array(block.items).map(row=>v3213Line(row)).filter(Boolean).join("\n");
+    }
+    if(changed){v3207CommitBlocks?.(session,stored,{source:"v3213_general_child_cue_repair",note:"Numbered child instructions retained as cues, not metres"});sessionsChanged++}
+  }
+  return sessionsChanged;
+}
+
+// 2. Evidence/display boundary. T400 can guide modification maths silently.
+// Put a numeric model target on the Board only when the written set asks for
+// an aerobic zone / race pace / explicit race segment target.
+function v3213AerobicTargetDriven(session,block,item){const text=[block?.title,block?.purpose,v3213Line(item)].join(" ");return /\b(?:regeneration|development|overload|threshold|clearance)\b/i.test(text)}
+function v3213RaceTargetDriven(session,block,item){const line=v3213Line(item);return Boolean(Number(item?.race_distance)||v3199RaceDistance?.(line)||/\b(?:50|100|200|400|800|1500)\s*(?:m\s*)?(?:race\s*)?pace\b/i.test(line)||/\b(?:race\s*pace|race\s*start|dive|from\s+blocks?|last\s+\d+(?:\.5)?\s*m?|finish|turn|push\s*start)\b/i.test(line))}
+function v3213TargetDriven(session,block,item){return v3213AerobicTargetDriven(session,block,item)||v3213RaceTargetDriven(session,block,item)||Boolean(item?.coach_target||item?.target_seconds||item?.target_time)}
+function v3213T400EvidenceRow(row){return /\b(?:t400|aerobic\s+(?:pace|target|model)|lee)\b/i.test([row?.method,row?.secondary,row?.source,row?.source_label].filter(Boolean).join(" "))}
+const v3213TargetRowsBase=v3205TargetRows;
+v3205TargetRows=function(session,block,item,blockIndex,itemIndex){const rows=v3213TargetRowsBase?.(session,block,item,blockIndex,itemIndex)||[];if(v3213TargetDriven(session,block,item))return rows;return rows.filter(row=>!v3213T400EvidenceRow(row))};
+
+// 3. Confirmed swimmer constraints / input-driven modification post-processing.
+function v3213AthleteRuleText(athlete){const structured=v34Array(appState.athlete_adaptation_rules).filter(row=>row.athlete_id===athlete?.id&&row.active!==false).map(row=>row.rule_text||row.notes||"");return [athlete?.modifications,athlete?.coach_notes,athlete?.current_considerations,...structured].filter(Boolean).join(" ")}
+function v3213NoLegUse(athlete){const text=v3213AthleteRuleText(athlete);return /\b(?:no\s+(?:functional\s+)?use\s+of\s+(?:her\s+|his\s+)?legs?|cannot\s+use\s+(?:her\s+|his\s+)?legs?|no\s+leg\s+use)\b/i.test(text)}
+function v3213NoBreastKickFins(athlete){const text=v3213AthleteRuleText(athlete);return /\b(?:no|avoid|cannot|can't|do\s+not)\b[^.\n]{0,50}\bbreast(?:stroke)?\s+kick\b[^.\n]{0,35}\bfins?\b|\bbreast(?:stroke)?\s+kick\b[^.\n]{0,35}\bfins?\b[^.\n]{0,30}\b(?:not\s+suitable|avoid|no)\b/i.test(text)}
+function v3213ShortQuality(item){const line=v3213Line(item),work=v3213Work(line),d=Number(item?.distance)||work?.distance||0;return Boolean(v3206LongRestQuality?.(item)||((/\b(?:max|maximum|dive|start|finish|last\s+\d+(?:\.5)?\s*m?|underwater)\b/i.test(line))&&d>0&&d<=50))}
+function v3213AmberEquivalent(line){let out=v3213Text(line);out=out.replace(/\bkick\s+(?:with\s+)?fins?\b/ig,"pull with paddles").replace(/\bkick\b/ig,"pull").replace(/\bwith\s+fins?\b/ig,"with paddles").replace(/\b(?:and|&)\s*fins?\b/ig,"").replace(/\bfins?\b/ig,"paddles");out=out.replace(/\bpaddles\s*(?:\+|&|and)\s*paddles\b/ig,"paddles").replace(/\bpull\s+with\s+paddles\s+paddles\b/ig,"pull with paddles").replace(/\s{2,}/g," ").replace(/\s+([),.;])/g,"$1");return out.trim()}
+function v3213ConorKickEquivalent(line){return v3213Text(line).replace(/\s*[·-]?\s*Breaststroke\s+kick\b/ig,"").replace(/\s*[·-]?\s*Breaststroke\b/ig,"").replace(/\s{2,}/g," ").trim()}
+function v3213Sequence(line){return Math.max(0,Number(v3191SequenceLength?.(line)||0))}
+function v3213PoolEndChoice(session,originalLine,currentLine){
+  const original=v3213Work(originalLine),current=v3213Work(currentLine);if(!current)return null;
+  const pool=v3211PoolLength?.(session)||25,lengths=current.reps*current.distance/pool;if(!Number.isInteger(lengths)||lengths%2===0)return current;
+  const sequence=v3213Sequence(originalLine),maxReps=Math.max(current.reps,original?.reps||current.reps),repOptions=[];
+  if(sequence>1){for(let r=sequence;r<=Math.max(maxReps,sequence);r+=sequence)repOptions.push(r);if(original?.reps&&original.reps%sequence===0&&!repOptions.includes(original.reps))repOptions.push(original.reps)}else{for(const r of [current.reps-1,current.reps,current.reps+1,original?.reps].filter(Boolean))if(r>0&&!repOptions.includes(r))repOptions.push(r)}
+  const distOptions=[];for(const d of [current.distance,Math.floor(current.distance/50)*50,Math.ceil(current.distance/50)*50,original?.distance].filter(Boolean))if(d>0&&(!original?.distance||d<=Math.max(original.distance,current.distance))&&!distOptions.includes(d))distOptions.push(d);
+  const target=current.reps*current.distance,candidates=[];for(const reps of repOptions)for(const distance of distOptions){const n=reps*distance/pool;if(!Number.isInteger(n)||n%2)continue;const nonStandard=distance%50===0?0:1,crossOriginal=original?.reps&&reps>original.reps?1:0,over=reps*distance>target?1:0;candidates.push({reps,distance,volume:reps*distance,score:Math.abs(reps*distance-target)+nonStandard*24+crossOriginal*18+over*2})}
+  candidates.sort((a,b)=>a.score-b.score||a.volume-b.volume);return candidates[0]||current;
+}
+
+const v3213AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3213AdaptationBase?.(athlete,session,block,blockIndex);if(!result)return result;
+  const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let rIndex=-1;
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i];if(row?.cue)continue;rIndex++;const item=runnable[rIndex];if(!item)continue;const original=v3213Line(item),explicit=v3213ExplicitEdit(athlete,session,block,blockIndex,rIndex,item);if(explicit)continue;
+    // Hard athlete capability constraints outrank generic stroke/profile scaling.
+    if(v3213NoLegUse(athlete)&&/\b(?:kick|fins?)\b/i.test(original)){row.line=v3213AmberEquivalent(row.line||original);row.target="";row.source=[row.source,"Athlete constraint · no functional leg use"].filter(Boolean).join(" · ")}
+    else if(v3213NoBreastKickFins(athlete)&&/\bkick\b/i.test(original)&&/\bfins?\b/i.test(original)){row.line=v3213ConorKickEquivalent(row.line||original);row.target="";row.source=[row.source,"Fins kick · no Breaststroke kick"].filter(Boolean).join(" · ")}
+    else if(v3213ShortQuality(item)||v3213RaceTargetDriven(session,block,item)){
+      // Starts / max / race-pace quality remain identical unless the coach explicitly edits them.
+      // Race-model targets may display, but the model must not silently reduce the prescribed work.
+      row.line=original;const w=v3213Work(original);if(w)row.distance=w.reps*w.distance;row.source=[row.source,v3213RaceTargetDriven(session,block,item)?"Race quality unchanged":"Short quality unchanged"].filter(Boolean).join(" · ")
+    }
+    // Generated odd-length work must return the swimmer to the coaching end.
+    if(!v3213ShortQuality(item)&&!v3213RaceTargetDriven(session,block,item)){
+      const choice=v3213PoolEndChoice(session,original,row.line||original);if(choice){const work=v3213Work(row.line||original);if(work&&(choice.reps!==work.reps||choice.distance!==work.distance)){row.line=v3213ReplaceWork(row.line||original,choice.reps,choice.distance);row.distance=choice.reps*choice.distance;row.source=[row.source,"pool-end guard"].filter(Boolean).join(" · ")}}
+    }
+    // Aerobic model can still inform the generated work, but keep it off a
+    // technical / recovery Board line unless that line explicitly asks for it.
+    if(!v3213TargetDriven(session,block,item))row.target="";
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;return{...result,rows,total,repeat,sharedTarget:v3213TargetDriven(session,block,runnable[0])?result.sharedTarget:""};
+};
+
+// 4. Compact modified versions: side-by-side when the screen has room, tight
+// stack on phone. A focused swimmer tab filters the rail without hiding the
+// ability to return to Group.
+function v3213FocusMap(){if(!appState.settings.v3213_focus_by_session)appState.settings.v3213_focus_by_session={};return appState.settings.v3213_focus_by_session}
+function v3213FocusId(session){return session?.id?v3213FocusMap()[session.id]||"":""}
+function v3213SetFocus(session,id=""){if(!session?.id)return;v3213FocusMap()[session.id]=id||"";appState.settings.selected_athlete_id=id||appState.settings.selected_athlete_id||"";saveState(appState);v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}
+function v3213PresentAthletes(session){const statuses=new Set(["present","modified","late"]),rows=(appState.attendance||[]).filter(row=>row.session_id===session?.id&&statuses.has(String(row.status||"").toLowerCase())),ids=[...new Set(rows.map(row=>row.athlete_id).filter(Boolean))];const roster=ids.map(id=>(appState.athletes||[]).find(a=>a.id===id)).filter(Boolean);return roster.length?roster:(v3204PresentAthletes?.(session)||[])}
+function v3213FocusStrip(session){const athletes=v3213PresentAthletes(session);if(!athletes.length)return"";const focus=v3213FocusId(session);return `<div class="v3213-focus-strip"><button type="button" data-v3213-focus="" class="${focus?"":"active"}">Group</button>${athletes.map(a=>`<button type="button" data-v3213-focus="${escapeHtml(a.id)}" class="${focus===a.id?"active":""}" title="${escapeHtml(a.full_name)}">${escapeHtml(v3212Initials(a.id))}</button>`).join("")}</div>`}
+
+v3205ModifiedLine=function(session,block,blockIndex,runnableIndex){
+  let athletes=v3180ModifiedAthletes?.(session)||[];if(!athletes.length)return"";const focus=v3213FocusId(session);if(focus)athletes=athletes.filter(a=>a.id===focus);if(!athletes.length)return"";
+  const runnable=v34Array(block?.items).filter(row=>row?.runnable!==false),item=runnable[runnableIndex],itemIndex=v34Array(block?.items).indexOf(item),quality=v3213ShortQuality(item),racePace=v3213RaceTargetDriven(session,block,item),showTarget=v3213TargetDriven(session,block,item);
+  const cards=athletes.map(athlete=>{const explicit=v3213ExplicitEdit(athlete,session,block,blockIndex,runnableIndex,item);if((quality||racePace)&&!explicit){let check=null;try{check=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}const qrow=v34Array(check?.rows).filter(x=>!x?.cue)[runnableIndex];const qline=v3206CleanAdaptedLine?.(qrow?.line||"")||v3213Text(qrow?.line);const main=v3206CleanAdaptedLine?.(v3213Line(item))||v3213Line(item);if(!qline||v3206Norm?.(qline)===v3206Norm?.(main))return""}
+    let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}const row=v34Array(adapt?.rows).filter(x=>!x?.cue)[runnableIndex];if(!row)return"";const line=v3206CleanAdaptedLine?.(explicit?.changed_text||row.line||"")||v3213Text(explicit?.changed_text||row.line),main=v3206Norm?.(v3213Line(item))||v3213Line(item).toLowerCase(),same=!explicit&&(v3206Norm?.(line)||line.toLowerCase())===main,target=showTarget?row.target:"";if(same&&!target)return"";return `<div class="v3205-mod-row v3212-mod-row v3213-mod-card"><b>${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><span>${escapeHtml(line||"Same as main")}</span>${target?`<em>${escapeHtml(target)}</em>`:""}<button type="button" class="secondary v3212-mod-edit" data-v3212-edit-mod="${escapeHtml(athlete.id)}|${blockIndex}|${itemIndex}">Edit</button></div>`}).filter(Boolean).join("");
+  return cards?`<div class="v3205-mod-rail v3213-mod-rail">${cards}</div>`:"";
+};
+
+// Add the one-tap attending-swimmer context strip once near the top of both
+// whole-session and current-block modes.
+const v3213WholeHtmlBase=v3170WholeHtml;
+v3170WholeHtml=function(session){let html=v3213WholeHtmlBase?.(session)||"";const strip=v3213FocusStrip(session);if(strip)html=html.replace(/(<div class="v3180-whole-flow">)/,`${strip}$1`);return html};v3180WholeHtml=v3170WholeHtml;
+const v3213ActiveHtmlBase=v3170ActiveHtml;
+v3170ActiveHtml=function(session){let html=v3213ActiveHtmlBase?.(session)||"";const strip=v3213FocusStrip(session);if(strip)html=html.replace(/(<div class="v3170-current-nav">)/,`${strip}$1`);return html};v3180ActiveHtml=v3170ActiveHtml;
+
+// Focused swimmer becomes the default capture/note recipient. Group remains a
+// one-tap option on the strip; no capture is silently published to swimmers.
+const v3213OpenCaptureBase=v3140OpenCapture;
+v3140OpenCapture=function(args={}){const session=(appState.sessions||[]).find(s=>s.id===(args?.sessionId||selectedSession?.()?.id)),focus=v3213FocusId(session);return v3213OpenCaptureBase?.({...args,athleteId:args?.athleteId||focus||null})};
+const v3213QuickNoteBase=v3199OpenQuickNote;
+v3199OpenQuickNote=function(blockIndex=null){const out=v3213QuickNoteBase?.(blockIndex),session=selectedSession?.(),focus=v3213FocusId(session);if(focus)requestAnimationFrame(()=>{const host=$("v3199QuickNote");if(!host)return;const scope=host.querySelector("[data-v3199-note-scope]"),row=host.querySelector("[data-v3199-athlete-row]"),select=host.querySelector("[data-v3199-note-athlete]");if(scope){scope.value="swimmer";scope.dispatchEvent(new Event("change",{bubbles:true}))}if(row)row.hidden=false;if(select)select.value=focus});return out};
+
+const v3213BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){const out=v3213BindBoardBase?.(host,session);host?.querySelectorAll?.("[data-v3213-focus]").forEach(button=>button.onclick=event=>{event.preventDefault();v3213SetFocus(session,button.dataset.v3213Focus||"")});return out};
+
+// 5. Roster hygiene confirmed by the head coach today. Do not delete history
+// in the app shell; make departed swimmers inactive. SQL performs the result
+// cleanup / backup. Pene stays retained but in the background while overseas.
+function v3213SeedConfirmedConstraints(){
+  if(!Array.isArray(appState.athlete_adaptation_rules))appState.athlete_adaptation_rules=[];let changed=false;
+  const specs=[
+    {name:"Amber Proudfoot",id:"v3213-amber-no-leg-use",text:"Standing athlete constraint: no functional use of legs. Replace kick and fins work with coach-appropriate pull, paddles or swim while preserving the purpose and rejoin window.",json:{v3213_constraint:true,constraint_key:"no_leg_use",activity:"kick_fins",replacement_family:"pull_paddles_swim"}},
+    {name:"Conor Fischer",id:"v3213-conor-no-breast-kick-fins",text:"Standing athlete constraint: no Breaststroke kick with fins. Other kick strokes with fins are permitted; do not force Breaststroke kick just because Breaststroke is the default stroke.",json:{v3213_constraint:true,constraint_key:"no_breaststroke_kick_with_fins",activity:"kick_fins"}}
+  ];
+  for(const spec of specs){const athlete=(appState.athletes||[]).find(a=>v3213Key(a.full_name)===v3213Key(spec.name));if(!athlete)continue;const exists=appState.athlete_adaptation_rules.some(r=>r.athlete_id===athlete.id&&r.active!==false&&(r.id===spec.id||r.rule_json?.constraint_key===spec.json.constraint_key));if(exists)continue;const now=nowIso();const rule={id:spec.id,athlete_id:athlete.id,scope:"general",rule_text:spec.text,rule_json:spec.json,source_type:"coach_confirmed_poolside",modification_type:"para",priority:160,active:true,created_at:now,updated_at:now};appState.athlete_adaptation_rules.push(rule);queueRecord?.("athlete_adaptation_rules",rule.id);changed=true}
+  if(changed)saveState(appState);return changed
+}
+
+function v3213ArchiveDeparted(){let changed=false;for(const athlete of appState.athletes||[]){const key=v3213Key(athlete.full_name);if(!["sophienewlove","sophnewlove","siennamuir","penesmith"].includes(key))continue;if(athlete.active!==false){athlete.active=false;athlete.updated_at=nowIso();queueRecord?.("athletes",athlete.id);changed=true}}if(changed)saveState(appState);return changed}
+
+const v3213Styles=document.createElement("style");v3213Styles.id="v3213Styles";v3213Styles.textContent=`
+.v3213-focus-strip{display:flex;gap:6px;align-items:center;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:thin}.v3213-focus-strip button{flex:0 0 auto;min-width:38px;min-height:34px;border-radius:999px;padding:4px 9px;font-size:.7rem;font-weight:900}.v3213-focus-strip button.active{background:#174a65;color:#fff;border-color:#174a65}.v3213-mod-rail{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:5px!important;padding:5px 7px!important}.v3213-mod-card{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;grid-template-areas:"who text edit" "who target edit"!important;gap:1px 7px!important;align-items:center!important;padding:5px 6px!important;border:1px solid rgba(151,112,20,.18);border-radius:8px;background:rgba(255,249,231,.72)}.v3213-mod-card>b{grid-area:who}.v3213-mod-card>span{grid-area:text;line-height:1.22;font-size:.72rem}.v3213-mod-card>em{grid-area:target;font-size:.7rem}.v3213-mod-card>button{grid-area:edit;align-self:center!important}.v3205-board-line{overflow:visible}
+@media(min-width:900px){.v3213-mod-rail{grid-template-columns:repeat(3,minmax(0,1fr))}.v3213-mod-card>span{font-size:.74rem}}
+@media(max-width:899px) and (min-width:560px){.v3213-mod-rail{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:559px){.v3213-mod-rail{grid-template-columns:1fr;padding:4px!important}.v3213-mod-card{padding:4px 5px!important}.v3213-mod-card>span{font-size:.7rem}.v3213-focus-strip{margin-inline:-2px}}
+`;document.head.appendChild(v3213Styles);
+
+function v3213Brand(){const title=`McLay Swimming OS — v${V3213_VERSION} Modification Truth`,subtitle=`v${V3213_VERSION} · compact modified work · silent model evidence · pool-end + athlete constraints · PB reconciliation ready`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3213_EXPECTED_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3213_EXPECTED_BUILD)}catch{}const badge=$("v3207BuildBadge")||$("v3208BuildBadge");if(badge){badge.textContent=`v${V3213_VERSION}`;badge.dataset.build=V3213_EXPECTED_BUILD;badge.title=V3213_EXPECTED_BUILD}}
+async function v3213RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3213_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.13 service worker update",error)}}
+try{v3212BrandObserver?.disconnect?.()}catch{}try{v3212Brand=v3213Brand}catch{}try{v3212RegisterWorker=v3213RegisterWorker}catch{}try{v3211Brand=v3213Brand}catch{}try{v3211RegisterWorker=v3213RegisterWorker}catch{}try{v3210Brand=v3213Brand}catch{}try{v3210RegisterWorker=v3213RegisterWorker}catch{}try{v3209Brand=v3213Brand}catch{}try{v3209RegisterWorker=v3213RegisterWorker}catch{}try{v3208RegisterWorker=v3213RegisterWorker}catch{}try{v3207RegisterWorker=v3213RegisterWorker}catch{}
+const v3213BrandObserver=new MutationObserver(()=>queueMicrotask(v3213Brand));if(document.querySelector("title"))v3213BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3213BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+function v3213Startup(){const repaired=v3213RepairStoredCueMeters(),seeded=v3213SeedConfirmedConstraints(),archived=v3213ArchiveDeparted();v3213Brand();v3213RegisterWorker();if(repaired||seeded||archived){v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}}
+window.v3213Debug={version:V3213_VERSION,build:V3213_EXPECTED_BUILD,targetDriven:v3213TargetDriven,poolEnd:v3213PoolEndChoice,noLeg:v3213NoLegUse,noBreastKickFins:v3213NoBreastKickFins,repairCues:v3213RepairStoredCueMeters,archiveDeparted:v3213ArchiveDeparted,focus:v3213FocusId};
+setTimeout(v3213Startup,0);setTimeout(v3213Brand,700);setTimeout(v3213Brand,2200);setTimeout(v3213Brand,5200);
