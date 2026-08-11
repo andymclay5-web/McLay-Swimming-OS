@@ -21068,3 +21068,78 @@ try{v3163BrandObserver?.disconnect?.()}catch{}
 const v3215BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3215_VERSION} Phone Stability`||document.querySelector(".header-subtitle")?.textContent!==`v${V3215_VERSION} · protected Board/pathway · phone state lock · no background UI takeover`)queueMicrotask(v3215Brand)});if(document.querySelector("title"))v3215BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3215BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3215Debug={version:V3215_VERSION,build:V3215_BUILD,phone:v3215Phone,activeView:v3215ActiveView,canonicalUi:v3215CanonicalUi,initials:v3215Initials,selected:()=>appState.settings.selected_athlete_id,hydrateDepth:()=>v3215HydrateDepth};
 v3215Brand();setTimeout(()=>{v3215Brand();v3215RegisterWorker();const deck=document.getElementById("deckAthlete");if(deck&&v3215DeckAthlete())renderDeckAthleteBrief?.()},0);setTimeout(v3215Brand,900);setTimeout(v3215Brand,2800);setTimeout(v3215Brand,5600);
+
+// =============================================================================
+// McLay Swimming OS v3.20.16 — Lane Sync ID Repair
+// 11 Aug 2026. Narrow sync-only correction over v3.20.15.
+// - clears stale resolved session_lane_assignments duplicate-PK diagnostics;
+// - repairs legacy lane-<athlete> IDs before any future push by making the ID
+//   unique to session + athlete;
+// - keeps the current build visible in Connection diagnostics/copy output.
+// No Board, parser, pathway, Capture, Finish or athlete-selection logic changed.
+// =============================================================================
+const V3216_VERSION="3.20.16";
+const V3216_BUILD="3.20.16-lane-sync-id-repair-20260811";
+const V3216_CORE="20260811-core3216";
+
+function v3216Text(value){return String(value??"").trim()}
+function v3216LaneCanonicalId(row){const session=v3216Text(row?.session_id),athlete=v3216Text(row?.athlete_id);return session&&athlete?`lane-${session}-${athlete}`:v3216Text(row?.id)}
+function v3216LanePkFailure(row){return row?.table==="session_lane_assignments"&&/duplicate key value violates unique constraint\s+["']?session_lane_assignments_pkey/i.test(v3216Text(row?.message))}
+function v3216ClearFailureById(id){if(!Array.isArray(appState?.settings?.v3111_sync_failures))return;appState.settings.v3111_sync_failures=appState.settings.v3111_sync_failures.filter(row=>!(row?.table==="session_lane_assignments"&&row?.id===id&&v3216LanePkFailure(row)))}
+
+function v3216RepairLaneSyncState(){
+  if(!appState||!Array.isArray(appState.session_lane_assignments))return {renamed:0,cleared:0};
+  const pending=v34Array(appState.pending),failures=v34Array(appState.settings?.v3111_sync_failures),failedIds=new Set(failures.filter(v3216LanePkFailure).map(row=>row.id).filter(Boolean));
+  const pendingLaneIds=new Set(pending.filter(row=>row?.table==="session_lane_assignments").map(row=>row.id).filter(Boolean));
+  const idCounts=new Map();for(const row of appState.session_lane_assignments){const id=v3216Text(row?.id);if(id)idCounts.set(id,(idCounts.get(id)||0)+1)}
+  let renamed=0,cleared=0;
+  for(const row of appState.session_lane_assignments){
+    const oldId=v3216Text(row?.id),canonical=v3216LaneCanonicalId(row);if(!oldId||!canonical)continue;
+    const legacyAthleteId=`lane-${v3216Text(row?.athlete_id)}`;
+    // Never manufacture new cloud work from a historical diagnostic alone.
+    // Only re-key a row that is genuinely still pending; 0 pending means the
+    // old failure is diagnostic history and can simply be cleared.
+    const implicated=pendingLaneIds.has(oldId)&&(oldId===legacyAthleteId||failedIds.has(oldId)||(idCounts.get(oldId)||0)>1);
+    if(!implicated||oldId===canonical)continue;
+    // If the canonical row already exists for the same pair, keep the freshest row.
+    const existing=appState.session_lane_assignments.find(other=>other!==row&&other.id===canonical);
+    if(existing&&existing.session_id===row.session_id&&existing.athlete_id===row.athlete_id){
+      if(v3216Text(row.updated_at)>=v3216Text(existing.updated_at))Object.assign(existing,{...row,id:canonical});
+      appState.session_lane_assignments=appState.session_lane_assignments.filter(other=>other!==row);
+    }else row.id=canonical;
+    appState.pending=v34Array(appState.pending).filter(item=>!(item.table==="session_lane_assignments"&&item.id===oldId));
+    if(typeof queueRecord==="function")queueRecord("session_lane_assignments",canonical);
+    v3216ClearFailureById(oldId);renamed++;
+  }
+  // A duplicate-PK diagnostic with no pending row is historical: the queue has
+  // already been acknowledged/deduped, so it must not keep Connection red forever.
+  if(Array.isArray(appState.settings?.v3111_sync_failures)){
+    const before=appState.settings.v3111_sync_failures.length;
+    const activePending=new Set(v34Array(appState.pending).filter(row=>row?.table==="session_lane_assignments").map(row=>row.id));
+    appState.settings.v3111_sync_failures=appState.settings.v3111_sync_failures.filter(row=>!(v3216LanePkFailure(row)&&!activePending.has(row.id)));
+    cleared=before-appState.settings.v3111_sync_failures.length;
+  }
+  if(renamed||cleared){try{v3123DedupeLaneAssignments?.()}catch{}saveState(appState)}
+  return {renamed,cleared};
+}
+
+// Repair immediately before the latest non-destructive transport loop runs.
+const v3216PushPendingBase=typeof v3111PushPending==="function"?v3111PushPending:null;
+if(v3216PushPendingBase){v3111PushPending=async function(){v3216RepairLaneSyncState();return v3216PushPendingBase()};pushPending=v3111PushPending}
+
+function v3216SyncCopyText(){const failures=typeof v3111Failures==="function"?v3111Failures():v34Array(appState.settings?.v3111_sync_failures);const summary=typeof v3111SyncSummary==="function"?v3111SyncSummary():`${v34Array(appState.pending).length} pending`;return `McLay Swimming ${V3216_BUILD}\n${summary}\n`+failures.map(f=>`${f.phase||"push"} ${f.table||""} ${f.id||""}: ${f.message||""}`).join("\n")}
+function v3216FixSyncDiagnostics(){
+  const build=document.querySelector("[data-v3207-sync-build]");if(build)build.textContent=V3216_BUILD;
+  const copy=document.getElementById("v3111CopySync");if(copy)copy.onclick=async()=>{const text=v3216SyncCopyText();try{await navigator.clipboard.writeText(text);updateStatus("Sync details copied","good")}catch{alert(text)}};
+}
+const v3216RenderSyncBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;
+if(v3216RenderSyncBase)v3111RenderSyncDetails=function(){v3216RepairLaneSyncState();v3216RenderSyncBase();v3216FixSyncDiagnostics()};
+const v3216RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;
+if(v3216RenderLegacySyncBase)v36RenderSyncDetails=function(){v3216RepairLaneSyncState();v3216RenderLegacySyncBase();v3216FixSyncDiagnostics()};
+
+function v3216Brand(){const title=`McLay Swimming OS — v${V3216_VERSION} Lane Sync Repair`,subtitle=`v${V3216_VERSION} · v3.20.15 phone stability retained · lane sync ID repair`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3216_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3216_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3216_VERSION}`;badge.dataset.build=V3216_BUILD;badge.title=V3216_BUILD}}
+async function v3216RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3216_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.16 service worker update",error)}}
+try{v3215BrandObserver?.disconnect?.()}catch{}
+const v3216BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3216_VERSION} Lane Sync Repair`)queueMicrotask(v3216Brand)});if(document.querySelector("title"))v3216BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3216BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3216Debug={version:V3216_VERSION,build:V3216_BUILD,canonical:v3216LaneCanonicalId,repair:v3216RepairLaneSyncState,copy:v3216SyncCopyText};
+v3216RepairLaneSyncState();v3216Brand();setTimeout(()=>{v3216RepairLaneSyncState();v3216Brand();v3216RegisterWorker();v3216FixSyncDiagnostics()},0);setTimeout(v3216Brand,900);setTimeout(v3216Brand,2800);
