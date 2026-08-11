@@ -1,7 +1,7 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-20-16-lane-sync-id-repair-20260811";
-const BUILD="3.20.16-lane-sync-id-repair-20260811";
-const CORE=["./","./index.html","./styles.css?v=20260811-core3216","./app.js?v=20260811-core3216","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-20-17-deck-pathway-selection-lock-20260811";
+const BUILD="3.20.17-deck-pathway-selection-lock-20260811";
+const CORE=["./","./index.html","./styles.css?v=20260811-core3217","./app.js?v=20260811-core3217","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
 async function fetchFresh(request){return fetch(request,{cache:"no-store"})}
 self.addEventListener("install",event=>event.waitUntil((async()=>{

@@ -21143,3 +21143,171 @@ try{v3215BrandObserver?.disconnect?.()}catch{}
 const v3216BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3216_VERSION} Lane Sync Repair`)queueMicrotask(v3216Brand)});if(document.querySelector("title"))v3216BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3216BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3216Debug={version:V3216_VERSION,build:V3216_BUILD,canonical:v3216LaneCanonicalId,repair:v3216RepairLaneSyncState,copy:v3216SyncCopyText};
 v3216RepairLaneSyncState();v3216Brand();setTimeout(()=>{v3216RepairLaneSyncState();v3216Brand();v3216RegisterWorker();v3216FixSyncDiagnostics()},0);setTimeout(v3216Brand,900);setTimeout(v3216Brand,2800);
+
+// =============================================================================
+// McLay Swimming OS v3.20.17 — Deck Pathway Snapshot + Selection Lock
+// 11 Aug 2026. Additive layer over v3.20.16.
+// - v3.20.16 lane-sync repair retained unchanged underneath;
+// - Board, parser, Capture, Finish and modification code are not rewritten;
+// - swimmer page answers the closest current national target immediately;
+// - ranks qualification gaps by percentage so different race distances compare;
+// - uses the existing WA / World Para points engine for the next 25-point bump;
+// - full 4,406-standard pathway is calculated only when the coach opens it;
+// - reconnects the pre-stability athlete hydrator to the quiet/idle path;
+// - explicit swimmer / squad / results-view choices cannot be replaced by a stale
+//   background UI snapshot (native Back remains allowed to restore history).
+// =============================================================================
+const V3217_VERSION="3.20.17";
+const V3217_BUILD="3.20.17-deck-pathway-selection-lock-20260811";
+const V3217_CORE="20260811-core3217";
+
+function v3217Text(value){return String(value??"").trim()}
+function v3217Norm(value){return v3217Text(value).toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function v3217Clock(seconds){return v3214Clock?.(seconds)||v3163Clock?.(seconds)||String(seconds)}
+function v3217ActiveView(){return document.querySelector(".view.active")?.id||"deck"}
+function v3217Visible(){return document.visibilityState==="visible"}
+function v3217Idle(fn,timeout=650){if(typeof requestIdleCallback==="function")return requestIdleCallback(fn,{timeout});return setTimeout(fn,Math.min(80,timeout))}
+
+// -----------------------------------------------------------------------------
+// 1. Fast deck answer: closest current national qualifying target by percentage.
+// Benchmarks/records are deliberately excluded here. They remain in the full path.
+// -----------------------------------------------------------------------------
+function v3217IsNationalQualifying(row){
+  if(!row||v3163Kind?.(row)!=="qualifying")return false;
+  const name=v3217Norm(row.programme||row.standard_name||row.name);
+  return /(^| )nzsc( |$)|new zealand short course|(^| )nags( |$)|national age group|new zealand championships|nz championships|new zealand open|nz opens/.test(name);
+}
+function v3217NationalPriority(row){const name=v3217Norm(row?.programme);if(/(^| )nzsc( |$)|new zealand short course/.test(name))return 1;if(/(^| )nags( |$)|national age group/.test(name))return 2;if(/new zealand championships|nz championships/.test(name))return 3;if(/new zealand open|nz opens/.test(name))return 4;return 9}
+function v3217TargetSeconds(row){return Number(v3163StageSeconds?.(row))||Number(row?.qualifying_seconds)||0}
+function v3217GapPct(pbSeconds,targetSeconds){if(!(pbSeconds>0)||!(targetSeconds>0))return null;return Math.max(0,(pbSeconds-targetSeconds)/targetSeconds*100)}
+function v3217GapText(candidate){if(!candidate)return"";if(candidate.qualified)return`qualified by ${v3217Clock(Math.abs(candidate.gapSeconds))}`;return`${v3217Clock(candidate.gapSeconds)} · ${candidate.gapPct.toFixed(1)}% away`}
+function v3217PointStepTo(athlete,pb,targetSeconds){
+  const scale=v3214Scale?.(athlete,pb);if(!scale?.points)return null;
+  const current=Math.round(Number(scale.points)),standardPoints=Math.round(Number(v3214PointsAtTime?.(athlete,pb,targetSeconds,scale))||0);if(!(current>0))return null;
+  if(standardPoints>0&&current>=standardPoints)return{currentPoints:current,targetPoints:standardPoints,targetSeconds,scaleShort:scale.short,scaleLabel:scale.label,qualified:true};
+  let targetPoints=v3214NextPoint?.(current)||current+25;if(standardPoints>current&&standardPoints<targetPoints)targetPoints=standardPoints;
+  const seconds=Number(v3214TimeForPoints?.(athlete,pb,targetPoints,scale));if(!(seconds>0)||seconds>=Number(pb.result_seconds)-.005)return null;
+  return{currentPoints:current,targetPoints:Math.round(targetPoints),targetSeconds:seconds,scaleShort:scale.short,scaleLabel:scale.label,standardPoints:standardPoints||null,qualified:false};
+}
+function v3217NationalCandidates(athlete){
+  if(!athlete)return[];const pbs=v3163PbInventory?.(athlete)?.pbs||[],standards=appState.pathway_standards||[],rows=[];
+  for(const pb of pbs){
+    for(const standard of standards){
+      if(!v3217IsNationalQualifying(standard))continue;
+      if(v3163StandardReason?.(standard,athlete,pb)!=="match")continue;
+      if(v3163Targetable?.(standard)===false)continue;
+      const targetSeconds=v3217TargetSeconds(standard),pbSeconds=Number(pb.result_seconds);if(!(targetSeconds>0)||!(pbSeconds>0))continue;
+      const gapSeconds=pbSeconds-targetSeconds,gapPct=v3217GapPct(pbSeconds,targetSeconds),scale=v3214Scale?.(athlete,pb),targetPoints=v3214PointsAtTime?.(athlete,pb,targetSeconds,scale),step=v3217PointStepTo(athlete,pb,targetSeconds);
+      rows.push({athlete,pb,standard,programme:v3217Text(standard.programme||"National target"),targetSeconds,target:v3217Text(standard.qualifying_time_text)||v3217Clock(targetSeconds),gapSeconds,gapPct,qualified:gapSeconds<=0,scale,targetPoints:Number(targetPoints)||null,step,priority:v3217NationalPriority(standard)});
+    }
+  }
+  // One row per programme + course-event. Exact age/class matching has already run.
+  const unique=new Map();for(const row of rows){const key=`${v3217Norm(row.programme)}|${row.pb.course}|${row.pb.distance}|${row.pb.stroke}`;const prior=unique.get(key);if(!prior||row.targetSeconds>prior.targetSeconds)unique.set(key,row)}
+  const all=[...unique.values()];const nzsc=all.filter(row=>row.priority===1),pool=nzsc.length?nzsc:all;
+  return pool.sort((a,b)=>Number(a.qualified)-Number(b.qualified)||a.gapPct-b.gapPct||a.priority-b.priority||Number(a.pb.distance)-Number(b.pb.distance)||String(a.pb.stroke).localeCompare(String(b.pb.stroke)));
+}
+function v3217CandidateLabel(row){return`${row.pb.course} ${row.pb.distance} ${row.pb.stroke}`}
+function v3217StepHtml(row){const step=row?.step;if(!step||step.qualified)return"";const per50=Number(step.targetSeconds)/Number(row.pb.distance)*50,pb50=Number(row.pb.result_seconds)/Number(row.pb.distance)*50;return `<div class="v3217-step"><span>Next small bump</span><strong>${escapeHtml(`${step.targetPoints} ${step.scaleShort} · ${v3217Clock(step.targetSeconds)}`)}</strong><small>${escapeHtml(`${step.currentPoints} → ${step.targetPoints} ${step.scaleShort} · /50 ${v3217Clock(pb50)} → ${v3217Clock(per50)}`)}</small></div>`}
+function v3217SnapshotHtml(athlete){
+  const candidates=v3217NationalCandidates(athlete),best=candidates[0];if(!best){const para=v3214ParaSignal?.(athlete),classification=para?[athlete.current_s_class,athlete.current_sb_class,athlete.current_sm_class].filter(Boolean).join(" / "):"";return `<section class="v3217-snapshot"><div class="eyebrow">Deck answer</div><h4>Closest national target</h4><div class="v3217-empty"><strong>${escapeHtml(para&&!classification?"Para classification needed":"No current national qualifying match loaded")}</strong><span>${escapeHtml(para&&!classification?"Set S / SB / SM so the correct para pathway can be ranked.":"PBs remain available; open the full pathway for other milestones.")}</span></div></section>`}
+  const title=best.priority===1?"Closest to NZSC":"Closest national qualifying target",top=candidates.slice(0,3),pb=best.pb;
+  return `<section class="v3217-snapshot" data-v3217-athlete="${escapeHtml(athlete.id)}"><div class="v3217-snapshot-head"><div><div class="eyebrow">Deck answer</div><h4>${escapeHtml(title)}</h4></div><b class="${best.qualified?"qualified":""}">${escapeHtml(best.qualified?"QUALIFIED":`${best.gapPct.toFixed(1)}% away`)}</b></div><div class="v3217-best"><strong>${escapeHtml(v3217CandidateLabel(best))}</strong><span>PB <b>${escapeHtml(pb.result_time_text||v3217Clock(pb.result_seconds))}</b> → ${escapeHtml(best.programme)} <b>${escapeHtml(best.target)}</b></span><small>${escapeHtml(v3217GapText(best))}${best.scale?.points?` · ${Math.round(best.scale.points)} ${escapeHtml(best.scale.short)}`:""}${best.targetPoints?` → ${Math.round(best.targetPoints)} ${escapeHtml(best.scale?.short||"pts")}`:""}</small>${v3217StepHtml(best)}</div>${top.length>1?`<div class="v3217-nearest"><span>Next closest</span>${top.slice(1).map(row=>`<div><strong>${escapeHtml(v3217CandidateLabel(row))}</strong><b>${escapeHtml(row.qualified?"qualified":`${row.gapPct.toFixed(1)}%`)}</b><small>${escapeHtml(`${row.pb.result_time_text||v3217Clock(row.pb.result_seconds)} → ${row.target}`)}</small></div>`).join("")}</div>`:""}<div class="v3217-rule">Ranked by percentage gap so a 50 and a 200 can be compared fairly. Points provide the small progress steps between named milestones.</div></section>`;
+}
+
+// -----------------------------------------------------------------------------
+// 2. Fast swimmer hub. Do not build all 4,406-standard event cards until opened.
+// -----------------------------------------------------------------------------
+function v3217FullPathwayShell(athlete,inventory){return `<details class="v3217-full-pathway" data-v3217-full-pathway="${escapeHtml(athlete.id)}"><summary><span><strong>Full performance pathway</strong><small>${inventory.pbs.length} PB events · points bumps + named milestones</small></span><b>＋</b></summary><div class="v3217-full-pathway-body"><div class="help">Open to calculate the full pathway.</div></div></details>`}
+function v3217PopulatePathway(details,athlete){if(!details||details.dataset.v3217Loaded==="1")return;details.dataset.v3217Loaded="loading";const body=details.querySelector(".v3217-full-pathway-body");if(body)body.innerHTML='<div class="help">Calculating full pathway…</div>';v3217Idle(()=>{if(!details.isConnected||appState.settings.selected_athlete_id!==athlete.id)return;try{if(body){body.innerHTML=v3163PathwayHtml?.(athlete)||'<div class="help">No pathway available.</div>';const inner=body.querySelector(".v3163-pathway");if(inner)inner.open=true}details.dataset.v3217Loaded="1"}catch(error){console.warn("Full pathway deferred",error);if(body)body.innerHTML='<div class="help">Full pathway could not be calculated just now.</div>';details.dataset.v3217Loaded="0"}},900)}
+const v3217RenderHubBase=renderAthleteResultsHub;
+renderAthleteResultsHub=function(athlete){
+  const hub=document.getElementById("athleteResultsHub");if(!hub||!athlete)return;hub.dataset.athleteId=athlete.id;hub.dataset.v3217Athlete=athlete.id;const title=document.getElementById("athleteResultsHubTitle");if(title)title.textContent=`${athlete.full_name} · deck pathway`;
+  const summary=v3144CachedSummary?.(athlete)||{},inventory=v3163PbInventory?.(athlete)||{pbs:[],unresolved:[]},historyCount=summary.races||athleteHistory?.(athlete.id)?.length||0,recordCount=(appState.results_record_gaps||[]).filter(row=>row.athlete_id===athlete.id).length;
+  hub.innerHTML=`${v3217SnapshotHtml(athlete)}<div class="v3144-athlete-hub-summary"><span><b>${historyCount||0}</b> races</span><span><b>${inventory.pbs.length}</b> PB events</span><span><b>${escapeHtml(summary.latest||"No latest meet cached")}</b></span></div>${v3217FullPathwayShell(athlete,inventory)}${v3144LazyAthleteSection?.("pbs","Official PBs",inventory.pbs.length?`${inventory.pbs.length} events`:"None loaded")||""}${v3144LazyAthleteSection?.("history","Race history",historyCount?`${historyCount} races`:"Not cached")||""}<details class="v3163-edit-link"><summary><strong>Full results and record detail</strong><span>Open only when needed</span></summary>${v3144LazyAthleteSection?.("records","Relevant records",recordCount?"Available":"No match")||""}</details>`;
+  hub.querySelectorAll("details").forEach(details=>details.addEventListener("toggle",()=>{const marker=details.querySelector(":scope > summary > b");if(marker)marker.textContent=details.open?"−":"＋";if(details.matches("[data-v3217-full-pathway]")&&details.open)v3217PopulatePathway(details,athlete);if(details.classList.contains("v3144-athlete-detail")&&details.open)v3144PopulateAthleteSection?.(details,athlete)}));
+  if(v3217ActiveView()==="athletes")requestAnimationFrame(()=>{try{const ui={...v3163ReadUi?.(),...(history.state?.mclay&&history.state.ui?history.state.ui:{})};v3163ApplyDetails?.(ui)}catch{}});return hub;
+};
+
+// -----------------------------------------------------------------------------
+// 3. Reconnect all swimmer selection paths to the quiet hydrator and defer cloud
+// work until the coach has stopped tapping. Cached PB/standards answer immediately.
+// -----------------------------------------------------------------------------
+const v3217HydrateBase=typeof v3163HydrateSelectedAthlete==="function"?v3163HydrateSelectedAthlete:null;let v3217HydrateTimer=null;
+async function v3217HydrateSelectedAthlete(force=false){
+  const athleteId=appState.settings.selected_athlete_id;if(!athleteId||!v3217HydrateBase)return false;const hasLocalPb=(appState.results_pb_board||[]).some(row=>row.athlete_id===athleteId)||(appState.coach_results||[]).some(row=>row.athlete_id===athleteId&&row.excluded_from_pb!==true);
+  if(force||!hasLocalPb||!v3217Visible()||v3217ActiveView()!=="athletes")return v3217HydrateBase(force);
+  clearTimeout(v3217HydrateTimer);v3217HydrateTimer=setTimeout(()=>{v3217HydrateTimer=null;if(appState.settings.selected_athlete_id!==athleteId||v3217ActiveView()!=="athletes")return;if(v3215RecentIntent?.(1800)){v3217HydrateSelectedAthlete(false);return}v3217HydrateBase(false)},2200);return true;
+}
+v3163HydrateSelectedAthlete=v3217HydrateSelectedAthlete;
+try{v3127HydrateSelectedAthlete=v3217HydrateSelectedAthlete}catch{}
+
+// -----------------------------------------------------------------------------
+// 4. Explicit swimmer/squad state is authoritative. A stale hydration/UI snapshot
+// cannot put the coach back on Alex (or any other default). Native Back can.
+// -----------------------------------------------------------------------------
+let v3217LockedAthleteId=appState.settings.v3217_locked_athlete_id||appState.settings.selected_athlete_id||"";
+let v3217HistoryUntil=0,v3217LastGestureAt=0,v3217ViewGuard=false,v3217LockedView="";
+function v3217LockAthlete(id,{persist=true}={}){if(!(appState.athletes||[]).some(row=>row.id===id))return"";v3217LockedAthleteId=id;appState.settings.selected_athlete_id=id;appState.settings.v3217_locked_athlete_id=id;if(persist)saveState(appState);return id}
+function v3217FilterValue(){const saved=appState.settings.v3215_swimmer_filter;return saved===undefined?document.getElementById("athleteSquadFilter")?.value||"__all__":String(saved)}
+function v3217LockedAllowed(){if(!v3217LockedAthleteId)return false;const filter=v3217FilterValue(),roster=v3215RosterForFilter?.(filter)||appState.athletes||[];return roster.some(row=>row.id===v3217LockedAthleteId)}
+for(const eventName of ["pointerdown","touchstart","keydown"]){document.addEventListener(eventName,()=>{v3217LastGestureAt=Date.now()},{capture:true,passive:eventName!=="keydown"})}
+window.addEventListener("popstate",()=>{v3217HistoryUntil=Date.now()+700},{capture:true});
+
+const v3217SelectBase=selectAthleteEverywhere;
+selectAthleteEverywhere=function(id){v3217LastGestureAt=Date.now();v3217LockAthlete(id);const result=v3217SelectBase?.(id);v3217LockAthlete(id);setTimeout(()=>{if(v3217LockedAthleteId===id&&appState.settings.selected_athlete_id!==id){v3217LockAthlete(id);if(v3217ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===id);if(athlete)renderAthleteResultsHub?.(athlete)}}},0);return result};
+
+if(typeof v3215EnsureSelectionForFilter==="function"){
+  const v3217FilterSelectionBase=v3215EnsureSelectionForFilter;
+  v3215EnsureSelectionForFilter=function(value){const id=v3217FilterSelectionBase(value);if(id)v3217LockAthlete(id);return id};
+}
+const v3217RenderAthletesBase=renderAthletes;
+renderAthletes=function(){if(v3217LockedAllowed())appState.settings.selected_athlete_id=v3217LockedAthleteId;const out=v3217RenderAthletesBase?.();if(v3217LockedAllowed()&&appState.settings.selected_athlete_id!==v3217LockedAthleteId){appState.settings.selected_athlete_id=v3217LockedAthleteId;const select=document.getElementById("athleteQuickSelect");if(select&&[...select.options].some(option=>option.value===v3217LockedAthleteId))select.value=v3217LockedAthleteId;const athlete=(appState.athletes||[]).find(row=>row.id===v3217LockedAthleteId);if(athlete){const quick=document.getElementById("athleteQuickProfile");if(quick)quick.innerHTML=athleteQuickHtml?.(athlete)||"";fillAthleteProfile?.(athlete);renderAthleteResultsHub?.(athlete)}}return out};
+
+const v3217ApplySelectionBase=typeof v3163ApplySelection==="function"?v3163ApplySelection:null;
+if(v3217ApplySelectionBase)v3163ApplySelection=function(ui){const incoming={...(ui||{})},historyAllowed=Date.now()<v3217HistoryUntil;if(historyAllowed&&incoming.selected_athlete_id&&(appState.athletes||[]).some(row=>row.id===incoming.selected_athlete_id))v3217LockedAthleteId=incoming.selected_athlete_id;else if(v3217LockedAllowed()&&(incoming.view==="athletes"||v3217ActiveView()==="athletes"))incoming.selected_athlete_id=v3217LockedAthleteId;const result=v3217ApplySelectionBase(incoming);if(!historyAllowed&&v3217LockedAllowed()&&v3217ActiveView()==="athletes"&&appState.settings.selected_athlete_id!==v3217LockedAthleteId)v3217LockAthlete(v3217LockedAthleteId);return result};
+
+// -----------------------------------------------------------------------------
+// 5. Results/Swimmers view lock. After a deliberate navigation has landed, a late
+// cloud/render callback cannot move the coach to another page. User taps and Back
+// still navigate normally. Limited to the result-aware views to avoid touching Board.
+// -----------------------------------------------------------------------------
+const v3217ShowViewBase=showView;
+showView=function(id,options={}){const current=v3217ActiveView(),gesture=Date.now()-v3217LastGestureAt<1400,historyAllowed=Boolean(options?.fromHistory)||Date.now()<v3217HistoryUntil;if(v3217ViewGuard&&v3217Visible()&&current!==id&&["athletes","results","resultsupdate"].includes(current)&&!gesture&&!historyAllowed&&!options?.force){console.warn("Blocked background view takeover",current,"→",id);return false}const out=v3217ShowViewBase?.(id,options);if(current!==id&&(gesture||historyAllowed||options?.force)){v3217LockedView=id;if(id==="athletes"&&appState.settings.selected_athlete_id)v3217LockAthlete(appState.settings.selected_athlete_id)}return out};
+
+const v3217RenderUiBase=typeof v3163RenderUi==="function"?v3163RenderUi:null;
+if(v3217RenderUiBase)v3163RenderUi=function(ui){const incoming={...(ui||{})},historyAllowed=Date.now()<v3217HistoryUntil,current=v3217ActiveView();if(historyAllowed){if(incoming.view)v3217LockedView=incoming.view;if(incoming.selected_athlete_id&&(appState.athletes||[]).some(row=>row.id===incoming.selected_athlete_id))v3217LockedAthleteId=incoming.selected_athlete_id}else if(v3217ViewGuard&&v3217Visible()&&v3217LockedView&&["athletes","results","resultsupdate"].includes(current)&&incoming.view&&incoming.view!==v3217LockedView){incoming.view=v3217LockedView;if(v3217LockedAthleteId)incoming.selected_athlete_id=v3217LockedAthleteId}return v3217RenderUiBase(incoming)};
+setTimeout(()=>{v3217LockedView=v3217ActiveView();v3217ViewGuard=true},1800);
+
+// -----------------------------------------------------------------------------
+// 6. Presentation / identity only. No Board layout change.
+// -----------------------------------------------------------------------------
+const v3217Styles=document.createElement("style");v3217Styles.id="v3217Styles";v3217Styles.textContent=`
+.v3217-snapshot{margin:0 0 10px;padding:12px;border:1px solid #a9cddc;border-radius:14px;background:#f6fbfd}.v3217-snapshot-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.v3217-snapshot h4{margin:2px 0 0;color:#123a5b;font-size:1rem}.v3217-snapshot-head>b{white-space:nowrap;border-radius:999px;background:#e9f3f8;color:#174f69;padding:5px 8px;font-size:.75rem}.v3217-snapshot-head>b.qualified{background:#eaf6ef;color:#246349}.v3217-best{display:grid;gap:3px;margin-top:9px}.v3217-best>strong{font-size:1.05rem;color:#102f43}.v3217-best>span{font-size:.83rem}.v3217-best>small{color:#526b78;font-weight:700}.v3217-step{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin-top:7px;padding:7px 8px;border-radius:9px;background:#eaf6f0;border:1px solid #bbdccc}.v3217-step>span{font-size:.62rem;text-transform:uppercase;font-weight:900;color:#33705b}.v3217-step>strong{font-size:.8rem;color:#185e49}.v3217-step>small{grid-column:1/-1;color:#536b76;font-size:.67rem}.v3217-nearest{display:grid;gap:4px;margin-top:9px;padding-top:8px;border-top:1px solid #d7e5eb}.v3217-nearest>span{font-size:.62rem;text-transform:uppercase;font-weight:900;color:#71838c}.v3217-nearest>div{display:grid;grid-template-columns:1fr auto;gap:0 8px;font-size:.75rem}.v3217-nearest small{grid-column:1/-1;color:#687e88}.v3217-rule{margin-top:8px;color:#6b7c84;font-size:.64rem;line-height:1.35}.v3217-empty{display:grid;gap:3px;margin-top:8px}.v3217-empty span{font-size:.72rem;color:#687e88}.v3217-full-pathway{margin:8px 0;border:1px solid #d8e3e8;border-radius:12px;background:#fff}.v3217-full-pathway>summary{display:flex;justify-content:space-between;align-items:center;padding:10px;cursor:pointer}.v3217-full-pathway>summary span{display:grid}.v3217-full-pathway>summary small{font-size:.66rem;color:#71838c}.v3217-full-pathway-body{padding:0 8px 8px}.v3217-full-pathway-body>.v3163-pathway{margin:0}
+@media(max-width:700px){.v3217-snapshot{padding:9px}.v3217-snapshot-head{align-items:center}.v3217-best>strong{font-size:.95rem}.v3217-step{grid-template-columns:1fr auto}.v3217-step>span{grid-column:1/-1}}
+`;document.head.appendChild(v3217Styles);
+
+function v3217Brand(){const title=`McLay Swimming OS — v${V3217_VERSION} Deck Pathway`,subtitle=`v${V3217_VERSION} · protected Board/session entry · instant national-target snapshot · swimmer/view lock`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3217_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3217_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3217_VERSION}`;badge.dataset.build=V3217_BUILD;badge.title=V3217_BUILD}}
+async function v3217RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3217_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.17 service worker update",error)}}
+try{v3216BrandObserver?.disconnect?.()}catch{}
+const v3217BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3217_VERSION} Deck Pathway`||document.querySelector(".header-subtitle")?.textContent!==`v${V3217_VERSION} · protected Board/session entry · instant national-target snapshot · swimmer/view lock`)queueMicrotask(v3217Brand)});if(document.querySelector("title"))v3217BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3217BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3217Debug={version:V3217_VERSION,build:V3217_BUILD,nationalCandidates:v3217NationalCandidates,snapshot:v3217SnapshotHtml,lockedAthlete:()=>v3217LockedAthleteId,lockAthlete:v3217LockAthlete,lockedView:()=>v3217LockedView,setViewGuard:value=>{v3217ViewGuard=Boolean(value)},markGesture:()=>{v3217LastGestureAt=Date.now()},hydrate:v3217HydrateSelectedAthlete};
+v3217Brand();setTimeout(()=>{v3217Brand();v3217RegisterWorker();if(v3217ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);setTimeout(v3217Brand,900);setTimeout(v3217Brand,2800);
+
+// v3.20.17 Connection identity: retain v3.20.16 repair engine but report the
+// currently deployed app build so Connection never looks rolled back/stale.
+function v3217SyncCopyText(){const failures=typeof v3111Failures==="function"?v3111Failures():v34Array(appState.settings?.v3111_sync_failures);const summary=typeof v3111SyncSummary==="function"?v3111SyncSummary():`${v34Array(appState.pending).length} pending`;return `McLay Swimming ${V3217_BUILD}\n${summary}\n`+failures.map(f=>`${f.phase||"push"} ${f.table||""} ${f.id||""}: ${f.message||""}`).join("\n")}
+function v3217FixSyncDiagnostics(){const build=document.querySelector("[data-v3207-sync-build]");if(build)build.textContent=V3217_BUILD;const copy=document.getElementById("v3111CopySync");if(copy)copy.onclick=async()=>{const text=v3217SyncCopyText();try{await navigator.clipboard.writeText(text);updateStatus("Sync details copied","good")}catch{alert(text)}}}
+const v3217RenderSyncBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;if(v3217RenderSyncBase)v3111RenderSyncDetails=function(){const out=v3217RenderSyncBase();v3217FixSyncDiagnostics();return out};
+const v3217RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;if(v3217RenderLegacySyncBase)v36RenderSyncDetails=function(){const out=v3217RenderLegacySyncBase();v3217FixSyncDiagnostics();return out};
+Object.assign(window.v3217Debug,{repair:v3216RepairLaneSyncState,copy:v3217SyncCopyText});setTimeout(v3217FixSyncDiagnostics,0);
+
+// v3.20.17 performance index: national snapshot lookups should be proportional to
+// the swimmer's events, not PB count × every standard row.
+let V3217_NATIONAL_INDEX={rows:null,length:-1,loadedAt:null,map:new Map()};
+function v3217NationalIndex(){const rows=appState.pathway_standards||[],loadedAt=appState.settings?.v3163_standards_loaded_at||"";if(V3217_NATIONAL_INDEX.rows===rows&&V3217_NATIONAL_INDEX.length===rows.length&&V3217_NATIONAL_INDEX.loadedAt===loadedAt)return V3217_NATIONAL_INDEX.map;const map=new Map();for(const row of rows){if(!v3217IsNationalQualifying(row))continue;const course=v3163ExplicitCourse?.(row.course)||v3Course?.(row.course)||"",distance=Number(row.distance),stroke=v3Stroke?.(row.stroke)||row.stroke;if(!course||!distance||!stroke)continue;const key=`${course}|${distance}|${stroke}`;if(!map.has(key))map.set(key,[]);map.get(key).push(row)}V3217_NATIONAL_INDEX={rows,length:rows.length,loadedAt,map};return map}
+v3217NationalCandidates=function(athlete){
+  if(!athlete)return[];const pbs=v3163PbInventory?.(athlete)?.pbs||[],index=v3217NationalIndex(),rows=[];
+  for(const pb of pbs){const key=`${pb.course}|${Number(pb.distance)}|${v3Stroke?.(pb.stroke)||pb.stroke}`;for(const standard of index.get(key)||[]){if(v3163StandardReason?.(standard,athlete,pb)!=="match"||v3163Targetable?.(standard)===false)continue;const targetSeconds=v3217TargetSeconds(standard),pbSeconds=Number(pb.result_seconds);if(!(targetSeconds>0)||!(pbSeconds>0))continue;const gapSeconds=pbSeconds-targetSeconds,gapPct=v3217GapPct(pbSeconds,targetSeconds),scale=v3214Scale?.(athlete,pb),targetPoints=v3214PointsAtTime?.(athlete,pb,targetSeconds,scale),step=v3217PointStepTo(athlete,pb,targetSeconds);rows.push({athlete,pb,standard,programme:v3217Text(standard.programme||"National target"),targetSeconds,target:v3217Text(standard.qualifying_time_text)||v3217Clock(targetSeconds),gapSeconds,gapPct,qualified:gapSeconds<=0,scale,targetPoints:Number(targetPoints)||null,step,priority:v3217NationalPriority(standard)})}}
+  const unique=new Map();for(const row of rows){const key=`${v3217Norm(row.programme)}|${row.pb.course}|${row.pb.distance}|${row.pb.stroke}`;const prior=unique.get(key);if(!prior||row.targetSeconds>prior.targetSeconds)unique.set(key,row)}const all=[...unique.values()],nzsc=all.filter(row=>row.priority===1),pool=nzsc.length?nzsc:all;return pool.sort((a,b)=>Number(a.qualified)-Number(b.qualified)||a.gapPct-b.gapPct||a.priority-b.priority||Number(a.pb.distance)-Number(b.pb.distance)||String(a.pb.stroke).localeCompare(String(b.pb.stroke)));
+};
+window.v3217Debug.nationalCandidates=v3217NationalCandidates;window.v3217Debug.nationalIndex=v3217NationalIndex;
