@@ -20846,3 +20846,225 @@ v3214RoadHtml=function(resolved){
 
 // Re-apply final brand/startup after the safety tail above.
 setTimeout(()=>{try{v3214Brand();if((document.querySelector('.view.active')?.id||'')==='athletes')renderAthletes?.()}catch{}},50);
+
+// =============================================================================
+// McLay Swimming OS v3.20.15 — Phone Stability Hotfix
+// 11 Aug 2026. Narrow correction layer over v3.20.14.
+// Protect the accepted desktop Board/pathway while stopping mobile startup/resume
+// state races, background hydration re-renders and swimmer-selection snap-back.
+// =============================================================================
+const V3215_VERSION="3.20.15";
+const V3215_BUILD="3.20.15-phone-stability-selection-20260811";
+const V3215_CORE="20260811-core3215";
+let v3215LastIntentAt=0,v3215HydrateDepth=0,v3215BootRestored=false,v3215DeferredCloudTimer=null,v3215AthleteRendering=false,v3215AthleteRenderPending=false;
+let v3215ExplicitAthleteId=appState?.settings?.selected_athlete_id||"";
+let v3215ExplicitAthleteAt=0;
+
+function v3215Text(value){return String(value??"").trim()}
+function v3215Phone(){try{return window.matchMedia?.("(max-width: 900px), (pointer: coarse)")?.matches||window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3215Visible(){return document.visibilityState==="visible"}
+function v3215ActiveView(){return document.querySelector(".view.active")?.id||"deck"}
+function v3215RecentIntent(ms=3500){return Date.now()-v3215LastIntentAt<ms}
+function v3215MarkIntent(){v3215LastIntentAt=Date.now()}
+for(const eventName of ["pointerdown","touchstart","keydown","input"]){document.addEventListener(eventName,v3215MarkIntent,{capture:true,passive:eventName!=="keydown"})}
+document.addEventListener("change",v3215MarkIntent,true);
+
+// -----------------------------------------------------------------------------
+// 1. One boot UI truth. v3.16.3 and v3.20.12 both retained their own UI stores;
+// on Android they could restore different page/scroll snapshots a few ms apart.
+// Synchronise them before their queued startup callbacks fire.
+// -----------------------------------------------------------------------------
+function v3215ReadJson(key){try{return JSON.parse(localStorage.getItem(key)||"null")||null}catch{return null}}
+function v3215CanonicalUi(){
+  const old=v3215ReadJson(typeof V3163_UI_KEY!=="undefined"?V3163_UI_KEY:"mclay_swimming_v3163_ui")||{};
+  const field=v3215ReadJson(typeof V3212_UI_STATE_KEY!=="undefined"?V3212_UI_STATE_KEY:"mclay_v3212_ui_state")||{};
+  const newer=Number(field.saved_at||0)>Number(old.saved_at||0)?field:old;
+  const view=(newer.view&&document.getElementById(newer.view))?newer.view:((old.view&&document.getElementById(old.view))?old.view:v3215ActiveView());
+  const sessionId=newer.session_id||newer.selected_session_id||old.selected_session_id||appState.settings.selected_session_id||"";
+  const squad=newer.selected_squad||old.selected_squad||appState.settings.selected_squad||"";
+  const athleteId=appState.settings.selected_athlete_id||old.selected_athlete_id||"";
+  const boardMode=newer.board_mode||old.board_mode||appState.settings.v3126_board_mode||"whole";
+  const blockIndex=Number.isFinite(Number(newer.active_block_index))?Number(newer.active_block_index):(Number(old.active_block_index)||0);
+  const oldScroll={...(old.scroll||{})};
+  if(Number.isFinite(Number(newer.scroll_y)))oldScroll[view]=Math.max(0,Number(newer.scroll_y)||0);
+  return {...old,view,selected_session_id:sessionId,selected_squad:squad,selected_athlete_id:athleteId,board_mode:boardMode,active_block_index:blockIndex,scroll:oldScroll,open_details:Array.isArray(old.open_details)?old.open_details:[],saved_at:Date.now()};
+}
+function v3215WriteCanonicalUi(ui){
+  try{localStorage.setItem(typeof V3163_UI_KEY!=="undefined"?V3163_UI_KEY:"mclay_swimming_v3163_ui",JSON.stringify(ui))}catch{}
+  try{localStorage.setItem(typeof V3212_UI_STATE_KEY!=="undefined"?V3212_UI_STATE_KEY:"mclay_v3212_ui_state",JSON.stringify({view:ui.view,saved_at:ui.saved_at,scroll_y:Number(ui.scroll?.[ui.view])||0,session_id:ui.selected_session_id||null,selected_squad:ui.selected_squad||"",board_mode:ui.board_mode||"whole",active_block_index:Number(ui.active_block_index)||0}))}catch{}
+}
+const v3215BootUi=v3215CanonicalUi();v3215WriteCanonicalUi(v3215BootUi);
+try{if(v3215Phone())v3212BootDeferredCloud=false}catch{}
+
+const v3215RestoreScrollBase=typeof v3163RestoreScroll==="function"?v3163RestoreScroll:null;
+if(v3215RestoreScrollBase)v3163RestoreScroll=function(ui,view){if(v3215Phone()&&v3215RecentIntent(3000))return false;return v3215RestoreScrollBase(ui,view)};
+
+if(typeof v3163RestoreUi==="function")v3163RestoreUi=function(){
+  if(v3215BootRestored)return true;v3215BootRestored=true;
+  const ui=v3215CanonicalUi();
+  try{v3163ApplySelection?.(ui)}catch{}
+  const view=ui.view&&document.getElementById(ui.view)?ui.view:v3215ActiveView();
+  document.body.dataset.v3163View=view;
+  // Render only when the saved view differs from the already usable shell.
+  if(v3215ActiveView()!==view){try{v3163ShowViewBase?.(view)}catch{try{document.querySelectorAll(".view").forEach(node=>node.classList.toggle("active",node.id===view))}catch{}}}
+  try{v3163ApplyDetails?.(ui)}catch{}
+  if(!v3215RecentIntent(1200)){const top=Math.max(0,Number(ui.scroll?.[view])||0);requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!v3215RecentIntent(1200))window.scrollTo({top,left:0,behavior:"auto"})}))}
+  try{history.replaceState({mclayRoot:true},"",location.href);const current=v3163Snapshot?.({view,open_details:ui.open_details||[],scrollTop:Number(ui.scroll?.[view])||0})||ui;history.pushState({mclay:true,ui:current},"",location.href);v3163PersistUi?.(current,{replaceHistory:false});v3215WriteCanonicalUi(current)}catch{}
+  return true;
+};
+
+// Same-view refreshes used to execute the entire navigation stack: scroll to 0,
+// rebuild, then restore scroll. On phone that visibly jumped and multiplied work.
+const v3215ShowViewBase=showView;
+showView=function(id,options={}){
+  const current=v3215ActiveView();
+  if(v3215Phone()&&current===id&&!options?.fromHistory&&!options?.force){
+    try{const ui=v3163Snapshot?.({view:id})||v3215CanonicalUi();v3163PersistUi?.(ui,{replaceHistory:true});v3215WriteCanonicalUi(ui)}catch{}
+    return true;
+  }
+  v3215MarkIntent();return v3215ShowViewBase?.(id,options);
+};
+
+// Resume must preserve whichever real page is already interactive. In particular,
+// an athlete/results page may not be replaced with Board while Android foregrounds.
+const v3215ResumeBase=typeof v3209RestoreBoardOnce==="function"?v3209RestoreBoardOnce:null;
+if(v3215ResumeBase)v3209RestoreBoardOnce=function(){
+  if(v3215Phone()&&v3215Visible()&&v3215ActiveView()&&v3215ActiveView()!=="deck"){
+    const ui=v3215CanonicalUi();try{v3163ApplySelection?.(ui);v3107UpdateWakeLock?.()}catch{}return true;
+  }
+  return v3215ResumeBase();
+};
+
+// -----------------------------------------------------------------------------
+// 2. Mobile cloud/hydration work is cache enrichment, never a foreground render.
+// Local coaching data remains interactive; explicit Sync remains available.
+// -----------------------------------------------------------------------------
+const v3215HydrateResultsBase=typeof v3103HydrateResults==="function"?v3103HydrateResults:null;
+if(v3215HydrateResultsBase)v3103HydrateResults=async function(options={}){const safe={...(options||{})};if(v3215Phone()&&v3215Visible())safe.render=false;return v3215HydrateResultsBase(safe)};
+
+const v3215HydrateAthleteBase=typeof v3163HydrateSelectedAthlete==="function"?v3163HydrateSelectedAthlete:null;
+if(v3215HydrateAthleteBase){
+  v3163HydrateSelectedAthlete=async function(force=false){
+    const athleteId=appState.settings.selected_athlete_id;v3215HydrateDepth++;
+    try{return await v3215HydrateAthleteBase(force)}finally{
+      v3215HydrateDepth=Math.max(0,v3215HydrateDepth-1);
+      if(force&&athleteId===appState.settings.selected_athlete_id&&v3215ActiveView()==="athletes")setTimeout(()=>{if(!v3215RecentIntent(800))renderAthletes?.()},120);
+    }
+  };
+  v3127HydrateSelectedAthlete=v3163HydrateSelectedAthlete;
+}
+
+// Defer automatic cloud passes until the phone has been idle. Captures/session
+// edits are already local-first; this removes cloud work from tap/navigation bursts.
+const v3215ScheduleCloudBase=typeof v3103ScheduleBackgroundSync==="function"?v3103ScheduleBackgroundSync:null;
+if(v3215ScheduleCloudBase){
+  v3103ScheduleBackgroundSync=function(delay=900,pull=false){
+    if(v3215Phone()&&v3215Visible()&&v3215ActiveView()!=="settings"){
+      clearTimeout(v3215DeferredCloudTimer);const wait=Math.max(4500,Number(delay)||0);
+      v3215DeferredCloudTimer=setTimeout(()=>{v3215DeferredCloudTimer=null;if(v3215Phone()&&v3215Visible()&&v3215RecentIntent(4000)){v3103ScheduleBackgroundSync(4500,pull);return}v3215ScheduleCloudBase(0,pull)},wait);return true;
+    }
+    return v3215ScheduleCloudBase(delay,pull);
+  };
+  window.v3103ScheduleBackgroundSync=v3103ScheduleBackgroundSync;
+}
+const v3215SyncIfPossibleBase=syncIfPossible;
+syncIfPossible=async function(...args){if(v3215Phone()&&v3215Visible()&&v3215RecentIntent(4000))return{deferred:true,phone_interaction:true};return v3215SyncIfPossibleBase?.(...args)};
+scheduleFastSync=function(){return v3103ScheduleBackgroundSync?.(350,false)};
+
+// -----------------------------------------------------------------------------
+// 3. Swimmer selection truth. The hidden Deck brief used to force selected athlete
+// back to the first athlete in the active session squad (often Alex Gibson). Deck
+// may choose a local display athlete, but it must never overwrite Swimmers selection.
+// -----------------------------------------------------------------------------
+function v3215DeckAthlete(){
+  const roster=selectedRoster?.()||[],saved=appState.settings.v3215_deck_athlete_id,globalId=appState.settings.selected_athlete_id;
+  const id=roster.some(a=>a.id===saved)?saved:(roster.some(a=>a.id===globalId)?globalId:(roster[0]?.id||""));return roster.find(a=>a.id===id)||null;
+}
+renderDeckAthleteBrief=function(){
+  const roster=selectedRoster?.()||[],athlete=v3215DeckAthlete(),id=athlete?.id||"";
+  const select=document.getElementById("deckAthlete");if(select){select.innerHTML=roster.map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===id?"selected":""}>${escapeHtml(a.full_name)}</option>`).join("");select.value=id;select.onchange=()=>{appState.settings.v3215_deck_athlete_id=select.value;saveState(appState);selectAthleteEverywhere?.(select.value)}}
+  const buttons=document.getElementById("deckAthleteButtons");if(buttons){buttons.innerHTML=roster.map(a=>`<button type="button" class="${a.id===id?"active":""}" data-v3215-deck-athlete="${escapeHtml(a.id)}">${escapeHtml(a.full_name)}</button>`).join("")||'<span class="help">No swimmers in active squad.</span>';buttons.querySelectorAll("[data-v3215-deck-athlete]").forEach(button=>button.onclick=()=>{appState.settings.v3215_deck_athlete_id=button.dataset.v3215DeckAthlete;saveState(appState);selectAthleteEverywhere?.(button.dataset.v3215DeckAthlete)})}
+  const brief=document.getElementById("deckAthleteBrief");if(brief)brief.innerHTML=athlete?athleteQuickHtml?.(athlete)||'<div class="help">Choose a swimmer.</div>':'<div class="help">Choose a swimmer.</div>';
+  return athlete;
+};
+
+const v3215SelectAthleteBase=selectAthleteEverywhere;
+selectAthleteEverywhere=function(id){
+  const athlete=(appState.athletes||[]).find(row=>row.id===id);if(!athlete)return false;
+  v3215MarkIntent();v3215ExplicitAthleteId=id;v3215ExplicitAthleteAt=Date.now();appState.settings.selected_athlete_id=id;saveState(appState);
+  const result=v3215SelectAthleteBase?.(id);
+  // Reassert after the inherited stack; no hidden Board helper may win.
+  if((appState.athletes||[]).some(row=>row.id===id)&&appState.settings.selected_athlete_id!==id){appState.settings.selected_athlete_id=id;saveState(appState)}
+  try{const ui=v3163Snapshot?.({selected_athlete_id:id})||v3215CanonicalUi();ui.selected_athlete_id=id;v3163PersistUi?.(ui,{replaceHistory:true});v3215WriteCanonicalUi(ui)}catch{}
+  return result;
+};
+
+function v3215SwimmerFilter(){const saved=appState.settings.v3215_swimmer_filter;return saved===undefined?null:String(saved)}
+function v3215RosterForFilter(value){const key=String(value||"");return (appState.athletes||[]).filter(a=>a.active!==false&&(key==="__all__"||!key||squadKey(a.squad)===squadKey(key))).sort(rosterSort)}
+function v3215EnsureSelectionForFilter(value){const roster=v3215RosterForFilter(value);if(!roster.length)return null;let id=appState.settings.selected_athlete_id;if(!roster.some(a=>a.id===id))id=roster[0].id;appState.settings.selected_athlete_id=id;v3215ExplicitAthleteId=id;v3215ExplicitAthleteAt=Date.now();return id}
+
+document.addEventListener("change",event=>{
+  if(event.target?.id!=="athleteSquadFilter")return;
+  event.stopImmediatePropagation();v3215MarkIntent();const value=event.target.value||"__all__";appState.settings.v3215_swimmer_filter=value;v3215EnsureSelectionForFilter(value);saveState(appState);renderAthletes?.();
+},true);
+
+const v3215RenderHubBase=renderAthleteResultsHub;let v3215HubStamp="",v3215HubAt=0;
+renderAthleteResultsHub=function(athlete){
+  if(!athlete)return;const stamp=[athlete.id,(appState.results_pb_board||[]).filter(r=>r.athlete_id===athlete.id).length,(appState.results_event_history||[]).filter(r=>r.athlete_id===athlete.id).length,(appState.pathway_standards||[]).length,Number(appState.settings.v3163_standards_loaded_at||0),athlete.current_s_class||"",athlete.current_sb_class||"",athlete.current_sm_class||""].join("|");
+  const hub=document.getElementById("athleteResultsHub");if(v3215Phone()&&hub&&hub.dataset.v3215Hub===stamp&&Date.now()-v3215HubAt<700)return;
+  const result=v3215RenderHubBase?.(athlete);if(hub){hub.dataset.v3215Hub=stamp;v3215HubStamp=stamp;v3215HubAt=Date.now()}return result;
+};
+
+const v3215RenderAthletesBase=renderAthletes;
+renderAthletes=function(){
+  if(v3215Phone()&&v3215HydrateDepth>0){v3215AthleteRenderPending=true;return true}
+  if(v3215AthleteRendering){v3215AthleteRenderPending=true;return true}
+  v3215AthleteRendering=true;
+  try{
+    const filter=document.getElementById("athleteSquadFilter"),saved=v3215SwimmerFilter();if(filter&&saved!==null)filter.value=saved;
+    const activeFilter=saved!==null?saved:(filter?.value||null);if(activeFilter)v3215EnsureSelectionForFilter(activeFilter);
+    if(v3215ExplicitAthleteId&&Date.now()-v3215ExplicitAthleteAt<30*60*1000&&(appState.athletes||[]).some(a=>a.id===v3215ExplicitAthleteId)){const roster=activeFilter?v3215RosterForFilter(activeFilter):appState.athletes;if(roster.some(a=>a.id===v3215ExplicitAthleteId))appState.settings.selected_athlete_id=v3215ExplicitAthleteId}
+    const result=v3215RenderAthletesBase?.();
+    if(filter&&saved!==null)filter.value=saved;
+    return result;
+  }finally{v3215AthleteRendering=false;v3215AthleteRenderPending=false}
+};
+
+// -----------------------------------------------------------------------------
+// 4. Unique swimmer identifiers. Extend surname characters until collisions split;
+// if two swimmers still share the surname, extend the first name too.
+// Andy McLay -> AMc, Amy March -> AMa.
+// -----------------------------------------------------------------------------
+let v3215InitialSig="",v3215InitialMap=new Map();
+function v3215BuildInitialMap(){
+  const athletes=(appState.athletes||[]).filter(a=>a.active!==false),sig=athletes.map(a=>`${a.id}:${a.full_name}`).sort().join("|");if(sig===v3215InitialSig)return v3215InitialMap;
+  const parts=a=>v3215Text(a.full_name).split(/\s+/).filter(Boolean),base=a=>{const p=parts(a);return p.length>1?(p[0][0]+p.at(-1)[0]).toUpperCase():(p[0]?.slice(0,2)||"?").toUpperCase()};
+  const groups=new Map();for(const a of athletes){const b=base(a);if(!groups.has(b))groups.set(b,[]);groups.get(b).push(a)}const map=new Map();
+  for(const [b,group] of groups){if(group.length===1){map.set(group[0].id,b);continue}const unresolved=new Set(group.map(a=>a.id));let surnameChars=2;while(unresolved.size&&surnameChars<30){const buckets=new Map();for(const a of group.filter(x=>unresolved.has(x.id))){const p=parts(a),first=p[0]||"",last=p.at(-1)||first,c=(first[0]+last.slice(0,surnameChars)).toUpperCase();if(!buckets.has(c))buckets.set(c,[]);buckets.get(c).push(a)}let progress=false;for(const [c,rows] of buckets)if(rows.length===1){map.set(rows[0].id,c);unresolved.delete(rows[0].id);progress=true}if(!unresolved.size)break;if(!progress&&surnameChars>=Math.max(...group.map(a=>(parts(a).at(-1)||"").length)))break;surnameChars++}
+    if(unresolved.size){let firstChars=2;while(unresolved.size&&firstChars<30){const buckets=new Map();for(const a of group.filter(x=>unresolved.has(x.id))){const p=parts(a),first=p[0]||"",last=p.at(-1)||first,c=(first.slice(0,firstChars)+(last||"")).toUpperCase();if(!buckets.has(c))buckets.set(c,[]);buckets.get(c).push(a)}for(const [c,rows] of buckets)if(rows.length===1){map.set(rows[0].id,c);unresolved.delete(rows[0].id)}firstChars++}}
+    for(const id of unresolved)map.set(id,b+String(group.findIndex(a=>a.id===id)+1));
+  }
+  v3215InitialSig=sig;v3215InitialMap=map;return map;
+}
+function v3215Initials(input){const athlete=typeof input==="string"?(appState.athletes||[]).find(a=>a.id===input):input;if(!athlete)return"?";return v3215BuildInitialMap().get(athlete.id)||v3215Text(athlete.initials)||"?"}
+try{v3212Initials=id=>v3215Initials(id)}catch{}
+try{v3205Initials=athlete=>v3215Initials(athlete)}catch{}
+
+// -----------------------------------------------------------------------------
+// 5. Final build authority. One observer only at the top layer.
+// -----------------------------------------------------------------------------
+function v3215Brand(){const title=`McLay Swimming OS — v${V3215_VERSION} Phone Stability`,subtitle=`v${V3215_VERSION} · protected Board/pathway · phone state lock · no background UI takeover`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3215_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3215_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3215_VERSION}`;badge.dataset.build=V3215_BUILD;badge.title=V3215_BUILD}}
+async function v3215RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3215_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.15 service worker update",error)}}
+try{v3214BrandObserver?.disconnect?.()}catch{}
+try{v3213BrandObserver?.disconnect?.()}catch{}
+try{v3212BrandObserver?.disconnect?.()}catch{}
+try{v3211BrandObserver?.disconnect?.()}catch{}
+try{v3210BrandObserver?.disconnect?.()}catch{}
+try{v3209BrandObserver?.disconnect?.()}catch{}
+try{v3208BrandObserver?.disconnect?.()}catch{}
+try{v3207BrandObserver?.disconnect?.()}catch{}
+try{v3190BrandObserver?.disconnect?.()}catch{}
+try{v3163BrandObserver?.disconnect?.()}catch{}
+const v3215BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3215_VERSION} Phone Stability`||document.querySelector(".header-subtitle")?.textContent!==`v${V3215_VERSION} · protected Board/pathway · phone state lock · no background UI takeover`)queueMicrotask(v3215Brand)});if(document.querySelector("title"))v3215BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3215BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3215Debug={version:V3215_VERSION,build:V3215_BUILD,phone:v3215Phone,activeView:v3215ActiveView,canonicalUi:v3215CanonicalUi,initials:v3215Initials,selected:()=>appState.settings.selected_athlete_id,hydrateDepth:()=>v3215HydrateDepth};
+v3215Brand();setTimeout(()=>{v3215Brand();v3215RegisterWorker();const deck=document.getElementById("deckAthlete");if(deck&&v3215DeckAthlete())renderDeckAthleteBrief?.()},0);setTimeout(v3215Brand,900);setTimeout(v3215Brand,2800);setTimeout(v3215Brand,5600);
