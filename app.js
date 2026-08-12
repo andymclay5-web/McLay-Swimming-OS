@@ -23146,3 +23146,295 @@ setTimeout(()=>{v3224Brand();v3224RegisterWorker()},500);
 setTimeout(v3224Brand,3000);
 // v3.20.23 has an inherited 13s branding timer; immediately reassert this build.
 setTimeout(v3224Brand,13025);setTimeout(v3224Brand,30000);
+
+// =============================================================================
+// McLay Swimming OS v3.20.25 — SESSION TRUTH + SIMPLE ENTRY
+// 13 Aug 2026
+// Live-field correction over v3.20.24. Preserve the static phone Board and
+// foreground/resume performance work. This layer removes split authoring truth,
+// makes draft/block edits local-first, simplifies session intake, makes Capture
+// tagging explicit, and tightens the target-display/parser failures proven Thu AM.
+// =============================================================================
+const V3225_VERSION="3.20.25";
+const V3225_BUILD="3.20.25-session-truth-simple-entry-20260813";
+const V3225_CORE="20260813-core3225";
+const V3225_DRAFT_KEY="mclay_v3225_session_drafts";
+const V3225_VERSION_KEY="mclay_v3225_session_versions";
+let v3225ComposerSessionId="";
+let v3225DraftTimer=null;
+
+function v3225Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v3225Text(value){return String(value??"").trim()}
+function v3225ExactSession(id=appState.settings?.selected_session_id){return (appState.sessions||[]).find(row=>row.id===id)||null}
+function v3225AuthoringSession(){
+  const latched=v3225ComposerSessionId&&v3225ExactSession(v3225ComposerSessionId);
+  return latched||v3225ExactSession()||null;
+}
+// One visible/live session truth. Do not silently canonicalise the selected ID
+// to a different duplicate record; repair/merge duplicates explicitly instead.
+const v3225SelectedSessionBase=typeof selectedSession==="function"?selectedSession:null;
+if(v3225SelectedSessionBase)selectedSession=function(){return v3225ExactSession()||v3225SelectedSessionBase()};
+function v3225SessionLabel(session){
+  if(!session)return"No session selected";
+  const date=new Date(`${session.session_date||localIsoDate(new Date())}T12:00:00`),day=Number.isNaN(date.getTime())?"Session":date.toLocaleDateString("en-NZ",{weekday:"short",day:"numeric",month:"short"}),part=String(session.day_part||"").toUpperCase(),squads=(typeof v3111ExplicitSquads==="function"?v3111ExplicitSquads(session):sessionSquads(session)||[]);
+  return `${day} ${part}${squads.length?` · ${squads.join(" + ")}`:""}`.trim();
+}
+function v3225LatchSession(id=""){
+  const picker=document.getElementById("contextSessionPicker"),wanted=id||picker?.value||appState.settings?.selected_session_id||"",session=v3225ExactSession(wanted);
+  if(!session)return null;
+  v3225ComposerSessionId=session.id;appState.settings.selected_session_id=session.id;
+  try{v3126ImportTargetSessionId=session.id}catch{}
+  if(picker&&[...picker.options].some(option=>option.value===session.id))picker.value=session.id;
+  saveState(appState);return session;
+}
+
+// Exact selected session is the only authoring target. Canonical duplicate
+// selection remains available elsewhere for browsing, but never redirects a write.
+v3192WriteTarget=function(){return v3225AuthoringSession()};
+v3126TargetSession=function(){const session=v3225AuthoringSession();if(session)try{v3126ImportTargetSessionId=session.id}catch{}return session};
+try{v3219Session=function(){return v3225ExactSession()||null}}catch{}
+
+const v3225SetSelectedBase=typeof setSelectedSession==="function"?setSelectedSession:null;
+if(v3225SetSelectedBase)setSelectedSession=function(id,...args){
+  const out=v3225SetSelectedBase(id,...args),exact=v3225ExactSession(id);
+  if(exact){v3225ComposerSessionId=exact.id;try{v3126ImportTargetSessionId=exact.id}catch{};queueMicrotask(()=>v3225RefreshComposerContext())}
+  return out;
+};
+
+// Keep non-destructive local versions before a workout/blocks write. This is a
+// recovery rail, not a second live session model.
+function v3225ReadJson(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"")||fallback}catch{return fallback}}
+function v3225SnapshotSession(session,reason="before edit"){
+  if(!session)return;
+  const versions=v3225ReadJson(V3225_VERSION_KEY,[]),blocks=(appState.session_blocks||[]).filter(row=>row.session_id===session.id).map(v3225Clone);
+  const previous=versions[0];
+  const signature=v3192Hash?.(`${session.id}|${session.updated_at||""}|${session.workout||""}|${blocks.map(b=>b.updated_at||b.id).join("|")}`)||`${session.id}-${Date.now()}`;
+  if(previous?.signature===signature)return;
+  versions.unshift({signature,session_id:session.id,reason,created_at:nowIso(),session:v3225Clone(session),blocks});
+  try{localStorage.setItem(V3225_VERSION_KEY,JSON.stringify(versions.slice(0,24)))}catch(error){console.warn("v3.20.25 session-version backup unavailable",error)}
+}
+
+// -----------------------------------------------------------------------------
+// Simple session entry: selected slot is already the context. Ask only how the
+// coach wants to get the workout in, then use the existing proven intake engines.
+// -----------------------------------------------------------------------------
+function v3225PlanContext(session){
+  if(!session)return[];
+  const week=(appState.weekly_plans||[]).find(row=>row.id===session.weekly_plan_id)||null;
+  const season=(appState.season_plans||[]).find(row=>row.id===session.season_plan_id)||((week?.season_plan_id)?(appState.season_plans||[]).find(row=>row.id===week.season_plan_id):null)||null;
+  const primary=v3225Text(session.primary_system)||v3225Text(typeof v3191DailyObjective==="function"?v3191DailyObjective(session):"");
+  const technical=v3225Text(session.technical_focus)||v3225Text(typeof v3191SecondaryEmphasis==="function"?v3191SecondaryEmphasis(session,primary):"");
+  const weekFocus=v3225Text(session.week_objective)||v3225Text(week?.objective)||v3225Text(session.week_phase)||v3225Text(week?.phase);
+  const seasonFocus=v3225Text(season?.overarching_goal)||v3225Text(session.season_name)||v3225Text(season?.name);
+  const carry=v3225Text(session.week_carry_forward)||v3225Text(week?.carry_forward)||v3225Text(session.plan_cue);
+  const venue=v3225Text(session.venue),course=v3225Text(session.pool_course);
+  const chips=[];
+  if(primary)chips.push(`Today · ${primary}`);
+  if(weekFocus&&weekFocus!==primary)chips.push(`Week · ${weekFocus}`);
+  if(seasonFocus&&seasonFocus!==weekFocus&&seasonFocus!==primary)chips.push(`Season · ${seasonFocus}`);
+  if(carry&&carry!==technical&&carry!==weekFocus)chips.push(`Carry · ${carry}`);
+  if(technical)chips.push(`Cue · ${technical}`);
+  if(venue)chips.push(venue);
+  if(course)chips.push(course);
+  return chips;
+}
+function v3225SetEntryMode(mode="text"){
+  const card=document.getElementById("v3198PoolsideComposer");if(!card)return;
+  card.dataset.v3225Mode=mode;
+  card.querySelectorAll("[data-v3225-mode]").forEach(button=>button.classList.toggle("active",button.dataset.v3225Mode===mode));
+  const textNodes=[document.getElementById("sessionPasteInput"),document.getElementById("parseSessionBtn")?.closest(".button-row"),document.querySelector(".quick-session-source-row")];
+  const voice=document.getElementById("v3101SessionDictation"),photo=document.querySelector(".quick-photo-row"),photoPreview=document.getElementById("quickSessionPhotoPreview");
+  textNodes.forEach(node=>{if(node)node.hidden=mode!=="text"});if(voice)voice.hidden=mode!=="voice";if(photo)photo.hidden=mode!=="photo";if(photoPreview&&mode!=="photo")photoPreview.hidden=true;
+  if(mode==="text")requestAnimationFrame(()=>document.getElementById("sessionPasteInput")?.focus());
+  if(mode==="voice")requestAnimationFrame(()=>document.getElementById("v3101StartSessionVoice")?.focus());
+}
+function v3225RefreshComposerContext(){
+  const card=document.getElementById("v3198PoolsideComposer");if(!card)return;
+  const session=v3225AuthoringSession()||v3225LatchSession();
+  const target=card.querySelector("#v3198ComposerTarget");if(target)target.textContent=v3225SessionLabel(session);
+  let context=card.querySelector("#v3225ComposerContext");
+  if(!context){context=document.createElement("div");context.id="v3225ComposerContext";context.className="v3225-context";card.querySelector(".v3198-composer-head")?.insertAdjacentElement("afterend",context)}
+  const chips=v3225PlanContext(session);context.innerHTML=`<strong>${escapeHtml(v3225SessionLabel(session))}</strong>${chips.length?`<div>${chips.map(text=>`<span>${escapeHtml(text)}</span>`).join("")}</div>`:""}`;
+}
+function v3225EnhanceComposer(){
+  const card=document.getElementById("v3198PoolsideComposer");if(!card)return null;
+  const body=document.getElementById("v3198ComposerBody");if(!body)return card;
+  const dictation=document.getElementById("v3101SessionDictation"),photo=document.querySelector(".quick-photo-row"),photoPreview=document.getElementById("quickSessionPhotoPreview");
+  for(const node of [dictation,photo,photoPreview])if(node&&node.parentElement!==body)body.appendChild(node);
+  let chooser=card.querySelector("#v3225EntryChooser");
+  if(!chooser){chooser=document.createElement("section");chooser.id="v3225EntryChooser";chooser.className="v3225-entry-chooser";chooser.innerHTML=`<h3>How do you want to enter this session?</h3><div><button type="button" data-v3225-mode="text" class="active">Paste / Type</button><button type="button" data-v3225-mode="voice">Voice / Transcribe</button><button type="button" data-v3225-mode="photo">Photo</button></div>`;body.insertAdjacentElement("afterbegin",chooser);chooser.querySelectorAll("[data-v3225-mode]").forEach(button=>button.onclick=()=>v3225SetEntryMode(button.dataset.v3225Mode))}
+  const oldIntro=[...card.children].find(node=>node.tagName==="P");if(oldIntro)oldIntro.hidden=true;
+  v3225RefreshComposerContext();v3225SetEntryMode(card.dataset.v3225Mode||"text");return card;
+}
+const v3225EnsureComposerBase=typeof v3198EnsureMobileComposer==="function"?v3198EnsureMobileComposer:null;
+if(v3225EnsureComposerBase)v3198EnsureMobileComposer=function(){const card=v3225EnsureComposerBase();if(card)v3225EnhanceComposer();return card};
+const v3225OpenComposerBase=typeof v3198OpenComposer==="function"?v3198OpenComposer:null;
+if(v3225OpenComposerBase)v3198OpenComposer=function(options={}){
+  v3225LatchSession();const out=v3225OpenComposerBase(options);queueMicrotask(()=>{v3225EnhanceComposer();v3225RefreshComposerContext()});return out;
+};
+// The inherited capture-phase + button route ultimately calls this function.
+v3197OpenNewSessionEditor=function(){if(v3198Phone?.()){v3225LatchSession();return v3198OpenComposer?.({focus:true})}return v3198AdvancedNewSessionBase?.()};
+
+// -----------------------------------------------------------------------------
+// Editable draft truth: every change updates the in-memory canonical draft and a
+// local session-keyed recovery copy immediately. Moving the current textarea line
+// between neighbouring blocks is one tap.
+// -----------------------------------------------------------------------------
+function v3225DraftStore(){return v3225ReadJson(V3225_DRAFT_KEY,{})}
+function v3225DraftSourceHash(){return typeof v3192Hash==="function"?v3192Hash(String(document.getElementById("sessionPasteInput")?.value||v3150DraftSource||"")):String((document.getElementById("sessionPasteInput")?.value||v3150DraftSource||"").length)}
+function v3225PersistDraftNow(){
+  const session=v3225AuthoringSession(),host=document.getElementById("sessionImportPreview");if(!session||!host?.querySelector(".v3150-draft-block"))return;
+  try{const blocks=v3150CollectDraft?.()||[];if(!blocks.length)return;v3150DraftBlocks=blocks;v35DraftBlocks=blocks;const store=v3225DraftStore();store[session.id]={source_hash:v3225DraftSourceHash(),updated_at:nowIso(),blocks:v3225Clone(blocks)};localStorage.setItem(V3225_DRAFT_KEY,JSON.stringify(store));appState.settings.v3225_active_draft={session_id:session.id,source_hash:store[session.id].source_hash,updated_at:store[session.id].updated_at};saveState(appState)}catch(error){console.warn("v3.20.25 draft local save",error)}
+}
+function v3225QueueDraft(){clearTimeout(v3225DraftTimer);v3225DraftTimer=setTimeout(v3225PersistDraftNow,90)}
+function v3225RestoreDraft(){
+  const session=v3225AuthoringSession();if(!session)return false;const saved=v3225DraftStore()[session.id];if(!saved||saved.source_hash!==v3225DraftSourceHash()||!Array.isArray(saved.blocks)||!saved.blocks.length)return false;
+  v3150DraftBlocks=v3225Clone(saved.blocks);v35DraftBlocks=v3150DraftBlocks;return true;
+}
+function v3225MoveDraftLine(section,direction){
+  const sections=[...document.querySelectorAll("#sessionImportPreview .v3150-draft-block")],index=sections.indexOf(section),to=index+direction;if(index<0||to<0||to>=sections.length)return;
+  const fromArea=section.querySelector(".v3150-lines"),toArea=sections[to].querySelector(".v3150-lines");if(!fromArea||!toArea)return;
+  const value=fromArea.value,caret=fromArea.selectionStart||0,start=value.lastIndexOf("\n",Math.max(0,caret-1))+1,endRaw=value.indexOf("\n",caret),end=endRaw<0?value.length:endRaw,line=value.slice(start,end).trim();if(!line)return;
+  const before=value.slice(0,start),after=value.slice(endRaw<0?end:end+1);fromArea.value=(before+after).replace(/^\n+|\n+$/g,"");toArea.value=[toArea.value.trim(),line].filter(Boolean).join("\n");fromArea.dispatchEvent(new Event("input",{bubbles:true}));toArea.dispatchEvent(new Event("input",{bubbles:true}));v3225PersistDraftNow();
+}
+function v3225DecorateDraft(){
+  const host=document.getElementById("sessionImportPreview");if(!host)return;
+  host.querySelectorAll(".v3150-draft-block").forEach((section,index)=>{if(section.dataset.v3225Decorated)return;section.dataset.v3225Decorated="1";const actions=section.querySelector("header>div");if(actions){const up=document.createElement("button");up.type="button";up.className="secondary v3225-move-line";up.textContent="Line ↑";up.disabled=index===0;up.onclick=()=>v3225MoveDraftLine(section,-1);const down=document.createElement("button");down.type="button";down.className="secondary v3225-move-line";down.textContent="Line ↓";down.disabled=index===host.querySelectorAll(".v3150-draft-block").length-1;down.onclick=()=>v3225MoveDraftLine(section,1);actions.append(up,down)}});
+}
+const v3225RenderDraftBase=typeof v3150RenderDraft==="function"?v3150RenderDraft:null;
+if(v3225RenderDraftBase)v3150RenderDraft=function(){const out=v3225RenderDraftBase();v3225DecorateDraft();return out};
+const v3225BuildDraftBase=typeof v3150BuildDraft==="function"?v3150BuildDraft:null;
+if(v3225BuildDraftBase)v3150BuildDraft=function(raw,type="text"){const out=v3225BuildDraftBase(raw,type);v3225PersistDraftNow();v3225DecorateDraft();return out};
+document.addEventListener("input",event=>{if(event.target?.closest?.("#sessionImportPreview .v3150-draft-block")){try{v3150DraftBlocks=v3150CollectDraft?.()||v3150DraftBlocks;v35DraftBlocks=v3150DraftBlocks}catch{}v3225QueueDraft()}},true);
+document.addEventListener("change",event=>{if(event.target?.closest?.("#sessionImportPreview .v3150-draft-block")){try{v3150DraftBlocks=v3150CollectDraft?.()||v3150DraftBlocks;v35DraftBlocks=v3150DraftBlocks}catch{}v3225PersistDraftNow()}},true);
+
+// Prefer the visible edited draft when it belongs to this exact source/session;
+// otherwise the inherited parser remains authoritative.
+const v3225CollectBase=typeof v3192CollectOrBuild==="function"?v3192CollectOrBuild:null;
+if(v3225CollectBase)v3192CollectOrBuild=function(raw,options={}){
+  const host=document.getElementById("sessionImportPreview"),hasVisible=Boolean(host?.querySelector(".v3150-draft-block"));
+  if(hasVisible){const blocks=v3150CollectDraft?.()||[];if(blocks.length){v3150DraftBlocks=blocks;v35DraftBlocks=blocks;v3225PersistDraftNow();return typeof v3224FixNestedCueMeters==="function"?v3224FixNestedCueMeters(blocks):blocks}}
+  if(v3225RestoreDraft()){const blocks=v3225Clone(v3150DraftBlocks);if(options.showPreview)v3150RenderDraft?.();return typeof v3224FixNestedCueMeters==="function"?v3224FixNestedCueMeters(blocks):blocks}
+  return v3225CollectBase(raw,options);
+};
+
+// Structured Edit Blocks is an explicit coach write. The v3.20.22 background
+// quarantine must not mistake it for passive background repair.
+const v3225SaveBlockBase=typeof v32SaveSessionBlock==="function"?v32SaveSessionBlock:null;
+if(v3225SaveBlockBase)v32SaveSessionBlock=async function(...args){try{v3222MarkExplicit?.(3000);const session=v3225ExactSession()||selectedSession?.();if(session)v3225SnapshotSession(session,"before Edit Blocks save")}catch{}return v3225SaveBlockBase(...args)};
+for(const name of ["v32DeleteSessionBlock","v32DuplicateSessionBlock","v32MoveBlock"]){try{const base=globalThis[name];if(typeof base==="function")globalThis[name]=async function(...args){v3222MarkExplicit?.(3000);const session=v3225ExactSession()||selectedSession?.();if(session)v3225SnapshotSession(session,`before ${name}`);return base(...args)}}catch{}}
+
+// Snapshot the exact target before the verified Board commit, then require the
+// returned session ID to match it. Never silently report success on another day.
+const v3225CommitBase=typeof v3192CommitToBoard==="function"?v3192CommitToBoard:null;
+if(v3225CommitBase)v3192CommitToBoard=async function(...args){
+  const target=v3225AuthoringSession();if(!target){v33SetImportMessage?.("Select the session first.","warning");return null}v3225SnapshotSession(target,"before session import");v3222MarkExplicit?.(4000);
+  const saved=await v3225CommitBase(...args);if(saved&&saved.id!==target.id){console.error("v3.20.25 blocked cross-session commit",{target:target.id,saved:saved.id});v33SetImportMessage?.(`Session identity check stopped the save. Expected ${v3225SessionLabel(target)}. Nothing else should be edited.`,"warning");return null}
+  if(saved){v3225ComposerSessionId=saved.id;v3225PersistDraftNow();v3224FlushCritical?.()}return saved;
+};
+saveImportedSession=async function(openNow=true){return openNow===false?(v3193ReviewDraft?.(),importedSessionDraft):v3192CommitToBoard?.()};v3126CommitSelectedSession=v3192CommitToBoard;
+
+// -----------------------------------------------------------------------------
+// Parser ownership hardening for prose/composition numbers within a parent rep.
+// -----------------------------------------------------------------------------. 
+// Keep common deck-authored support headings as real blocks rather than cue lines.
+const v3225HeadingBase=typeof v3198Heading==="function"?v3198Heading:null;
+if(v3225HeadingBase)v3198Heading=function(line){const text=v3225Text(line).replace(/[–—]/g,"-");if(/^kick(?:\s+(?:sharpness|sharpeners?))?\s*[:.-]?$/i.test(text))return{type:"post_set",title:/sharp/i.test(text)?"Kick sharpness":"Kick",repeat:1,rest:""};return v3225HeadingBase(line)};
+function v3225CleanWorkoutSource(raw){const text=String(raw||"").replace(/\r/g,"");const lines=text.split("\n");if(lines.length>2&&/^(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\s+(?:am|pm)\b/i.test(lines[0].trim())&&lines.slice(1).some(line=>v3198Heading?.(v3198NormaliseLine?.(line)||line)))lines.shift();return lines.join("\n").trim()}
+function v3225PaceOrCueOnly(text){const line=v3225Text(text),startsDistance=/^\s*(?:\d{1,3}\s*[x×]\s*)?\d{1,4}(?:\.5)?\s*(?:m\b)?/i.test(line);if(/^\s*\d{1,4}(?:\.5)?\s*(?:m\b)?\s*pace\b/i.test(line))return true;return !startsDistance&&/\b(?:pace|drill|swim|hands?\s+by\s+side|hands?\s+inside|reset|underwater|build|max|easy|scull|kick|HR\s*gauge|heart\s*rate)\b/i.test(line)}
+function v3225FixComposition(blocks){
+  return v34Array(blocks).map(source=>{
+    const block={...source,items:v34Array(source?.items).map(item=>({...item}))},items=block.items;
+    let parent=null;
+    for(let i=0;i<items.length;i++){
+      const item=items[i];if(item.runnable===false)continue;const line=v3225Text(item.raw||item.instruction||item.label),d=Number(item.distance||0),reps=Number(item.reps||0);
+      // Short within-rep instruction under a repeated parent: 15m Max beneath
+      // 4x25, 25 drill beneath 6x50, or a standalone “200 Pace” reference.
+      if(parent&&Number(parent.reps||0)>1&&!/^\s*\d{1,3}\s*[x×]/i.test(line)&&!/(?:@|\bon\b)\s*\d/i.test(line)){
+        const parentD=Number(parent.distance||0),cueWord=/\b(?:pace|drill|swim|hands?\s+by\s+side|hands?\s+inside|reset|underwater|build|max|easy|scull|kick)\b/i.test(line);
+        if(cueWord&&((d>0&&d<=parentD)||v3225PaceOrCueOnly(line)||/^\s*\d+\s*@\s*\d+\s*pace\b/i.test(line))){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3225_parent_cue=true;continue}
+      }
+      // A parent distance followed by single-distance composition lines whose
+      // sum equals the parent: 400 Easy then 100 Free / Back / Breast / Free.
+      if(reps===1&&d>=100&&!/^\s*\d{1,3}\s*[x×]/i.test(line)){
+        const children=[];let sum=0,j=i+1;
+        for(;j<items.length;j++){
+          const child=items[j],childLine=v3225Text(child.raw||child.instruction||child.label),cd=Number(child.distance||0),cr=Number(child.reps||0);
+          if(child.runnable===false)continue;
+          if(cr!==1||!(cd>0&&cd<d)||/^\s*\d{1,3}\s*[x×]/i.test(childLine)||/(?:@|\bon\b)\s*\d/i.test(childLine))break;
+          if(!/\b(?:free|back|breast|fly|choice|im|drill|swim|kick|easy|build|reset)\b/i.test(childLine))break;
+          children.push(child);sum+=cd;if(sum>=d)break;
+        }
+        if(children.length>=2&&Math.abs(sum-d)<0.01){for(const child of children){child.runnable=false;child.reps=0;child.distance=null;child.line_type="cue";child.v3225_parent_composition=true}}
+      }
+      parent=item;
+    }
+    return block;
+  });
+}
+const v3225ParseBase=typeof v3224ParseBlocks==="function"?v3224ParseBlocks:typeof v3126ParseBlocks==="function"?v3126ParseBlocks:null;
+function v3225ParseBlocks(raw){const clean=v3225CleanWorkoutSource(raw);return v3225FixComposition(v3224FixNestedCueMeters?.(v3225ParseBase?v3225ParseBase(clean):[])||[])}
+if(v3225ParseBase){for(const name of ["v3206ParseBlocks","v3200ParseBlocks","v3198ParseBlocks","v3193ParseBlocks","v3150ParseBlocks","v3126ParseBlocks","v3127ParseBlocks","v3128ParseBlocks","v3107BlocksFromRaw"]){try{globalThis[name]=v3225ParseBlocks}catch{}}}
+estimateDistance=function(text){const blocks=v3225ParseBlocks(text),calculated=typeof v3200Distance==="function"?v3200Distance(blocks):blocks.reduce((sum,block)=>sum+v34Array(block.items).reduce((n,item)=>n+(item.runnable===false?0:Number(item.reps||0)*Number(item.distance||0)),0),0),explicit=typeof v3200ExplicitTotal==="function"?Number(v3200ExplicitTotal(text)||0):0;return calculated||explicit||0};
+
+// -----------------------------------------------------------------------------
+// Target display: HR-gauged clearance is deliberately coach/heart-rate driven;
+// alternating pace/drill targets apply to pace reps only; never render @ 00.0.
+// -----------------------------------------------------------------------------
+function v3225TargetText(item,block){return `${v3225Text(item?.raw||item?.instruction||item?.label)} ${v3225Text(block?.title)} ${v3225Text(block?.purpose)}`}
+function v3225HrGauge(item,block){const text=v3225TargetText(item,block);return /\b(?:HR\s*gauge|heart\s*rate(?:\s*gauge)?)\b/i.test(text)&&/\b(?:clearance|recovery|easy)\b/i.test(text)}
+function v3225AlternatingPaceDrill(item,block){const text=v3225TargetText(item,block);return /\b(?:odd|1)\b[^\n]*\b\d+\s*pace\b/i.test(text)&&/\b(?:even|2)\b[^\n]*\bdrill\b/i.test(text)}
+const v3225T400SpecBase=typeof v3205T400Spec==="function"?v3205T400Spec:null;
+if(v3225T400SpecBase)v3205T400Spec=function(item,block){if(v3225HrGauge(item,block))return null;return v3225T400SpecBase(item,block)};
+const v3225TargetHintBase=typeof v3223TargetHint==="function"?v3223TargetHint:null;
+if(v3225TargetHintBase)v3223TargetHint=function(item,block){if(v3225HrGauge(item,block))return false;return v3225TargetHintBase(item,block)};
+const v3225TargetRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+if(v3225TargetRowsBase)v3205TargetRows=function(session,block,item,blockIndex,itemIndex){if(v3225HrGauge(item,block))return[];return v3225TargetRowsBase(session,block,item,blockIndex,itemIndex)};
+function v3225TargetDetails(session,block,item,blockIndex,itemIndex){
+  if(v3225HrGauge(item,block))return '<div class="v3225-no-target"><strong>HR gauge</strong><span>Clearance is controlled by heart-rate response and movement quality. No pace target required.</span></div>';
+  const rows=v3205TargetRows?.(session,block,item,blockIndex,itemIndex)||[];if(!rows.length)return"";const note=v3225AlternatingPaceDrill(item,block)?'<div class="v3225-target-note">Targets apply to odd 200-pace reps only · even reps are drill.</div>':"";
+  return `${note}<div class="v3206-target-list v3214-target-list v3225-target-list" data-v3206-target-list="${escapeHtml(`${blockIndex}:${itemIndex}`)}">${rows.map(row=>{const stroke=row.resolved?.stroke||"Stroke needed",target=row.missing?"Target needed":row.pointRangeText||v3214Clock?.(row.targetSeconds)||"Target needed",cycle=Number(row.cycleSeconds)>0?`@ ${v3214Clock?.(row.cycleSeconds)||row.cycleSeconds}`:"",source=row.secondary||row.source_label||"";return `<div class="v3206-target-row ${row.missing?"missing":""} ${row.pointRangeText?"v3214-pathway-target":""}"><b>${escapeHtml(v3205Initials?.(row.athlete)||"?")}</b><span class="v3206-target-stroke">${row.resolved?.token&&row.resolved?.stroke?v3140StrokeButton?.(row,session,block,item,blockIndex,itemIndex)||escapeHtml(stroke):escapeHtml(stroke)}</span><strong>${escapeHtml(target)}</strong>${cycle?`<em>${escapeHtml(cycle)}</em>`:"<em></em>"}${source?`<small>${escapeHtml(source)}</small>`:""}</div>`}).join("")}</div>`;
+}
+try{v3206TargetDetails=v3225TargetDetails;v3205TargetDetails=v3225TargetDetails}catch{}
+
+// -----------------------------------------------------------------------------
+// Capture truth: attending swimmers only, explicit multi-tag state before media,
+// exact-session context, and an unmistakable local-save confirmation.
+// -----------------------------------------------------------------------------
+v3180CaptureRoster=function(){const session=v3225ExactSession();if(!session)return[];return v3180RelevantAttendance?.(session)?.filter(row=>v3180Here?.(row.status)).map(row=>(appState.athletes||[]).find(a=>a.id===row.athlete_id)).filter(Boolean)||[]};
+v3180CaptureTagsUi=function(){
+  const select=document.getElementById("captureAthlete");if(!select)return;const roster=v3180CaptureRoster(),valid=new Set(roster.map(a=>a.id)),ids=v3180TagIds?.().filter(id=>valid.has(id))||[];if(ids.length!==(v3180TagIds?.()||[]).length)v3180SetTagIds?.(ids);
+  let host=document.getElementById("v3180CaptureTags");if(!host){host=document.createElement("div");host.id="v3180CaptureTags";host.className="v3180-capture-tags v3225-capture-tags";select.closest("div")?.insertAdjacentElement("afterend",host)}
+  host.innerHTML=`<div class="v3225-tag-head"><strong>Who is this for?</strong><span>Attending swimmers only · choose one or several</span></div><div class="v3225-tag-grid"><button type="button" data-v3180-tag="group" class="${ids.length?"":"active"}">Attending group</button>${roster.map(a=>`<button type="button" title="${escapeHtml(a.full_name)}" data-v3180-tag="${escapeHtml(a.id)}" class="${ids.includes(a.id)?"active":""}">${escapeHtml(v3180Initials?.(a.full_name)||a.full_name)}</button>`).join("")}</div>${roster.length?"":'<div class="help">No swimmers are marked Here yet. Take attendance first for individual capture.</div>'}`;
+  host.querySelectorAll("[data-v3180-tag]").forEach(button=>button.onclick=()=>{if(button.dataset.v3180Tag==="group")v3180SetTagIds?.([]);else{const next=new Set(v3180TagIds?.()||[]);next.has(button.dataset.v3180Tag)?next.delete(button.dataset.v3180Tag):next.add(button.dataset.v3180Tag);v3180SetTagIds?.([...next])}v3180CaptureTagsUi()});
+};
+function v3225CaptureNames(){const ids=v3180TagIds?.()||[],roster=v3180CaptureRoster();if(!ids.length)return"Attending group";return ids.map(id=>(appState.athletes||[]).find(a=>a.id===id)?.full_name).filter(Boolean).join(", ")||"Selected swimmer"}
+function v3225CaptureBlockName(){const id=document.getElementById("captureBlock")?.value;if(!id)return"Whole session";return (appState.session_blocks||[]).find(b=>b.id===id)?.title||"Current block"}
+function v3225CaptureConfirmation(kind){const session=v3225ExactSession(),label=kind==="video"?"Video":kind==="photo"?"Photo":kind==="voice"?"Voice note":"Note";return `${label} saved to ${v3225CaptureNames()} · ${v3225SessionLabel(session)} · ${v3225CaptureBlockName()}`}
+const v3225PhoneMediaBase=typeof v3219SavePhoneMedia==="function"?v3219SavePhoneMedia:null;
+if(v3225PhoneMediaBase)v3219SavePhoneMedia=async function(file,kind){const out=await v3225PhoneMediaBase(file,kind);v3219Status?.(v3225CaptureConfirmation(kind));return out};
+// Board shortcut for video/photo now opens Capture first so tagging is explicit.
+const v3225OpenBlockMediaBase=typeof v3212OpenBlockMedia==="function"?v3212OpenBlockMedia:null;
+if(v3225OpenBlockMediaBase)v3212OpenBlockMedia=function(session,blockIndex,kind){
+  if(!v3219Phone?.()||kind==="voice")return v3225OpenBlockMediaBase(session,blockIndex,kind);
+  v3222MarkExplicit?.(2200);v3180OpenCaptureForBlock?.(session,blockIndex,{mode:"quick_note",media:""});requestAnimationFrame(()=>{v3180CaptureTagsUi?.();v3219Status?.(`Choose attending swimmer(s), then ${kind==="video"?"Record video":"Take photo"}.`)})
+};
+
+// -----------------------------------------------------------------------------
+// UI layout only. Do not alter the v3.20.23/24 Board render/scroll architecture.
+// -----------------------------------------------------------------------------
+const v3225Style=document.createElement("style");v3225Style.id="v3225Styles";v3225Style.textContent=`
+.v3225-context{display:grid;gap:5px;padding:9px 10px;margin:8px 0;border:1px solid #c9dce5;border-radius:12px;background:#f7fbfd}.v3225-context>strong{font-size:.9rem;color:#173d55}.v3225-context>div{display:flex;gap:5px;flex-wrap:wrap}.v3225-context span{font-size:.65rem;font-weight:800;color:#446572;background:#eaf3f7;border-radius:999px;padding:4px 7px}.v3225-entry-chooser{margin:7px 0 10px}.v3225-entry-chooser h3{margin:0 0 7px;font-size:1rem}.v3225-entry-chooser>div{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.v3225-entry-chooser button{min-height:44px;background:#eef4f7;color:#17415a;border:1px solid #bfd3dd}.v3225-entry-chooser button.active{background:#174f70;color:#fff;border-color:#174f70}.v3225-move-line{font-size:.66rem!important;padding:5px 6px!important}.v3225-target-note,.v3225-no-target{margin:5px 0 7px;padding:7px 8px;border-radius:9px;background:#f2f7f9;font-size:.72rem;color:#395866}.v3225-no-target{display:grid;gap:2px}.v3225-target-list .v3206-target-row{display:grid!important;grid-template-columns:32px minmax(54px,.7fr) minmax(90px,1fr) auto!important;gap:5px 7px!important;align-items:center!important}.v3225-target-list .v3206-target-row small{grid-column:2/-1!important;line-height:1.2!important;white-space:normal!important;overflow-wrap:anywhere}.v3225-target-list .v3206-target-row strong,.v3225-target-list .v3206-target-row em{white-space:nowrap}.v3225-capture-tags{margin:7px 0 11px}.v3225-tag-head{display:grid;gap:2px;margin-bottom:6px}.v3225-tag-head strong{font-size:.92rem}.v3225-tag-head span{font-size:.68rem;color:#617984}.v3225-tag-grid{display:flex;gap:5px;flex-wrap:wrap}.v3225-tag-grid button{min-width:42px;min-height:38px}.v3225-tag-grid button.active{background:#174f70;color:#fff}
+@media(max-width:900px){.v3198-poolside-composer #v3101SessionDictation:not([hidden]){display:block!important}.v3198-poolside-composer .quick-photo-row:not([hidden]){display:grid!important;grid-template-columns:1fr!important}.v3198-poolside-composer .quick-photo-preview:not([hidden]){display:block!important}.v3198-poolside-composer #sessionPasteInput[hidden],.v3198-poolside-composer .quick-session-source-row[hidden],.v3198-poolside-composer #v3101SessionDictation[hidden],.v3198-poolside-composer .quick-photo-row[hidden]{display:none!important}.v3225-target-list .v3206-target-row{grid-template-columns:30px minmax(48px,.55fr) minmax(86px,1fr) auto!important}.v3225-entry-chooser>div{grid-template-columns:1fr 1fr 1fr}.v3198-poolside-composer{scroll-margin-top:108px}}
+`;document.head.appendChild(v3225Style);
+
+function v3225Brand(){
+  const title=`McLay Swimming OS — v${V3225_VERSION} Session Truth + Simple Entry`,subtitle=`v${V3225_VERSION} · exact session ownership · simple intake · persistent edits · explicit capture tagging`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3225_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3225_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3225_VERSION}`;badge.dataset.build=V3225_BUILD;badge.title=V3225_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V3225_BUILD)
+}
+async function v3225RegisterWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3225_CORE}`,{updateViaCache:'none'});await registration.update();if(registration.waiting)registration.waiting.postMessage('SKIP_WAITING')}catch(error){console.warn('v3.20.25 service worker update',error)}}
+// Watch only build-label nodes, never the live Board. Older delayed brand timers
+// cannot make the deployed build appear to roll backwards during startup.
+const v3225BrandObserver=new MutationObserver(()=>queueMicrotask(v3225Brand));if(document.querySelector('title'))v3225BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3225BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
+window.v3225Debug={version:V3225_VERSION,build:V3225_BUILD,exact:v3225ExactSession,authoring:v3225AuthoringSession,latch:v3225LatchSession,snapshot:v3225SnapshotSession,restoreDraft:v3225RestoreDraft,parse:v3225ParseBlocks,distance:blocks=>v3200Distance?.(blocks)||0,blockDistance:block=>v3200BlockDistance?.(block)||0,writer:()=>v3192WriteTarget?.(),targetSession:()=>v3126TargetSession?.(),select:id=>setSelectedSession?.(id),rest:text=>v3224ExplicitRest?.(text),targetHint:(item,block)=>v3223TargetHint?.(item,block),t400:(item,block)=>v3205T400Spec?.(item,block),targetDetails:(session,block,item,bi=0,ii=0)=>v3206TargetDetails?.(session,block,item,bi,ii),captureRoster:v3180CaptureRoster,openComposer:options=>v3198OpenComposer?.(options||{}),buildDraft:(raw,type="text")=>v3150BuildDraft?.(raw,type),renderDraft:()=>v3150RenderDraft?.(),persistDraft:v3225PersistDraftNow,commit:()=>v3192CommitToBoard?.(),saveBlock:()=>v32SaveSessionBlock?.(),sessionLabel:v3225SessionLabel,versionKey:V3225_VERSION_KEY,draftKey:V3225_DRAFT_KEY};
+setTimeout(()=>{v3225Brand();v3225EnhanceComposer();v3180CaptureTagsUi?.()},0);setTimeout(()=>{v3225Brand();v3225RegisterWorker();v3225EnhanceComposer()},650);setTimeout(v3225Brand,3100);setTimeout(v3225Brand,13050);setTimeout(v3225Brand,30050);
