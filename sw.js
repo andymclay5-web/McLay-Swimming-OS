@@ -1,7 +1,7 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-20-22-live-board-quarantine-20260812";
-const BUILD="3.20.22-live-board-quarantine-canonical-truth-20260812";
-const CORE=["./","./index.html","./styles.css?v=20260812-core3222","./app.js?v=20260812-core3222","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-20-24-morning-stability-gate-20260812";
+const BUILD="3.20.24-morning-stability-gate-20260812";
+const CORE=["./","./index.html","./styles.css?v=20260812-core3224","./app.js?v=20260812-core3224","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
 async function fetchFresh(request){return fetch(request,{cache:"no-store"})}
 self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);for(const url of CORE){const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(!response.ok)throw new Error(`Core cache failed ${url}: ${response.status}`);await cache.put(request,response.clone())}await self.skipWaiting()})()));

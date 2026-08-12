@@ -13381,7 +13381,7 @@ showView=function(id,options={}){
 
 document.addEventListener("click",event=>{const summary=event.target.closest("details > summary");if(summary?.parentElement instanceof HTMLDetailsElement)summary.parentElement._v3163UserToggleAt=Date.now()},true);
 document.addEventListener("toggle",event=>{const details=event.target,userAction=Date.now()-Number(details?._v3163UserToggleAt||0)<1200;if(v3163HistoryApplying||!userAction||!(details instanceof HTMLDetailsElement)||!details.closest(".view.active"))return;clearTimeout(details._v3163Timer);details._v3163Timer=setTimeout(()=>{if(v3163HistoryApplying)return;const key=v3163DetailsKey(details,[...document.querySelectorAll(".view.active details")].indexOf(details));if(details.open){const ui=v3163Snapshot({detail_entry_key:key});v3163PersistUi(ui,{replaceHistory:false});history.pushState({mclay:true,ui},"",location.href)}else if(history.state?.mclay&&history.state.ui?.detail_entry_key===key){history.back()}else if(history.state?.mclay){const ui=v3163Snapshot({detail_entry_key:null});v3163PersistUi(ui,{replaceHistory:false});history.replaceState({mclay:true,ui},"",location.href)}},0)},true);
-window.addEventListener("scroll",()=>{if(v3163HistoryApplying)return;clearTimeout(v3163ScrollTimer);v3163ScrollTimer=setTimeout(()=>v3163SaveUi({replaceHistory:true}),140)},{passive:true});
+window.addEventListener("scroll",()=>{if(window.innerWidth<=900&&(document.querySelector(".view.active")?.id||"deck")==="deck")return;if(v3163HistoryApplying)return;clearTimeout(v3163ScrollTimer);v3163ScrollTimer=setTimeout(()=>v3163SaveUi({replaceHistory:true}),140)},{passive:true});
 window.addEventListener("pagehide",()=>v3163SaveUi({replaceHistory:true}));
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")v3163SaveUi({replaceHistory:true})});
 window.addEventListener("popstate",event=>{
@@ -13909,13 +13909,13 @@ v3163RestoreScroll=function(ui,view){if(view==="deck"&&document.querySelector("#
 document.addEventListener("touchstart",event=>{if(event.isTrusted&&event.target.closest?.("#deck")&&!v3170RestoringState){v3170MarkUser("touchstart")}},{capture:true,passive:true});
 document.addEventListener("wheel",event=>{if(event.isTrusted&&event.target.closest?.("#deck")&&!v3170RestoringState){v3170MarkUser("wheel")}},{capture:true,passive:true});
 
-window.addEventListener("scroll",()=>{if((!v3170UserInteracted&&Date.now()<v3170BootHoldUntil)||v3170RestoringState||(document.querySelector(".view.active")?.id||"deck")!=="deck"||document.body.classList.contains("v3170-editing")||$("v3170Drawer"))return;clearTimeout(v3170ScrollSaveTimer);v3170ScrollSaveTimer=setTimeout(()=>v3170SavePoolsideState(),120)},{passive:true});
+window.addEventListener("scroll",()=>{if(window.innerWidth<=900&&(document.querySelector(".view.active")?.id||"deck")==="deck")return;if((!v3170UserInteracted&&Date.now()<v3170BootHoldUntil)||v3170RestoringState||(document.querySelector(".view.active")?.id||"deck")!=="deck"||document.body.classList.contains("v3170-editing")||$("v3170Drawer"))return;clearTimeout(v3170ScrollSaveTimer);v3170ScrollSaveTimer=setTimeout(()=>v3170SavePoolsideState(),120)},{passive:true});
 window.addEventListener("pagehide",()=>v3170SavePoolsideState());
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")v3170SavePoolsideState();else setTimeout(()=>{const state=v3170ReadPoolsideState();v3170PaintBoard();v3170RestorePoolsideState(state,{scroll:true,retries:true})},0)});
 window.addEventListener("pageshow",()=>setTimeout(()=>{const state=v3170InitialRestorePending?V3170_INITIAL_STATE:v3170ReadPoolsideState();v3170PaintBoard();v3170RestorePoolsideState(state,{scroll:true,retries:true})},0));
 window.addEventListener("popstate",()=>setTimeout(()=>{if((document.querySelector(".view.active")?.id||"deck")==="deck"){const state=v3170ReadPoolsideState();v3170PaintBoard();v3170RestorePoolsideState(state,{scroll:true,retries:false})}},0));
 
-setTimeout(()=>{if(!v3170UserInteracted){v3170RestorePoolsideState(V3170_INITIAL_STATE,{scroll:true,retries:false});v3170WritePoolsideState({...V3170_INITIAL_STATE,saved_at:Date.now()})}v3170BootHoldUntil=0},4700);
+setTimeout(()=>{if(window.innerWidth<=900&&(document.querySelector(".view.active")?.id||"deck")==="deck"){v3170BootHoldUntil=0;return}if(!v3170UserInteracted){v3170RestorePoolsideState(V3170_INITIAL_STATE,{scroll:true,retries:false});v3170WritePoolsideState({...V3170_INITIAL_STATE,saved_at:Date.now()})}v3170BootHoldUntil=0},4700);
 
 window.v3170Debug={...window.v3170Debug,readState:v3170ReadPoolsideState,saveState:v3170SavePoolsideState,restoreState:v3170RestorePoolsideState,initialState:V3170_INITIAL_STATE};
 setTimeout(()=>{v3170PaintBoard();if(v3170InitialRestorePending)v3170RestorePoolsideState(V3170_INITIAL_STATE,{scroll:true,retries:true})},180);
@@ -21787,7 +21787,7 @@ function v3220RestoreLockedSession(){if(!v3220Phone()||!v3220ProtectedView()||v3
 function v3220RestoreDeckScroll(payload=v3220LastDeck()){if(!payload||v3220View()!=="deck")return;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(v3220View()==="deck"&&!v3220RecentIntent(500))window.scrollTo({top:Math.max(0,Number(payload.scroll_y)||0),left:0,behavior:"auto"})}))}
 for(const name of ["pointerdown","touchstart","keydown"]){document.addEventListener(name,()=>{v3220GestureAt=Date.now()},{capture:true,passive:name!=="keydown"})}
 window.addEventListener("popstate",()=>{v3220HistoryUntil=Date.now()+900},{capture:true});
-window.addEventListener("scroll",()=>{if(!v3220Phone()||v3220View()!=="deck")return;clearTimeout(v3220ScrollTimer);v3220ScrollTimer=setTimeout(v3220SaveDeck,450)},{passive:true});
+window.addEventListener("scroll",()=>{if(v3220Phone()&&v3220View()==="deck")return;if(!v3220Phone()||v3220View()!=="deck")return;clearTimeout(v3220ScrollTimer);v3220ScrollTimer=setTimeout(v3220SaveDeck,450)},{passive:true});
 window.addEventListener("pagehide",()=>{if(v3220View()==="deck")v3220SaveDeck();else v3220SaveSafe()});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){if(v3220View()==="deck")v3220SaveDeck();else v3220SaveSafe()}},{capture:true});
 
@@ -22889,3 +22889,260 @@ v3222Brand();
 for(const delay of [60,450,1400,3200,5200,7000])setTimeout(v3222ApplyBootSafe,delay);
 setTimeout(()=>{v3222BootSafeActive=false},8100);
 setTimeout(()=>{v3222Brand();v3222RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3222Brand,900);setTimeout(v3222Brand,2800);
+
+// =============================================================================
+// McLay Swimming OS v3.20.23 — STATIC PHONE DECK
+// Direct hot-path correction over v3.20.22 after the real phone still froze.
+// Phone scroll no longer serialises UI/history/deck state. Unopened target panels
+// are lazy: their swimmer target rows are not calculated or inserted into the DOM
+// until the coach explicitly opens that exact line. Local notes/edits/captures
+// keep their existing immediate-save behaviour.
+// =============================================================================
+const V3223_VERSION="3.20.23";
+const V3223_BUILD="3.20.23-static-phone-deck-lazy-targets-20260812";
+const V3223_CORE="20260812-core3223";
+function v3223Phone(){try{return v3222Phone?.()??(window.innerWidth<=900)}catch{return window.innerWidth<=900}}
+function v3223View(){return document.querySelector('.view.active')?.id||'deck'}
+function v3223LiveDeck(){return v3223Phone()&&document.visibilityState!=='hidden'&&v3223View()==='deck'}
+function v3223LineText(item){return String(item?.raw||item?.instruction||item?.label||'').trim()}
+function v3223TargetHint(item,block){
+  const text=[v3223LineText(item),block?.title||'',block?.purpose||''].join(' ');
+  if(/\b(?:scull|easy|warm[- ]?down|choice easy|drill|steady kick|kick easy)\b/i.test(text)&&!/\b(?:regeneration|development|overload|threshold|clearance)\b/i.test(text))return false;
+  return /@\s*\d+\s*p\b/i.test(text)||/\b(?:regeneration|development|overload|threshold|clearance|aerobic\s+power|race\s*pace|\d+\s*pace|t\s*400)\b/i.test(text);
+}
+function v3223PhoneLineHtml(session,block,group,blockIndex){
+  const {item,itemIndex,runnableIndex,attachments}=group,raw=v3223LineText(item),rest=attachments.filter(x=>x.kind==='rest').map(x=>x.text),patterns=attachments.filter(x=>x.kind==='pattern').map(x=>x.text),rounds=attachments.filter(x=>x.kind==='round').map(x=>x.text.replace(/^Round\s*/i,'R')),other=attachments.filter(x=>!['rest','pattern','round'].includes(x.kind)).map(x=>x.text),t400=v3205T400Spec?.(item,block),hasTargets=Boolean(t400||v3223TargetHint(item,block)),tab=t400?'Time ›':hasTargets?'Targets ›':'Open ›',inlineRest=rest.length?`<span class="v3205-inline-rest">${escapeHtml(rest.join(' · '))}</span>`:'',sub=[...patterns,...rounds,...other].filter(Boolean).join(' · '),planned=item?.planned_raw&&v3207Norm?.(item.planned_raw)!==v3207Norm?.(raw)?`<small class="v3207-planned-line">Planned: ${escapeHtml(item.planned_raw)}</small>`:'';
+  const lazy=`<div class="v3223-lazy-targets" data-v3223-targets="${blockIndex}:${itemIndex}" data-v3223-loaded="0">${hasTargets?'<p class="help">Open to load targets.</p>':'<p class="help">No individual target is required for this line.</p>'}</div>`;
+  return `<article class="v3205-board-line v3206-board-line v3207-board-line v3223-board-line" data-v3205-line="${blockIndex}:${itemIndex}"><div class="v3206-line-shell"><details data-v3223-line="${blockIndex}:${itemIndex}"><summary><span class="v3205-line-copy"><strong>${escapeHtml(raw)}</strong>${inlineRest}${sub?`<small>${escapeHtml(sub)}</small>`:''}${planned}</span><span class="v3205-open-tab">${escapeHtml(tab)}</span></summary><div class="v3205-line-open">${lazy}<div class="v3205-line-actions"><button type="button" data-v3205-time-line="${blockIndex}:${itemIndex}">${t400?`Time T400 ${escapeHtml(t400.stroke)}`:'Time this line'}</button><button type="button" class="secondary" data-v3205-capture-line="${blockIndex}:${itemIndex}">Capture</button></div></div></details><button type="button" class="secondary v3206-edit-button" data-v3206-edit-line="${blockIndex}:${itemIndex}" aria-label="Edit or modify ${escapeHtml(raw)}">Edit</button></div>${t400?v3205T400Pbs?.(session,t400.stroke)||'':''}${v3205ModifiedLine?.(session,block,blockIndex,runnableIndex)||''}</article>`;
+}
+const v3223LineHtmlBase=typeof v3205LineHtml==='function'?v3205LineHtml:null;
+v3205LineHtml=function(session,block,group,blockIndex){if(v3223LiveDeck())return v3223PhoneLineHtml(session,block,group,blockIndex);return v3223LineHtmlBase?.(session,block,group,blockIndex)||''};
+
+function v3223LoadTargets(details,session){
+  if(!details?.open)return;const host=details.querySelector('[data-v3223-targets]');if(!host||host.dataset.v3223Loaded==='1')return;
+  const [blockIndex,itemIndex]=String(host.dataset.v3223Targets||'').split(':').map(Number),block=v3170BoardBlocks?.(session)?.[blockIndex],item=v34Array?.(block?.items)?.[itemIndex];if(!block||!item){host.dataset.v3223Loaded='1';host.innerHTML='<p class="help">Target unavailable.</p>';return}
+  let html='';try{html=v3206TargetDetails?.(session,block,item,blockIndex,itemIndex)||v3205TargetDetails?.(session,block,item,blockIndex,itemIndex)||''}catch(error){console.warn('v3.20.23 target load deferred',error)}
+  host.dataset.v3223Loaded='1';host.innerHTML=html||'<p class="help">No target loaded for this line.</p>';try{v3205CloseNestedTargetDetails?.(host)}catch{}
+}
+const v3223BindBoardBase=typeof v3170BindBoard==='function'?v3170BindBoard:null;
+if(v3223BindBoardBase)v3170BindBoard=function(host,session){const out=v3223BindBoardBase(host,session);if(v3223LiveDeck())host?.querySelectorAll?.('details[data-v3223-line]').forEach(details=>details.addEventListener('toggle',()=>v3223LoadTargets(details,session),{passive:true}));return out};
+
+// CSS already keeps obsolete deck shells hidden. No live mutation observer is
+// needed on phone and removing it keeps scrolling completely passive.
+try{v3220LegacyObserver?.disconnect?.()}catch{}
+const v3223RepairShellBase=typeof v3220RepairBoardShell==='function'?v3220RepairBoardShell:null;
+if(v3223RepairShellBase)v3220RepairBoardShell=function(reason='guard'){if(v3223LiveDeck()){try{if(v3220BoardShellHealthy?.())return true}catch{}}return v3223RepairShellBase(reason)};
+
+try{v3222BrandObserver?.disconnect?.()}catch{}
+function v3223Brand(){const title=`McLay Swimming OS — v${V3223_VERSION} Static Phone Deck`,subtitle=`v${V3223_VERSION} · static live Board · passive scroll · lazy targets · v3.20.22 coaching truth retained`;if(document.title!==title)document.title=title;const node=document.querySelector('.header-subtitle');if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3223_BUILD;try{localStorage.setItem('mclay_last_installed_build',V3223_BUILD)}catch{}const badge=document.getElementById('v3207BuildBadge')||document.getElementById('v3208BuildBadge');if(badge){badge.textContent=`v${V3223_VERSION}`;badge.dataset.build=V3223_BUILD;badge.title=V3223_BUILD}document.querySelectorAll('[data-v3207-sync-build]').forEach(el=>el.textContent=V3223_BUILD)}
+async function v3223RegisterWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3223_CORE}`,{updateViaCache:'none'});await registration.update();if(registration.waiting)registration.waiting.postMessage('SKIP_WAITING')}catch(error){console.warn('v3.20.23 service worker update',error)}}
+window.v3223Debug={version:V3223_VERSION,build:V3223_BUILD,liveDeck:v3223LiveDeck,targetHint:v3223TargetHint,loadTargets:v3223LoadTargets};
+v3223Brand();setTimeout(v3223Brand,13000);setTimeout(()=>{v3223RegisterWorker();v3191EnsurePastButton?.()},0);
+
+// =============================================================================
+// McLay Swimming OS v3.20.24 — MORNING STABILITY GATE
+// 12 Aug 2026. Narrow correction layer over v3.20.23.
+// Protects the live Board first: exact session ownership, local-first resume,
+// authored-rest target truth, nested distance ownership and Alex Auer T400.
+// =============================================================================
+const V3224_VERSION="3.20.24";
+const V3224_BUILD="3.20.24-morning-stability-gate-20260812";
+const V3224_CORE="20260812-core3224";
+const V3224_LIVE_TRUTH_KEY="mclay_v3224_live_session_truth";
+let v3224Restoring=false;
+let v3224HiddenAt=0;
+
+function v3224Phone(){try{return typeof v3223Phone==="function"?v3223Phone():typeof v3222Phone==="function"?v3222Phone():window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3224View(){return document.querySelector('.view.active')?.id||'deck'}
+function v3224Today(){try{return typeof localIsoDate==="function"?localIsoDate(new Date()):new Date().toISOString().slice(0,10)}catch{return new Date().toISOString().slice(0,10)}}
+function v3224SessionById(id){return (appState.sessions||[]).find(row=>row.id===id)||null}
+function v3224CurrentSession(){return v3224SessionById(appState?.settings?.selected_session_id)||selectedSession?.()||null}
+function v3224Clone(value){try{return clone(value)}catch{return JSON.parse(JSON.stringify(value))}}
+function v3224ReadLiveTruth(){try{const raw=localStorage.getItem(V3224_LIVE_TRUTH_KEY);return raw?JSON.parse(raw):null}catch{return null}}
+function v3224LiveTruthIsCurrent(saved=v3224ReadLiveTruth()){
+  if(!saved?.session?.id||saved.view!=="deck")return false;
+  if(Date.now()-Number(saved.saved_at||0)>12*60*60*1000)return false;
+  // Never let last night's protected Board become the next day's workout.
+  return String(saved.session.session_date||"")===v3224Today();
+}
+function v3224CriticalSnapshot(){
+  const session=v3224CurrentSession();if(!session)return null;
+  const id=session.id,blocks=(appState.session_blocks||[]).filter(row=>row.session_id===id);
+  return {
+    version:V3224_VERSION,saved_at:Date.now(),view:v3224View(),session:v3224Clone(session),blocks:v3224Clone(blocks),
+    settings:{selected_session_id:id,selected_squad:appState.settings?.selected_squad||"",selected_athlete_id:appState.settings?.selected_athlete_id||"",board_mode:appState.settings?.v3126_board_mode||"whole",active_block_index:Number(appState.settings?.v3129_active_block_index)||0,scroll_y:Math.max(0,Math.round(window.scrollY||0))}
+  };
+}
+function v3224FlushCritical(){
+  if(!v3224Phone()||v3224View()!=="deck")return false;
+  const snap=v3224CriticalSnapshot();if(!snap)return false;
+  try{localStorage.setItem(V3224_LIVE_TRUTH_KEY,JSON.stringify(snap))}catch(error){console.warn("v3.20.24 live truth snapshot unavailable",error)}
+  // Ordinary saves stay lazy; hide/pagehide is a deliberate synchronous commit.
+  try{const persisted=typeof v374PersistableState==="function"?v374PersistableState(appState):appState;localStorage.setItem(STATE_KEY,JSON.stringify(persisted))}catch(error){console.warn("v3.20.24 critical local flush unavailable",error)}
+  try{if(typeof v3220LockedSessionId!=="undefined")v3220LockedSessionId=snap.session.id}catch{}
+  return true;
+}
+function v3224MergeLiveTruth(saved=v3224ReadLiveTruth()){
+  if(!v3224LiveTruthIsCurrent(saved))return false;
+  const id=saved.session.id;let changed=false,existing=v3224SessionById(id);
+  if(!existing){appState.sessions=(appState.sessions||[]).concat(v3224Clone(saved.session));existing=v3224SessionById(id);changed=true}
+  else{
+    const savedStamp=Date.parse(saved.session.updated_at||saved.session.created_at||0)||Number(saved.saved_at||0),currentStamp=Date.parse(existing.updated_at||existing.created_at||0)||0;
+    const currentHasTruth=Boolean(String(existing.workout||"").trim()||Number(existing.planned_distance)>0||(appState.session_blocks||[]).some(row=>row.session_id===id));
+    if((!currentHasTruth||savedStamp>=currentStamp)&&String(saved.session.workout||"").trim()){Object.assign(existing,v3224Clone(saved.session));changed=true}
+  }
+  // Poolside local truth outranks any stale hydration for this same live session.
+  const savedBlocks=Array.isArray(saved.blocks)?saved.blocks:[];
+  if(savedBlocks.length){appState.session_blocks=(appState.session_blocks||[]).filter(row=>row.session_id!==id).concat(v3224Clone(savedBlocks));changed=true}
+  if(appState.settings.selected_session_id!==id){appState.settings.selected_session_id=id;changed=true}
+  if(saved.settings?.selected_squad&&appState.settings.selected_squad!==saved.settings.selected_squad){appState.settings.selected_squad=saved.settings.selected_squad;changed=true}
+  if(saved.settings?.selected_athlete_id&&(appState.athletes||[]).some(a=>a.id===saved.settings.selected_athlete_id)&&appState.settings.selected_athlete_id!==saved.settings.selected_athlete_id){appState.settings.selected_athlete_id=saved.settings.selected_athlete_id;changed=true}
+  if(saved.settings?.board_mode&&appState.settings.v3126_board_mode!==saved.settings.board_mode){appState.settings.v3126_board_mode=saved.settings.board_mode;changed=true}
+  const block=Math.max(0,Number(saved.settings?.active_block_index)||0);if((Number(appState.settings.v3129_active_block_index)||0)!==block){appState.settings.v3129_active_block_index=block;changed=true}
+  try{if(typeof v3220LockedSessionId!=="undefined")v3220LockedSessionId=id}catch{}
+  if(changed)saveState(appState);
+  return true;
+}
+function v3224BoardHasContent(){
+  try{
+    const hosts=[document.getElementById('v3126WholeView'),document.getElementById('v3126ActiveView'),document.getElementById('v3170PlanView')].filter(Boolean);
+    return hosts.some(host=>host.querySelector('.v3205-board-line,.v3205-board-block,[data-v3180-block],[data-v3170-block]'));
+  }catch{return false}
+}
+function v3224RestoreScroll(saved){const y=Math.max(0,Number(saved?.settings?.scroll_y)||0);requestAnimationFrame(()=>requestAnimationFrame(()=>{if(v3224View()==="deck")window.scrollTo({top:y,left:0,behavior:"auto"})}))}
+function v3224ResumeFromPocket(reason="resume"){
+  if(v3224Restoring||!v3224Phone()||v3224View()!=="deck")return false;
+  const saved=v3224ReadLiveTruth();if(!v3224LiveTruthIsCurrent(saved))return false;
+  v3224Restoring=true;
+  try{
+    v3224MergeLiveTruth(saved);
+    // v3.20.22/23 quarantine prevented background repainting correctly, but could
+    // also block the one repair paint Android needs after returning to a blank DOM.
+    if(!v3224BoardHasContent()){
+      try{v3222MarkExplicit?.(1200);if(typeof v3222WithPaint==="function"&&typeof v3205RequestBoardTruth==="function")v3222WithPaint(()=>v3205RequestBoardTruth(0));else v3205RequestBoardTruth?.(0)}catch(error){console.warn("v3.20.24 controlled Board recovery",reason,error)}
+    }
+    v3224RestoreScroll(saved);v3224HiddenAt=0;return true;
+  }finally{setTimeout(()=>{v3224Restoring=false},150)}
+}
+function v3224PoolsideProtected(){
+  if(!v3224Phone())return false;
+  const current=v3224CurrentSession();
+  if(v3224View()==="deck"&&current&&String(current.session_date||"")===v3224Today())return true;
+  const saved=v3224ReadLiveTruth();return document.visibilityState==="hidden"&&v3224LiveTruthIsCurrent(saved);
+}
+
+// Keep background cloud pulls away from a live phone Board, including while the
+// document is hidden. Local writes remain immediate; sync can resume off Board.
+const v3224BgSyncBase=typeof v3103BackgroundSync==="function"?v3103BackgroundSync:null;
+if(v3224BgSyncBase)v3103BackgroundSync=async function(options={}){if(v3224PoolsideProtected())return{deferred:true,live_board:true,v3224:true};return v3224BgSyncBase(options)};
+const v3224ScheduleSyncBase=typeof v3103ScheduleBackgroundSync==="function"?v3103ScheduleBackgroundSync:null;
+if(v3224ScheduleSyncBase){v3103ScheduleBackgroundSync=function(delay=900,pull=false){if(v3224PoolsideProtected())return false;return v3224ScheduleSyncBase(delay,pull)};window.v3103ScheduleBackgroundSync=v3103ScheduleBackgroundSync}
+function v3224TransportProtected(){if(!v3224PoolsideProtected())return false;if(document.visibilityState!=="hidden"&&typeof v3222Explicit==="function"&&v3222Explicit())return false;return true}
+const v3224PullCloudBase=typeof pullCloud==="function"?pullCloud:null;
+if(v3224PullCloudBase)pullCloud=async function(...args){if(v3224TransportProtected())return false;return v3224PullCloudBase(...args)};
+const v3224OperationalPullBase=typeof v3103PullOperational==="function"?v3103PullOperational:null;
+if(v3224OperationalPullBase)v3103PullOperational=async function(...args){if(v3224TransportProtected())return false;return v3224OperationalPullBase(...args)};
+
+window.addEventListener("pagehide",()=>{v3224HiddenAt=Date.now();v3224FlushCritical()},{capture:true});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){v3224HiddenAt=Date.now();v3224FlushCritical()}
+  else setTimeout(()=>v3224ResumeFromPocket("visibility"),40);
+},{capture:true});
+window.addEventListener("focus",()=>{if(v3224HiddenAt&&Date.now()-v3224HiddenAt<30*60*1000)setTimeout(()=>v3224ResumeFromPocket("focus"),60)},{passive:true});
+
+// -----------------------------------------------------------------------------
+// Session identity: the coach-selected calendar booking owns the workout.
+// A 12-hour manual pin must never carry Tuesday PM into Wednesday/Thursday.
+// -----------------------------------------------------------------------------
+const v3224RecentManualBase=typeof v3143RecentManualSelection==="function"?v3143RecentManualSelection:null;
+if(v3224RecentManualBase)v3143RecentManualSelection=function(){const selected=v3224SessionById(appState.settings?.selected_session_id||"");if(selected&&String(selected.session_date||"")!==v3224Today())return false;return v3224RecentManualBase()};
+const v3224SetSessionBase=typeof setSelectedSession==="function"?setSelectedSession:null;
+if(v3224SetSessionBase)setSelectedSession=function(id,...args){
+  const out=v3224SetSessionBase(id,...args),selected=v3224SessionById(appState.settings?.selected_session_id||"");
+  if(selected?.id===id){
+    try{v3126ImportTargetSessionId=id}catch{}
+    const context=document.getElementById('contextSessionPicker');if(context&&[...context.options].some(option=>option.value===id))context.value=id;
+    try{if(document.getElementById('sessionImportDetails'))v3126ConfigureComposer?.()}catch{}
+    if(v3224Phone()&&v3224View()==="deck")setTimeout(v3224FlushCritical,0);
+  }
+  return out;
+};
+const v3224TargetSessionBase=typeof v3126TargetSession==="function"?v3126TargetSession:null;
+if(v3224TargetSessionBase)v3126TargetSession=function(){const selected=v3224SessionById(appState.settings?.selected_session_id||"")||selectedSession?.();if(selected){v3126ImportTargetSessionId=selected.id;return selected}return v3224TargetSessionBase()};
+const v3224WriteTargetBase=typeof v3192WriteTarget==="function"?v3192WriteTarget:null;
+if(v3224WriteTargetBase)v3192WriteTarget=function(){let selected=v3224SessionById(appState.settings?.selected_session_id||"")||selectedSession?.();if(selected&&typeof v3141CanonicalSessionFor==="function")selected=v3141CanonicalSessionFor(selected)||selected;if(selected){try{v3126ImportTargetSessionId=selected.id}catch{}return selected}return v3224WriteTargetBase()};
+
+// -----------------------------------------------------------------------------
+// Distance ownership: parent reps count once; child 25/25 etc describe how that
+// rep is swum. Keep the cue visible, remove it from distance summation.
+// -----------------------------------------------------------------------------
+function v3224Line(item){return String(item?.raw||item?.instruction||item?.label||"").trim()}
+function v3224SegmentDistances(text){const clean=String(text||"").replace(/\b\d{1,2}:\d{2}(?:\.\d+)?\b/g,"");const values=[];const re=/(?:^|[\/+])\s*(\d+(?:\.5)?)\s*m?\b/gi;let match;while((match=re.exec(clean)))values.push(Number(match[1]));return values.filter(value=>value>0&&value<=400)}
+function v3224WithinRepCue(item,parent){
+  if(!item||!parent||item.runnable===false||Number(parent.reps||0)<2||Number(parent.distance||0)<=0)return false;
+  const text=v3224Line(item),parentDistance=Number(parent.distance)||0;if(!text||/^\s*\d+\s*[x×]\s*\d+/i.test(text))return false;
+  if(/(?:@|\bon\b)\s*\d{1,2}(?::\d{2})?\b/i.test(text))return false;
+  const parts=v3224SegmentDistances(text),sum=parts.reduce((a,b)=>a+b,0);
+  if(parts.length>=2&&Math.abs(sum-parentDistance)<0.01)return true;
+  if(/\b(?:first|last|each)\s+\d+(?:\.5)?\s*m?\b/i.test(text)&&/\b(?:drill|swim|reset|build|max|easy|underwater|hands?|stroke|scull|kick|body|position|to\s+wall)\b/i.test(text))return true;
+  return false;
+}
+function v3224FixNestedCueMeters(blocks){
+  return v34Array(blocks).map(source=>{const block={...source,items:v34Array(source?.items).map(item=>({...item}))};let parent=null;for(const item of block.items){if(item.runnable===false)continue;if(parent&&v3224WithinRepCue(item,parent)){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3204_cue_reason="within_length_instruction";continue}parent=item}return block});
+}
+const v3224ParseBlocksBase=typeof v3206ParseBlocks==="function"?v3206ParseBlocks:typeof v3126ParseBlocks==="function"?v3126ParseBlocks:null;
+function v3224ParseBlocks(raw){return v3224FixNestedCueMeters(v3224ParseBlocksBase?v3224ParseBlocksBase(raw):[])}
+if(v3224ParseBlocksBase){try{v3206ParseBlocks=v3224ParseBlocks;v3200ParseBlocks=v3224ParseBlocks;v3198ParseBlocks=v3224ParseBlocks;v3193ParseBlocks=v3224ParseBlocks;v3150ParseBlocks=v3224ParseBlocks;v3126ParseBlocks=v3224ParseBlocks;v3127ParseBlocks=v3224ParseBlocks;v3128ParseBlocks=v3224ParseBlocks;v3107BlocksFromRaw=v3224ParseBlocks}catch{}}
+const v3224BoardBlocksBase=typeof v3170BoardBlocks==="function"?v3170BoardBlocks:null;
+if(v3224BoardBlocksBase){v3170BoardBlocks=function(session){return v3224FixNestedCueMeters(v3224BoardBlocksBase(session))};try{v3125BoardBlocks=v3170BoardBlocks}catch{}}
+estimateDistance=function(text){const blocks=v3224ParseBlocks(text),calculated=typeof v3200Distance==="function"?v3200Distance(blocks):blocks.reduce((sum,block)=>sum+v34Array(block.items).reduce((n,item)=>n+(item.runnable===false?0:Number(item.reps||0)*Number(item.distance||0)),0),0),explicit=typeof v3200ExplicitTotal==="function"?Number(v3200ExplicitTotal(text)||0):0;return calculated||explicit||0};
+
+// -----------------------------------------------------------------------------
+// Rest truth: explicit authored rest outranks parser defaults/inherited pace_rest.
+// In particular "10 seconds rest" must never silently become the 30s model.
+// -----------------------------------------------------------------------------
+function v3224ExplicitRest(text){
+  const value=String(text||"").toLowerCase().replace(/[–—-]/g," ").replace(/\s+/g," ");let match;
+  if((match=value.match(/\b(10|30)\s*(?:s|sec|secs|second|seconds)\s*(?:of\s*)?(?:rest|recovery)\b/)))return Number(match[1]);
+  if((match=value.match(/\b(?:rest|recovery)\s*(?:of\s*)?(10|30)\s*(?:s|sec|secs|second|seconds)?\b/)))return Number(match[1]);
+  if((match=value.match(/\+\s*(10|30)\s*(?:s|sec|secs|second|seconds)?\s*(?:rest|recovery)?\b/)))return Number(match[1]);
+  return null;
+}
+function v3224AuthoredRest(item,block){
+  const direct=v3224ExplicitRest(v3224Line(item));if(direct)return direct;
+  try{const groups=v3205BoardGroups?.(block)?.groups||[],index=v34Array(block?.items).indexOf(item),group=groups.find(row=>row.item===item||row.itemIndex===index);for(const cue of group?.attachments||[]){if(cue.kind!=="rest")continue;const rest=v3224ExplicitRest(cue.text||v3224Line(cue.item));if(rest)return rest}}catch{}
+  return null;
+}
+const v3224PaceSpecBase=typeof v382PaceSpec==="function"?v382PaceSpec:null;
+if(v3224PaceSpecBase)v382PaceSpec=function(item,block,session){const authored=v3224AuthoredRest(item,block),corrected=authored?{...item,pace_rest:authored}:item,spec=v3224PaceSpecBase(corrected,block,session);return authored?{...spec,rest:authored,authored_rest:true}:spec};
+const v3224RestBase=typeof v3129Rest==="function"?v3129Rest:null;
+if(v3224RestBase)v3129Rest=function(item,block){const authored=v3224AuthoredRest(item,block);return authored||v3224RestBase(item,block)};
+const v3224TargetRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+if(v3224TargetRowsBase)v3205TargetRows=function(session,block,item,blockIndex,itemIndex){const authored=v3224AuthoredRest(item,block),corrected=authored?{...item,pace_rest:authored}:item;return v3224TargetRowsBase(session,block,corrected,blockIndex,itemIndex)};
+
+// -----------------------------------------------------------------------------
+// Alex Auer — coach-confirmed June 2026 400 Freestyle anchor: 5:23.0 (323s).
+// It is an operational fallback only when no stored matched T400 anchor exists.
+// -----------------------------------------------------------------------------
+function v3224NameKey(value){return String(value||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"")}
+function v3224AlexAuerRow(athleteId){const athlete=(appState.athletes||[]).find(row=>row.id===athleteId);if(v3224NameKey(athlete?.full_name)!=="alexauer")return null;return{id:"coach-confirmed-alex-auer-t400-2026-06",athlete_id:athleteId,result_seconds:323,result_date:"2026-06-01",result_period:"2026-06",date_precision:"month",pool_course:null,start_type:"Push",valid_for_anchor:true,source_type:"coach_confirmed",source_label:"Coach-confirmed June 2026",metadata:{stroke:"Freestyle",v3224_fallback:true}}}
+const v3224T400AnchorBase=typeof v380T400Anchor==="function"?v380T400Anchor:null;
+if(v3224T400AnchorBase)v380T400Anchor=function(athleteId,stroke="Freestyle"){const found=v3224T400AnchorBase(athleteId,stroke);if(found)return found;const canonical=typeof v3Stroke==="function"?v3Stroke(stroke):String(stroke||"Freestyle");if(!/^free/i.test(canonical))return null;return v3224AlexAuerRow(athleteId)};
+
+function v3224Brand(){
+  const title=`McLay Swimming OS — v${V3224_VERSION} Morning Stability Gate`,subtitle=`v${V3224_VERSION} · protected resume · exact session ownership · authored-rest targets · distance ownership`;
+  if(document.title!==title)document.title=title;const node=document.querySelector('.header-subtitle');if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3224_BUILD;try{localStorage.setItem('mclay_last_installed_build',V3224_BUILD)}catch{}
+  const badge=document.getElementById('v3207BuildBadge')||document.getElementById('v3208BuildBadge');if(badge){badge.textContent=`v${V3224_VERSION}`;badge.dataset.build=V3224_BUILD;badge.title=V3224_BUILD}
+  document.querySelectorAll('[data-v3207-sync-build]').forEach(el=>el.textContent=V3224_BUILD);
+}
+async function v3224RegisterWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3224_CORE}`,{updateViaCache:'none'});await registration.update();if(registration.waiting)registration.waiting.postMessage('SKIP_WAITING')}catch(error){console.warn('v3.20.24 service worker update',error)}}
+window.v3224Debug={version:V3224_VERSION,build:V3224_BUILD,flush:v3224FlushCritical,resume:v3224ResumeFromPocket,protected:v3224PoolsideProtected,fixNested:v3224FixNestedCueMeters,explicitRest:v3224ExplicitRest,authoredRest:v3224AuthoredRest,alexAuer:v3224AlexAuerRow,boardHasContent:v3224BoardHasContent};
+
+// Restore a same-day live snapshot after a full Android page/PWA recreation.
+try{v3224MergeLiveTruth()}catch{}
+setTimeout(()=>{try{v3143AutoSelectCurrentSession?.(false)}catch{}v3224Brand()},0);
+setTimeout(()=>{v3224Brand();v3224RegisterWorker()},500);
+setTimeout(v3224Brand,3000);
+// v3.20.23 has an inherited 13s branding timer; immediately reassert this build.
+setTimeout(v3224Brand,13025);setTimeout(v3224Brand,30000);
