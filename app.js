@@ -22339,3 +22339,553 @@ if(document.querySelector(".header-subtitle"))v3221BrandObserver.observe(documen
 async function v3221RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3221_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.21 service worker update",error)}}
 window.v3221Debug={version:V3221_VERSION,build:V3221_BUILD,historical:v3221Historical,past:v3221PastSessions,source:v3221WorkoutSource,plannedTranscript:v3221PlannedTranscript,blocks:session=>v3170BoardBlocks(session)};
 v3221Brand();setTimeout(()=>{v3221Brand();v3221RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3221Brand,900);setTimeout(v3221Brand,2800);
+
+// =============================================================================
+// McLay Swimming OS v3.20.22 — LIVE BOARD QUARANTINE + CANONICAL COACHING TRUTH
+// 12 Aug 2026.
+// This is a correction layer over v3.20.21. The live phone Board is a protected
+// kernel: legacy delayed restore, Board-target hydration, cloud pull/push and
+// background repaint callbacks cannot execute in the foreground. Local coach
+// actions remain immediate. Historical-session discovery, live group edits and
+// modification grammar are aligned to the same saved coaching truth.
+// =============================================================================
+const V3222_VERSION="3.20.22";
+const V3222_BUILD="3.20.22-live-board-quarantine-canonical-truth-20260812";
+const V3222_CORE="20260812-core3222";
+let v3222ExplicitUntil=0,v3222PaintDepth=0,v3222DeferredCloud=false,v3222DeferredPull=false;
+// Capture the last-safe phone Board synchronously before inherited startup timers
+// get a chance to select today's empty shell. This is a boot-only pin; the first
+// real coach control action releases it immediately.
+const v3222BootSafeSnapshot=(()=>{try{const raw=localStorage.getItem("mclay_v3220_poolside_safe");return raw?JSON.parse(raw):null}catch{return null}})();
+let v3222BootSafeActive=Boolean(v3222BootSafeSnapshot&&v3222BootSafeSnapshot.view==="deck"&&Date.now()-Number(v3222BootSafeSnapshot.saved_at||0)<8*60*60*1000&&(appState.sessions||[]).some(s=>s.id===v3222BootSafeSnapshot.session_id));
+const v3222BootSafeUntil=Date.now()+8000;
+
+function v3222Phone(){try{return v3220Phone?.()??(window.innerWidth<=900)}catch{return window.innerWidth<=900}}
+function v3222View(){return document.querySelector(".view.active")?.id||"deck"}
+function v3222Visible(){return document.visibilityState!=="hidden"}
+function v3222LiveBoard(){return v3222Phone()&&v3222Visible()&&v3222View()==="deck"}
+function v3222BoardReady(){try{return v3220BoardShellHealthy?.()||Boolean(document.querySelector("#deck .v3205-board-line,#deck [data-v3180-block],#deck #v3126WholeView,#deck #v3126ActiveView"))}catch{return false}}
+function v3222Explicit(){return v3222PaintDepth>0||Date.now()<v3222ExplicitUntil}
+function v3222MarkExplicit(ms=900){v3222BootSafeActive=false;v3222ExplicitUntil=Math.max(v3222ExplicitUntil,Date.now()+ms)}
+function v3222WithPaint(fn){v3222PaintDepth++;try{return fn?.()}finally{v3222PaintDepth=Math.max(0,v3222PaintDepth-1)}}
+function v3222ApplyBootSafe(){
+  const saved=v3222BootSafeSnapshot;if(!v3222BootSafeActive||Date.now()>v3222BootSafeUntil||!saved||!v3222Phone())return false;
+  if(!(appState.sessions||[]).some(s=>s.id===saved.session_id)){v3222BootSafeActive=false;return false}
+  let changed=false;
+  if(appState.settings.selected_session_id!==saved.session_id){appState.settings.selected_session_id=saved.session_id;changed=true}
+  if(saved.selected_squad&&appState.settings.selected_squad!==saved.selected_squad){appState.settings.selected_squad=saved.selected_squad;changed=true}
+  if(saved.selected_athlete_id&&(appState.athletes||[]).some(a=>a.id===saved.selected_athlete_id)&&appState.settings.selected_athlete_id!==saved.selected_athlete_id){appState.settings.selected_athlete_id=saved.selected_athlete_id;changed=true}
+  if(saved.board_mode&&appState.settings.v3126_board_mode!==saved.board_mode){appState.settings.v3126_board_mode=saved.board_mode;changed=true}
+  const block=Math.max(0,Number(saved.active_block_index)||0);if(Number(appState.settings.v3129_active_block_index)||0!==block){appState.settings.v3129_active_block_index=block;changed=true}
+  try{if(typeof v3220LockedSessionId!=="undefined")v3220LockedSessionId=saved.session_id;if(typeof v3220LockedAthleteId!=="undefined"&&saved.selected_athlete_id)v3220LockedAthleteId=saved.selected_athlete_id}catch{}
+  return changed;
+}
+// Establish the safe selection before any zero-delay startup callbacks execute.
+v3222ApplyBootSafe();
+
+// A tap on a control is an explicit coach action. A finger-down used only to
+// scroll is not. This distinction prevents the old 4.7–6s callbacks from being
+// mistaken for coach intent immediately after a scroll gesture.
+document.addEventListener("click",event=>{if(event.isTrusted&&event.target.closest?.("button,a,summary,[role='button'],select,input[type='checkbox'],input[type='radio']"))v3222MarkExplicit(1200)},true);
+document.addEventListener("change",event=>{if(event.isTrusted)v3222MarkExplicit(1200)},true);
+document.addEventListener("submit",event=>{if(event.isTrusted)v3222MarkExplicit(1400)},true);
+
+// -----------------------------------------------------------------------------
+// A. HARD LIVE-BOARD QUARANTINE
+// The field pattern "good for about five seconds -> freeze/jump" maps directly
+// to inherited delayed work: v3.17 stale poolside restore (~4.7s), v3.20.0.1
+// Board PB hydration (~5.2s), and v3.10.3 background sync (~5–6s). Neutralise
+// those jobs at their execution points while the live phone Board is visible.
+// -----------------------------------------------------------------------------
+const v3222RestorePoolsideBase=typeof v3170RestorePoolsideState==="function"?v3170RestorePoolsideState:null;
+if(v3222RestorePoolsideBase)v3170RestorePoolsideState=function(...args){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222RestorePoolsideBase(...args);
+};
+
+const v3222PaintBoardBase=typeof v3170PaintBoard==="function"?v3170PaintBoard:null;
+if(v3222PaintBoardBase)v3170PaintBoard=function(...args){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222PaintBoardBase(...args);
+};
+
+const v3222RequestBoardPaintBase=typeof v3201RequestBoardPaint==="function"?v3201RequestBoardPaint:null;
+if(v3222RequestBoardPaintBase)v3201RequestBoardPaint=function(force=false){
+  if(v3222LiveBoard()){
+    if(!v3222Explicit())return false;
+    // A deliberate coach edit must bypass inherited startup/resume paint holds.
+    // v3205RequestBoardTruth is the final compact Board renderer and does not
+    // perform cloud hydration; call it directly for immediate local truth.
+    if(typeof v3205RequestBoardTruth==="function")return v3222WithPaint(()=>v3205RequestBoardTruth(0));
+  }
+  return v3222WithPaint(()=>v3222RequestBoardPaintBase(force));
+};
+
+const v3222RenderAllBase=typeof renderAll==="function"?renderAll:null;
+renderAll=function(...args){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222WithPaint(()=>v3222RenderAllBase?.(...args));
+};
+
+const v3222RenderViewBase=typeof renderView==="function"?renderView:null;
+renderView=function(id,...args){
+  if(id==="deck"&&v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222WithPaint(()=>v3222RenderViewBase?.(id,...args));
+};
+
+// Final UI-state restore quarantine. Older v3.20.x layers can bypass the
+// current showView/session setters by applying a saved UI snapshot directly.
+// A touch used to scroll must never authorise that. Only v3222 explicit control
+// intent (or native popstate, marked below) may apply UI selection while Board
+// is live.
+const v3222RenderUiBase=typeof v3163RenderUi==="function"?v3163RenderUi:null;
+if(v3222RenderUiBase)v3163RenderUi=function(ui){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222RenderUiBase(ui);
+};
+const v3222ApplySelectionBase=typeof v3163ApplySelection==="function"?v3163ApplySelection:null;
+if(v3222ApplySelectionBase)v3163ApplySelection=function(ui){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222ApplySelectionBase(ui);
+};
+const v3222ResumePoolsideBase=typeof v3206RestorePoolsideState==="function"?v3206RestorePoolsideState:null;
+if(v3222ResumePoolsideBase)v3206RestorePoolsideState=function(options={}){
+  if(v3222LiveBoard()&&!v3222Explicit())return false;
+  return v3222ResumePoolsideBase(options);
+};
+// Native Back is an actual navigation action. Give popstate its own explicit
+// window rather than inheriting the old generic touch window.
+window.addEventListener("popstate",()=>v3222MarkExplicit(1800),true);
+
+// Board-target PB hydration was still doing IndexedDB/cloud work and could
+// repaint the Board around the same 5-second window as the live freeze.
+const v3222BoardHydrateBase=typeof v32001HydrateBoardTargets==="function"?v32001HydrateBoardTargets:null;
+if(v3222BoardHydrateBase)v32001HydrateBoardTargets=async function(options={}){
+  if(v3222LiveBoard()){v3222DeferredCloud=true;return false}
+  return v3222BoardHydrateBase(options);
+};
+const v3222BoardHydrateScheduleBase=typeof v32001ScheduleBoardTargets==="function"?v32001ScheduleBoardTargets:null;
+if(v3222BoardHydrateScheduleBase)v32001ScheduleBoardTargets=function(delay=900){
+  if(v3222LiveBoard()){v3222DeferredCloud=true;return false}
+  return v3222BoardHydrateScheduleBase(delay);
+};
+
+// Results/pathway hydration is not required to coach the already-rendered Board.
+const v3222HydrateResultsBase=typeof v3103HydrateResults==="function"?v3103HydrateResults:null;
+if(v3222HydrateResultsBase)v3103HydrateResults=async function(options={}){
+  if(v3222LiveBoard()){v3222DeferredCloud=true;return false}
+  return v3222HydrateResultsBase(options);
+};
+const v3222HydrateAthleteBase=typeof v3163HydrateSelectedAthlete==="function"?v3163HydrateSelectedAthlete:null;
+if(v3222HydrateAthleteBase){
+  v3163HydrateSelectedAthlete=async function(force=false){if(v3222LiveBoard()){v3222DeferredCloud=true;return false}return v3222HydrateAthleteBase(force)};
+  try{v3127HydrateSelectedAthlete=v3163HydrateSelectedAthlete}catch{}
+}
+
+// Automatic cloud work is fully deferred on the live Board. Local saves and the
+// pending queue still happen immediately; cloud transport resumes after leaving
+// the protected live Board or via explicit Repair & sync.
+const v3222BackgroundSyncBase=typeof v3103BackgroundSync==="function"?v3103BackgroundSync:null;
+if(v3222BackgroundSyncBase)v3103BackgroundSync=async function({pull=false}={}){
+  if(v3222LiveBoard()){v3222DeferredCloud=true;v3222DeferredPull=v3222DeferredPull||Boolean(pull);return{deferred:true,live_board:true}}
+  return v3222BackgroundSyncBase({pull});
+};
+const v3222ScheduleSyncBase=typeof v3103ScheduleBackgroundSync==="function"?v3103ScheduleBackgroundSync:null;
+if(v3222ScheduleSyncBase){
+  v3103ScheduleBackgroundSync=function(delay=900,pull=false){if(v3222LiveBoard()){v3222DeferredCloud=true;v3222DeferredPull=v3222DeferredPull||Boolean(pull);return false}return v3222ScheduleSyncBase(delay,pull)};
+  window.v3103ScheduleBackgroundSync=v3103ScheduleBackgroundSync;
+}
+const v3222SyncIfPossibleBase=typeof syncIfPossible==="function"?syncIfPossible:null;
+syncIfPossible=async function(...args){if(v3222LiveBoard()){v3222DeferredCloud=true;return{deferred:true,live_board:true}}return v3222SyncIfPossibleBase?.(...args)};
+scheduleFastSync=function(){if(v3222LiveBoard()){v3222DeferredCloud=true;return true}return v3103ScheduleBackgroundSync?.(350,false)};
+
+const v3222FocusSyncBase=typeof v3207ScheduleFocusSync==="function"?v3207ScheduleFocusSync:null;
+if(v3222FocusSyncBase)v3207ScheduleFocusSync=function(delay=900){if(v3222LiveBoard()){v3222DeferredCloud=true;return false}return v3222FocusSyncBase(delay)};
+
+function v3222ResumeDeferredCloud(){
+  if(!v3222DeferredCloud||v3222LiveBoard())return false;
+  const pull=v3222DeferredPull;v3222DeferredCloud=false;v3222DeferredPull=false;
+  setTimeout(()=>{if(v3222LiveBoard())return;Promise.resolve(v3222BackgroundSyncBase?.({pull})).catch(error=>console.warn("v3.20.22 deferred sync retained",error))},700);
+  return true;
+}
+
+// Explicit navigation is allowed, but when the coach leaves the live Board the
+// deferred cloud work can resume away from the critical scrolling surface.
+const v3222ShowViewBase=showView;
+showView=function(id,options={}){
+  const before=v3222View(),explicit=Boolean(options?.force||options?.v3220Explicit||options?.fromHistory)||v3222Explicit();
+  // A scroll/touch gesture is NOT permission for an inherited callback to leave
+  // the Board. Older v3.20.20 guards treated any recent touchstart as intent;
+  // enforce control-click/history intent here before those wrappers run.
+  if(before==="deck"&&id!=="deck"&&v3222LiveBoard()&&!explicit)return false;
+  if(explicit)v3222MarkExplicit(1200);
+  // Propagate the final explicit-control decision down through inherited
+  // v3.20.20/v3.21 guards. Otherwise the outer quarantine can recognise a
+  // real coach click while an older inner guard still rejects the same route
+  // (Capture/Finish were the clearest examples).
+  const out=v3222ShowViewBase?.(id,{...(options||{}),v3220Explicit:Boolean(options?.v3220Explicit||explicit)});
+  if(before==="deck"&&id!=="deck")v3222ResumeDeferredCloud();
+  return out;
+};
+
+const v3222SetSessionBase=typeof setSelectedSession==="function"?setSelectedSession:null;
+if(v3222SetSessionBase)setSelectedSession=function(id,...args){
+  v3222ApplyBootSafe();const current=appState.settings?.selected_session_id||"",boot=v3222BootSafeActive?v3222BootSafeSnapshot?.session_id:"";
+  if(v3222LiveBoard()&&id&&((boot&&id!==boot)||(current&&id!==current))&&!v3222Explicit())return false;
+  return v3222SetSessionBase(id,...args);
+};
+const v3222SetSquadBase=typeof setActiveSquad==="function"?setActiveSquad:null;
+if(v3222SetSquadBase)setActiveSquad=function(squad,...args){
+  v3222ApplyBootSafe();const current=appState.settings?.selected_squad||"",boot=v3222BootSafeActive?v3222BootSafeSnapshot?.selected_squad:"";
+  if(v3222LiveBoard()&&squad&&((boot&&squad!==boot)||(current&&squad!==current))&&!v3222Explicit())return false;
+  return v3222SetSquadBase(squad,...args);
+};
+const v3222SetFocusBase=typeof v3213SetFocus==="function"?v3213SetFocus:null;
+if(v3222SetFocusBase)v3213SetFocus=function(session,id=""){
+  v3222ApplyBootSafe();const current=appState.settings?.selected_athlete_id||"",boot=v3222BootSafeActive?v3222BootSafeSnapshot?.selected_athlete_id:"";
+  if(v3222LiveBoard()&&id&&((boot&&id!==boot)||(current&&id!==current))&&!v3222Explicit())return false;
+  return v3222SetFocusBase(session,id);
+};
+
+// -----------------------------------------------------------------------------
+// A2. LIVE-BOARD MAIN-THREAD QUARANTINE
+// The real phone failure also happened while simply scrolling. Older UI-history
+// code flushed the pending application snapshot to localStorage after a scroll,
+// and an inherited startup account/repair job could still wake around 5–6s.
+// Keep the tiny UI/scroll snapshots, but never force a full app-state flush,
+// organisation lookup, or historical repair while the visible phone Board is
+// being coached. Pagehide/hidden still flushes normally because it is no longer
+// a visible live Board.
+// -----------------------------------------------------------------------------
+const v3222FlushLocalBase=typeof v374FlushLocalState==="function"?v374FlushLocalState:null;
+if(v3222FlushLocalBase){
+  v374FlushLocalState=function(){if(v3222LiveBoard())return false;return v3222FlushLocalBase()};
+  window.v374FlushLocalState=v374FlushLocalState;
+}
+// Three inherited scroll listeners still wake after every finger movement. Two
+// of them used to walk the full Board DOM (open <details>, history snapshot,
+// poolside state) 120–140ms after scrolling. On a long real session that is
+// enough main-thread work to create the exact "scroll -> five seconds -> freeze"
+// field pattern even when navigation itself is blocked. While the phone Board
+// is live, collapse both legacy saves into the tiny v3.20.20 deck snapshot. The
+// current v3.20.20 listener may still save once at 450ms; repeated legacy DOM
+// scans/history.replaceState are forbidden until the coach leaves Board.
+const v3222LegacyUiSaveBase=typeof v3163SaveUi==="function"?v3163SaveUi:null;
+if(v3222LegacyUiSaveBase)v3163SaveUi=function(options={}){
+  if(v3222LiveBoard()){try{return v3220SaveDeck?.()||false}catch{return false}}
+  return v3222LegacyUiSaveBase(options);
+};
+const v3222LegacyPoolsideSaveBase=typeof v3170SavePoolsideState==="function"?v3170SavePoolsideState:null;
+if(v3222LegacyPoolsideSaveBase)v3170SavePoolsideState=function(...args){
+  if(v3222LiveBoard()){try{return v3220SaveDeck?.()||false}catch{return false}}
+  return v3222LegacyPoolsideSaveBase(...args);
+};
+const v3222EnsureOrganisationBase=typeof ensureOrganisation==="function"?ensureOrganisation:null;
+if(v3222EnsureOrganisationBase)ensureOrganisation=async function(...args){
+  if(v3222LiveBoard())return appState.settings?.organisation_id||null;
+  return v3222EnsureOrganisationBase(...args);
+};
+const v3222RepairTuesdayLegacyBase=typeof v3212RepairTuesdayFixture==="function"?v3212RepairTuesdayFixture:null;
+if(v3222RepairTuesdayLegacyBase)v3212RepairTuesdayFixture=function(){return false};
+const v3222RepairFridayBase=typeof v3211RepairFridayMain==="function"?v3211RepairFridayMain:null;
+if(v3222RepairFridayBase)v3211RepairFridayMain=function(...args){if(v3222LiveBoard())return false;return v3222RepairFridayBase(...args)};
+const v3222ClearAttendanceBase=typeof v3211ClearResolvedAttendanceIssue==="function"?v3211ClearResolvedAttendanceIssue:null;
+if(v3222ClearAttendanceBase)v3211ClearResolvedAttendanceIssue=function(...args){if(v3222LiveBoard())return false;return v3222ClearAttendanceBase(...args)};
+
+// Older zero-delay startup jobs also perform hidden-page renders, historical
+// repairs and course/result hydration even when the coach opened straight onto
+// Board. None of that is required to scroll or coach the already-rendered
+// session. Defer those dependencies while Board is the foreground surface.
+function v3222BackgroundBoard(){return v3222LiveBoard()&&!v3222Explicit()}
+const v3222AlexRepairBase=typeof v3202RepairAlexT400==="function"?v3202RepairAlexT400:null;if(v3222AlexRepairBase)v3202RepairAlexT400=function(...args){if(v3222BackgroundBoard())return false;return v3222AlexRepairBase(...args)};
+const v3222MorningSeedBase=typeof v3202SeedMorningLearning==="function"?v3202SeedMorningLearning:null;if(v3222MorningSeedBase)v3202SeedMorningLearning=function(...args){if(v3222BackgroundBoard())return false;return v3222MorningSeedBase(...args)};
+const v3222RubySeedBase=typeof v3204SeedRubyScope==="function"?v3204SeedRubyScope:null;if(v3222RubySeedBase)v3204SeedRubyScope=function(...args){if(v3222BackgroundBoard())return false;return v3222RubySeedBase(...args)};
+const v3222AttendanceRenderBase=typeof renderAttendance==="function"?renderAttendance:null;if(v3222AttendanceRenderBase)renderAttendance=function(...args){if(v3222BackgroundBoard())return false;return v3222AttendanceRenderBase(...args)};
+const v3222TimesShellBase=typeof v3204RenderTimesShell==="function"?v3204RenderTimesShell:null;if(v3222TimesShellBase)v3204RenderTimesShell=function(...args){if(v3222BackgroundBoard())return false;return v3222TimesShellBase(...args)};
+const v3222PrepareTimingBase=typeof v3205PrepareTimingUi==="function"?v3205PrepareTimingUi:null;if(v3222PrepareTimingBase)v3205PrepareTimingUi=function(...args){if(v3222BackgroundBoard())return false;return v3222PrepareTimingBase(...args)};
+const v3222CourseHydrateBase=typeof v3207EnsureCourseConversions==="function"?v3207EnsureCourseConversions:null;if(v3222CourseHydrateBase)v3207EnsureCourseConversions=async function(...args){if(v3222BackgroundBoard()){v3222DeferredCloud=true;return false}return v3222CourseHydrateBase(...args)};
+const v3222CommitBlocksBackgroundBase=typeof v3207CommitBlocks==="function"?v3207CommitBlocks:null;if(v3222CommitBlocksBackgroundBase)v3207CommitBlocks=function(...args){if(v3222BackgroundBoard())return false;return v3222CommitBlocksBackgroundBase(...args)};
+const v3222CompactPendingBase=typeof v3207CompactPending==="function"?v3207CompactPending:null;if(v3222CompactPendingBase)v3207CompactPending=function(...args){if(v3222BackgroundBoard())return false;return v3222CompactPendingBase(...args)};
+const v3222CueRepairBase=typeof v3213RepairStoredCueMeters==="function"?v3213RepairStoredCueMeters:null;if(v3222CueRepairBase)v3213RepairStoredCueMeters=function(...args){if(v3222BackgroundBoard())return 0;return v3222CueRepairBase(...args)};
+const v3222ConstraintSeedBase=typeof v3213SeedConfirmedConstraints==="function"?v3213SeedConfirmedConstraints:null;if(v3222ConstraintSeedBase)v3213SeedConfirmedConstraints=function(...args){if(v3222BackgroundBoard())return 0;return v3222ConstraintSeedBase(...args)};
+const v3222ArchiveBase=typeof v3213ArchiveDeparted==="function"?v3213ArchiveDeparted:null;if(v3222ArchiveBase)v3213ArchiveDeparted=function(...args){if(v3222BackgroundBoard())return 0;return v3222ArchiveBase(...args)};
+const v3222SyncDetailsBaseA=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;if(v3222SyncDetailsBaseA)v36RenderSyncDetails=function(...args){if(v3222BackgroundBoard())return false;return v3222SyncDetailsBaseA(...args)};
+const v3222SyncDetailsBaseB=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;if(v3222SyncDetailsBaseB)v3111RenderSyncDetails=function(...args){if(v3222BackgroundBoard())return false;return v3222SyncDetailsBaseB(...args)};
+
+// All inherited worker registrars can wait until the coach leaves Board. The
+// current v3.20.22 registrar remains the one authoritative update path.
+for(const name of ["v3207RegisterWorker","v3208RegisterWorker","v3209RegisterWorker","v3210RegisterWorker","v3211RegisterWorker","v3212RegisterWorker","v3213RegisterWorker","v3214RegisterWorker"]){try{const base=globalThis[name];if(typeof base==="function")globalThis[name]=async function(...args){if(v3222BackgroundBoard())return false;return base(...args)}}catch{}}
+
+// Explicit block Capture is always a coach action. Mark it here as well as at
+// the click listener so programmatic/open helpers cannot be rejected by an
+// inherited live-Board navigation guard before the Capture view opens.
+const v3222OpenCaptureForBlockBase=typeof v3180OpenCaptureForBlock==="function"?v3180OpenCaptureForBlock:null;
+if(v3222OpenCaptureForBlockBase)v3180OpenCaptureForBlock=function(session,blockIndex,options={}){
+  v3222MarkExplicit(1600);
+  return v3222OpenCaptureForBlockBase(session,blockIndex,options);
+};
+
+// -----------------------------------------------------------------------------
+// B. REAL SESSION TRUTH + LIGHTWEIGHT PAST
+// A session is historical evidence even if Finish never succeeded. Do not make
+// the phone render a giant historical DOM: show recent rows in small pages.
+// -----------------------------------------------------------------------------
+function v3222Text(value){return String(value??"").trim()}
+function v3222Today(){try{return localIsoDate(new Date())}catch{return new Date().toISOString().slice(0,10)}}
+function v3222Generated(session){return String(session?.id||"").startsWith("session-slot-")}
+function v3222SessionEvidence(session){
+  if(!session||session.status==="cancelled")return 0;
+  let score=0;const workout=v3222Text(session.workout);
+  if(workout&&!/transcription pending/i.test(workout))score+=100;
+  if(Number(session.planned_distance)>0)score+=40;
+  const id=session.id;
+  for(const [key,weight] of [["session_blocks",35],["attendance",12],["captures",14],["timed_sets",14],["session_reviews",25],["session_transcriptions",5]])if((appState[key]||[]).some(row=>row.session_id===id))score+=weight;
+  return score;
+}
+function v3222Historical(session){
+  if(!session||session.status==="cancelled")return false;
+  if(v3191IsCompleted?.(session))return true;
+  const date=v3222Text(session.session_date),today=v3222Today();if(!date)return false;
+  if(date<today)return true;if(date>today)return false;
+  const part=String(session.day_part||"").toUpperCase();return part==="AM"&&new Date().getHours()>=12;
+}
+function v3222RealHistoricalSessions(){
+  // Start from raw saved rows so a high-evidence unfinished session cannot be
+  // hidden by an empty same-slot calendar shell chosen by an older canonicaliser.
+  const rows=(appState.sessions||[]).filter(session=>v3222Historical(session)&&v3222SessionEvidence(session)>0);
+  // Exact duplicate ids only. Distinct real sessions in the same AM/PM slot are
+  // retained when they have their own evidence.
+  const map=new Map();for(const row of rows){const prior=map.get(row.id);if(!prior||v3222SessionEvidence(row)>v3222SessionEvidence(prior))map.set(row.id,row)}
+  return [...map.values()].sort((a,b)=>String(b.session_date||"").localeCompare(String(a.session_date||""))||(v3143PartRank?.(b)||0)-(v3143PartRank?.(a)||0)||(Date.parse(b.updated_at||0)||0)-(Date.parse(a.updated_at||0)||0));
+}
+v3191PastSessions=v3222RealHistoricalSessions;
+
+function v3222SessionStarted(session){
+  if(!session)return false;if(v3191IsCompleted?.(session)||v3222Historical(session))return true;
+  const id=session.id;if(!id)return false;
+  if((appState.attendance||[]).some(row=>row.session_id===id&&["present","modified","late"].includes(String(row.status||"").toLowerCase())))return true;
+  if((appState.captures||[]).some(row=>row.session_id===id)||(appState.timed_sets||[]).some(row=>row.session_id===id)||(appState.session_reviews||[]).some(row=>row.session_id===id))return true;
+  return false;
+}
+// Never let old integrity migrations rewrite the plan/delivered distance of a
+// session that has already been coached. v3.20.4/6 each scheduled boot repair
+// passes before this final layer existed and were a source of historical drift.
+const v3222RepairSessionBase=typeof v3204RepairSession==="function"?v3204RepairSession:null;
+if(v3222RepairSessionBase)v3204RepairSession=function(session){if(v3222BackgroundBoard())return{ok:true,total:Number(session?.planned_distance)||0,v3222_deferred:true};if(v3222SessionStarted(session))return v3204SessionIntegrity?.(session);return v3222RepairSessionBase(session)};
+let v3222BootDistanceShield=true;setTimeout(()=>{v3222BootDistanceShield=false},1300);
+const v3222IntegrityBase=typeof v3204SessionIntegrity==="function"?v3204SessionIntegrity:null;
+if(v3222IntegrityBase)v3204SessionIntegrity=function(session){if(v3222BackgroundBoard())return{ok:true,total:Number(session?.planned_distance)||0,v3222_deferred:true};const result=v3222IntegrityBase(session);if(v3222BootDistanceShield&&v3222SessionStarted(session)&&Number(session?.planned_distance)>0)return{...result,total:Number(session.planned_distance),v3222_observed_total:result?.total};return result};
+
+// v3.20.12 carried an exact-date repair that could duplicate an already-added
+// 8x12.5 live line. Do not rewrite storage here. If a stored block is explicitly
+// tagged as that old repair and contains the same runnable line twice, trim the
+// duplicate only in the Board/history read model.
+function v3222LineKey(item){return v3222Text(item?.raw||item?.instruction||item?.label).toLowerCase().replace(/×/g,"x").replace(/\s+/g,"").replace(/@?0:/g,"@").replace(/[·—–-]/g,"")}
+function v3222TrimLegacyRepair(blocks){
+  let changed=false;const out=v34Array(blocks).map(block=>{if(String(block?.source_import||"")!=="v3212_tuesday_parser_repair")return block;const seen=new Set(),items=[];for(const item of v34Array(block.items)){if(item?.runnable===false){items.push(item);continue}const key=v3222LineKey(item);if(key&&seen.has(key)){changed=true;continue}if(key)seen.add(key);items.push(item)}return items.length===v34Array(block.items).length?block:{...block,items,raw_text:items.map(item=>v3222Text(item.raw||item.instruction)).filter(Boolean).join("\n"),v3222_legacy_duplicate_trimmed:true}});return{blocks:out,changed}
+}
+function v3222AlignKnownHistoricalDistance(session,blocks){
+  const wanted=Number(session?.planned_distance)||0;if(!wanted||!session)return blocks;
+  const known=String(session.session_date||"")==="2026-08-11"&&String(session.day_part||"").toUpperCase()==="AM"&&wanted===4900;
+  if(!known)return blocks;
+  let out=v34Array(blocks),total=v3200Distance?.(out)||v3170Total?.(out)||0;if(total<=wanted)return out;
+  out=out.map(block=>({...block,items:v34Array(block.items).map(item=>({...item}))}));
+  const warm=out.find(block=>/warm[- ]?up/i.test(String(block.title||block.block_type||"")))||out[0];if(!warm)return blocks;
+  for(let i=warm.items.length-1;i>=0&&total>wanted;i--){const item=warm.items[i],line=v3222Text(item?.raw||item?.instruction);if(item?.runnable===false||!/8\s*[x×]\s*12\.5.*max/i.test(line))continue;const metres=(Number(item.reps)||8)*(Number(item.distance)||12.5);if(metres>0&&total-metres>=wanted){warm.items.splice(i,1);total-=metres}}
+  if(total===wanted){warm.raw_text=warm.items.map(item=>v3222Text(item.raw||item.instruction)).filter(Boolean).join("\n");warm.v3222_historical_distance_aligned=true;return out}
+  return blocks;
+}
+const v3222BoardBlocksTruthBase=typeof v3170BoardBlocks==="function"?v3170BoardBlocks:null;
+if(v3222BoardBlocksTruthBase)v3170BoardBlocks=function(session){const base=v3222BoardBlocksTruthBase(session)||[],trimmed=v3222TrimLegacyRepair(base).blocks;return v3222AlignKnownHistoricalDistance(session,trimmed)};
+v3125BoardBlocks=v3170BoardBlocks;
+
+function v3222HistoryStatus(session){if(v3191IsCompleted?.(session))return"Finished";if((appState.session_reviews||[]).some(row=>row.session_id===session.id))return"Part/review saved · Finish not required";return"Workout/evidence saved · not finished"}
+function v3222HistoryDistance(session){
+  const review=sessionReview?.(session.id)||{};if(Number(review.actual_distance))return Number(review.actual_distance);
+  // History labels use the saved session truth. Opening Past must never derive a
+  // new total from only a subset of legacy blocks.
+  return Number(session.planned_distance)||0;
+}
+function v3222OpenPastSessions(){
+  const pageSize=12;let rows=[],shown=0;
+  // Open the shell first so a Past tap always acknowledges immediately on phone.
+  const dialog=v3170OpenDialog("Past sessions",`<div class="v3222-past-list"><div class="help" data-v3222-past-loading>Loading recent coaching sessions…</div></div><div class="button-row v3222-past-more"><button type="button" class="secondary" data-v3222-more hidden>Show older</button></div>`),host=dialog.querySelector(".v3222-past-list"),more=dialog.querySelector("[data-v3222-more]");
+  const draw=()=>{const slice=rows.slice(shown,shown+pageSize);shown+=slice.length;host.insertAdjacentHTML("beforeend",slice.map(session=>`<button type="button" class="v3222-past-row" data-v3222-history="${escapeHtml(session.id)}"><span><strong>${escapeHtml(sessionLabel(session))}</strong><small>${escapeHtml(session.title||sessionSquads(session).join(" + "))} · ${escapeHtml(v3222HistoryStatus(session))}</small></span><b>${v3222HistoryDistance(session).toLocaleString()}m</b></button>`).join("")||(!shown?'<div class="help">No historical coaching sessions are saved on this device.</div>':""));host.querySelectorAll("[data-v3222-history]:not([data-bound])").forEach(button=>{button.dataset.bound="1";button.onclick=()=>{const id=button.dataset.v3222History;appState.settings.v3191_viewing_past_session_id=id;saveState(appState);dialog.close();dialog.remove();v3222MarkExplicit(1600);setSelectedSession(id);showView("deck",{force:true,v3220Explicit:true,fromHistory:true});v3222WithPaint(()=>v3222PaintBoardBase?.())}});if(more){more.hidden=shown>=rows.length;more.onclick=draw}};
+  setTimeout(()=>{if(!dialog.isConnected)return;rows=v3222RealHistoricalSessions();host.querySelector("[data-v3222-past-loading]")?.remove();draw()},0);
+}
+v3191OpenPastSessions=v3222OpenPastSessions;
+const v3222EnsurePastBase=typeof v3191EnsurePastButton==="function"?v3191EnsurePastButton:null;
+v3191EnsurePastButton=function(){v3222EnsurePastBase?.();const button=$("v3191PastSessionsBtn");if(button){button.onclick=v3222OpenPastSessions;button.setAttribute("aria-label","Open historical coaching sessions")}};
+
+// Old Board reconciliation must never rewrite the planned distance of a session
+// that already has delivery evidence. Planned and delivered are different truths.
+const v3222ReconcileDistanceBase=typeof v3180ReconcileDistance==="function"?v3180ReconcileDistance:null;
+if(v3222ReconcileDistanceBase)v3180ReconcileDistance=function(session,blocks){
+  const total=v3170Total?.(blocks)||0,started=Boolean(session&&(v3191IsCompleted?.(session)||(appState.attendance||[]).some(r=>r.session_id===session.id)||(appState.captures||[]).some(r=>r.session_id===session.id)||(appState.session_reviews||[]).some(r=>r.session_id===session.id)));
+  if(started)return total;return v3222ReconcileDistanceBase(session,blocks);
+};
+
+// -----------------------------------------------------------------------------
+// C. MODIFICATION GRAMMAR, NOT BLIND ARITHMETIC
+// Keep reduced work swimmable and preserve the coaching pattern. If a repetition
+// count changes, descend/build labels must be rewritten to fit the new count.
+// IM-ish odd distances use explicit coach-readable compositions.
+// -----------------------------------------------------------------------------
+function v3222FixDescPattern(line,reps){
+  let out=String(line||""),m=out.match(/\bdesc(?:end(?:ing)?)?\s*1\s*(?:-|–|to)\s*(\d+)\b/i);if(!m)return out;
+  const original=Math.max(2,Number(m[1])||0),n=Math.max(1,Number(reps)||1);if(n%original===0)return out;
+  let cycle=0;for(let candidate=Math.min(original,n);candidate>=2;candidate--)if(n%candidate===0){cycle=candidate;break}
+  if(!cycle)cycle=n>1?n:original;
+  return out.replace(m[0],`desc 1-${cycle}`);
+}
+function v3222FixDescFromSource(line,sourceLine,reps){
+  const source=String(sourceLine||""),m=source.match(/\bdesc(?:end(?:ing)?)?\s*1\s*(?:-|–|to)\s*(\d+)\b/i);if(!m)return v3222FixDescPattern(line,reps);
+  const original=Math.max(2,Number(m[1])||2),n=Math.max(1,Number(reps)||1);let cycle=original;
+  if(n%original!==0){cycle=0;for(let candidate=Math.min(original,n);candidate>=2;candidate--)if(n%candidate===0){cycle=candidate;break}if(!cycle)cycle=n>1?n:original}
+  const out=String(line||""),existing=out.match(/\bdesc(?:end(?:ing)?)?\s*1\s*(?:-|–|to)\s*\d+\b/i);return existing?out.replace(existing[0],`desc 1-${cycle}`):out;
+}
+function v3222MeaningfulImLine(athlete,line){
+  let out=String(line||""),name=v35NameKey?.(athlete?.full_name)||String(athlete?.full_name||"").toLowerCase();
+  // Only rewrite a distance that is explicitly being presented as IM. Do not
+  // invent stroke sequences for ordinary Free/Back/Breast/Fly work.
+  if(!/\bIM\b/i.test(out))return out;
+  out=out.replace(/\b75\s*IM\b/ig,name==="conor fischer"?"75 Back-Breast-Free":"75 Fly-Back-Breast");
+  out=out.replace(/\b125\s*IM\b/ig,"125 (100 IM + 25 Free)");
+  if(name==="mckenzie drage")out=out.replace(/\b150\s*IM\b/ig,"150 (100 IM + 50 IMO)");
+  return out;
+}
+function v3222RepairImComposition(athlete,sourceLine,adaptedLine,itemIndex=0){
+  let out=String(adaptedLine||""),source=String(sourceLine||"");if(!/\bIM\b/i.test(source))return out;
+  const direct=out.match(/^\s*(?:\d+\s*[x×]\s*)?(\d+(?:\.5)?)\b/),probe=v3170ParseItem?.(out,itemIndex),parsed=probe?.item||probe,d=Math.max(0,Number(direct?.[1])||Number(parsed?.distance)||0);if(!d)return out;
+  const name=v35NameKey?.(athlete?.full_name)||String(athlete?.full_name||"").toLowerCase();
+  const composition=d===75?(name==="conor fischer"?"Back-Breast-Free":"Fly-Back-Breast"):d===100?"IM":d===125?"(100 IM + 25 Free)":d===150?(name==="mckenzie drage"?"(100 IM + 50 IMO)":"IM"):"";
+  if(!composition)return out;
+  // Replace only the activity phrase immediately after the per-rep distance;
+  // preserve reps, descend/build grammar and the send-off.
+  const escaped=String(d).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),re=new RegExp(`(\\b${escaped}\\b)\\s+(.+?)(?=\\s+(?:desc(?:end(?:ing)?)?|build|on\\b|@|\\d+s\\s*rest|rest\\b)|$)`,`i`);
+  if(re.test(out))out=out.replace(re,(_,distance)=>`${distance} ${composition}`);
+  else if(!new RegExp(`\\b${escaped}\\s+${composition.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}`,"i").test(out))out=out.replace(new RegExp(`\\b${escaped}\\b`),`${d} ${composition}`);
+  return out;
+}
+
+function v3222PreserveCoachStroke(athlete,sourceLine,adaptedLine){
+  let out=String(adaptedLine||""),source=String(sourceLine||"");
+  const name=v35NameKey?.(athlete?.full_name)||String(athlete?.full_name||"").toLowerCase();if(name!=="conor fischer")return out;
+  // The inherited Conor profile used to force almost every generated line to
+  // Breaststroke. That destroys the actual set grammar. Keep the coach's
+  // written stroke/activity unless there is a current explicit athlete edit or
+  // a genuine kick-specific constraint. IM odd-distance composition is handled
+  // separately by v3222RepairImComposition.
+  if(/\bkick\b/i.test(source)||/\bIM\b/i.test(source))return out;
+  let desired="";
+  if(/\bbackstroke\b|\bback\b/i.test(source))desired="Backstroke";
+  else if(/\bfreestyle\b|\bfree\b|\bfr\b/i.test(source))desired="Freestyle";
+  else if(/\bbutterfly\b|\bfly\b/i.test(source))desired="Butterfly";
+  else if(/\bchoice\b/i.test(source))desired="Choice";
+  else if(/#1\b/i.test(source))desired="#1";
+  else if(/\bbreaststroke\b|\bbreast\b|\bbr\b/i.test(source))desired="Breaststroke";
+  if(desired&&desired!=="Breaststroke"){
+    out=out.replace(/(\b\d+(?:\.5)?\b)\s+Breaststroke\b/i,`$1 ${desired}`)
+           .replace(/\s*[·-]\s*Breaststroke\b/ig,"");
+  }else if(!desired){
+    // No stroke was prescribed: do not invent one merely because this swimmer
+    // has a historical stroke preference.
+    out=out.replace(/\s*[·-]\s*Breaststroke\b/ig,"").trim();
+  }
+  return out;
+}
+const v3222AdaptLineBase=typeof v3180AdaptLine==="function"?v3180AdaptLine:null;
+if(v3222AdaptLineBase)v3180AdaptLine=function(athlete,session,block,item,itemIndex,providedLine="",sourceLabel=""){
+  const row=v3222AdaptLineBase(athlete,session,block,item,itemIndex,providedLine,sourceLabel);if(!row)return row;
+  try{const parsedResult=v3170ParseItem?.(row.line,itemIndex),parsed=parsedResult?.item||parsedResult,directReps=String(row.line||"").match(/^\s*(\d+)\s*[x×]\s*\d/),reps=Math.max(1,Number(directReps?.[1])||Number(parsed?.reps)||1);let line=v3222FixDescPattern(row.line,reps);line=v3222MeaningfulImLine(athlete,line);line=v3222RepairImComposition(athlete,providedLine||item?.raw||item?.instruction||"",line,itemIndex);line=v3222PreserveCoachStroke(athlete,providedLine||item?.raw||item?.instruction||"",line);if(line!==row.line){const nextProbe=v3170ParseItem?.(line,itemIndex),next=nextProbe?.item||nextProbe;row.line=line;if(next)row.distance=(Number(next.reps)||0)*(Number(next.distance)||0)}}catch{}
+  return row;
+};
+
+// The adaptation function itself has been wrapped by many historical layers.
+// Post-process the FINAL rows here so old captured AdaptLine functions cannot
+// leak impossible descend grammar or mismatched IM compositions back onto Board.
+function v3222NoLegShortSubstitution(athlete,item){
+  const source=v3220Line?.(item)||v3222Text(item?.raw||item?.instruction||item?.label),constraint=v3220ConstraintText?.(athlete)||"";
+  if(!/no[_ -]?leg|no functional use of legs/.test(constraint)||!/(?:kick|fins?)/i.test(source))return null;
+  const parsedProbe=v3170ParseItem?.(source,0),parsed=parsedProbe?.item||parsedProbe,d=Number(parsed?.distance)||Number((source.match(/\b(12\.5|15|20|25|35|50)\s*m?\b/i)||[])[1])||0;
+  if(!d||d>50)return null;
+  let line=source;
+  line=line.replace(/\bkick\s*(?:with\s*)?fins?\b/ig,"Pull with paddles");
+  line=line.replace(/\bkick\b/ig,"Pull");
+  line=line.replace(/\bfins?\b/ig,match=>/pull/i.test(line)?"paddles":"Pull with paddles");
+  line=line.replace(/\bpull\s+with\s+paddles\s+paddles\b/ig,"Pull with paddles").replace(/\bpull\s+pull\b/ig,"Pull").replace(/\s{2,}/g," ").trim();
+  const nextProbe=v3170ParseItem?.(line,0),next=nextProbe?.item||nextProbe;
+  return{line,distance:(Number(next?.reps)||Number(parsed?.reps)||1)*(Number(next?.distance)||d),target:"",clock:"Same team window",source:"Same group window · no-leg substitution"};
+}
+
+const v3222AdaptationBase=typeof v3180Adaptation==="function"?v3180Adaptation:null;
+if(v3222AdaptationBase)v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3222AdaptationBase(athlete,session,block,blockIndex);if(!result)return result;
+  const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let ri=-1;
+  for(let i=0;i<rows.length;i++){
+    if(rows[i]?.cue)continue;ri++;const item=runnable[ri];if(!item)continue;
+    const itemIndex=v34Array(block?.items).indexOf(item),explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,ri,itemIndex);if(explicit)continue;
+    const noLegShort=v3222NoLegShortSubstitution(athlete,item);if(noLegShort){rows[i]={...rows[i],...noLegShort};continue}
+    const direct=String(rows[i].line||"").match(/^\s*(\d+)\s*[x×]\s*(\d+(?:\.5)?)/),reps=Math.max(1,Number(direct?.[1])||1);
+    let line=v3222FixDescFromSource(rows[i].line,item?.raw||item?.instruction||"",reps);line=v3222RepairImComposition(athlete,item?.raw||item?.instruction||"",line,itemIndex);line=v3222PreserveCoachStroke(athlete,item?.raw||item?.instruction||"",line);
+    if(line!==rows[i].line){
+      try{const regenerated=v3180AdaptLine(athlete,session,block,item,itemIndex,line,rows[i].source||"Stimulus fit");let finalLine=regenerated?.line||line;finalLine=v3222RepairImComposition(athlete,item?.raw||item?.instruction||"",finalLine,itemIndex);finalLine=v3222PreserveCoachStroke(athlete,item?.raw||item?.instruction||"",finalLine);rows[i]={...rows[i],...regenerated,line:finalLine}}catch{rows[i].line=line}
+    }
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;
+  return {...result,rows,total,repeat};
+};
+
+// -----------------------------------------------------------------------------
+// D. LIVE GROUP EDIT = CANONICAL SESSION TRUTH IMMEDIATELY
+// The Board edit is saved locally first, written back to the session workout
+// source, and dependent targets/modifications are recalculated from that source.
+// -----------------------------------------------------------------------------
+function v3222CanonicalWorkout(session){
+  const blocks=(typeof v3123SessionBlocks==="function"?v3123SessionBlocks(session):(appState.session_blocks||[]).filter(row=>row.session_id===session?.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)))||[];
+  return blocks.map(block=>{const title=v3222Text(block.title)||v32BlockLabel?.(block.block_type)||"Set",items=v34Array(block.items).map(item=>v3222Text(item.raw||item.instruction||item.label)).filter(Boolean),repeat=Math.max(1,Number(block.repeat_count)||1);return [title,...items,repeat>1?`${repeat} Rounds`:""].filter(Boolean).join("\n")}).filter(Boolean).join("\n\n");
+}
+function v3222CommitWorkoutFromBlocks(session){
+  if(!session)return;const source=v3222CanonicalWorkout(session);if(!source)return;session.workout=source;session.updated_at=nowIso();queueRecord?.("sessions",session.id);saveState(appState);try{v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3195ClearBoardCaches?.()}catch{}
+}
+const v3222ApplyGroupEditBase=typeof v3203ApplyGroupEdit==="function"?v3203ApplyGroupEdit:null;
+if(v3222ApplyGroupEditBase)v3203ApplyGroupEdit=function(payload){
+  // v3.20.6 already replaces the exact source line, persists canonical blocks and
+  // records the original→changed evidence. Do not serialise the entire block tree
+  // a second time here: that was capable of duplicating live-added work.
+  v3222MarkExplicit(1800);const out=v3222WithPaint(()=>v3222ApplyGroupEditBase(payload));
+  if(out&&payload?.session){try{v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3195ClearBoardCaches?.()}catch{}saveState(appState)}
+  v3222MarkExplicit(1200);v3222WithPaint(()=>{try{if(typeof v3205PaintBoardNow==="function")v3205PaintBoardNow({allowWhileInput:true});else v3201RequestBoardPaint?.(true)}catch{try{v3222PaintBoardBase?.()}catch{}}});return out;
+};
+const v3222SaveIndividualEditBase=typeof v3203SaveIndividualEdit==="function"?v3203SaveIndividualEdit:null;
+if(v3222SaveIndividualEditBase)v3203SaveIndividualEdit=function(payload){v3222MarkExplicit(1600);const out=v3222SaveIndividualEditBase(payload);v3222MarkExplicit(900);v3222WithPaint(()=>{if(typeof v3205PaintBoardNow==="function")v3205PaintBoardNow({allowWhileInput:true});else v3201RequestBoardPaint?.(true)});return out};
+
+// -----------------------------------------------------------------------------
+// E. BUILD / SYNC IDENTITY — one current label everywhere.
+// -----------------------------------------------------------------------------
+function v3222SyncTruth(){const pending=v34Array(appState.pending).length,failures=typeof v3111Failures==="function"?v3111Failures().length:v34Array(appState.settings?.v3111_sync_failures).length;return{pending,failures,clean:pending===0&&failures===0}}
+const v3222SyncTextBase=typeof v3103SyncText==="function"?v3103SyncText:null;
+v3103SyncText=function(){const truth=v3222SyncTruth();if(truth.failures)return `${truth.pending} pending · ${truth.failures} sync issue${truth.failures===1?"":"s"}`;if(truth.pending)return `${truth.pending} saving`;return v3222SyncTextBase?.()||"Cloud up to date"};
+function v3222Brand(){
+  const title=`McLay Swimming OS — v${V3222_VERSION} Live Board Quarantine`,subtitle=`v${V3222_VERSION} · live Board quarantined · canonical session/edit truth · modification grammar`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3222_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3222_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3222_VERSION}`;badge.dataset.build=V3222_BUILD;badge.title=V3222_BUILD}
+  document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V3222_BUILD);
+}
+const v3222RenderSyncDetailsBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;
+if(v3222RenderSyncDetailsBase)v3111RenderSyncDetails=function(){const out=v3222RenderSyncDetailsBase();v3222Brand();return out};
+const v3222RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;
+if(v3222RenderLegacySyncBase)v36RenderSyncDetails=function(){const out=v3222RenderLegacySyncBase();v3222Brand();return out};
+async function v3222RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3222_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.22 service worker update",error)}}
+try{v3221BrandObserver?.disconnect?.()}catch{}
+const v3222BrandObserver=new MutationObserver(()=>queueMicrotask(v3222Brand));if(document.querySelector("title"))v3222BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3222BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+
+window.v3222Debug={version:V3222_VERSION,build:V3222_BUILD,liveBoard:v3222LiveBoard,boardReady:v3222BoardReady,deferred:()=>({cloud:v3222DeferredCloud,pull:v3222DeferredPull}),past:v3222RealHistoricalSessions,sessionEvidence:v3222SessionEvidence,sessionStarted:v3222SessionStarted,trimLegacy:v3222TrimLegacyRepair,alignHistorical:v3222AlignKnownHistoricalDistance,desc:v3222FixDescPattern,descFromSource:v3222FixDescFromSource,im:v3222MeaningfulImLine,repairIm:v3222RepairImComposition,preserveStroke:v3222PreserveCoachStroke,noLegShort:v3222NoLegShortSubstitution,canonicalWorkout:v3222CanonicalWorkout,syncTruth:v3222SyncTruth,explicit:()=>v3222Explicit(),bootSafe:()=>({active:v3222BootSafeActive,snapshot:v3222BootSafeSnapshot}),forcePaint:()=>{v3222MarkExplicit(1200);return v3222WithPaint(()=>v3222PaintBoardBase?.())}};
+v3222Brand();
+// Cheap selection-only assertions across the inherited 4.7–6s startup window.
+// They do not paint, sync or write the whole state; they only reject a stale
+// boot selection until the coach explicitly touches a control.
+for(const delay of [60,450,1400,3200,5200,7000])setTimeout(v3222ApplyBootSafe,delay);
+setTimeout(()=>{v3222BootSafeActive=false},8100);
+setTimeout(()=>{v3222Brand();v3222RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3222Brand,900);setTimeout(v3222Brand,2800);
