@@ -22217,3 +22217,125 @@ v3180Adaptation=function(athlete,session,block,blockIndex){
   return {...result,rows,total,repeat};
 };
 Object.assign(window.v3220Debug||{}, {sameLineNorm:v3220SameLineNorm});
+
+// =============================================================================
+// McLay Swimming OS v3.20.21 — Historical Session Truth
+// 12 Aug 2026. Narrow recovery on top of v3.20.20:
+// - Past means real historical coaching sessions, not only sessions successfully
+//   finished through the Finish workflow.
+// - The saved workout / accepted canonical blocks are the Board source of truth.
+//   A later review/note/video transcription can never replace the workout when
+//   reopening an historical session.
+// - Historical sessions with a valid saved workout can be viewed even if their
+//   session_blocks were never persisted or were damaged by an older Finish path.
+// No live-phone Board/state/capture behaviour from v3.20.20 is rewritten here.
+// =============================================================================
+const V3221_VERSION="3.20.21";
+const V3221_BUILD="3.20.21-historical-session-truth-20260812";
+const V3221_CORE="20260812-core3221";
+
+function v3221Text(value){return String(value??"").trim()}
+function v3221Today(){try{return localIsoDate(new Date())}catch{return new Date().toISOString().slice(0,10)}}
+function v3221Generated(session){return typeof v3191Generated==="function"?v3191Generated(session):String(session?.id||"").startsWith("session-slot-")}
+function v3221Completed(session){return typeof v3191IsCompleted==="function"?v3191IsCompleted(session):Boolean(session&&String(session.status||"").toLowerCase()==="completed")}
+function v3221Historical(session){
+  if(!session||session.status==="cancelled")return false;
+  if(v3221Completed(session))return true;
+  const date=v3221Text(session.session_date),today=v3221Today();
+  if(date&&date<today)return true;
+  if(date&&date>today)return false;
+  // Same-day AM becomes historical once the day has moved into PM. Same-day PM
+  // remains live unless it has actually been completed.
+  return date===today&&String(session.day_part||"").toUpperCase()==="AM"&&new Date().getHours()>=12;
+}
+function v3221HistoryEvidence(session){
+  if(!session)return false;
+  if(v3221Text(session.workout)&&!/^(?:session photo attached\s*[—-]\s*transcription pending|transcription pending)$/i.test(v3221Text(session.workout)))return true;
+  if(Number(session.planned_distance)>0)return true;
+  const id=session.id;
+  return ["session_blocks","attendance","captures","timed_sets","session_reviews","session_transcriptions"].some(key=>(appState[key]||[]).some(row=>row.session_id===id));
+}
+function v3221PastSessions(){
+  const pool=typeof v3191SessionPool==="function"?v3191SessionPool():(appState.sessions||[]);
+  return pool.filter(session=>!v3221Generated(session)&&v3221Historical(session)&&v3221HistoryEvidence(session))
+    .sort((a,b)=>String(b.session_date||"").localeCompare(String(a.session_date||""))||(typeof v3143PartRank==="function"?v3143PartRank(b)-v3143PartRank(a):String(b.day_part||"").localeCompare(String(a.day_part||"")))||String(b.updated_at||"").localeCompare(String(a.updated_at||"")));
+}
+v3191PastSessions=v3221PastSessions;
+
+// Planned workout truth. The old resolver chose the newest transcription before
+// session.workout, so a post-session voice/review transcript could become the
+// reopened Board and turn a 4,250m session into a 0m paragraph. Never do that.
+function v3221PlannedTranscript(session){
+  const rows=(appState.session_transcriptions||[]).filter(row=>row.session_id===session?.id&&v3221Text(row.raw_text));
+  const planned=rows.filter(row=>{
+    const purpose=v3221Text(row.purpose).toLowerCase(),source=v3221Text(row.source_type).toLowerCase();
+    if(/actual|review|finish|note|observation|post/.test(purpose))return false;
+    return /planned|plan|workout|session/.test(purpose)||(!purpose&&/photo|voice/.test(source));
+  });
+  return planned.sort((a,b)=>(Date.parse(b.updated_at||b.created_at||0)||0)-(Date.parse(a.updated_at||a.created_at||0)||0))[0]||null;
+}
+function v3221WorkoutSource(session){
+  if(!session)return"";
+  const workout=v3221Text(session.workout),placeholder=/^(?:session photo attached\s*[—-]\s*transcription pending|transcription pending)$/i.test(workout);
+  if(workout&&!placeholder)return workout;
+  return v3221Text(v3221PlannedTranscript(session)?.raw_text);
+}
+v3123SourceText=v3221WorkoutSource;
+
+// Non-destructive history recovery. If an old session has lost/invalid stored
+// blocks but still has its real saved workout, render fresh blocks from that
+// source. Do not write or delete cloud rows just by opening history.
+const v3221BoardBlocksBase=v3170BoardBlocks;
+v3170BoardBlocks=function(session){
+  if(!session)return[];
+  const base=v3221BoardBlocksBase?.(session)||[],baseTotal=typeof v3200Distance==="function"?v3200Distance(base):base.reduce((sum,b)=>sum+(Number(v35BlockDistance?.(b))||0),0);
+  if(base.length&&baseTotal>0&&!v3204InvalidLockedBlocks?.(base))return base;
+  const source=v3221WorkoutSource(session);
+  if(!source)return base;
+  const fresh=(typeof v3206ParseBlocks==="function"?v3206ParseBlocks(source):typeof v3200ParseBlocks==="function"?v3200ParseBlocks(source):[])||[];
+  const total=typeof v3200Distance==="function"?v3200Distance(fresh):0;
+  if(fresh.length&&total>0&&!v3204InvalidLockedBlocks?.(fresh))return fresh.map((block,index)=>({...block,id:base[index]?.id||block.id,v3221_history_source_recovery:true}));
+  return base;
+};
+v3125BoardBlocks=v3170BoardBlocks;
+
+function v3221HistoryStatus(session){
+  if(v3221Completed(session))return"Finished";
+  if((appState.session_reviews||[]).some(row=>row.session_id===session?.id))return"Review saved · session not finished";
+  if(v3221Text(session?.workout)||Number(session?.planned_distance)>0)return"Workout saved · session not finished";
+  return"Historical session";
+}
+function v3221HistoryDistance(session){
+  const review=typeof sessionReview==="function"?sessionReview(session?.id):null;
+  return Number(review?.actual_distance)||Number(session?.planned_distance)||0;
+}
+function v3221OpenPastSessions(){
+  const rows=v3221PastSessions();
+  const html=rows.length?`<div class="v3191-past-list v3221-history-list">${rows.map(session=>{const review=typeof sessionReview==="function"?sessionReview(session.id):null,note=v3221Text(review?.what_changed).replace(/^\[[^\]]+\]\s*/,"");return `<button type="button" data-v3221-history="${escapeHtml(session.id)}"><span><strong>${escapeHtml(sessionLabel(session))}</strong><small>${escapeHtml(session.title||sessionSquads(session).join(" + "))} · ${escapeHtml(v3221HistoryStatus(session))}</small></span><b>${v3221HistoryDistance(session).toLocaleString()}m</b>${note?`<em>${escapeHtml(note.slice(0,100))}</em>`:""}</button>`}).join("")}</div>`:'<div class="help">No historical coaching sessions are saved yet.</div>';
+  const dialog=v3170OpenDialog("Past sessions",html);
+  dialog.querySelectorAll("[data-v3221-history]").forEach(button=>button.onclick=()=>{const id=button.dataset.v3221History;dialog.close();dialog.remove();setSelectedSession(id);showView("deck",{force:true,v3220Explicit:true});v3170PaintBoard?.()});
+}
+v3191OpenPastSessions=v3221OpenPastSessions;
+
+const v3221EnsurePastBase=v3191EnsurePastButton;
+v3191EnsurePastButton=function(){v3221EnsurePastBase?.();const button=$("v3191PastSessionsBtn");if(button){button.onclick=v3221OpenPastSessions;button.setAttribute("aria-label","Open historical coaching sessions")}};
+
+// Rebind an existing desktop Past button immediately; renderActiveContext will
+// continue to call the overridden ensure function after future renders.
+setTimeout(()=>v3191EnsurePastButton?.(),0);
+setTimeout(()=>v3191EnsurePastButton?.(),500);
+
+function v3221Brand(){
+  const title=`McLay Swimming OS — v${V3221_VERSION} Historical Session Truth`,subtitle=`v${V3221_VERSION} · protected poolside core · historical sessions restored · workout source truth`;
+  if(document.title!==title)document.title=title;
+  const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V3221_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3221_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3221_VERSION}`;badge.dataset.build=V3221_BUILD;badge.title=V3221_BUILD}
+}
+try{v3220BrandObserver?.disconnect?.()}catch{}
+const v3221BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3221_VERSION} Historical Session Truth`||document.querySelector(".header-subtitle")?.textContent!==`v${V3221_VERSION} · protected poolside core · historical sessions restored · workout source truth`)queueMicrotask(v3221Brand)});
+if(document.querySelector("title"))v3221BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v3221BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+async function v3221RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3221_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.21 service worker update",error)}}
+window.v3221Debug={version:V3221_VERSION,build:V3221_BUILD,historical:v3221Historical,past:v3221PastSessions,source:v3221WorkoutSource,plannedTranscript:v3221PlannedTranscript,blocks:session=>v3170BoardBlocks(session)};
+v3221Brand();setTimeout(()=>{v3221Brand();v3221RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3221Brand,900);setTimeout(v3221Brand,2800);
