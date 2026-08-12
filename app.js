@@ -21482,3 +21482,738 @@ const v3218RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36Rend
 
 window.v3218Debug={version:V3218_VERSION,build:V3218_BUILD,coachAnswer:v3218CoachAnswerHtml,agePathway:v3218AgePathwayHtml,forwardSteps:v3218ForwardSteps,nationalForPb:v3218NationalForPb,pathOpen:()=>v3218OpenPathwayAthlete,setPathOpen:v3218SetPathwayOpen,clearPathOpen:v3218ClearPathwayOpen,qualIndex:v3218QualifyingIndex,hydrate:v3218HydrateSelectedAthlete,copy:v3218SyncCopyText,repair:v3216RepairLaneSyncState};
 v3218Brand();setTimeout(()=>{v3218Brand();v3218FixSyncDiagnostics();v3218RegisterWorker();if(v3218ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);setTimeout(v3218Brand,900);setTimeout(v3218Brand,2800);
+
+// =============================================================================
+// McLay Swimming OS v3.20.19 — Poolside Stability Recovery
+// 11 Aug 2026. Field repair after real Tue PM deck use.
+// Entire v3.20.18 app.js is preserved above unchanged.
+// Priorities:
+// - phone Capture/Note/Voice/Video are local-first and never perform heavy media
+//   decoding/transcription or full-page rerenders in the live coaching path;
+// - Finish is always reachable on phone;
+// - large canonical blocks gain phone-only subsection navigation without changing
+//   saved session structure;
+// - modified aerobic lines recover valid Freestyle T400 targets when the written
+//   zone is explicit but no stroke was written;
+// - poolside cloud work stays deferred until the coach leaves the live views.
+// =============================================================================
+const V3219_VERSION="3.20.19";
+const V3219_BUILD="3.20.19-poolside-stability-capture-recovery-20260811";
+const V3219_CORE="20260811-core3219";
+let v3219IdleSyncTimer=null,v3219VoiceRecorder=null,v3219VoiceStream=null,v3219VoiceChunks=[],v3219VoicePreviewUrl=null;
+
+function v3219Phone(){try{return typeof v3215Phone==="function"?v3215Phone():window.matchMedia?.("(max-width: 900px), (pointer: coarse)")?.matches||window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3219View(){return document.querySelector(".view.active")?.id||"deck"}
+function v3219PoolsideView(){return ["deck","capture","finish","times"].includes(v3219View())}
+function v3219Session(){return selectedSession?.()||null}
+function v3219BlockIndex(){
+  if(v3219Phone()&&v3219View()==="deck"){const cards=[...document.querySelectorAll(".v3205-board-block[data-v3180-block],.v3180-board-block[data-v3180-block]")].filter(card=>{const r=card.getBoundingClientRect();return r.bottom>72&&r.top<window.innerHeight-72});if(cards.length){const anchor=Math.max(90,window.innerHeight*.32),best=cards.sort((a,b)=>Math.abs(a.getBoundingClientRect().top-anchor)-Math.abs(b.getBoundingClientRect().top-anchor))[0],n=Number(best?.dataset?.v3180Block);if(Number.isFinite(n))return Math.max(0,n)}}
+  return Math.max(0,Number(appState?.settings?.v3129_active_block_index)||0)
+}
+function v3219Status(text,mode="good"){try{updateStatus?.(text,mode)}catch{}const node=document.querySelector("[data-v3219-status]");if(node)node.textContent=text}
+
+// -----------------------------------------------------------------------------
+// 1. Poolside sync is replication, not a tap blocker. Live phone views never run
+// cloud work in the foreground. Sync resumes after leaving the live views.
+// -----------------------------------------------------------------------------
+const v3219SyncBase=syncIfPossible;
+syncIfPossible=async function(...args){
+  if(v3219Phone()&&document.visibilityState==="visible"&&v3219PoolsideView())return{deferred:true,poolside:true};
+  return v3219SyncBase?.(...args);
+};
+function v3219ScheduleIdleSync(delay=12000){
+  clearTimeout(v3219IdleSyncTimer);
+  v3219IdleSyncTimer=setTimeout(()=>{
+    v3219IdleSyncTimer=null;
+    if(v3219Phone()&&document.visibilityState==="visible"&&v3219PoolsideView()){v3219ScheduleIdleSync(12000);return}
+    Promise.resolve(v3219SyncBase?.()).catch(()=>{});
+  },Math.max(4000,Number(delay)||0));
+  return true;
+}
+scheduleFastSync=function(){return v3219ScheduleIdleSync(12000)};
+
+// -----------------------------------------------------------------------------
+// 2. Phone Capture list is metadata-only while coaching. The old renderer opened
+// every IndexedDB media blob / signed URL just to show the page, which grew more
+// expensive as notes/videos accumulated.
+// -----------------------------------------------------------------------------
+const v3219RenderCapturesBase=renderCaptures;
+function v3219CaptureTypeLabel(row){return row.capture_type==="video"?"Video saved":row.capture_type==="photo"?"Photo saved":row.capture_type==="voice"?"Voice saved":"Note"}
+function v3219RenderCapturesLite(){
+  const host=$("captureList"),session=v3219Session();if(!host)return;
+  const items=(appState.captures||[]).filter(row=>row.session_id===session?.id).sort(byUpdated).slice(0,14);
+  host.innerHTML=items.length?items.map(row=>{const athlete=(appState.athletes||[]).find(a=>a.id===row.athlete_id),block=(appState.session_blocks||[]).find(b=>b.id===row.session_block_id);return `<div class="list-item v3219-capture-lite"><strong>${escapeHtml(athlete?.full_name||"Whole session / group")}</strong><p>${escapeHtml(row.capture_type==="text"?(row.text_content||"Note saved"):v3219CaptureTypeLabel(row))}</p><div class="list-meta">${escapeHtml(block?.title||"Session")} · ${escapeHtml(new Date(row.created_at||row.updated_at||Date.now()).toLocaleTimeString("en-NZ",{hour:"2-digit",minute:"2-digit"}))}</div></div>`}).join(""):'<div class="help">No captures for this session yet.</div>';
+}
+renderCaptures=async function(){if(v3219Phone()&&v3219View()==="capture"){v3219RenderCapturesLite();return true}return v3219RenderCapturesBase?.()};
+
+function v3219CaptureTargets(){try{return v3180CaptureTargets?.()||[$("captureAthlete")?.value||null]}catch{return[$("captureAthlete")?.value||null]}}
+function v3219CloneCapture(base,athleteId){const row={...base,id:uid("capture"),athlete_id:athleteId||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",row);queueRecord("captures",row.id);return row}
+function v3219CaptureContextBase(kind,localId,mime,text){return{session_id:v3219Session()?.id,capture_type:kind,text_content:text||`${kind} saved locally${v33CaptureBlockPrefix?.()||""}`,session_block_id:$("captureBlock")?.value||null,media_path:null,media_local_id:localId||null,mime_type:mime||null}}
+
+function v3219SaveTextCapture(event){
+  event?.preventDefault?.();event?.stopImmediatePropagation?.();
+  const text=$("captureText")?.value.trim();if(!text){alert("Add a note first.");return}
+  const base=v3219CaptureContextBase("text",null,"text/plain",`[${$("captureCategory")?.value||"note"}]${v33CaptureBlockPrefix?.()||""} ${text}`);
+  for(const id of v3219CaptureTargets())v3219CloneCapture(base,id);
+  saveState(appState);if($("captureText"))$("captureText").value="";v3219RenderCapturesLite();v3219Status("Note saved locally · cloud sync deferred until off the live deck");v3219ScheduleIdleSync();
+}
+
+async function v3219SavePhoneMedia(file,kind){
+  if(!file||!v3219Session())return;
+  v3219Status(`Saving ${kind} locally…`);
+  const localId=await saveMediaBlob(file,kind,file.name||`${kind}-${Date.now()}`),targets=v3219CaptureTargets(),base=v3219CaptureContextBase(kind,localId,file.type||"application/octet-stream",`${kind==="photo"?"Poolside photo":"Poolside video"}${v33CaptureBlockPrefix?.()||""} · saved locally`);
+  const rows=targets.map(id=>v3219CloneCapture(base,id));
+  saveState(appState);v3219RenderCapturesLite();v3219ScheduleIdleSync();
+  if(kind==="video"){
+    // Deliberately DO NOT decode video audio or transcribe on the live phone.
+    // v3.20.18 called AudioContext.decodeAudioData + OfflineAudioContext over up
+    // to five minutes here, then rendered the app again. Preserve the video and
+    // let desktop/manual review process commentary later.
+    appState.settings.v3219_deferred_video_ids=[...new Set([...(appState.settings.v3219_deferred_video_ids||[]),...rows.map(r=>r.id)])].slice(-100);saveState(appState);
+    v3219Status("Video saved locally · commentary processing deferred so coaching stays responsive");
+  }else v3219Status("Photo saved locally · cloud sync deferred until off the live deck");
+}
+
+function v3219MakeTranscriptShell(capture){return{id:uid("transcript"),session_id:capture.session_id,capture_id:capture.id,athlete_id:capture.athlete_id,session_block_id:capture.session_block_id||null,source_type:"voice",purpose:$("voiceNoteMode")?.value||"quick_note",status:"audio_saved",raw_text:"",structured_blocks:[],structured_data:{v3219_local_first:true},error_message:"",created_at:nowIso(),updated_at:nowIso()}}
+async function v3219StartVoice(event){
+  event?.preventDefault?.();event?.stopImmediatePropagation?.();if(v3219VoiceRecorder&&v3219VoiceRecorder.state!=="inactive")return;
+  try{
+    v3219VoiceStream=await navigator.mediaDevices.getUserMedia({audio:true});v3219VoiceChunks=[];v3219VoiceRecorder=new MediaRecorder(v3219VoiceStream);
+    v3219VoiceRecorder.ondataavailable=e=>{if(e.data?.size)v3219VoiceChunks.push(e.data)};
+    v3219VoiceRecorder.onstop=async()=>{const blob=new Blob(v3219VoiceChunks,{type:v3219VoiceRecorder.mimeType||"audio/webm"});v3219VoiceStream?.getTracks?.().forEach(t=>t.stop());v3219Status("Saving voice locally…");const localId=await saveMediaBlob(blob,"voice","voice-note.webm"),base=v3219CaptureContextBase("voice",localId,blob.type,`Voice note${v33CaptureBlockPrefix?.()||""} · saved locally`);for(const id of v3219CaptureTargets()){const capture=v3219CloneCapture(base,id),tr=v3219MakeTranscriptShell(capture);upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id)}saveState(appState);v3219RenderCapturesLite();v3219ScheduleIdleSync();if($("voicePreview")){try{if(v3219VoicePreviewUrl)URL.revokeObjectURL(v3219VoicePreviewUrl)}catch{}v3219VoicePreviewUrl=URL.createObjectURL(blob);$("voicePreview").src=v3219VoicePreviewUrl;$("voicePreview").hidden=false}v3219Status("Voice saved locally · transcription deferred until off the live deck");if($("startVoiceBtn"))$("startVoiceBtn").disabled=false;if($("stopVoiceBtn"))$("stopVoiceBtn").disabled=true};
+    v3219VoiceRecorder.start();if($("startVoiceBtn"))$("startVoiceBtn").disabled=true;if($("stopVoiceBtn"))$("stopVoiceBtn").disabled=false;v3219Status("Recording voice note");
+  }catch(error){v3219Status(error?.message||"Microphone unavailable","error")}
+}
+function v3219StopVoice(event){event?.preventDefault?.();event?.stopImmediatePropagation?.();if(v3219VoiceRecorder&&v3219VoiceRecorder.state!=="inactive")v3219VoiceRecorder.stop()}
+
+function v3219ReplaceInput(id,kind){
+  const old=$(id);if(!old||old.dataset.v3219==="1")return old;const next=old.cloneNode(true);next.dataset.v3219="1";next.dataset.v3180="1";old.replaceWith(next);next.addEventListener("change",async event=>{event.preventDefault();event.stopImmediatePropagation();const file=event.target.files?.[0];event.target.value="";await v3219SavePhoneMedia(file,kind)},true);return next;
+}
+function v3219ReplaceButton(id,handler){const old=$(id);if(!old||old.dataset.v3219==="1")return old;const next=old.cloneNode(true);next.dataset.v3219="1";old.replaceWith(next);next.addEventListener("click",handler,true);return next}
+const v3219InstallCaptureBase=typeof v3180InstallCaptureHandlers==="function"?v3180InstallCaptureHandlers:null;
+v3180InstallCaptureHandlers=function(){
+  if(!v3219Phone())return v3219InstallCaptureBase?.();
+  const save=$("saveTextCaptureBtn");if(save){try{save.removeEventListener("click",v3180SaveTextCapture,true)}catch{}if(save.dataset.v3219!=="1"){save.dataset.v3219="1";save.addEventListener("click",v3219SaveTextCapture,true)}}
+  v3219ReplaceInput("photoInput","photo");v3219ReplaceInput("galleryPhotoInput","photo");v3219ReplaceInput("videoInput","video");v3219ReplaceButton("startVoiceBtn",v3219StartVoice);v3219ReplaceButton("stopVoiceBtn",v3219StopVoice);return true;
+};
+
+// Open media only after the v3.20.19 phone handlers are installed. The old
+// v3.20.12 shortcut clicked the input immediately after navigation, which could
+// beat requestAnimationFrame and fire the legacy video decoder/transcriber.
+const v3219OpenBlockMediaBase=typeof v3212OpenBlockMedia==="function"?v3212OpenBlockMedia:null;
+v3212OpenBlockMedia=function(session,blockIndex,kind){
+  if(!v3219Phone())return v3219OpenBlockMediaBase?.(session,blockIndex,kind);
+  if(!session)return;
+  v3180OpenCaptureForBlock?.(session,blockIndex,{mode:"quick_note",media:kind==="voice"?"audio":kind});
+  v3180InstallCaptureHandlers?.();
+  requestAnimationFrame(()=>{v3180InstallCaptureHandlers?.();if(kind==="video")$("videoInput")?.click();if(kind==="voice")$("startVoiceBtn")?.click()});
+};
+
+// -----------------------------------------------------------------------------
+// 3. Quick Note stays inside the current Board DOM. The old phone path saved the
+// note and then forced a complete Board cache clear + repaint 180ms later.
+// -----------------------------------------------------------------------------
+function v3219OpenQuickNote(blockIndex=null){
+  const session=v3219Session();if(!session)return;document.querySelector("#v3199QuickNote")?.remove();document.body.insertAdjacentHTML("beforeend",v3199QuickNoteHtml(session,blockIndex));const host=$("v3199QuickNote"),scope=host?.querySelector("[data-v3199-note-scope]"),athleteRow=host?.querySelector("[data-v3199-athlete-row]");if(!host)return;host.querySelector("[data-v3199-close]").onclick=()=>host.remove();scope.onchange=()=>{athleteRow.hidden=scope.value!=="swimmer"};host.querySelector("[data-v3199-save-note]").onclick=()=>{const text=v3212Text(host.querySelector("[data-v3199-note-text]").value);if(!text)return host.querySelector("[data-v3199-note-status]").textContent="Add a note first.";const blocks=v3170BoardBlocks(session),block=Number.isFinite(Number(blockIndex))?blocks[Number(blockIndex)]:null,scopeValue=scope.value,athleteId=scopeValue==="swimmer"?host.querySelector("[data-v3199-note-athlete]").value:null,squad=typeof v3195Mode==="function"?v3195Mode(session):appState.settings.selected_squad||"Mixed",prefix=scopeValue==="block"?`[Block: ${block?.title||"Current block"}]`:scopeValue==="squad"?`[Group: ${squad}]`:scopeValue==="swimmer"?"[Swimmer note]":"[Session note]",blockId=block&&scopeValue!=="session"?block.id||null:null,record={id:uid("capture"),session_id:session.id,athlete_id:athleteId||null,capture_type:"text",text_content:`${prefix} ${text}`,session_block_id:blockId,media_path:null,media_local_id:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",record);queueRecord("captures",record.id);saveState(appState);v3219ScheduleIdleSync();host.querySelector("[data-v3199-note-status]").textContent="Saved locally.";setTimeout(()=>host.remove(),140)};requestAnimationFrame(()=>host.querySelector("[data-v3199-note-text]")?.focus())
+}
+if(v3219Phone())try{v3199OpenQuickNote=v3219OpenQuickNote}catch{}
+
+// -----------------------------------------------------------------------------
+// 4. Finish must always be reachable. v3.18.0 intentionally hid both the sidebar
+// and mobile Finish nav; that is reversed on phone and a fixed current-block rail
+// keeps Note / Voice / Video / Edit / Finish within one tap.
+// -----------------------------------------------------------------------------
+const v3219LogoBase=typeof v3180Logo==="function"?v3180Logo:null;
+v3180Logo=function(){const out=v3219LogoBase?.();if(v3219Phone())document.querySelectorAll(".sidebar .nav-button[data-view='finish'],.mobile-nav .nav-button[data-view='finish']").forEach(button=>button.hidden=false);return out};
+function v3219EnsureActionRail(){
+  let rail=$("v3219PhoneRail");if(!v3219Phone()||!["deck","capture"].includes(v3219View())){rail?.remove();document.body.classList.remove("v3219-has-rail");return}
+  if(!rail){rail=document.createElement("nav");rail.id="v3219PhoneRail";rail.className="v3219-phone-rail";rail.innerHTML='<button type="button" data-v3219-note>Note</button><button type="button" data-v3219-voice>Voice</button><button type="button" data-v3219-video>Video</button><button type="button" data-v3219-edit>Edit</button><button type="button" class="finish" data-v3219-finish>Finish</button><small data-v3219-status></small>';document.body.appendChild(rail)}
+  document.body.classList.add("v3219-has-rail");rail.querySelector("[data-v3219-note]").onclick=()=>v3219OpenQuickNote(v3219BlockIndex());rail.querySelector("[data-v3219-voice]").onclick=()=>{const session=v3219Session();if(session)v3212OpenBlockMedia?.(session,v3219BlockIndex(),"voice")};rail.querySelector("[data-v3219-video]").onclick=()=>{const session=v3219Session();if(session)v3212OpenBlockMedia?.(session,v3219BlockIndex(),"video")};rail.querySelector("[data-v3219-edit]").onclick=()=>{try{v3170OpenEditor?.(false)}catch{showView?.("sessions")}};rail.querySelector("[data-v3219-finish]").onclick=()=>showView?.("finish");
+}
+
+// -----------------------------------------------------------------------------
+// 5. Parser field repair for large Main Sets.
+// A standalone "N Rounds" inside a named subsection must stop at the next
+// subsection heading. It must never multiply the remainder of the whole Main
+// Set. Also keep a detached race-segment cue + interval with its parent line.
+// This preprocessing is deliberately narrow and leaves ordinary top-level
+// PRE-SET / MAIN SET round structures untouched.
+// -----------------------------------------------------------------------------
+function v3219TopBlockHeading(line){return /^(?:warm[ -]?up|pre[ -]?set|main(?:[ -]?set)?|post[ -]?(?:main[ -]?)?set|warm[ -]?down)\b/i.test(String(line||"").trim())}
+function v3219SectionHeadingText(line){const t=String(line||"").trim();return !v3219TopBlockHeading(t)&&(/\b(front[- ]?end|back[- ]?end|aerobic\s+reset|aerobic\s+capacity\s+finish|race\s+pace|speed\s+block|reset\s+block)\b/i.test(t)||(/^[A-Z0-9][A-Z0-9 /&+()'’\-–—]{5,}$/.test(t)&&t.length<70))}
+function v3219RaceCueLine(line){return /^(?:back[- ]?end\b.*|final\s+\d+\b.*|(?:2nd|second|3rd|third|final)\s+\d+\b.*(?:pace|speed)|.*\b(?:back[- ]?end|final)\b.*\bspeed\b)/i.test(String(line||"").trim())}
+function v3219IntervalOnly(line){return /^(?:@|on)\s*\d+(?::\d{1,2}(?:\.\d+)?)?(?:\.\d+)?\s*$/i.test(String(line||"").trim())}
+function v3219PrescriptionLine(line){return /^\s*(?:\d{1,3}\s*[x×]\s*\d+(?:\.5)?\s*m?\b|\d{2,4}(?:\.5)?\s*m?\b)/i.test(String(line||""))}
+function v3219AttachDetachedRaceCues(raw){
+  const lines=String(raw||"").replace(/\r/g,"").split("\n"),out=[];
+  const previousPrescription=()=>{for(let i=out.length-1;i>=0;i--){if(!String(out[i]).trim())continue;if(v3219TopBlockHeading(out[i])||v3219SectionHeadingText(out[i]))return-1;if(v3219PrescriptionLine(out[i]))return i;return-1}return-1};
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i],trim=line.trim(),next=String(lines[i+1]||"").trim(),pi=previousPrescription();
+    if(pi>=0&&v3219RaceCueLine(trim)&&v3219IntervalOnly(next)){out[pi]=`${out[pi]} · ${trim} · ${next}`;i++;continue}
+    if(pi>=0&&v3219IntervalOnly(trim)){out[pi]=`${out[pi]} · ${trim}`;continue}
+    out.push(line);
+  }
+  return out.join("\n");
+}
+function v3219ScopeNestedRounds(raw){
+  const lines=String(raw||"").replace(/\r/g,"").split("\n"),out=[];let section="";
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i],trim=line.trim();
+    if(v3219TopBlockHeading(trim)){section="";out.push(line);continue}
+    if(v3219SectionHeadingText(trim)){section=trim;out.push(line);continue}
+    const round=section&&trim.match(/^(\d{1,2})\s*rounds?\s*:?[.]?$/i);
+    if(!round){out.push(line);continue}
+    const count=Math.max(1,Math.min(8,Number(round[1])||1));let j=i+1,body=[];
+    while(j<lines.length){const candidate=lines[j],ct=candidate.trim();if(v3219TopBlockHeading(ct)||v3219SectionHeadingText(ct))break;body.push(candidate);j++}
+    if(count>1&&body.some(v3219PrescriptionLine)){for(let r=0;r<count;r++)out.push(...body);i=j-1;continue}
+    out.push(line);
+  }
+  return out.join("\n");
+}
+function v3219NormaliseSessionSource(raw){return v3219ScopeNestedRounds(v3219AttachDetachedRaceCues(raw))}
+const v3219ParseBlocksBase=typeof v3206ParseBlocks==="function"?v3206ParseBlocks:null;
+if(v3219ParseBlocksBase){
+  v3206ParseBlocks=function(raw){return v3219ParseBlocksBase(v3219NormaliseSessionSource(raw))};
+  v3200ParseBlocks=v3206ParseBlocks;v3198ParseBlocks=v3206ParseBlocks;v3193ParseBlocks=v3206ParseBlocks;v3150ParseBlocks=v3206ParseBlocks;v3126ParseBlocks=v3206ParseBlocks;v3127ParseBlocks=v3206ParseBlocks;v3128ParseBlocks=v3206ParseBlocks;v3107BlocksFromRaw=v3206ParseBlocks;
+  estimateDistance=function(text){const blocks=v3206ParseBlocks(text),calculated=v3200Distance?.(blocks)||0,explicit=v3200ExplicitTotal?.(text)||0;return calculated||explicit};
+}
+
+// -----------------------------------------------------------------------------
+// 6. Large Main Set blocks remain one canonical block in storage, but phone-only
+// presentation groups runnable lines under real subsection headings. If the
+// parser stored headings in block cues rather than item rows, rebuild the visual
+// grouping from raw_text. Canonical session data is never changed here.
+// -----------------------------------------------------------------------------
+function v3219Heading(text){return v3219SectionHeadingText(text)}
+function v3219SubsectionPlan(block){
+  const items=v34Array(block?.items),sections=[];let current=null;
+  for(const [index,item] of items.entries()){const text=v3212Text(item?.raw||item?.instruction||item?.label);if(item?.runnable===false&&v3219Heading(text)){current={title:text,indices:[]};sections.push(current);continue}if(item?.runnable!==false){if(!current){current={title:"Main work",indices:[]};sections.push(current)}current.indices.push(index)}}
+  const direct=sections.filter(s=>s.indices.length);if(direct.length>=2)return direct;
+  const runnable=items.map((item,index)=>({item,index})).filter(x=>x.item?.runnable!==false),raw=String(block?.raw_text||"").replace(/\r/g,"").split("\n");let pointer=0,rawSections=[],rawCurrent=null;
+  for(const line of raw){const trim=v3212Text(line);if(v3219Heading(trim)){rawCurrent={title:trim,indices:[]};rawSections.push(rawCurrent);continue}if(!rawCurrent||pointer>=runnable.length)continue;const entry=runnable[pointer],itemText=v3212Text(entry.item?.raw||entry.item?.instruction||entry.item?.label),a=v3206Norm?.(trim)||trim.toLowerCase(),b=v3206Norm?.(itemText)||itemText.toLowerCase();if((a&&b&&(a===b||a.includes(b)||b.includes(a)))||v3219PrescriptionLine(trim)){rawCurrent.indices.push(entry.index);pointer++}}
+  const useful=rawSections.filter(s=>s.indices.length);return useful.length>=2?useful:direct;
+}
+function v3219DecorateLargeBlocks(){
+  if(!v3219Phone()||v3219View()!=="deck")return;const session=v3219Session(),blocks=v3170BoardBlocks?.(session)||[];
+  document.querySelectorAll(".v3205-board-block[data-v3180-block]").forEach(card=>{const index=Number(card.dataset.v3180Block),block=blocks[index],lines=card.querySelector(".v3205-board-lines");if(!block||!lines||lines.dataset.v3219Sectioned==="1")return;const sections=v3219SubsectionPlan(block);if(sections.length<2||sections.reduce((n,s)=>n+s.indices.length,0)<7)return;const byIndex=new Map([...lines.querySelectorAll("[data-v3205-line]")].map(node=>[Number(String(node.dataset.v3205Line).split(":")[1]),node]));const frag=document.createDocumentFragment(),sessionKey=session?.id||"",saved=appState.settings.v3219_subsection_by_session?.[sessionKey]||sections[0].title;for(const section of sections){const detail=document.createElement("details");detail.className="v3219-subsection";detail.dataset.v3219Section=section.title;detail.open=section.title===saved;detail.innerHTML=`<summary><strong>${escapeHtml(section.title)}</strong><span>${section.indices.length} line${section.indices.length===1?"":"s"}</span></summary><div class="v3219-subsection-lines"></div>`;const body=detail.querySelector(".v3219-subsection-lines");for(const itemIndex of section.indices){const node=byIndex.get(itemIndex);if(node)body.appendChild(node)}detail.addEventListener("toggle",()=>{if(!detail.open)return;if(!appState.settings.v3219_subsection_by_session)appState.settings.v3219_subsection_by_session={};appState.settings.v3219_subsection_by_session[sessionKey]=section.title;saveState(appState);card.querySelectorAll(".v3219-subsection").forEach(other=>{if(other!==detail)other.open=false})});frag.appendChild(detail)}lines.textContent="";lines.appendChild(frag);lines.dataset.v3219Sectioned="1";card.querySelector(".v3205-orphan-cues")?.classList.add("v3219-section-cues-hidden")});
+}
+
+// -----------------------------------------------------------------------------
+// 6. Modified aerobic target repair. If a line explicitly says Regeneration /
+// Development / Overload / Threshold / Clearance but no stroke is written, a
+// valid Freestyle T400 is the default aerobic evidence instead of a blank target.
+// Explicitly written strokes still win.
+// -----------------------------------------------------------------------------
+const v3219AdaptationBase=v3180Adaptation;
+function v3219ExplicitStroke(line){return /\b(freestyle|free|backstroke|back|breaststroke|breast|butterfly|fly|\bim\b|medley)\b/i.test(String(line||""))}
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3219AdaptationBase?.(athlete,session,block,blockIndex);if(!result)return result;const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let ri=-1;
+  for(let i=0;i<rows.length;i++){const row=rows[i];if(row?.cue)continue;ri++;const item=runnable[ri],line=v3213Line?.(item)||item?.raw||"";if(!item||row.target||!v3213AerobicTargetDriven?.(session,block,item)||v3219ExplicitStroke(line))continue;try{const parsedResult=v3170ParseItem?.(row.line||line,ri),parsed=parsedResult?.item||parsedResult||item,spec=v382PaceSpec?.({...parsed,stroke:"Freestyle"},block,session),target=v382RowTarget?.(athlete,{...spec,stroke:"Freestyle"});if(target?.status==="ok"){row.target=target.primary||target.secondary||"";row.source=[row.source,"Freestyle T400 default for unstated aerobic stroke"].filter(Boolean).join(" · ")}}catch{}
+  }
+  return{...result,rows};
+};
+
+// -----------------------------------------------------------------------------
+// 7. Make swimmer/focus taps acknowledge immediately before any Board repaint.
+// -----------------------------------------------------------------------------
+const v3219SetFocusBase=typeof v3213SetFocus==="function"?v3213SetFocus:null;
+if(v3219SetFocusBase)v3213SetFocus=function(session,id=""){if(!v3219Phone())return v3219SetFocusBase(session,id);if(!session?.id)return;const map=v3213FocusMap?.();if(map)map[session.id]=id||"";appState.settings.selected_athlete_id=id||appState.settings.selected_athlete_id||"";saveState(appState);document.querySelectorAll("[data-v3213-focus]").forEach(button=>button.classList.toggle("active",String(button.dataset.v3213Focus||"")===String(id||"")));v3219Status(id?"Swimmer selected · updating differences":"Group selected · updating differences");setTimeout(()=>{try{v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true);setTimeout(v3219DecorateLargeBlocks,80)}catch{}},40)};
+
+// Rebind Board block Note buttons to the light quick-note modal on phone.
+const v3219BindBoardBase=v3170BindBoard;
+v3170BindBoard=function(host,session){const out=v3219BindBoardBase?.(host,session);if(v3219Phone())host?.querySelectorAll?.("[data-v3170-capture]").forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();v3219OpenQuickNote(Number(button.dataset.v3180CaptureBlock??v3219BlockIndex()))});requestAnimationFrame(()=>{v3219EnsureActionRail();v3219DecorateLargeBlocks()});return out};
+
+// Final render/view hooks: only lightweight DOM decoration; no extra full render.
+const v3219RenderAllBase=renderAll;
+renderAll=function(){const out=v3219RenderAllBase?.();requestAnimationFrame(()=>{v3180Logo?.();v3219EnsureActionRail();v3219InstallCaptureHandlers();v3219DecorateLargeBlocks()});return out};
+const v3219RenderViewBase=renderView;
+renderView=function(id){const out=v3219RenderViewBase?.(id);requestAnimationFrame(()=>{v3180Logo?.();if(id==="capture"){v3219InstallCaptureHandlers();v3219RenderCapturesLite()}v3219EnsureActionRail();if(id==="deck")v3219DecorateLargeBlocks()});return out};
+const v3219ShowViewBase=showView;
+showView=function(id,options={}){const before=v3219View(),out=v3219ShowViewBase?.(id,options);requestAnimationFrame(()=>{v3219EnsureActionRail();if(id==="capture")v3219InstallCaptureHandlers();if(id==="deck")v3219DecorateLargeBlocks()});if(v3219Phone()&&["deck","capture","finish","times"].includes(before)&&!["deck","capture","finish","times"].includes(id))setTimeout(()=>Promise.resolve(v3219SyncBase?.()).catch(()=>{}),250);return out};
+
+// -----------------------------------------------------------------------------
+// 8. Final authority / styles / worker.
+// -----------------------------------------------------------------------------
+const v3219Styles=document.createElement("style");v3219Styles.id="v3219Styles";v3219Styles.textContent=`
+.v3219-capture-lite{min-height:0!important}.v3219-section-cues-hidden{display:none!important}
+@media(max-width:900px),(pointer:coarse){body.v3219-has-rail{padding-bottom:142px!important}.v3219-phone-rail{position:fixed;left:7px;right:7px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:9990;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:6px;background:rgba(245,249,251,.97);border:1px solid #b8ced8;border-radius:12px;box-shadow:0 6px 24px rgba(17,48,66,.18);backdrop-filter:blur(8px)}.v3219-phone-rail button{min-height:42px!important;padding:5px 3px!important;font-size:.68rem!important;font-weight:850!important}.v3219-phone-rail button.finish{background:#123f5d;color:#fff}.v3219-phone-rail small{grid-column:1/-1;display:block;min-height:0;max-height:22px;overflow:hidden;text-align:center;font-size:.58rem;color:#54717e}.v3219-subsection{margin:7px 0;border:1px solid #cbdde5;border-radius:10px;background:#f9fbfc}.v3219-subsection>summary{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;list-style:none}.v3219-subsection>summary strong{font-size:.76rem;color:#174762}.v3219-subsection>summary span{font-size:.62rem;color:#6a808b}.v3219-subsection-lines{padding:0 6px 6px}.v3219-subsection:not([open]) .v3219-subsection-lines{display:none}.mobile-nav .nav-button[data-view='finish']{display:flex!important}}
+`;document.head.appendChild(v3219Styles);
+
+function v3219Brand(){const title=`McLay Swimming OS — v${V3219_VERSION} Poolside Stability Recovery`,subtitle=`v${V3219_VERSION} · local-first Capture · phone action rail · deferred video processing · protected Board/pathway`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3219_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3219_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3219_VERSION}`;badge.dataset.build=V3219_BUILD;badge.title=V3219_BUILD}}
+async function v3219RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3219_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.19 service worker update",error)}}
+try{v3218BrandObserver?.disconnect?.()}catch{}
+const v3219BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3219_VERSION} Poolside Stability Recovery`||document.querySelector(".header-subtitle")?.textContent!==`v${V3219_VERSION} · local-first Capture · phone action rail · deferred video processing · protected Board/pathway`)queueMicrotask(v3219Brand)});if(document.querySelector("title"))v3219BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3219BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3219Debug={version:V3219_VERSION,build:V3219_BUILD,phone:v3219Phone,poolside:v3219PoolsideView,sections:v3219SubsectionPlan,captureLite:v3219RenderCapturesLite,deferredVideos:()=>appState.settings.v3219_deferred_video_ids||[],sync:()=>v3219SyncBase?.(),decorate:v3219DecorateLargeBlocks,normaliseSource:v3219NormaliseSessionSource,scopeRounds:v3219ScopeNestedRounds,attachRaceCues:v3219AttachDetachedRaceCues};
+v3219Brand();setTimeout(()=>{v3219Brand();v3219RegisterWorker();v3180Logo?.();v3219InstallCaptureHandlers();v3219EnsureActionRail();v3219DecorateLargeBlocks()},0);setTimeout(v3219Brand,900);setTimeout(v3219Brand,2800);
+
+// =============================================================================
+// McLay Swimming OS v3.20.20 — Poolside Core Recovery
+// 12 Aug 2026. Consolidated field repair from real Tue AM/Tue PM deck use.
+// v3.20.18 remains the protected functional baseline; v3.20.19 local-first media
+// and parser repairs are retained above. This layer narrows live rendering,
+// prevents unsolicited navigation/session takeovers, preserves deck context,
+// restores inclusion on short quality work, and tightens target visibility.
+// =============================================================================
+const V3220_VERSION="3.20.20";
+const V3220_BUILD="3.20.20-poolside-core-recovery-20260812";
+const V3220_CORE="20260812-core3220";
+const V3220_SAFE_KEY="mclay_v3220_poolside_safe";
+const V3220_DECK_KEY="mclay_v3220_last_deck";
+// v3.20.19 scheduled callbacks referenced this name but the implementation was
+// still installed under v3180InstallCaptureHandlers. Keep an explicit alias so
+// deferred capture decoration cannot throw on deck.
+function v3219InstallCaptureHandlers(){return typeof v3180InstallCaptureHandlers==="function"?v3180InstallCaptureHandlers():undefined}
+let v3220GestureAt=0,v3220HistoryUntil=0,v3220ScrollTimer=null,v3220RenderDepth=0;
+let v3220LockedSessionId=appState?.settings?.selected_session_id||"",v3220CaptureReturn=null;
+
+function v3220Phone(){try{return typeof v3219Phone==="function"?v3219Phone():window.matchMedia?.("(max-width: 900px), (pointer: coarse)")?.matches||window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3220View(){return document.querySelector(".view.active")?.id||"deck"}
+function v3220Visible(){return document.visibilityState!=="hidden"}
+function v3220ProtectedView(view=v3220View()){return ["deck","capture","times","finish"].includes(String(view||""))}
+function v3220RecentIntent(ms=2200){return Date.now()-v3220GestureAt<ms}
+function v3220HistoryAllowed(options={}){return Boolean(options?.fromHistory)||Date.now()<v3220HistoryUntil}
+function v3220Json(key){try{return JSON.parse(localStorage.getItem(key)||"null")||null}catch{return null}}
+function v3220SessionExists(id){return Boolean(id&&(appState.sessions||[]).some(s=>s.id===id))}
+function v3220CurrentSession(){const id=appState?.settings?.selected_session_id||"";return (appState.sessions||[]).find(s=>s.id===id)||selectedSession?.()||null}
+function v3220FocusId(session){try{return v3213FocusId?.(session)||""}catch{return""}}
+function v3220SafePayload(view=v3220View()){
+  const session=v3220CurrentSession(),scrollY=Math.max(0,Math.round(window.scrollY||0));
+  return {version:V3220_VERSION,saved_at:Date.now(),view,session_id:session?.id||appState?.settings?.selected_session_id||"",selected_squad:appState?.settings?.selected_squad||"",selected_athlete_id:appState?.settings?.selected_athlete_id||"",focus_athlete_id:v3220FocusId(session),board_mode:appState?.settings?.v3126_board_mode||"whole",active_block_index:Number(appState?.settings?.v3129_active_block_index)||0,scroll_y:scrollY};
+}
+function v3220SaveSafe(view=v3220View()){if(!v3220Phone()||!v3220ProtectedView(view))return null;const payload=v3220SafePayload(view);try{localStorage.setItem(V3220_SAFE_KEY,JSON.stringify(payload))}catch{}if(payload.session_id)v3220LockedSessionId=payload.session_id;return payload}
+function v3220SaveDeck(){if(!v3220Phone()||v3220View()!=="deck")return null;const payload=v3220SafePayload("deck");try{localStorage.setItem(V3220_DECK_KEY,JSON.stringify(payload));localStorage.setItem(V3220_SAFE_KEY,JSON.stringify(payload))}catch{}if(payload.session_id)v3220LockedSessionId=payload.session_id;return payload}
+function v3220LastDeck(){const saved=v3220Json(V3220_DECK_KEY);return saved&&Date.now()-Number(saved.saved_at||0)<8*60*60*1000&&v3220SessionExists(saved.session_id)?saved:null}
+function v3220RestoreLockedSession(){if(!v3220Phone()||!v3220ProtectedView()||v3220RecentIntent()||Date.now()<v3220HistoryUntil)return false;if(v3220LockedSessionId&&v3220SessionExists(v3220LockedSessionId)&&appState.settings.selected_session_id!==v3220LockedSessionId){appState.settings.selected_session_id=v3220LockedSessionId;saveState(appState);return true}return false}
+function v3220RestoreDeckScroll(payload=v3220LastDeck()){if(!payload||v3220View()!=="deck")return;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(v3220View()==="deck"&&!v3220RecentIntent(500))window.scrollTo({top:Math.max(0,Number(payload.scroll_y)||0),left:0,behavior:"auto"})}))}
+for(const name of ["pointerdown","touchstart","keydown"]){document.addEventListener(name,()=>{v3220GestureAt=Date.now()},{capture:true,passive:name!=="keydown"})}
+window.addEventListener("popstate",()=>{v3220HistoryUntil=Date.now()+900},{capture:true});
+window.addEventListener("scroll",()=>{if(!v3220Phone()||v3220View()!=="deck")return;clearTimeout(v3220ScrollTimer);v3220ScrollTimer=setTimeout(v3220SaveDeck,450)},{passive:true});
+window.addEventListener("pagehide",()=>{if(v3220View()==="deck")v3220SaveDeck();else v3220SaveSafe()});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){if(v3220View()==="deck")v3220SaveDeck();else v3220SaveSafe()}},{capture:true});
+
+// -----------------------------------------------------------------------------
+// 1. Live phone view/session is coach-owned. Background render/hydration/sync may
+// update data but may not navigate, select another session, or reset Board state.
+// -----------------------------------------------------------------------------
+const v3220ShowViewBase=showView;
+showView=function(id,options={}){
+  const current=v3220View(),historyAllowed=v3220HistoryAllowed(options),explicit=v3220RecentIntent()||historyAllowed||options?.force||options?.v3220Explicit;
+  if(v3220Phone()&&v3220Visible()&&current!==id&&v3220ProtectedView(current)&&!explicit){console.warn("v3.20.20 blocked background view takeover",current,"→",id);v3220SaveSafe(current);return false}
+  if(current==="deck"&&current!==id)v3220SaveDeck();
+  if(id==="finish"&&current==="deck"){
+    const session=v3220CurrentSession(),blocks=session?(v3170BoardBlocks?.(session)||[]):[];
+    if(!session||!blocks.length){v3219Status?.("Finish held · current session structure is not ready", "error");return false}
+  }
+  const out=v3220ShowViewBase?.(id,{...(options||{}),v3220Explicit:explicit});
+  if(out===false)return out;
+  if(v3220ProtectedView(id)){const session=v3220CurrentSession();if(session?.id)v3220LockedSessionId=session.id;setTimeout(()=>v3220SaveSafe(id),0)}
+  if(id==="deck"&&options?.v3220RestoreDeck)v3220RestoreDeckScroll(options?.v3220RestoreDeck);
+  return out;
+};
+
+const v3220ApplySelectionBase=typeof v3163ApplySelection==="function"?v3163ApplySelection:null;
+if(v3220ApplySelectionBase)v3163ApplySelection=function(ui){const incoming={...(ui||{})},current=v3220View();if(v3220Phone()&&v3220Visible()&&v3220ProtectedView(current)&&!v3220RecentIntent()&&Date.now()>=v3220HistoryUntil){const sessionId=v3220LockedSessionId||appState.settings.selected_session_id;if(sessionId&&v3220SessionExists(sessionId))incoming.selected_session_id=sessionId;incoming.view=current;incoming.selected_squad=appState.settings.selected_squad||incoming.selected_squad;incoming.board_mode=appState.settings.v3126_board_mode||incoming.board_mode;incoming.active_block_index=Number(appState.settings.v3129_active_block_index)||0}return v3220ApplySelectionBase(incoming)};
+
+const v3220RenderUiBase=typeof v3163RenderUi==="function"?v3163RenderUi:null;
+if(v3220RenderUiBase)v3163RenderUi=function(ui){const incoming={...(ui||{})},current=v3220View();if(v3220Phone()&&v3220Visible()&&v3220ProtectedView(current)&&!v3220RecentIntent()&&Date.now()>=v3220HistoryUntil){incoming.view=current;const sessionId=v3220LockedSessionId||appState.settings.selected_session_id;if(sessionId&&v3220SessionExists(sessionId))incoming.selected_session_id=sessionId;incoming.selected_squad=appState.settings.selected_squad||incoming.selected_squad;incoming.board_mode=appState.settings.v3126_board_mode||incoming.board_mode;incoming.active_block_index=Number(appState.settings.v3129_active_block_index)||0}return v3220RenderUiBase(incoming)};
+
+// -----------------------------------------------------------------------------
+// 2. A live-phone render only repaints the current screen. The inherited
+// renderAll() paints Results, Reports, Athletes, Sessions, captures etc. even when
+// the coach is only on Board; that work is removed from the foreground path.
+// -----------------------------------------------------------------------------
+const v3220RenderAllBase=renderAll;
+renderAll=function(){const current=v3220View();if(v3220Phone()&&v3220Visible()&&v3220ProtectedView(current)&&v3220RenderDepth===0){v3220RenderDepth++;try{v3220RestoreLockedSession();const out=renderView?.(current);requestAnimationFrame(()=>{v3219EnsureActionRail?.();v3219DecorateLargeBlocks?.();v3220CompactBoard?.();v3220SaveSafe(current)});return out}finally{v3220RenderDepth=Math.max(0,v3220RenderDepth-1)}}return v3220RenderAllBase?.()};
+
+const v3220RenderViewBase=renderView;
+renderView=function(id){if(v3220Phone()&&v3220ProtectedView(id))v3220RestoreLockedSession();const out=v3220RenderViewBase?.(id);requestAnimationFrame(()=>{if(id==="deck"){v3219DecorateLargeBlocks?.();v3220CompactBoard?.()}v3220InstallRail?.();if(v3220ProtectedView(id))v3220SaveSafe(id)});return out};
+
+// -----------------------------------------------------------------------------
+// 3. Target visibility: show model times only where the written work asks for a
+// training-zone or race-pace target. Skill/easy/scull/general lines stay clean.
+// Regeneration/Development/Overload/Threshold/Clearance remain target-driven.
+// -----------------------------------------------------------------------------
+function v3220Line(item){return String(item?.raw||item?.instruction||item?.label||"").trim()}
+function v3220ExplicitAerobic(line){return /\b(?:regeneration|development|overload|threshold|clearance)\b/i.test(String(line||""))}
+function v3220QuietLine(line){return /\b(?:scull|drill|choice\s+easy|easy\s+(?:swim|choice)|warm[- ]?down|warm[- ]?up|underwater|max(?:imum)?|kick\s+(?:fast|max|easy|steady)|skills?|streamline|breakout\s+skill)\b/i.test(String(line||""))}
+function v3220ExplicitRacePace(line){return /\b(?:race\s*pace|\d{2,4}\s*(?:m\s*)?(?:race\s*)?pace|\d{2,4}\s*p\b|at\s+\d{2,4}\s*pace|pb\s*pace|target\s*pace|final\s+\d+\s+of\s+\d+\s+pace|2nd\s+50\s+of\s+100\s+pace)\b/i.test(String(line||""))}
+v3213AerobicTargetDriven=function(session,block,item){const line=v3220Line(item);if(v3220ExplicitAerobic(line))return true;if(v3220QuietLine(line))return false;const pace=String(item?.pace_mode||item?.training_zone||item?.zone||"");if(v3220ExplicitAerobic(pace))return true;return false};
+v3213RaceTargetDriven=function(session,block,item){const line=v3220Line(item);return Boolean(Number(item?.race_distance)||item?.target_seconds||item?.target_time||item?.coach_target||v3220ExplicitRacePace(line))};
+v3213TargetDriven=function(session,block,item){return v3213AerobicTargetDriven(session,block,item)||v3213RaceTargetDriven(session,block,item)};
+
+const v3220TargetRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+if(v3220TargetRowsBase)v3205TargetRows=function(session,block,item,blockIndex,itemIndex){if(!v3213TargetDriven(session,block,item))return[];return v3220TargetRowsBase(session,block,item,blockIndex,itemIndex)};
+const v3220TargetDetailsBase=typeof v3205TargetDetails==="function"?v3205TargetDetails:null;
+if(v3220TargetDetailsBase)v3205TargetDetails=function(session,block,item,blockIndex,itemIndex){if(!v3213TargetDriven(session,block,item))return"";return v3220TargetDetailsBase(session,block,item,blockIndex,itemIndex)};
+
+// -----------------------------------------------------------------------------
+// 4. Inclusion on short quality/race-pace work. Generic reduced-volume profiles
+// do not automatically split an athlete away from 15/25/35/50m quality work.
+// Hard movement constraints and explicit coach edits still win.
+// -----------------------------------------------------------------------------
+function v3220ConstraintText(athlete){const rows=(appState.athlete_adaptation_rules||[]).filter(r=>r.athlete_id===athlete?.id&&r.active!==false),profile=(appState.athlete_adaptation_profiles||[]).find(r=>r.athlete_id===athlete?.id&&r.active!==false);return [athlete?.modifications,profile?.stroke_restrictions,profile?.equipment_preferences,...rows.map(r=>[r.rule_text,r.rule_json?.constraint_key].filter(Boolean).join(" "))].filter(Boolean).join(" ").toLowerCase()}
+function v3220HardConstraint(athlete,line){const c=v3220ConstraintText(athlete),t=String(line||"").toLowerCase();if(!c)return false;if(/no[_ -]?leg|no functional use of legs/.test(c)&&/(kick|fins|underwater|dolphin)/.test(t))return true;if(/no[_ -]?kick|knee/.test(c)&&/kick/.test(t))return true;if(/no[_ -]?fins|ankle/.test(c)&&/fins?/.test(t))return true;if(/no[_ -]?pull|shoulder/.test(c)&&/(pull|paddles?)/.test(t))return true;if(/no[_ -]?breast.*kick|no breaststroke kick/.test(c)&&/breast/.test(t)&&/kick/.test(t))return true;return false}
+function v3220QualityLine(item){const line=v3220Line(item),d=Number(item?.distance)||Number((line.match(/\b(12\.5|15|20|25|35|50|65)\s*m?\b/i)||[])[1])||0,shortKick=/\bkick\b/i.test(line)&&d>0&&d<=50;return Boolean(v3213ShortQuality?.(item)||v3220ExplicitRacePace(line)||shortKick||(/\b(?:dive|push\s*start|start|max(?:imum)?|finish|underwater)\b/i.test(line)&&d>0&&d<=65))}
+const v3220AdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){const result=v3220AdaptationBase?.(athlete,session,block,blockIndex);if(!result)return result;const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let ri=-1;for(let i=0;i<rows.length;i++){const row=rows[i];if(row?.cue)continue;ri++;const item=runnable[ri];if(!item)continue;const itemIndex=v34Array(block?.items).indexOf(item),explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,ri,itemIndex),line=v3220Line(item);if(v3220QualityLine(item)&&!explicit&&!v3220HardConstraint(athlete,line)){const target=v3213TargetDriven(session,block,item)?row.target||"":"";rows[i]={...row,line,distance:(Number(item.reps)||1)*(Number(item.distance)||0),clock:"Same team window",target,source:"Same as team · short quality / race-pace inclusion"};continue}if(!v3213TargetDriven(session,block,item)&&!explicit)rows[i].target=""}
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;return{...result,rows,total,repeat,sharedTarget:""};
+};
+
+// -----------------------------------------------------------------------------
+// 5. Compact phone Board. Keep canonical structure and all edits, but make
+// modified differences horizontal and collapse historical block notes by default.
+// -----------------------------------------------------------------------------
+function v3220CompactBoard(){if(!v3220Phone()||v3220View()!=="deck")return;document.querySelectorAll(".v3212-block-notes:not([data-v3220-compact])").forEach(host=>{host.dataset.v3220Compact="1";const head=host.querySelector(".v3212-note-head"),chips=[...host.querySelectorAll(".v3212-note-chip")];if(!chips.length)return;const details=document.createElement("details");details.className="v3220-block-notes";const summary=document.createElement("summary");summary.innerHTML=`<strong>Notes on this block</strong><span>${chips.length} recent</span>`;details.appendChild(summary);chips.forEach(node=>details.appendChild(node));host.replaceChildren(details)});}
+
+// -----------------------------------------------------------------------------
+// 6. Poolside action rail. Capture/Finish always reachable. Capture remembers
+// the exact Board position; a single Board action restores it without hunting.
+// -----------------------------------------------------------------------------
+function v3220BeginCapture(kind){const session=v3220CurrentSession();if(!session)return;v3220CaptureReturn=v3220View()==="deck"?v3220SaveDeck():v3220LastDeck();const blockIndex=typeof v3219BlockIndex==="function"?v3219BlockIndex():Number(appState.settings.v3129_active_block_index)||0;v3212OpenBlockMedia?.(session,blockIndex,kind)}
+function v3220BackToBoard(){const saved=v3220CaptureReturn||v3220LastDeck(),sessionId=saved?.session_id||v3220LockedSessionId;if(sessionId&&v3220SessionExists(sessionId)){appState.settings.selected_session_id=sessionId;v3220LockedSessionId=sessionId;saveState(appState)}v3220GestureAt=Date.now();showView("deck",{force:true,v3220Explicit:true,v3220RestoreDeck:saved});v3220CaptureReturn=null}
+function v3220OpenFinish(){const session=v3220CurrentSession();if(!session)return;v3220SaveDeck();v3220GestureAt=Date.now();showView("finish",{force:true,v3220Explicit:true})}
+function v3220InstallRail(){if(!v3220Phone())return;v3219EnsureActionRail?.();const rail=$("v3219PhoneRail");if(!rail)return;const view=v3220View(),note=rail.querySelector("[data-v3219-note]"),voice=rail.querySelector("[data-v3219-voice]"),video=rail.querySelector("[data-v3219-video]"),edit=rail.querySelector("[data-v3219-edit]"),finish=rail.querySelector("[data-v3219-finish]");if(view==="capture"){if(note){note.textContent="Board";note.onclick=v3220BackToBoard}}else if(note){note.textContent="Note";note.onclick=()=>v3219OpenQuickNote?.(v3219BlockIndex?.())}if(voice)voice.onclick=()=>v3220BeginCapture("voice");if(video)video.onclick=()=>v3220BeginCapture("video");if(edit)edit.onclick=()=>{v3220GestureAt=Date.now();try{v3170OpenEditor?.(false)}catch{showView?.("sessions",{force:true,v3220Explicit:true})}};if(finish)finish.onclick=v3220OpenFinish}
+
+// -----------------------------------------------------------------------------
+// 7. Minimal deterministic timing helper for planning/testing. It reports a
+// conservative cycle floor from explicit send-offs and does not invent precision
+// for untimed work. This is intentionally not used to label physiology.
+// -----------------------------------------------------------------------------
+function v3220CycleSeconds(raw,item=null){try{return Number(v3207CycleSeconds?.(raw,item))||0}catch{}const m=String(raw||"").match(/(?:on|@)\s*(\d{1,2}:\d{2}(?:\.\d+)?|\d{2,3}(?:\.\d+)?)\b/i);return m?Number(v3Seconds?.(m[1]))||0:0}
+function v3220TimingFloorFromBlocks(blocks){let seconds=0,covered=0,total=0;for(const block of v34Array(blocks)){const repeat=Math.max(1,Number(block?.repeat_count)||1);for(const item of v34Array(block?.items)){if(item?.runnable===false)continue;total++;const reps=Math.max(1,Number(item?.reps)||1),cycle=v3220CycleSeconds(v3220Line(item),item);if(cycle){seconds+=cycle*reps*repeat;covered++}}}return{explicit_cycle_seconds:seconds,explicit_cycle_minutes:Math.round(seconds/6)/10,covered_lines:covered,runnable_lines:total,coverage:total?covered/total:0}}
+
+// -----------------------------------------------------------------------------
+// 8. Recovery on load: if a recent safe Board snapshot says the coach was on the
+// Board, stale UI stores are not allowed to strand the app on another page.
+// -----------------------------------------------------------------------------
+function v3220RecoverSafe(){if(!v3220Phone())return;const saved=v3220Json(V3220_SAFE_KEY)||v3220LastDeck();if(!saved||Date.now()-Number(saved.saved_at||0)>8*60*60*1000||!v3220SessionExists(saved.session_id))return;v3220LockedSessionId=saved.session_id;if(saved.view==="deck"&&!v3220RecentIntent(2500)){appState.settings.selected_session_id=saved.session_id;appState.settings.selected_squad=saved.selected_squad||appState.settings.selected_squad;appState.settings.v3126_board_mode=saved.board_mode||appState.settings.v3126_board_mode;appState.settings.v3129_active_block_index=Number(saved.active_block_index)||0;if(saved.selected_athlete_id&&appState.athletes?.some(a=>a.id===saved.selected_athlete_id))appState.settings.selected_athlete_id=saved.selected_athlete_id;saveState(appState);if(v3220View()!=="deck")showView("deck",{force:true,v3220Explicit:true,v3220RestoreDeck:saved});else{renderView?.("deck");v3220RestoreDeckScroll(saved)}}}
+
+// -----------------------------------------------------------------------------
+// 9. Presentation / styles / build identity.
+// -----------------------------------------------------------------------------
+const v3220Styles=document.createElement("style");v3220Styles.id="v3220Styles";v3220Styles.textContent=`
+@media(max-width:900px),(pointer:coarse){
+  body.v3219-has-rail{padding-bottom:126px!important}
+  .v3219-phone-rail{bottom:calc(59px + env(safe-area-inset-bottom));padding:5px;gap:3px}
+  .v3219-phone-rail button{min-height:38px!important;font-size:.66rem!important}
+  .v3219-phone-rail small:empty{display:none!important}.v3219-phone-rail small{max-height:17px!important;font-size:.56rem!important}
+  .v3213-mod-rail{display:grid!important;grid-auto-flow:column!important;grid-auto-columns:minmax(180px,78vw)!important;grid-template-columns:none!important;overflow-x:auto!important;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;padding:4px 1px 6px!important;gap:5px!important}
+  .v3213-mod-card{scroll-snap-align:start;min-width:0!important;padding:4px 6px!important;grid-template-columns:auto minmax(0,1fr) auto!important}
+  .v3213-mod-card>span{white-space:normal;font-size:.69rem!important}.v3213-mod-card>em{font-size:.68rem!important}
+  .v3220-block-notes{margin:4px 0;border-top:1px solid #e1e8eb}.v3220-block-notes>summary{display:flex;justify-content:space-between;gap:8px;padding:7px 2px;font-size:.68rem;color:#5d7480}.v3220-block-notes>summary strong{color:#31566a}.v3220-block-notes>.v3212-note-chip{margin:3px 0!important;padding:5px!important}
+  .v3205-block-actions,.v3170-session-actions{gap:4px!important}.v3206-edit-button{min-height:34px!important;padding:4px 7px!important}
+}
+`;document.head.appendChild(v3220Styles);
+
+function v3220Brand(){const title=`McLay Swimming OS — v${V3220_VERSION} Poolside Core Recovery`,subtitle=`v${V3220_VERSION} · protected live view/session · local-first capture · compact Board · target truth`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3220_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3220_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3220_VERSION}`;badge.dataset.build=V3220_BUILD;badge.title=V3220_BUILD}}
+async function v3220RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3220_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.20 service worker update",error)}}
+try{v3219BrandObserver?.disconnect?.()}catch{}
+const v3220BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3220_VERSION} Poolside Core Recovery`||document.querySelector(".header-subtitle")?.textContent!==`v${V3220_VERSION} · protected live view/session · local-first capture · compact Board · target truth`)queueMicrotask(v3220Brand)});if(document.querySelector("title"))v3220BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3220BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3220Debug={version:V3220_VERSION,build:V3220_BUILD,view:v3220View,saveSafe:v3220SaveSafe,lastDeck:v3220LastDeck,targetDriven:v3213TargetDriven,aerobicDriven:v3213AerobicTargetDriven,raceDriven:v3213RaceTargetDriven,quality:v3220QualityLine,hardConstraint:v3220HardConstraint,timingFloor:v3220TimingFloorFromBlocks,restore:v3220RecoverSafe,lockedSession:()=>v3220LockedSessionId,compact:v3220CompactBoard};
+v3220Brand();setTimeout(()=>{v3220Brand();v3220RegisterWorker();const safe=v3220Json(V3220_SAFE_KEY),current=v3220CurrentSession();v3220LockedSessionId=(safe&&v3220SessionExists(safe.session_id)?safe.session_id:current?.id)||"";v3220InstallRail();v3220CompactBoard();v3220RecoverSafe()},0);setTimeout(()=>{v3220Brand();v3220InstallRail();v3220CompactBoard()},900);setTimeout(v3220Brand,2800);
+
+// =============================================================================
+// v3.20.20 addendum — Board shell authority / scroll + session ownership
+// Field evidence: while scrolling the live Board, the modern Board disappeared
+// and the old legacy "Complete session / No complete blocks saved yet" card was
+// exposed. The legacy card is not a Finish screen. It is an obsolete fallback
+// surface inside #deck. On live phone Board it must never become authoritative.
+// =============================================================================
+let v3220ShellRepairAt=0,v3220ShellRepairPending=false;
+const V3220_LEGACY_DECK_SELECTORS=[
+  ".deck-workout-card",
+  ".deck-blocks-card",
+  ".deck-sets-card",
+  "#deckPlanThread",
+  "#deckNextSession",
+  "#deckAthleteQuickDetails",
+  "#v311BoardCore",
+  "#v3105DeckContext",
+  "#v310SessionAttendance",
+  "#v3121MissingPlan"
+];
+function v3220BoardMode(){try{return typeof v3126Mode==="function"?v3126Mode():appState.settings.v3126_board_mode||"whole"}catch{return appState.settings.v3126_board_mode||"whole"}}
+function v3220ModernBoardHost(mode=v3220BoardMode()){return mode==="deck"?$("v3126ActiveView"):mode==="plan"?$("v3170PlanView"):$("v3126WholeView")}
+function v3220HideLegacyDeck(){
+  if(!v3220Phone()||v3220View()!=="deck")return false;
+  const deck=$("deck");if(!deck)return false;deck.classList.add("v3220-protected-board");
+  let changed=false;
+  for(const selector of V3220_LEGACY_DECK_SELECTORS){
+    const nodes=selector.startsWith("#")?[deck.querySelector(selector)].filter(Boolean):[...deck.querySelectorAll(selector)];
+    for(const node of nodes){const card=node.matches?.("article,details")?node:node.closest?.("article,details")||node;if(card&&!card.classList.contains("deck-hero")&&!card.hidden){card.hidden=true;changed=true}if(card)card.setAttribute("aria-hidden","true")}
+  }
+  try{v3205ApplyModeVisibility?.(v3220BoardMode())}catch{}
+  return changed;
+}
+function v3220BoardShellHealthy(){
+  if(!v3220Phone()||v3220View()!=="deck")return true;
+  const deck=$("deck"),session=v3220CurrentSession(),host=v3220ModernBoardHost();
+  if(!deck||!session||!host)return false;
+  const blocks=v3170BoardBlocks?.(session)||[];
+  if(!blocks.length)return Boolean(host.textContent?.trim());
+  return Boolean(host.querySelector("[data-v3170-block],.v3205-board-block,[data-v3180-block],.v3205-board-line,.v3180-board-block,.v3127-session-grid")||host.textContent?.trim());
+}
+function v3220RepairBoardShell(reason="guard"){
+  if(!v3220Phone()||v3220View()!=="deck")return false;
+  v3220HideLegacyDeck();
+  if(v3220BoardShellHealthy())return true;
+  const now=Date.now();if(v3220ShellRepairPending||now-v3220ShellRepairAt<1800)return false;
+  const session=v3220CurrentSession(),blocks=session?(v3170BoardBlocks?.(session)||[]):[];
+  if(!session||!blocks.length)return false;
+  v3220ShellRepairAt=now;v3220ShellRepairPending=true;
+  console.warn("v3.20.20 repairing protected Board shell",reason,session.id);
+  try{v3201RequestBoardPaint?.(true)}catch{}
+  setTimeout(()=>{v3220ShellRepairPending=false;v3220HideLegacyDeck()},120);
+  return true;
+}
+
+// Direct session/squad calls are another route old timers can use without going
+// through the UI-state wrappers. Once the coach owns a live Board selection,
+// background code cannot replace it. Explicit taps/back navigation still can.
+const v3220SetSelectedSessionBase=setSelectedSession;
+setSelectedSession=function(id,...args){
+  const current=v3220View(),explicit=v3220RecentIntent()||Date.now()<v3220HistoryUntil;
+  if(v3220Phone()&&v3220Visible()&&v3220ProtectedView(current)&&v3220LockedSessionId&&id!==v3220LockedSessionId&&!explicit){
+    console.warn("v3.20.20 blocked background session takeover",v3220LockedSessionId,"→",id);return false;
+  }
+  const out=v3220SetSelectedSessionBase?.(id,...args);
+  if(v3220Phone()&&v3220SessionExists(id)){v3220LockedSessionId=id;if(v3220View()==="deck"){v3220SaveDeck();requestAnimationFrame(()=>v3220RepairBoardShell("session-select"))}}
+  return out;
+};
+const v3220SetActiveSquadBase=setActiveSquad;
+setActiveSquad=function(squad,...args){
+  const explicit=v3220RecentIntent()||Date.now()<v3220HistoryUntil,current=appState.settings.selected_squad||"";
+  if(v3220Phone()&&v3220Visible()&&v3220ProtectedView()&&current&&squad!==current&&!explicit){console.warn("v3.20.20 blocked background squad takeover",current,"→",squad);return false}
+  const out=v3220SetActiveSquadBase?.(squad,...args);if(v3220Phone()&&v3220View()==="deck"){v3220SaveDeck();requestAnimationFrame(()=>v3220RepairBoardShell("squad-select"))}return out;
+};
+
+// Background UI restores were a major source of the Board apparently skipping
+// vertically. On a live Board, ignore a stale scroll-restoration request unless
+// it follows a real user/history action. Explicit capture-return uses our own
+// saved deck scroll and is not blocked here.
+const v3220RestoreScrollBase=typeof v3163RestoreScroll==="function"?v3163RestoreScroll:null;
+if(v3220RestoreScrollBase)v3163RestoreScroll=function(ui,view){if(v3220Phone()&&view==="deck"&&v3220View()==="deck"&&!v3220RecentIntent()&&Date.now()>=v3220HistoryUntil)return false;return v3220RestoreScrollBase(ui,view)};
+
+// Reassert the protected Board shell after any inherited deck paint. This is a
+// DOM-only guard: it hides obsolete surfaces and only requests a paint if the
+// authoritative modern host is genuinely missing/empty.
+const v3220RenderViewGuardBase=renderView;
+renderView=function(id){
+  const preserveY=v3220Phone()&&id==="deck"&&v3220View()==="deck"&&!v3220RecentIntent()?Math.max(0,window.scrollY||0):null;
+  const out=v3220RenderViewGuardBase?.(id);
+  if(id==="deck")requestAnimationFrame(()=>{v3220RepairBoardShell("render-view");if(preserveY!==null&&v3220View()==="deck"&&!v3220RecentIntent(600)&&Math.abs((window.scrollY||0)-preserveY)>3)window.scrollTo({top:preserveY,left:0,behavior:"auto"})});
+  return out;
+};
+
+const v3220DeckObserver=new MutationObserver(records=>{
+  if(!v3220Phone()||v3220View()!=="deck")return;
+  let relevant=false;
+  for(const record of records){
+    const target=record.target?.nodeType===1?record.target:record.target?.parentElement;
+    if(!target)continue;
+    if(target.closest?.(".deck-blocks-card,.deck-workout-card,.deck-sets-card,#v3126WholeView,#v3126ActiveView,#v3170PlanView")||record.type==="childList"){relevant=true;break}
+  }
+  if(relevant)queueMicrotask(()=>v3220RepairBoardShell("mutation"));
+});
+if($("deck"))v3220DeckObserver.observe($("deck"),{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class"]});
+
+const v3220ShellStyle=document.createElement("style");v3220ShellStyle.id="v3220ShellStyle";v3220ShellStyle.textContent=`
+@media(max-width:900px),(pointer:coarse){
+  #deck.v3220-protected-board .deck-workout-card,
+  #deck.v3220-protected-board .deck-blocks-card,
+  #deck.v3220-protected-board .deck-sets-card,
+  #deck.v3220-protected-board #deckPlanThread,
+  #deck.v3220-protected-board #deckNextSession,
+  #deck.v3220-protected-board #deckAthleteQuickDetails{display:none!important}
+}
+`;document.head.appendChild(v3220ShellStyle);
+
+// Keep the shell guard cheap but persistent across old delayed callbacks and
+// app-resume callbacks. It does no data fetch and no render when the Board is OK.
+setTimeout(()=>v3220RepairBoardShell("startup"),60);
+setTimeout(()=>v3220RepairBoardShell("settle"),1400);
+window.addEventListener("focus",()=>setTimeout(()=>v3220RepairBoardShell("focus"),80),{passive:true});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")setTimeout(()=>v3220RepairBoardShell("visible"),80)},{passive:true});
+
+Object.assign(window.v3220Debug||{}, {shellHealthy:v3220BoardShellHealthy,repairShell:v3220RepairBoardShell,hideLegacy:v3220HideLegacyDeck,modernHost:v3220ModernBoardHost});
+
+// v3.20.20 shell-observer correction: the broad subtree observer could react to
+// our own host reordering. Observe only the obsolete cards' hidden state. CSS is
+// the primary fail-safe; this observer only re-hides an explicitly unhidden card.
+try{v3220DeckObserver.disconnect()}catch{}
+const v3220LegacyObserver=new MutationObserver(records=>{
+  if(!v3220Phone()||v3220View()!=="deck")return;
+  for(const record of records){const node=record.target;if(node&&!node.hidden&&!node.classList?.contains("deck-hero")){node.hidden=true;node.setAttribute("aria-hidden","true")}}
+});
+if($("deck"))for(const selector of [".deck-workout-card",".deck-blocks-card",".deck-sets-card","#deckAthleteQuickDetails"]){for(const node of $("deck").querySelectorAll(selector)){try{v3220LegacyObserver.observe(node,{attributes:true,attributeFilter:["hidden"]})}catch{}}}
+
+// v3.20.20 live-scroll ownership. Older poolside state code scheduled several
+// delayed scroll retries. They are useful at cold start / explicit navigation,
+// but on an already-live Board they can yank the coach to a different position.
+const v3220Restore3170ScrollBase=typeof v3170RestoreScroll==="function"?v3170RestoreScroll:null;
+if(v3220Restore3170ScrollBase)v3170RestoreScroll=function(top,options={}){if(v3220Phone()&&v3220Visible()&&v3220View()==="deck"&&!v3220RecentIntent()&&Date.now()>=v3220HistoryUntil)return false;return v3220Restore3170ScrollBase(top,options)};
+
+// Hard stop for stale UI snapshots on the live Board. Sanitising an old snapshot
+// was not enough because the inherited history renderer itself executes a legacy
+// showView path that scrolls to the top before restoring state. On a live Board,
+// background UI restoration is therefore a no-op. Native Back/history remains
+// allowed through the capture-phase popstate window above.
+const v3220RenderUiHardBase=typeof v3163RenderUi==="function"?v3163RenderUi:null;
+if(v3220RenderUiHardBase)v3163RenderUi=function(ui){
+  const current=v3220View(),historyAllowed=Date.now()<v3220HistoryUntil;
+  if(v3220Phone()&&v3220Visible()&&v3220ProtectedView(current)&&!v3220RecentIntent()&&!historyAllowed){v3220RestoreLockedSession();v3220RepairBoardShell("blocked-ui-restore");return false}
+  return v3220RenderUiHardBase(ui);
+};
+
+// v3.20.20 cold-recovery ordering fix. Earlier startup timers can render the
+// operational "current" session before our zero-delay recovery callback runs,
+// which would overwrite the last-safe Board snapshot. Capture the snapshot now,
+// synchronously at script evaluation, and consume it once during boot recovery.
+const v3220BootSafeSnapshot=v3220Json(V3220_SAFE_KEY);
+let v3220BootSafeConsumed=false;
+const v3220RecoverSafeFallback=v3220RecoverSafe;
+v3220RecoverSafe=function(){
+  if(!v3220Phone())return false;
+  const boot=(!v3220BootSafeConsumed&&v3220BootSafeSnapshot&&Date.now()-Number(v3220BootSafeSnapshot.saved_at||0)<8*60*60*1000&&v3220SessionExists(v3220BootSafeSnapshot.session_id))?v3220BootSafeSnapshot:null;
+  v3220BootSafeConsumed=true;
+  if(!boot)return v3220RecoverSafeFallback?.();
+  const saved=boot;v3220LockedSessionId=saved.session_id;
+  appState.settings.selected_session_id=saved.session_id;
+  appState.settings.selected_squad=saved.selected_squad||appState.settings.selected_squad;
+  appState.settings.v3126_board_mode=saved.board_mode||appState.settings.v3126_board_mode;
+  appState.settings.v3129_active_block_index=Number(saved.active_block_index)||0;
+  if(saved.selected_athlete_id&&appState.athletes?.some(a=>a.id===saved.selected_athlete_id))appState.settings.selected_athlete_id=saved.selected_athlete_id;
+  saveState(appState);
+  if(saved.view==="deck"){
+    if(v3220View()!=="deck")showView("deck",{force:true,v3220Explicit:true,v3220RestoreDeck:saved});
+    else{renderView?.("deck");v3220RestoreDeckScroll(saved)}
+  }
+  try{localStorage.setItem(V3220_SAFE_KEY,JSON.stringify({...saved,saved_at:Date.now()}));localStorage.setItem(V3220_DECK_KEY,JSON.stringify({...saved,saved_at:Date.now()}))}catch{}
+  requestAnimationFrame(()=>v3220RepairBoardShell("cold-recovery"));return true;
+};
+
+// Preserve the coach's explicitly selected swimmer/focus alongside session/view.
+// A late renderer must not silently replace it with the first modified swimmer.
+let v3220LockedAthleteId=(v3220BootSafeSnapshot?.selected_athlete_id&&appState.athletes?.some(a=>a.id===v3220BootSafeSnapshot.selected_athlete_id)?v3220BootSafeSnapshot.selected_athlete_id:appState.settings.selected_athlete_id)||"";
+function v3220RestoreLockedAthlete(){if(!v3220Phone()||!v3220ProtectedView()||v3220RecentIntent()||Date.now()<v3220HistoryUntil)return false;if(v3220LockedAthleteId&&appState.athletes?.some(a=>a.id===v3220LockedAthleteId)&&appState.settings.selected_athlete_id!==v3220LockedAthleteId){appState.settings.selected_athlete_id=v3220LockedAthleteId;saveState(appState);return true}return false}
+const v3220RestoreLockedSessionAthleteBase=v3220RestoreLockedSession;
+v3220RestoreLockedSession=function(){const changed=v3220RestoreLockedSessionAthleteBase?.();const athleteChanged=v3220RestoreLockedAthlete();return Boolean(changed||athleteChanged)};
+const v3220SetFocusFinalBase=typeof v3213SetFocus==="function"?v3213SetFocus:null;
+if(v3220SetFocusFinalBase)v3213SetFocus=function(session,id=""){
+  const explicit=v3220RecentIntent()||Date.now()<v3220HistoryUntil;
+  if(v3220Phone()&&v3220View()==="deck"&&v3220LockedAthleteId&&id&&id!==v3220LockedAthleteId&&!explicit){console.warn("v3.20.20 blocked background swimmer takeover",v3220LockedAthleteId,"→",id);return false}
+  const out=v3220SetFocusFinalBase(session,id);if(id&&appState.athletes?.some(a=>a.id===id))v3220LockedAthleteId=id;return out;
+};
+const v3220RepairBoardShellAthleteBase=v3220RepairBoardShell;
+v3220RepairBoardShell=function(reason="guard"){v3220RestoreLockedAthlete();return v3220RepairBoardShellAthleteBase(reason)};
+// cold-recovery selected swimmer is authoritative after the first render too
+setTimeout(()=>{if(!v3220RecentIntent())v3220RestoreLockedAthlete()},500);
+setTimeout(()=>{if(!v3220RecentIntent())v3220RestoreLockedAthlete()},2200);
+Object.assign(window.v3220Debug||{}, {lockedAthlete:()=>v3220LockedAthleteId,restoreAthlete:v3220RestoreLockedAthlete});
+
+// -----------------------------------------------------------------------------
+// v3.20.20 final compact-modified-row correction.
+// The canonical group line commonly uses the multiplication sign (×) while
+// generated adaptations use ASCII x. Treat those spellings as equivalent so a
+// swimmer who is deliberately staying with the team does not get a redundant
+// yellow modification card. True individual edits, hard-constraint changes and
+// target-bearing aerobic/race-pace rows remain visible.
+// -----------------------------------------------------------------------------
+function v3220SameLineNorm(value){
+  return String(value||"")
+    .replace(/×/g,"x")
+    .replace(/[–—]/g,"-")
+    .replace(/\s+/g," ")
+    .trim()
+    .toLowerCase();
+}
+v3205ModifiedLine=function(session,block,blockIndex,runnableIndex){
+  let athletes=v3180ModifiedAthletes?.(session)||[];
+  if(!athletes.length)return"";
+  const focus=v3213FocusId(session);
+  if(focus)athletes=athletes.filter(a=>a.id===focus);
+  if(!athletes.length)return"";
+
+  const runnable=v34Array(block?.items).filter(row=>row?.runnable!==false),
+        item=runnable[runnableIndex],
+        itemIndex=v34Array(block?.items).indexOf(item),
+        quality=v3213ShortQuality(item),
+        racePace=v3213RaceTargetDriven(session,block,item),
+        showTarget=v3213TargetDriven(session,block,item),
+        mainRaw=v3206CleanAdaptedLine?.(v3213Line(item))||v3213Line(item),
+        mainNorm=v3220SameLineNorm(mainRaw);
+
+  const cards=athletes.map(athlete=>{
+    const explicit=v3213ExplicitEdit(athlete,session,block,blockIndex,runnableIndex,item);
+    let adapt=null;
+    try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}
+    const row=v34Array(adapt?.rows).filter(x=>!x?.cue)[runnableIndex];
+    if(!row)return"";
+
+    const rawLine=explicit?.changed_text||row.line||"",
+          line=v3206CleanAdaptedLine?.(rawLine)||v3213Text(rawLine),
+          same=!explicit&&v3220SameLineNorm(line)===mainNorm,
+          target=showTarget?(row.target||""):"";
+
+    // Short quality / race-pace work that has not genuinely changed stays with
+    // the group. If a meaningful individual target exists, retain the row so
+    // the coach can see the target without manufacturing a distance change.
+    if((quality||racePace)&&!explicit&&same&&!target)return"";
+    if(same&&!target)return"";
+
+    return `<div class="v3205-mod-row v3212-mod-row v3213-mod-card"><b>${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><span>${escapeHtml(line||"Same as main")}</span>${target?`<em>${escapeHtml(target)}</em>`:""}<button type="button" class="secondary v3212-mod-edit" data-v3212-edit-mod="${escapeHtml(athlete.id)}|${blockIndex}|${itemIndex}">Edit</button></div>`;
+  }).filter(Boolean).join("");
+
+  return cards?`<div class="v3205-mod-rail v3213-mod-rail">${cards}</div>`:"";
+};
+Object.assign(window.v3220Debug||{}, {sameLineNorm:v3220SameLineNorm});
+
+// v3.20.20 final field-truth refinements.
+// Treat common race-pace shorthand as the same wording for compact-row
+// comparison (e.g. @100p == @ 100 Pace). This only affects display equality.
+v3220SameLineNorm=function(value){
+  return String(value||"")
+    .replace(/×/g,"x")
+    .replace(/[–—]/g,"-")
+    .replace(/\b(50|100|200|400|800|1500)\s*p\b/gi,"$1 pace")
+    .replace(/@\s*/g,"@ ")
+    .replace(/\s+/g," ")
+    .trim()
+    .toLowerCase();
+};
+
+// A hard capability constraint must not hand control back to the old generic
+// volume scaler on short quality work. Preserve the group's reps, distance and
+// send-off, and change only the movement required by the athlete constraint.
+// This keeps the athlete in the same coaching window and protects the intended
+// stimulus (e.g. Amber 25 kick fast -> 25 pull fast, not 2 x 50 pull).
+const v3220FinalAdaptationBase=v3180Adaptation;
+v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3220FinalAdaptationBase?.(athlete,session,block,blockIndex);
+  if(!result)return result;
+  const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),
+        rows=v34Array(result.rows).map(row=>({...row}));
+  let ri=-1;
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i];if(row?.cue)continue;ri++;
+    const item=runnable[ri];if(!item||!v3220QualityLine(item))continue;
+    const itemIndex=v34Array(block?.items).indexOf(item),
+          explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,ri,itemIndex);
+    if(explicit)continue;
+    const original=v3220Line(item),work=v3213Work?.(original);
+    if(v3213NoLegUse?.(athlete)&&/\b(?:kick|fins?|underwater|dolphin)\b/i.test(original)){
+      let replacement=v3213AmberEquivalent?.(original)||original.replace(/\bkick\b/ig,"pull").replace(/\bfins?\b/ig,"paddles");
+      // Underwater-only quality is not a usable leg task for this constraint;
+      // keep the same distance/window but make the replacement explicit.
+      replacement=replacement.replace(/\b(?:15\s*m\s*)?underwater\s+max\b/ig,"Pull Max");
+      rows[i]={...row,line:replacement,distance:work?work.reps*work.distance:row.distance,target:v3213TargetDriven?.(session,block,item)?(row.target||""):"",clock:"Same team window",source:"Athlete constraint · same reps/distance/window · no functional leg use"};
+    }else if(v3213NoBreastKickFins?.(athlete)&&/\bkick\b/i.test(original)&&/\bfins?\b/i.test(original)){
+      const replacement=v3213ConorKickEquivalent?.(original)||original;
+      rows[i]={...row,line:replacement,distance:work?work.reps*work.distance:row.distance,target:v3213TargetDriven?.(session,block,item)?(row.target||""):"",clock:"Same team window",source:"Athlete constraint · same reps/distance/window · no Breaststroke kick with fins"};
+    }
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),
+        total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;
+  return {...result,rows,total,repeat};
+};
+Object.assign(window.v3220Debug||{}, {sameLineNorm:v3220SameLineNorm});
