@@ -23438,3 +23438,251 @@ async function v3225RegisterWorker(){if(!('serviceWorker' in navigator)||!locati
 const v3225BrandObserver=new MutationObserver(()=>queueMicrotask(v3225Brand));if(document.querySelector('title'))v3225BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3225BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
 window.v3225Debug={version:V3225_VERSION,build:V3225_BUILD,exact:v3225ExactSession,authoring:v3225AuthoringSession,latch:v3225LatchSession,snapshot:v3225SnapshotSession,restoreDraft:v3225RestoreDraft,parse:v3225ParseBlocks,distance:blocks=>v3200Distance?.(blocks)||0,blockDistance:block=>v3200BlockDistance?.(block)||0,writer:()=>v3192WriteTarget?.(),targetSession:()=>v3126TargetSession?.(),select:id=>setSelectedSession?.(id),rest:text=>v3224ExplicitRest?.(text),targetHint:(item,block)=>v3223TargetHint?.(item,block),t400:(item,block)=>v3205T400Spec?.(item,block),targetDetails:(session,block,item,bi=0,ii=0)=>v3206TargetDetails?.(session,block,item,bi,ii),captureRoster:v3180CaptureRoster,openComposer:options=>v3198OpenComposer?.(options||{}),buildDraft:(raw,type="text")=>v3150BuildDraft?.(raw,type),renderDraft:()=>v3150RenderDraft?.(),persistDraft:v3225PersistDraftNow,commit:()=>v3192CommitToBoard?.(),saveBlock:()=>v32SaveSessionBlock?.(),sessionLabel:v3225SessionLabel,versionKey:V3225_VERSION_KEY,draftKey:V3225_DRAFT_KEY};
 setTimeout(()=>{v3225Brand();v3225EnhanceComposer();v3180CaptureTagsUi?.()},0);setTimeout(()=>{v3225Brand();v3225RegisterWorker();v3225EnhanceComposer()},650);setTimeout(v3225Brand,3100);setTimeout(v3225Brand,13050);setTimeout(v3225Brand,30050);
+
+// =============================================================================
+// McLay Swimming OS v3.20.26 — PARENT SET TRUTH + DECK ACTIONS
+// 14 Aug 2026
+// Focused live-field correction over v3.20.25. Preserve v3.20.23–25 phone
+// performance/session ownership. Repair parent-set repeats/rests, grouped aerobic
+// targets, lazy stroke controls, changed-distance aerobic targets and block-local
+// photo/video capture without reopening the generic Capture page.
+// =============================================================================
+const V3226_VERSION="3.20.26";
+const V3226_BUILD="3.20.26-parent-set-truth-deck-actions-20260814";
+const V3226_CORE="20260814-core3226";
+
+function v3226Text(value){return String(value??"").replace(/\r/g,"").trim()}
+function v3226Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v3226RepeatMarker(value){const text=v3226Text(value).replace(/[–—]/g,"-");let m=text.match(/^\s*(?:repeat\s*)?[x×]\s*(\d{1,2})\s*$/i);if(!m)m=text.match(/^\s*(\d{1,2})\s*(?:x|×|rounds?)\s*$/i);const n=Number(m?.[1]||0);return n>=2&&n<=20?n:null}
+function v3226TitleRepeat(value){const text=v3226Text(value);const m=text.match(/(?:^|\s)(?:repeat\s*)?[x×]\s*(\d{1,2})\s*$/i),n=Number(m?.[1]||0);return n>=2&&n<=20?{count:n,title:text.slice(0,m.index).trim()}:null}
+function v3226NeedsRepeatRepair(block){if(!block)return false;if((Number(block.repeat_count)||1)>1)return v34Array(block.items).some(item=>v3226RepeatMarker(item?.raw||item?.instruction||item?.label));return Boolean(v3226TitleRepeat(block.title)||v34Array(block.items).some(item=>v3226RepeatMarker(item?.raw||item?.instruction||item?.label)))}
+function v3226NormalizeBlock(source){
+  if(!v3226NeedsRepeatRepair(source))return source;
+  const block={...source,items:v34Array(source?.items).map(item=>({...item}))};let repeat=Math.max(1,Number(block.repeat_count)||1),titleRepeat=v3226TitleRepeat(block.title);
+  if(titleRepeat){repeat=Math.max(repeat,titleRepeat.count);if(titleRepeat.title)block.title=titleRepeat.title}
+  const kept=[];for(const item of block.items){const n=v3226RepeatMarker(item?.raw||item?.instruction||item?.label);if(n){repeat=Math.max(repeat,n);continue}kept.push(item)}
+  block.items=kept.map((item,index)=>({...item,sort_order:index+1}));block.repeat_count=repeat;block.v3226_parent_repeat=true;return block;
+}
+function v3226NormalizeBlocks(blocks){return v34Array(blocks).map(v3226NormalizeBlock)}
+
+// Parser and every edited-draft path return the same structural repeat truth.
+const v3226ParseBase=typeof v3225ParseBlocks==="function"?v3225ParseBlocks:typeof v3206ParseBlocks==="function"?v3206ParseBlocks:null;
+function v3226ParseBlocks(raw){return v3226NormalizeBlocks(v3226ParseBase?v3226ParseBase(raw):[])}
+if(v3226ParseBase){for(const name of ["v3206ParseBlocks","v3200ParseBlocks","v3198ParseBlocks","v3193ParseBlocks","v3150ParseBlocks","v3126ParseBlocks","v3127ParseBlocks","v3128ParseBlocks","v3107BlocksFromRaw"]){try{globalThis[name]=v3226ParseBlocks}catch{}}}
+const v3226CollectBase=typeof v3192CollectOrBuild==="function"?v3192CollectOrBuild:null;
+if(v3226CollectBase)v3192CollectOrBuild=function(raw,options={}){return v3226NormalizeBlocks(v3226CollectBase(raw,options))};
+const v3226BoardBlocksBase=typeof v3170BoardBlocks==="function"?v3170BoardBlocks:null;
+if(v3226BoardBlocksBase){v3170BoardBlocks=function(session){return v3226NormalizeBlocks(v3226BoardBlocksBase(session))};try{v3125BoardBlocks=v3170BoardBlocks}catch{}}
+const v3226CommitBlocksBase=typeof v3207CommitBlocks==="function"?v3207CommitBlocks:null;
+if(v3226CommitBlocksBase)v3207CommitBlocks=function(session,blocks,meta={}){return v3226CommitBlocksBase(session,v3226NormalizeBlocks(blocks),meta)};
+estimateDistance=function(text){const blocks=v3226ParseBlocks(text),calculated=typeof v3200Distance==="function"?v3200Distance(blocks):0,explicit=typeof v3200ExplicitTotal==="function"?Number(v3200ExplicitTotal(text)||0):0;return calculated||explicit||0};
+const v3226RoundCountBase=typeof v3205RoundCount==="function"?v3205RoundCount:null;
+if(v3226RoundCountBase)v3205RoundCount=function(block){return Math.max(v3226RoundCountBase(block),Number(block?.repeat_count)||1)};
+
+// -----------------------------------------------------------------------------
+// Parent aerobic set truth. One authored rest applies to the complete boxed set;
+// otherwise the default aerobic model is 10s. The Board can switch the parent
+// set between 10s and 30s with one tap and all child targets recalculate.
+// -----------------------------------------------------------------------------
+function v3226RestSeconds(value){const text=v3226Text(value).toLowerCase().replace(/[–—-]/g," ").replace(/\s+/g," ");let m=text.match(/\b(\d{1,2})\s*(?:s|sec|secs|second|seconds)\s*(?:of\s*)?(?:rest|recovery)\b/);if(!m)m=text.match(/\b(?:rest|recovery)\s*(?:of\s*)?(\d{1,2})\s*(?:s|sec|secs|second|seconds)?\b/);const n=Number(m?.[1]||0);return n>=5&&n<=60?n:null}
+function v3226AerobicItem(item,block){const line=v3226Text(item?.raw||item?.instruction||item?.label),context=`${line} ${v3226Text(block?.purpose)}`,zone=v3226Text(item?.pace_zone);if(/\b(?:HR\s*gauge|heart\s*rate)\b/i.test(context)&&/\b(?:clearance|recovery|easy)\b/i.test(context))return false;return /\b(?:regeneration|development|overload|threshold|aerobic\s+(?:capacity|power))\b/i.test(line)||/^(?:regeneration|development|overload|threshold|aerobic\s+(?:capacity|power))$/i.test(zone)}
+function v3226ParentAerobic(block){const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),aerobic=runnable.filter(item=>v3226AerobicItem(item,block));return runnable.length>=2&&aerobic.length>=2&&aerobic.length===runnable.length}
+function v3226StandaloneRests(block){return v34Array(block?.items).map(item=>({item,rest:v3226RestSeconds(item?.raw||item?.instruction||item?.label)})).filter(row=>row.rest&&row.item?.runnable===false)}
+function v3226ParentRest(block){
+  const saved=Number(block?.v3226_parent_rest||block?.parent_rest_seconds||0);if(saved>=5&&saved<=60)return saved;
+  if(!v3226ParentAerobic(block))return null;
+  const cues=v3226StandaloneRests(block);if(cues.length){const values=[...new Set(cues.map(row=>row.rest))];if(values.length===1)return values[0]}
+  const direct=[...new Set(v34Array(block?.items).filter(item=>item?.runnable!==false).map(item=>v3226RestSeconds(item?.raw||item?.instruction||item?.label)).filter(Boolean))];if(direct.length===1)return direct[0];
+  return 10;
+}
+function v3226RestForItem(item,block){if(v3226AerobicItem(item,block)){const parent=v3226ParentRest(block);if(parent)return parent;const direct=v3226RestSeconds(item?.raw||item?.instruction||item?.label);return direct||10}return null}
+const v3226PaceSpecBase=typeof v382PaceSpec==="function"?v382PaceSpec:null;
+if(v3226PaceSpecBase)v382PaceSpec=function(item,block,session){const rest=v3226RestForItem(item,block),corrected=rest?{...item,pace_rest:rest}:item,spec=v3226PaceSpecBase(corrected,block,session);return rest?{...spec,rest,authored_rest:true}:spec};
+const v3226RestBase=typeof v3129Rest==="function"?v3129Rest:null;
+if(v3226RestBase)v3129Rest=function(item,block){return v3226RestForItem(item,block)||v3226RestBase(item,block)};
+const v3226TargetRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+if(v3226TargetRowsBase)v3205TargetRows=function(session,block,item,blockIndex,itemIndex){const rest=v3226RestForItem(item,block),corrected=rest?{...item,pace_rest:rest}:item;return v3226TargetRowsBase(session,block,corrected,blockIndex,itemIndex)};
+
+function v3226StoredBlocks(session){return (typeof v3123SessionBlocks==="function"?v3123SessionBlocks(session):(appState.session_blocks||[]).filter(row=>row.session_id===session?.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0))).map(v3226Clone)}
+function v3226SetParentRest(session,blockIndex,seconds){
+  const rest=Math.max(5,Math.min(60,Number(seconds)||10)),blocks=v3226StoredBlocks(session),block=blocks[blockIndex];if(!session||!block||!v3226ParentAerobic(block))return false;
+  try{v3225SnapshotSession?.(session,`before parent rest ${rest}s`)}catch{};block.v3226_parent_rest=rest;block.parent_rest_seconds=rest;
+  for(const item of v34Array(block.items))if(item?.runnable!==false&&v3226AerobicItem(item,block))item.pace_rest=rest;
+  const restRows=v34Array(block.items).filter(item=>item?.runnable===false&&v3226RestSeconds(item?.raw||item?.instruction||item?.label));
+  if(restRows.length===1){restRows[0].raw=`${rest}s Rest`;restRows[0].instruction=`${rest}s Rest`;restRows[0].label=`${rest}s Rest`;restRows[0].v3204_cue_reason="rest_instruction"}
+  else if(!restRows.length)block.items.push({id:uid("block-line"),sort_order:block.items.length+1,raw:`${rest}s Rest`,instruction:`${rest}s Rest`,label:`${rest}s Rest`,runnable:false,reps:0,distance:null,line_type:"cue",v3204_cue_reason:"rest_instruction",v3226_parent_rest_cue:true});
+  block.items=v34Array(block.items).map((item,index)=>({...item,sort_order:index+1}));block.raw_text=block.items.map(item=>v3226Text(item.raw||item.instruction||item.label)).filter(Boolean).join("\n");
+  v3207CommitBlocks?.(session,blocks,{source:"v3226_parent_rest",note:`Parent aerobic set changed to ${rest}s rest`});try{v3129TargetCache?.clear?.();V3144_TARGET_CACHE?.clear?.();v3195ClearBoardCaches?.()}catch{};v3201RequestBoardPaint?.(true);return true;
+}
+
+function v3226ApplyRepeat(session,blockIndex,count){
+  const n=Math.max(1,Number(count)||1),blocks=v3226StoredBlocks(session),block=blocks[blockIndex];if(!session||!block)return false;try{v3225SnapshotSession?.(session,`before repeat ×${n}`)}catch{};block.repeat_count=n;block.v3226_parent_repeat=true;
+  block.items=v34Array(block.items).filter(item=>!v3226RepeatMarker(item?.raw||item?.instruction||item?.label)).map((item,index)=>({...item,sort_order:index+1}));block.raw_text=block.items.map(item=>v3226Text(item.raw||item.instruction||item.label)).filter(Boolean).join("\n");
+  v3207CommitBlocks?.(session,blocks,{source:"v3226_parent_repeat",note:`Parent set repeat changed to ×${n}`});
+  const record={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`Everyone: ${block.title||"set"} repeat changed to ×${n}`,session_block_id:block.id||null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal?.("captures",record);queueRecord?.("captures",record.id);saveState(appState);v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true);return true;
+}
+
+// Live “+ Line” entry of a bare X2/×2 is a structural repeat, not a new set line.
+const v3226OpenAddLineBase=typeof v3212OpenAddLine==="function"?v3212OpenAddLine:null;
+if(v3226OpenAddLineBase)v3212OpenAddLine=function(blockIndex){
+  const out=v3226OpenAddLineBase(blockIndex),modal=document.getElementById("v3212AddLineModal"),save=modal?.querySelector("[data-v3212-add-save]");
+  if(save)save.addEventListener("click",event=>{const text=v3226Text(modal.querySelector("[data-v3212-add-text]")?.value),repeat=v3226RepeatMarker(text);if(!repeat)return;event.preventDefault();event.stopImmediatePropagation();const session=v3225ExactSession?.()||selectedSession?.();if(v3226ApplyRepeat(session,Number(blockIndex),repeat))modal.remove()},true);return out;
+};
+
+// -----------------------------------------------------------------------------
+// Changed-distance aerobic modifications must recalculate the target from the
+// resulting distance/rest. Never retain the parent-distance target string.
+// -----------------------------------------------------------------------------
+const v3226AdaptationBase=typeof v3180Adaptation==="function"?v3180Adaptation:null;
+if(v3226AdaptationBase)v3180Adaptation=function(athlete,session,block,blockIndex){
+  const result=v3226AdaptationBase(athlete,session,block,blockIndex);if(!result)return result;const runnable=v34Array(block?.items).filter(item=>item?.runnable!==false),rows=v34Array(result.rows).map(row=>({...row}));let ri=-1;
+  for(let i=0;i<rows.length;i++){const row=rows[i];if(row?.cue)continue;ri++;const item=runnable[ri];if(!item||!v3226AerobicItem(item,block))continue;try{const parsedProbe=v3170ParseItem?.(row.line||item.raw||item.instruction,ri),parsed=parsedProbe?.item||parsedProbe;if(!parsed)continue;const mainDistance=Number(item.distance)||0,adaptedDistance=Number(parsed.distance)||0,mainReps=Math.max(1,Number(item.reps)||1),adaptedReps=Math.max(1,Number(parsed.reps)||1);if(mainDistance===adaptedDistance&&mainReps===adaptedReps)continue;const spec=v382PaceSpec?.(parsed,block,session),target=v382RowTarget?.(athlete,spec);row.distance=adaptedReps*adaptedDistance;if(target?.status==="ok"){row.target=target.primary||"";row.source=[row.source,"Recalculated from modified distance"].filter(Boolean).join(" · ")}}
+    catch(error){console.warn("v3.20.26 modified target recalculation",error)}
+  }
+  const repeat=Math.max(1,Number(result.repeat)||Number(block?.repeat_count)||1),total=rows.reduce((sum,row)=>sum+(Number(row.distance)||0),0)*repeat;return{...result,rows,total,repeat};
+};
+
+// -----------------------------------------------------------------------------
+// One parent-set target view. A boxed aerobic progression loads all swimmer
+// targets together and displays board-language target + send-off on one line.
+// -----------------------------------------------------------------------------
+function v3226ParentGroups(block){return v3205BoardGroups?.(block)?.groups?.filter(group=>v3226AerobicItem(group.item,block))||[]}
+function v3226ZoneShort(item,block){const text=`${v3226Text(item?.raw||item?.instruction||item?.label)} ${v3226Text(block?.title)}`;if(/regeneration/i.test(text))return"Reg";if(/development/i.test(text))return"Dev";if(/overload/i.test(text))return"OL";if(/threshold/i.test(text))return"Thr";if(/aerobic\s*power/i.test(text))return"A-Pwr";if(/aerobic\s*capacity/i.test(text))return"A-Cap";return"Aerobic"}
+function v3226ColumnLabel(item,block){const d=Number(item?.distance)||Number((v3226Text(item?.raw||item?.instruction).match(/\b(\d{2,4})\b/)||[])[1])||0;return `${d?`${d} `:""}${v3226ZoneShort(item,block)}`.trim()}
+function v3226CellText(row){if(!row||row.missing||row.status==="missing")return"—";const target=Number(row.targetSeconds),cycle=Number(row.cycleSeconds);if(Number.isFinite(target)&&target>0)return `${v3205Clock?.(target)||formatSeconds(target)}${Number.isFinite(cycle)&&cycle>0?` on ${v3205Clock?.(cycle)||formatSeconds(cycle)}`:""}`;const primary=v3226Text(row.primary);return primary||"—"}
+function v3226ParentTargetHtml(session,block,blockIndex){
+  const groups=v3226ParentGroups(block);if(groups.length<2)return'<p class="help">This block does not have a grouped aerobic target set.</p>';
+  const byAthlete=new Map(),labels=groups.map(group=>v3226ColumnLabel(group.item,block));
+  groups.forEach((group,column)=>{const rows=v3205TargetRows?.(session,block,group.item,blockIndex,group.itemIndex)||[];for(const row of rows){const id=row?.athlete?.id;if(!id)continue;if(!byAthlete.has(id))byAthlete.set(id,{athlete:row.athlete,cells:Array(groups.length).fill(null),sort:Infinity});const entry=byAthlete.get(id);entry.cells[column]=row;if(column===0&&Number.isFinite(Number(row.targetSeconds)))entry.sort=Number(row.targetSeconds)}});
+  const rows=[...byAthlete.values()].sort((a,b)=>a.sort-b.sort||v3226Text(a.athlete?.full_name).localeCompare(v3226Text(b.athlete?.full_name)));const columns=`52px repeat(${groups.length},minmax(78px,1fr))`;
+  return `<div class="v3226-target-grid" style="--v3226-cols:${columns}"><div class="v3226-target-head" style="grid-template-columns:${columns}"><b>Swim</b>${labels.map(label=>`<strong>${escapeHtml(label)}</strong>`).join("")}</div>${rows.map(entry=>`<div class="v3226-target-row" style="grid-template-columns:${columns}" title="${escapeHtml(entry.athlete?.full_name||"")}"><b>${escapeHtml(v3205Initials?.(entry.athlete)||"?")}</b>${entry.cells.map(cell=>`<span>${escapeHtml(v3226CellText(cell))}</span>`).join("")}</div>`).join("")||'<p class="help">No target rows loaded.</p>'}</div>`;
+}
+function v3226LoadParentTargets(details,session){if(!details?.open)return;const host=details.querySelector("[data-v3226-parent-target-body]");if(!host||host.dataset.loaded==="1")return;const index=Number(details.dataset.v3226ParentTargets),block=v3170BoardBlocks?.(session)?.[index];host.innerHTML=block?v3226ParentTargetHtml(session,block,index):'<p class="help">Set targets unavailable.</p>';host.dataset.loaded="1";v3226BindStrokeButtons(host)}
+
+function v3226ModifiedSummary(session,block,blockIndex){
+  if(!v3226ParentAerobic(block))return"";const athletes=v3180ModifiedAthletes?.(session)||[],main=v34Array(block.items).filter(item=>item?.runnable!==false);if(!athletes.length)return"";const rendered=[];
+  for(const athlete of athletes){let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{};const rows=v34Array(adapt?.rows).filter(row=>!row?.cue),diff=[];for(let i=0;i<Math.min(main.length,rows.length);i++){const row=rows[i],mainLine=v3226Text(main[i]?.raw||main[i]?.instruction),adapted=v3226Text(row?.line);const same=(typeof v3206Norm==="function"?v3206Norm(adapted)===v3206Norm(mainLine):adapted.toLowerCase()===mainLine.toLowerCase());if(same&&!row?.target)continue;if(!same){const target=v3226Text(row?.target);diff.push(`<span>${escapeHtml(adapted||mainLine)}${target?` — <strong>${escapeHtml(target)}</strong>`:""}</span>`)}}
+    if(diff.length)rendered.push(`<div class="v3226-mod-athlete"><b title="${escapeHtml(athlete.full_name)}">${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><div>${diff.join("")}</div></div>`)
+  }
+  return rendered.length?`<div class="v3226-parent-mods"><div class="v3226-mod-head"><strong>Modified within this set</strong><span>Only differences shown</span></div>${rendered.join("")}</div>`:"";
+}
+// Parent aerobic blocks render their modification differences once, not once per line.
+const v3226ModifiedLineBase=typeof v3205ModifiedLine==="function"?v3205ModifiedLine:null;
+if(v3226ModifiedLineBase)v3205ModifiedLine=function(session,block,blockIndex,runnableIndex){if(v3226ParentAerobic(block))return"";return v3226ModifiedLineBase(session,block,blockIndex,runnableIndex)};
+
+const v3226BlockCardBase=typeof v3205BlockCard==="function"?v3205BlockCard:null;
+if(v3226BlockCardBase)v3205BlockCard=function(session,block,index,options={}){
+  const normal=v3226NormalizeBlock(block),parent=v3226ParentAerobic(normal);let html=v3226BlockCardBase(session,normal,index,options);if(!parent)return html;
+  const rest=v3226ParentRest(normal)||10,repeat=Math.max(1,Number(normal.repeat_count)||1),toolbar=`<div class="v3226-parent-toolbar"><span class="v3226-parent-label">${repeat>1?`${repeat}× set · `:""}Aerobic parent set</span><div class="v3226-rest-toggle" aria-label="Aerobic rest model"><span>Rest</span><button type="button" data-v3226-rest="${index}:10" class="${rest===10?"active":""}">10s</button><button type="button" data-v3226-rest="${index}:30" class="${rest===30?"active":""}">30s</button></div><details data-v3226-parent-targets="${index}"><summary>Set targets ›</summary><div data-v3226-parent-target-body data-loaded="0"><p class="help">Open once to see every swimmer across this set.</p></div></details></div>`,mods=v3226ModifiedSummary(session,normal,index);
+  html=html.replace("</header>",`</header>${toolbar}`);if(mods)html=html.replace('<div class="v3205-block-actions">',`${mods}<div class="v3205-block-actions">`);return html;
+};
+if(v3226BlockCardBase){v3191BlockCard=v3205BlockCard;v3190BlockCard=v3205BlockCard;v3180BlockCard=v3205BlockCard;v3170BlockCard=function(session,block,index){return v3205BlockCard(session,block,index,{whole:false})}}
+
+// -----------------------------------------------------------------------------
+// Lazy-target regression: v3.20.23 inserted stroke pills after the Board bind.
+// Rebind those pills as soon as the lazy target HTML is injected.
+// -----------------------------------------------------------------------------
+function v3226BindStrokeButtons(host=document){host?.querySelectorAll?.("[data-v3140-stroke-athlete]").forEach(button=>{if(button.dataset.v3226StrokeBound==="1")return;button.dataset.v3226StrokeBound="1";button.onclick=event=>{event.preventDefault();event.stopPropagation();v3140OpenStrokeChooser?.(button)}})}
+const v3226LoadTargetsBase=typeof v3223LoadTargets==="function"?v3223LoadTargets:null;
+if(v3226LoadTargetsBase)v3223LoadTargets=function(details,session){const out=v3226LoadTargetsBase(details,session);queueMicrotask(()=>v3226BindStrokeButtons(details));return out};
+
+// -----------------------------------------------------------------------------
+// Block-local media. Do not navigate to generic Capture. The block/session are
+// already known; choose attending swimmer(s), then open camera. Local save remains
+// first and v3.20.19 deferred video processing remains protected.
+// -----------------------------------------------------------------------------
+let v3226CaptureContext=null;
+function v3226StoredBlock(session,blockIndex){const blocks=(appState.session_blocks||[]).filter(row=>row.session_id===session?.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));return blocks[blockIndex]||null}
+function v3226CaptureRoster(session){return v3180RelevantAttendance?.(session)?.filter(row=>v3180Here?.(row.status)).map(row=>(appState.athletes||[]).find(a=>a.id===row.athlete_id)).filter(Boolean)||[]}
+function v3226CaptureNames(){const ids=v3180TagIds?.()||[];if(!ids.length)return"Attending group";return ids.map(id=>(appState.athletes||[]).find(a=>a.id===id)?.full_name).filter(Boolean).join(", ")||"Selected swimmer"}
+const v3226CaptureContextBase=typeof v3219CaptureContextBase==="function"?v3219CaptureContextBase:null;
+if(v3226CaptureContextBase)v3219CaptureContextBase=function(kind,localId,mime,text){const out=v3226CaptureContextBase(kind,localId,mime,text);if(v3226CaptureContext){out.session_id=v3226CaptureContext.sessionId||out.session_id;out.session_block_id=v3226CaptureContext.blockId||out.session_block_id}return out};
+const v3226SaveMediaBase=typeof v3219SavePhoneMedia==="function"?v3219SavePhoneMedia:null;
+if(v3226SaveMediaBase)v3219SavePhoneMedia=async function(file,kind){const context=v3226CaptureContext,out=await v3226SaveMediaBase(file,kind);if(context){const label=kind==="video"?"Video":"Photo",name=context.blockTitle||"Current block";v3219Status?.(`${label} saved · ${v3226CaptureNames()} · ${name}`);document.getElementById("v3226MediaPicker")?.remove();v3226CaptureContext=null}return out};
+function v3226OpenMediaPicker(session,blockIndex,preferred="video"){
+  if(!session)return;document.getElementById("v3226MediaPicker")?.remove();const block=v3170BoardBlocks?.(session)?.[blockIndex],stored=v3226StoredBlock(session,blockIndex),roster=v3226CaptureRoster(session);v3180SetTagIds?.([]);v3226CaptureContext={sessionId:session.id,blockId:stored?.id||block?.id||null,blockIndex,blockTitle:block?.title||v32BlockLabel?.(block?.block_type)||"Current block"};
+  document.body.insertAdjacentHTML("beforeend",`<div id="v3226MediaPicker" class="v3226-media-overlay"><div class="v3226-media-dialog"><header><div><span class="eyebrow">${escapeHtml(v3226CaptureContext.blockTitle)}</span><h3>Who is this for?</h3></div><button type="button" class="secondary" data-v3226-media-close>Close</button></header><div class="v3226-media-tags"><button type="button" data-v3226-media-group class="active">Whole attending group</button>${roster.map(a=>`<button type="button" title="${escapeHtml(a.full_name)}" data-v3226-media-athlete="${escapeHtml(a.id)}">${escapeHtml(v3180Initials?.(a.full_name)||v3205Initials?.(a)||a.full_name)}</button>`).join("")}</div>${roster.length?"":'<p class="help">No swimmers are marked Here. Whole attending group will be saved.</p>'}<div class="v3226-media-actions"><button type="button" data-v3226-media-kind="video" class="${preferred==="video"?"active":""}">🎥 Record video</button><button type="button" data-v3226-media-kind="photo" class="${preferred==="photo"?"active":""}">📷 Take photo</button></div><small>Session + block are already attached. Media saves locally first.</small></div></div>`);
+  const modal=document.getElementById("v3226MediaPicker"),render=()=>{const ids=v3180TagIds?.()||[];modal.querySelector("[data-v3226-media-group]")?.classList.toggle("active",ids.length===0);modal.querySelectorAll("[data-v3226-media-athlete]").forEach(button=>button.classList.toggle("active",ids.includes(button.dataset.v3226MediaAthlete)))};
+  modal.querySelector("[data-v3226-media-close]").onclick=()=>{modal.remove();v3226CaptureContext=null};modal.onclick=event=>{if(event.target===modal){modal.remove();v3226CaptureContext=null}};
+  modal.querySelector("[data-v3226-media-group]").onclick=()=>{v3180SetTagIds?.([]);render()};modal.querySelectorAll("[data-v3226-media-athlete]").forEach(button=>button.onclick=()=>{const next=new Set(v3180TagIds?.()||[]),id=button.dataset.v3226MediaAthlete;next.has(id)?next.delete(id):next.add(id);v3180SetTagIds?.([...next]);render()});
+  modal.querySelectorAll("[data-v3226-media-kind]").forEach(button=>button.onclick=()=>{v3180InstallCaptureHandlers?.();const kind=button.dataset.v3226MediaKind,input=document.getElementById(kind==="video"?"videoInput":"photoInput");if(input)input.click()});render();
+}
+const v3226OpenBlockMediaBase=typeof v3212OpenBlockMedia==="function"?v3212OpenBlockMedia:null;
+if(v3226OpenBlockMediaBase)v3212OpenBlockMedia=function(session,blockIndex,kind){if(!v3219Phone?.()||kind==="voice")return v3226OpenBlockMediaBase(session,blockIndex,kind);v3222MarkExplicit?.(2200);return v3226OpenMediaPicker(session,blockIndex,kind)};
+
+// Board bindings added only to the static DOM already rendered. No observer or
+// scroll/state timer is introduced.
+const v3226BindBoardBase=typeof v3170BindBoard==="function"?v3170BindBoard:null;
+if(v3226BindBoardBase)v3170BindBoard=function(host,session){const out=v3226BindBoardBase(host,session);host?.querySelectorAll?.("[data-v3226-rest]").forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();const [b,r]=button.dataset.v3226Rest.split(":").map(Number);v3226SetParentRest(session,b,r)});host?.querySelectorAll?.("details[data-v3226-parent-targets]").forEach(details=>details.addEventListener("toggle",()=>v3226LoadParentTargets(details,session),{passive:true}));v3226BindStrokeButtons(host);return out};
+
+// -----------------------------------------------------------------------------
+// UI: compact parent set, compact multi-mod rows, and one lightweight media modal.
+// -----------------------------------------------------------------------------
+const v3226Style=document.createElement("style");v3226Style.id="v3226Styles";v3226Style.textContent=`
+.v3226-parent-toolbar{display:grid;grid-template-columns:auto auto minmax(120px,1fr);gap:6px;align-items:center;margin:6px 8px 8px;padding:6px 7px;border:1px solid #c6d9e2;border-radius:10px;background:#f6fafc}.v3226-parent-label{font-size:.65rem;font-weight:850;color:#44636f}.v3226-rest-toggle{display:flex;align-items:center;gap:3px}.v3226-rest-toggle>span{font-size:.6rem;font-weight:800;color:#627985}.v3226-rest-toggle button{min-height:30px!important;padding:3px 7px!important;font-size:.63rem!important}.v3226-rest-toggle button.active{background:#174f70!important;color:#fff!important;border-color:#174f70!important}.v3226-parent-toolbar>details{min-width:0}.v3226-parent-toolbar>details>summary{cursor:pointer;list-style:none;border:1px solid #bcd1db;border-radius:8px;padding:6px 8px;font-size:.66rem;font-weight:850;color:#174f70;background:#fff}.v3226-parent-toolbar>details[open]{grid-column:1/-1}.v3226-parent-toolbar>details[open]>summary{margin-bottom:6px}.v3226-target-grid{display:grid;gap:2px;overflow-x:auto}.v3226-target-head,.v3226-target-row{display:grid;gap:3px;align-items:center;min-width:300px}.v3226-target-head>*{font-size:.6rem;color:#566f7a;padding:3px}.v3226-target-row{border-top:1px solid #e1ebef}.v3226-target-row>b{font-size:.65rem;color:#163e55;padding:5px 2px}.v3226-target-row>span{font-size:.63rem;font-weight:780;color:#203f4d;white-space:nowrap;padding:5px 3px}.v3226-parent-mods{display:grid;gap:3px;margin:5px 8px 8px;padding:6px;border:1px solid #d3e0e6;border-radius:9px;background:#fbfcfd}.v3226-mod-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.v3226-mod-head strong{font-size:.66rem;color:#274d60}.v3226-mod-head span{font-size:.56rem;color:#6d808a}.v3226-mod-athlete{display:grid;grid-template-columns:32px 1fr;gap:5px;padding-top:4px;border-top:1px solid #e5edef}.v3226-mod-athlete>b{font-size:.67rem;color:#174f70}.v3226-mod-athlete>div{display:grid;gap:2px;min-width:0}.v3226-mod-athlete span{font-size:.62rem;line-height:1.24;white-space:normal;overflow-wrap:anywhere}.v3226-mod-athlete strong{white-space:nowrap;color:#173f54}.v3226-media-overlay{position:fixed;inset:0;z-index:10050;background:rgba(8,26,36,.42);display:flex;align-items:flex-end;justify-content:center;padding:8px}.v3226-media-dialog{width:min(560px,100%);max-height:72vh;overflow:auto;background:#fff;border-radius:15px;padding:11px;box-shadow:0 12px 38px rgba(4,24,34,.28)}.v3226-media-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.v3226-media-dialog h3{margin:2px 0 7px;font-size:1.05rem}.v3226-media-tags{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 10px}.v3226-media-tags button{min-width:43px;min-height:38px!important;padding:5px 8px!important;font-size:.68rem!important}.v3226-media-tags button.active{background:#174f70!important;color:#fff!important;border-color:#174f70!important}.v3226-media-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.v3226-media-actions button{min-height:47px!important}.v3226-media-dialog>small{display:block;margin-top:6px;color:#607985;font-size:.62rem}
+@media(max-width:900px){.v3226-parent-toolbar{grid-template-columns:1fr auto}.v3226-parent-label{grid-column:1}.v3226-parent-toolbar>details{grid-column:1/-1}.v3226-parent-toolbar>details[open]{grid-column:1/-1}.v3226-parent-mods{margin-left:6px;margin-right:6px}.v3226-media-overlay{padding:6px;padding-bottom:calc(72px + env(safe-area-inset-bottom))}}
+`;document.head.appendChild(v3226Style);
+
+// -----------------------------------------------------------------------------
+// Current build authority.
+// -----------------------------------------------------------------------------
+function v3226Brand(){const title=`McLay Swimming OS — v${V3226_VERSION} Parent Set Truth + Deck Actions`,subtitle=`v${V3226_VERSION} · parent-set repeats/rest · grouped targets · quick stroke · block-local media`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3226_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3226_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3226_VERSION}`;badge.dataset.build=V3226_BUILD;badge.title=V3226_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V3226_BUILD)}
+async function v3226RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3226_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.26 service worker update",error)}}
+try{v3225BrandObserver?.disconnect?.()}catch{}
+const v3226BrandObserver=new MutationObserver(()=>queueMicrotask(v3226Brand));if(document.querySelector("title"))v3226BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3226BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3226Debug={version:V3226_VERSION,build:V3226_BUILD,parse:v3226ParseBlocks,normalise:v3226NormalizeBlocks,parentAerobic:v3226ParentAerobic,parentRest:v3226ParentRest,restForItem:v3226RestForItem,parentTargets:v3226ParentTargetHtml,setRest:(seconds,blockIndex=0)=>v3226SetParentRest(v3225ExactSession?.()||selectedSession?.(),blockIndex,seconds),applyRepeat:(count,blockIndex=0)=>v3226ApplyRepeat(v3225ExactSession?.()||selectedSession?.(),blockIndex,count),bindStroke:v3226BindStrokeButtons,media:v3226OpenMediaPicker};
+v3226Brand();setTimeout(()=>{v3226Brand();v3226RegisterWorker()},0);setTimeout(v3226Brand,900);setTimeout(v3226Brand,3100);setTimeout(v3226Brand,13075);setTimeout(v3226Brand,30075);
+
+// -----------------------------------------------------------------------------
+// v3.20.26 generic Max guide. When no race pace/segment is authored, use the
+// shortest honest race reference: <=50m from the 50 PB/race-start or push shape;
+// >50m from the shortest event that contains the work. Explicit pace always wins.
+// -----------------------------------------------------------------------------
+function v3226ExplicitRaceInstruction(line){const text=v3226Text(line);return /@\s*(?:50|100|200|400|800|1500)\s*p\b|\b(?:50|100|200|400|800|1500)\s*(?:m\s*)?(?:race\s*)?pace\b|\b(?:first|second|third|fourth|last|\d+(?:st|nd|rd|th))\s+(?:25|50|100)\b[^\n]{0,30}\b(?:of|in)\s+(?:50|100|200|400|800|1500)\b/i.test(text)||Boolean(v3199RaceDistance?.(text))}
+function v3226MaxWorkDistance(item,block,itemIndex){let distance=Number(item?.distance)||0;try{const group=v3205BoardGroups?.(block)?.groups?.find(row=>Number(row.itemIndex)===Number(itemIndex));for(const cue of group?.attachments||[]){const text=v3226Text(cue.text||cue.item?.raw||cue.item?.instruction),m=text.match(/\b(5|10|12\.5|15|20|25|35|50|65|75|100)\s*m?\s*(?:max|maximum)\b/i);if(m)distance=Number(m[1])}}catch{}return distance}
+function v3226GenericMaxEligible(item,block,itemIndex){const line=v3226Text(item?.raw||item?.instruction||item?.label),text=`${line} ${v3226Text(block?.title)} ${v3226Text(block?.purpose)}`;if(!/\bmax(?:imum)?\b/i.test(text)||v3226ExplicitRaceInstruction(line))return false;if(/\b(?:kick|fins?|bands?|scull|drill|underwater)\b/i.test(text)&&!/\b(?:dive|race\s*start|from\s+blocks?|push\s*start)\b/i.test(text))return false;return v3226MaxWorkDistance(item,block,itemIndex)>0}
+function v3226ContainingRace(distance){const d=Number(distance)||0;return [50,100,200,400,800,1500].find(value=>value>=d)||1500}
+function v3226GenericMaxRows(session,block,item,blockIndex,itemIndex){
+  const line=v3226Text(item?.raw||item?.instruction||item?.label);
+  const repDistance=v3226MaxWorkDistance(item,block,itemIndex);
+  const eventDistance=v3226ContainingRace(repDistance);
+  const course=v3Course?.(item?.pace_course||session?.pool_course||"SCM")||"SCM";
+  const cycleSeconds=Number(item?.cycle)||v3129ExplicitCycle?.(item)||null;
+  const plan=typeof v3129LanePlan==="function"?v3129LanePlan(session):{roster:v3204PresentAthletes?.(session)||[],assignments:new Map()};
+  const rows=[];
+  for(const athlete of plan.roster||[]){
+    const resolved=v3207ResolvePaceStroke?.(athlete,session,block,item,blockIndex,itemIndex)||v3140ResolveStroke?.(athlete,session,block,item,blockIndex,itemIndex)||{};
+    const stroke=v3207Stroke?.(resolved.stroke)||resolved.stroke||"Freestyle";
+    let target=null,source="",method="";
+    if(repDistance<=50){
+      const anchor=v3207RaceAnchor?.(athlete,course,50,stroke);
+      if(anchor){
+        const sex=v3150Sex?.(athlete)||v3206Sex?.(athlete),model=v3150ModelFor?.(sex,100,stroke);
+        if(model?.parts?.[0]){
+          const equivalent100=anchor.seconds/Number(model.parts[0]),profile=v3150FiftyProfile?.(equivalent100,sex,100,stroke);
+          const dive=/\bdive|race\s*start|from\s+blocks?/i.test(line),push=/\bpush(?:\s*start)?\b/i.test(line);
+          if(profile){
+            if(dive){target=v3211RaceCumulative?.(profile,repDistance);method="50 PB · start segment"}
+            else {const push50=v3150PushFirst50?.(profile);target=Number.isFinite(push50)&&push50>0?push50*(repDistance/50):anchor.seconds*(repDistance/50);method=push?"50 PB · push segment":"50 PB · max push guide"}
+            source=anchor.source||`${course} 50 ${stroke} PB`;
+          }
+        }
+      }
+    }else{
+      const anchor=v3207RaceAnchor?.(athlete,course,eventDistance,stroke);
+      if(anchor){
+        const sex=v3150Sex?.(athlete)||v3206Sex?.(athlete);
+        const guide=v3150TargetFromTotal?.(anchor.seconds,{sex,eventDistance,eventStroke:stroke,repDistance,line:`first ${repDistance}m`,resolvedStroke:stroke});
+        if(guide?.seconds){target=guide.seconds;method=`${eventDistance} PB · first ${repDistance}m`;source=anchor.source||`${course} ${eventDistance} ${stroke} PB`}
+      }
+    }
+    const missing=!Number.isFinite(Number(target))||Number(target)<=0;
+    rows.push({athlete,lane:plan.assignments?.get?.(athlete.id)||1,resolved:{...resolved,stroke,token:resolved.token||"editable"},missing,status:missing?"missing":"ok",targetSeconds:missing?null:Number(target),cycleSeconds,primary:missing?"Target needed":cycleSeconds?`${v3205Clock?.(target)||formatSeconds(target)} on ${v3205Clock?.(cycleSeconds)||formatSeconds(cycleSeconds)}`:(v3205Clock?.(target)||formatSeconds(target)),secondary:missing?`No ${course} ${eventDistance} ${stroke} reference`:`${source} · ${method}`,source,source_label:missing?"Target needed":source,method});
+  }
+  return rows;
+}
+const v3226GenericMaxRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+if(v3226GenericMaxRowsBase)v3205TargetRows=function(session,block,item,blockIndex,itemIndex){if(v3226GenericMaxEligible(item,block,itemIndex))return v3226GenericMaxRows(session,block,item,blockIndex,itemIndex);return v3226GenericMaxRowsBase(session,block,item,blockIndex,itemIndex)};
+const v3226TargetHintBase=typeof v3223TargetHint==="function"?v3223TargetHint:null;
+if(v3226TargetHintBase)v3223TargetHint=function(item,block){const index=v34Array(block?.items).indexOf(item);if(v3226GenericMaxEligible(item,block,index))return true;return v3226TargetHintBase(item,block)};
+window.v3226Debug.maxEligible=v3226GenericMaxEligible;window.v3226Debug.maxRows=v3226GenericMaxRows;
