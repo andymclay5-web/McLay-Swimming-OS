@@ -23918,3 +23918,223 @@ try{v3226BrandObserver?.disconnect?.()}catch{}
 const v3227BrandObserver=new MutationObserver(()=>queueMicrotask(v3227Brand));if(document.querySelector("title"))v3227BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3227BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3227Debug={version:V3227_VERSION,build:V3227_BUILD,effectiveLine:v3227EffectiveLine,t400Prior:v3227T400Prior,t400Select:v3227OpenT400Selector,t400Seed:v3227SeedT400,t400Summary:v3227OpenT400Summary,evidence:v3227OpenEvidence,parentRest:(seconds,blockIndex=0)=>v3226SetParentRest?.(v3225ExactSession?.()||selectedSession?.(),blockIndex,seconds)};
 v3227Brand();setTimeout(()=>{v3227Brand();v3227RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);setTimeout(v3227Brand,900);setTimeout(v3227Brand,3100);setTimeout(v3227Brand,13100);setTimeout(v3227Brand,30100);
+
+// =============================================================================
+// McLay Swimming OS v3.20.28 — PHONE TRUTH + HEAD-COACH FOCUS
+// 14 Aug 2026
+// Field-repair layer over v3.20.27. Keep the working local-first Board/evidence
+// path. Repair canonical metres, phone clipping, T400 domain separation,
+// selected-swimmer persistence, Coach Hub squad threading/stimulus truth and
+// Finish-as-delivered. Start moving Hub/report surfaces toward the North Star:
+// evidence underneath, coaching interpretation and next action on top.
+// =============================================================================
+const V3228_VERSION="3.20.28";
+const V3228_BUILD="3.20.28-phone-truth-head-coach-focus-20260814";
+const V3228_CORE="20260814-core3228";
+
+function v3228Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3228Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v3228Line(item){return v3228Text(item?.raw||item?.instruction||item?.label)}
+function v3228BlockType(block){return String(block?.block_type||"").toLowerCase()}
+function v3228Total(blocks){return v34Array(blocks).reduce((sum,block)=>sum+Number(v3170BlockDistance?.(block)||0),0)}
+
+// -----------------------------------------------------------------------------
+// 1. Canonical Board tree repair.
+// A cue inside a parent rep must never become metres. Tiny parser fragments such
+// as "1 Paddles" / "1 Swim" are composition cues, not 1-metre swims. Apply the
+// same repaired tree to Board, Coach Hub and Finish rather than reparsing each.
+// -----------------------------------------------------------------------------
+function v3228CompositionFragment(item,parent){
+  if(!item||item.runnable===false)return false;const line=v3228Line(item),d=Number(item.distance||0),reps=Number(item.reps||0);
+  if(/^\s*\d+\s*[x×]\s*\d+/i.test(line))return false;
+  if(d>0&&d<=10&&reps<=1&&/^\s*\d+\s+(?:pull|paddles?|swim|kick|fins?|drill|choice|free(?:style)?|back(?:stroke)?|breast(?:stroke)?|fly|butterfly|im|medley)\b/i.test(line))return true;
+  if(parent&&Number(parent.reps||0)>1&&Number(parent.distance||0)>0&&d>0&&d<Number(parent.distance)&&!/(@|\bon\b)\s*\d/i.test(line)&&/\b(?:max|underwater|build|drill|swim|kick|scull|hands?|body|position|to\s+wall|pace)\b/i.test(line))return true;
+  return false;
+}
+function v3228FixBlocks(blocks){
+  let out=v34Array(blocks).map(block=>({...block,items:v34Array(block?.items).map(item=>({...item}))}));
+  try{if(typeof v3224FixNestedCueMeters==="function")out=v3224FixNestedCueMeters(out)}catch{}
+  try{if(typeof v3225FixComposition==="function")out=v3225FixComposition(out)}catch{}
+  try{if(typeof v3226NormalizeBlocks==="function")out=v3226NormalizeBlocks(out)}catch{}
+  out=out.map(source=>{const block={...source,items:v34Array(source?.items).map(item=>({...item}))};let parent=null;
+    for(const item of block.items){
+      if(item.runnable===false)continue;
+      if(v3228CompositionFragment(item,parent)){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3228_composition_cue=true;continue}
+      parent=item;
+    }
+    return block;
+  });
+  return out;
+}
+const v3228BoardBlocksBase=typeof v3170BoardBlocks==="function"?v3170BoardBlocks:null;
+if(v3228BoardBlocksBase){v3170BoardBlocks=function(session){return v3228FixBlocks(v3228BoardBlocksBase(session)||[])};try{v3125BoardBlocks=v3170BoardBlocks}catch{}}
+
+// Stop a parser/read discrepancy from silently rewriting the immutable plan.
+// The Board total is delivered truth; the planned distance remains plan truth.
+const v3228ReconcileBase=typeof v3180ReconcileDistance==="function"?v3180ReconcileDistance:null;
+v3180ReconcileDistance=function(session,blocks){return v3228Total(blocks)};
+
+function v3228PlanStore(){if(!appState.settings.v3228_plan_distance)appState.settings.v3228_plan_distance={};return appState.settings.v3228_plan_distance}
+function v3228SourcePlanDistance(session){
+  if(!session)return 0;const store=v3228PlanStore();if(Number(store[session.id])>0)return Number(store[session.id]);let sourceTotal=0;
+  try{const raw=String(v3123SourceText?.(session)||session.workout||"").trim();if(raw){const parsed=typeof v3226ParseBlocks==="function"?v3226ParseBlocks(raw):[];sourceTotal=v3228Total(v3228FixBlocks(parsed))}}catch{}
+  const saved=Number(session.planned_distance||0),chosen=sourceTotal>0?sourceTotal:saved;if(chosen>0){store[session.id]=chosen;saveState(appState)}return chosen||0;
+}
+
+// Coach Hub rows now consume exactly the Board tree. No second parser is allowed
+// to produce a different session distance or invent 1m composition lines.
+const v3228SessionRowsBase=typeof v390SessionRows==="function"?v390SessionRows:null;
+function v3228StimulusZone(item,block,session,fallback="Unclassified"){
+  const line=v3228Line(item),text=`${line} ${v3228Text(block?.title)} ${v3228Text(block?.purpose)} ${v3228Text(block?.cues)}`.toLowerCase(),type=v3228BlockType(block);
+  if(/\b(regeneration|regen|recovery|reset|easy|loosen)\b/.test(text)||type==="warm_up"||type==="warm_down")return"Regeneration";
+  if(/\b(scull|hbs|hands?\s+by\s+side|drill|alignment|technique|technical|stroke count|body position|build)\b/.test(text))return"Skill / technique";
+  if(/\b(?:100|200|400|800|1500)\s*(?:m\s*)?(?:race\s*)?pace\b|\brace\s*pace\b/.test(text))return"Race pace";
+  if(/\b(overload|aerobic\s+power)\b/.test(text))return"Overload";
+  if(/\b(threshold|css)\b/.test(text))return"Threshold";
+  if(/\b(development|aerobic\s+capacity)\b/.test(text))return"Development";
+  if(/\b(clearance|lactate clearance)\b/.test(text))return"Clearance";
+  if(/\b(max|maximum|all out|dive start|dive|start)\b/.test(text))return"Anaerobic power";
+  if(/\b(anaerobic capacity|anc)\b/.test(text))return"Anaerobic capacity";
+  if(/\b(anaerobic power|anp)\b/.test(text))return"Anaerobic power";
+  if(type==="post_set"&&/\b\d+\s*[x×]\s*100\b/.test(text)&&/\b(?:rest|kick|pull|paddles?|swim|free|fins?)\b/.test(text))return"Development";
+  return fallback||"Unclassified";
+}
+v390SessionRows=function(session=selectedSession?.()){
+  if(!session)return[];const blocks=v3170BoardBlocks?.(session)||[],rows=[];
+  blocks.forEach((block,blockIndex)=>{let itemIndex=-1;for(const item of v34Array(block.items)){itemIndex++;if(item?.runnable===false)continue;const key=typeof v390LineKey==="function"?v390LineKey(block,blockIndex,item,itemIndex):`${blockIndex}:${itemIndex}`,inferred=typeof v390IntensityClassification==="function"?v390IntensityClassification(item,block,session):{zone:"Unclassified",confidence:.4,reasoning:"",suggestion:"",distance:(Number(item.reps)||0)*(Number(item.distance)||0)},saved=typeof v390SavedClassification==="function"?v390SavedClassification(session.id,key):null,zone=saved?.canonical_zone||v3228StimulusZone(item,block,session,inferred.zone),distance=(Number(item.reps)||0)*(Number(item.distance)||0)*Math.max(1,Number(block.repeat_count)||1);rows.push({session,block,blockIndex,item,itemIndex,key,inferred,saved,zone,confidence:saved?.confidence??inferred.confidence,reasoning:saved?.reasoning||inferred.reasoning,suggestion:saved?.suggestion||inferred.suggestion,distance})}});return rows;
+};
+
+// -----------------------------------------------------------------------------
+// 2. Stimulus-value model: raw metres and coaching stimulus are two views.
+// The linked session purpose leads; high-quality max/race work carries more
+// stimulus value than its metres, while recovery/skill remains visible but does
+// not become the session identity by volume alone.
+// -----------------------------------------------------------------------------
+const v3228RoleBase=typeof v3140RoleForRow==="function"?v3140RoleForRow:null;
+v3140RoleForRow=function(row,primary){
+  const text=v3140RowText?.(row).toLowerCase?.()||"",type=v3228BlockType(row?.block),zone=row?.zone;
+  if(type==="warm_up"||type==="warm_down"||zone==="Regeneration"||/\b(easy|loosen|recovery|regeneration|reset)\b/.test(text))return"Preparation / recovery";
+  if(zone==="Skill / technique"||/\b(scull|hbs|hands?\s+by\s+side|skill|alignment|drill|technique|technical|build)\b/.test(text))return"Maintenance / skill";
+  if(zone===primary)return"Primary target";
+  if(primary==="Anaerobic capacity"&&zone==="Race pace"&&/\b(?:100\s*(?:m\s*)?(?:race\s*)?pace|@\s*100\s*pace|100\s*pace)\b/.test(text))return"Primary target";
+  if(primary==="Anaerobic power"&&["Speed","Race pace"].includes(zone))return"Primary target";
+  return"Supporting work";
+};
+const v3228IntensityWeightBase=typeof v3140IntensityWeight==="function"?v3140IntensityWeight:null;
+v3140IntensityWeight=function(zone){if(zone==="Skill / technique")return .35;return v3228IntensityWeightBase?v3228IntensityWeightBase(zone):.7};
+function v3228PlannedZone(session,expected=[]){
+  const direct=typeof v390ZoneName==="function"?v390ZoneName(session?.primary_system||session?.technical_focus||""):null;if(direct)return direct;
+  const purpose=typeof v3150SessionPurpose==="function"?v3150SessionPurpose(session):"",mapped=typeof v390ZoneName==="function"?v390ZoneName(purpose):null;return mapped||expected?.[0]||null;
+}
+v3140SessionInterpretation=function(session=selectedSession?.()){
+  const rows=v390SessionRows(session),modelExpected=typeof v390ExpectedZones==="function"?v390ExpectedZones(session):[],zoneWeights={},raw={};
+  for(const row of rows){const distance=Math.max(0,Number(row.distance||0)),zone=row.zone||"Unclassified",roleProbe=v3140RoleForRow(row,"__none__"),type=v3228BlockType(row.block);raw[zone]=(raw[zone]||0)+distance;let context=type==="main_set"?1.15:type==="pre_set"?.8:type==="post_set"?.78:.55;if(roleProbe==="Preparation / recovery")context=.16;if(roleProbe==="Maintenance / skill")context=.28;zoneWeights[zone]=(zoneWeights[zone]||0)+Math.max(25,distance)*v3140IntensityWeight(zone)*context}
+  const ranked=Object.entries(zoneWeights).filter(([zone])=>zone!=="Unclassified"&&zone!=="Skill / technique").sort((a,b)=>b[1]-a[1]),planned=v3228PlannedZone(session,modelExpected),expected=[...new Set([planned,...modelExpected].filter(Boolean))],primary=planned||ranked[0]?.[0]||"General session";
+  const roleTotals={"Primary target":0,"Supporting work":0,"Maintenance / skill":0,"Preparation / recovery":0};
+  for(const row of rows){const role=v3140RoleForRow(row,primary),distance=Math.max(0,Number(row.distance||0)),base=Math.max(25,distance)*v3140IntensityWeight(row.zone),factor=role==="Primary target"?1.18:role==="Supporting work"?.72:role==="Maintenance / skill"?.34:.14;roleTotals[role]+=base*factor}
+  const totalWeight=Object.values(roleTotals).reduce((a,b)=>a+b,0)||1,shares=Object.fromEntries(Object.entries(roleTotals).map(([key,value])=>[key,Math.round(value/totalWeight*100)])),support=ranked.map(([zone])=>zone).filter(zone=>zone!==primary).slice(0,3),rawTotal=Object.values(raw).reduce((a,b)=>a+b,0),primaryShare=shares["Primary target"]||0;
+  let check="";if(planned&&primaryShare<30)check=`The linked plan says ${v3163ZoneDisplay?.(planned)||planned}, but the delivered work currently gives it only ${primaryShare}% of weighted stimulus. Review whether the target work was large or intense enough.`;
+  return {rows,expected,primary,support,raw,rawTotal,roleTotals,shares,check,zoneWeights,planned};
+};
+v3163SessionInterpretation=function(session=selectedSession?.()){return v3140SessionInterpretation(session)};
+
+// -----------------------------------------------------------------------------
+// 3. Programme thread: previous/next means the selected squad's programme, not
+// whichever club squad happened to train immediately before/after on calendar.
+// Calendar remains operational truth; only relevant squad sessions are linked.
+// -----------------------------------------------------------------------------
+function v3228SessionSquadKeys(session){return new Set((typeof sessionSquads==="function"?sessionSquads(session):v34Array(session?.squads)).map(v3195OperationalSquadKey).filter(Boolean))}
+function v3228SharesSquad(a,b){const aa=v3228SessionSquadKeys(a),bb=v3228SessionSquadKeys(b);for(const key of aa)if(bb.has(key))return true;return false}
+function v3228SessionSortKey(session){return `${session?.session_date||""}-${String(session?.day_part||"").toUpperCase()==="AM"?"0":"1"}-${session?.id||""}`}
+v3150PreviousNext=function(session){if(!session)return{previous:null,next:null};const key=v3228SessionSortKey(session),sameWeek=session.weekly_plan_id||session.weekly_plan_id===0?String(session.weekly_plan_id):"",rows=(appState.sessions||[]).filter(row=>row.id!==session.id&&row.status!=="cancelled"&&v3228SharesSquad(session,row)).sort((a,b)=>v3228SessionSortKey(a).localeCompare(v3228SessionSortKey(b))),preferred=sameWeek?rows.filter(row=>String(row.weekly_plan_id||"")===sameWeek):rows,candidates=preferred.length?preferred:rows;return{previous:candidates.filter(row=>v3228SessionSortKey(row)<key).at(-1)||null,next:candidates.find(row=>v3228SessionSortKey(row)>key)||null}};
+
+// Clarify that the Hub is reading the squad thread, and put the development
+// question near the analysis without adding another long page of controls.
+const v3228ContextDetailsBase=typeof v3163HubContextDetails==="function"?v3163HubContextDetails:null;
+if(v3228ContextDetailsBase)v3163HubContextDetails=function(session,context){let html=v3228ContextDetailsBase(session,context);html=html.replace(/<span>From previous<\/span>/g,"<span>Previous for this squad</span>").replace(/<span>Protect \/ lead into<\/span>/g,"<span>Next for this squad</span>");return html};
+const v3228CoachHubPlanBase=typeof v3163CoachHubPlanTab==="function"?v3163CoachHubPlanTab:null;
+if(v3228CoachHubPlanBase)v3163CoachHubPlanTab=function(){let html=v3228CoachHubPlanBase();const session=selectedSession?.();if(!session)return html;const data=v3163SessionInterpretation(session),delivered=v3228Total(v3170BoardBlocks?.(session)||[]),planned=v3228SourcePlanDistance(session)||Number(session.planned_distance||0),insert=`<article class="card v3228-head-coach-question"><span class="eyebrow">Head Coach question</span><h3>What does this squad and its swimmers need next for their development?</h3><p><strong>Plan:</strong> ${escapeHtml(v3150SessionPurpose?.(session)||"Session purpose")} · <strong>Delivered:</strong> ${delivered.toLocaleString()}m${planned?` · <strong>Plan distance:</strong> ${planned.toLocaleString()}m`:""}</p><p class="help">Use the session evidence, attendance, modifications, tests and results to decide what carries into the next session and week. Raw changes stay underneath; coaching meaning leads.</p></article>`;return html.replace(/(<details class="card v3163-hub-detail" data-v3163-state="coachhub-tools")/,`${insert}$1`)};
+
+// v3.16.3's active Hub uses v3.14 report launchers, so bind both attribute sets.
+const v3228BindHubBase=typeof v3163BindCoachHub==="function"?v3163BindCoachHub:null;
+v3163BindCoachHub=function(host){v3228BindHubBase?.(host);host?.querySelectorAll?.("[data-v3140-jump]").forEach(button=>button.onclick=()=>{const target=button.dataset.v3140Jump;if(target==="athletes"&&v3228SelectedAthleteId)appState.settings.selected_athlete_id=v3228SelectedAthleteId;saveState(appState);showView(target)});host?.querySelectorAll?.("[data-v3140-edit-hub]").forEach(button=>button.onclick=()=>v33OpenSessionComposer?.({reset:false}));host?.querySelectorAll?.("[data-v3140-capture]").forEach(button=>button.onclick=()=>v3140OpenCapture?.({sessionId:selectedSession?.()?.id}))};
+
+// -----------------------------------------------------------------------------
+// 4. T400 is a training-test data domain. NT stays NT. Official race PBs and
+// generic timed 400s never masquerade as a T400 seed or prior comparison.
+// -----------------------------------------------------------------------------
+v3227T400Seed=function(athlete,stroke="Freestyle"){const prior=v3227T400Prior?.(athlete?.id,stroke);if(prior)return{seconds:Number(prior.result_seconds),source:"T400 PB"};const manual=Number(appState.settings?.v3228_t400_manual_seed?.[athlete?.id]?.[v3Stroke?.(stroke)||stroke]);if(Number.isFinite(manual)&&manual>0)return{seconds:manual,source:"Coach seed"};return{seconds:null,source:"T400 NT"}};
+
+// -----------------------------------------------------------------------------
+// 5. Selected swimmer is explicit app context. Render/filter/hydration may not
+// replace William (or any swimmer) with the first athlete in a list.
+// -----------------------------------------------------------------------------
+let v3228SelectedAthleteId=(appState.athletes||[]).some(a=>a.id===appState.settings.selected_athlete_id)?appState.settings.selected_athlete_id:"";
+function v3228RememberAthlete(id){if(id&&(appState.athletes||[]).some(a=>a.id===id)){v3228SelectedAthleteId=id;appState.settings.selected_athlete_id=id;saveState(appState)}return id}
+const v3228SelectAthleteBase=typeof selectAthleteEverywhere==="function"?selectAthleteEverywhere:null;
+if(v3228SelectAthleteBase)selectAthleteEverywhere=function(id){v3228RememberAthlete(id);const out=v3228SelectAthleteBase(id);v3228RememberAthlete(id);return out};
+const v3228RenderAthletesBase=typeof renderAthletes==="function"?renderAthletes:null;
+if(v3228RenderAthletesBase)renderAthletes=function(){const keep=v3228SelectedAthleteId||appState.settings.selected_athlete_id,out=v3228RenderAthletesBase();if(keep&&(appState.athletes||[]).some(a=>a.id===keep)){appState.settings.selected_athlete_id=keep;const select=document.getElementById("athleteQuickSelect");if(select&&![...select.options].some(o=>o.value===keep)){const a=(appState.athletes||[]).find(x=>x.id===keep);if(a)select.insertAdjacentHTML("afterbegin",`<option value="${escapeHtml(keep)}">${escapeHtml(a.full_name)} — ${escapeHtml(a.squad||"")}</option>`)}if(select)select.value=keep;v3228RememberAthlete(keep)}return out};
+const v3228RenderResultsBase=typeof renderResults==="function"?renderResults:null;
+if(v3228RenderResultsBase)renderResults=function(){const keep=v3228SelectedAthleteId||appState.settings.selected_athlete_id,out=v3228RenderResultsBase();if(keep&&(appState.athletes||[]).some(a=>a.id===keep)){appState.settings.selected_athlete_id=keep;const select=document.getElementById("resultsAthlete");if(select&&[...select.options].some(o=>o.value===keep))select.value=keep;v3228RememberAthlete(keep)}return out};
+const v3228EnsureFilterBase=typeof v3215EnsureSelectionForFilter==="function"?v3215EnsureSelectionForFilter:null;
+if(v3228EnsureFilterBase)v3215EnsureSelectionForFilter=function(value){const keep=v3228SelectedAthleteId||appState.settings.selected_athlete_id;if(keep&&(appState.athletes||[]).some(a=>a.id===keep)){appState.settings.selected_athlete_id=keep;return(appState.athletes||[]).find(a=>a.id===keep)}return v3228EnsureFilterBase(value)};
+document.addEventListener("change",event=>{const el=event.target;if(!(el instanceof HTMLSelectElement))return;if(["athleteQuickSelect","resultsAthlete","deckAthlete"].includes(el.id)&&el.value)setTimeout(()=>v3228RememberAthlete(el.value),0)},true);
+document.addEventListener("click",event=>{const button=event.target?.closest?.("[data-edit-athlete],[data-athlete-id],[data-v3215-athlete]");const id=button?.dataset?.editAthlete||button?.dataset?.athleteId||button?.dataset?.v3215Athlete;if(id)v3228RememberAthlete(id)},true);
+document.addEventListener("change",event=>{const el=event.target;if(el?.id!=="v380AthleteSelect")return;const keep=v3228SelectedAthleteId;setTimeout(()=>{if(keep&&(appState.athletes||[]).some(a=>a.id===keep)){appState.settings.selected_athlete_id=keep;saveState(appState)}},0)},true);
+
+// -----------------------------------------------------------------------------
+// 6. Finish is a description of the delivered canonical session, not a request
+// for the coach to retype a distance the Board already knows.
+// -----------------------------------------------------------------------------
+function v3228DeliveredDistance(session,blocks){const pending=appState.settings?.v3206_finish_here_pending;if(pending?.session_id===session?.id&&Number(pending.actual_distance)>=0)return Number(pending.actual_distance);const review=sessionReview?.(session?.id)||{};if(pending?.session_id===session?.id&&Number(review.actual_distance)>=0)return Number(review.actual_distance);return v3228Total(blocks)}
+v3180FinishPanel=function(session,blocks,{open=false}={}){const plan=v3180PlanData?.(session)||{today:"Did today achieve its purpose?",week:"Did this support the week?",season:"Did this support the season?"},saved=appState.settings.v3180_finish_outcomes?.[session.id]||{},draft=typeof v3197FinishDraft==="function"?v3197FinishDraft(session,blocks):{},isOpen=open||draft.open,delivered=v3228DeliveredDistance(session,blocks),planned=v3228SourcePlanDistance(session)||Number(session.planned_distance||delivered),delta=delivered-planned,deltaText=delta===0?"on plan":`${delta>0?"+":""}${delta.toLocaleString()}m`;return `<details class="v3180-finish v3228-finish" data-v3180-finish ${isOpen?"open":""}><summary><span><strong>Finish session</strong><small>Delivered truth · learning · carry forward</small></span><b>${isOpen?"−":"＋"}</b></summary><div class="v3180-finish-body"><div class="v3228-finish-distance"><div><span>Planned</span><strong>${planned.toLocaleString()}m</strong></div><div><span>Delivered</span><strong>${delivered.toLocaleString()}m</strong></div><b>${escapeHtml(deltaText)}</b></div><input data-v3180-distance type="hidden" value="${delivered}"><div class="v3228-finish-route"><button type="button" class="secondary" data-v3228-finish-here>Finish here — session ended early</button></div><div class="v3180-finish-question"><span>Today</span><strong>${escapeHtml(plan.today)}</strong>${v3180OutcomeButtons("today",saved.today)}</div><div class="v3180-finish-question"><span>Week</span><strong>${escapeHtml(plan.week)}</strong>${v3180OutcomeButtons("week",saved.week)}</div><div class="v3180-finish-question"><span>Season</span><strong>${escapeHtml(plan.season)}</strong>${v3180OutcomeButtons("season",saved.season)}</div><label>What changed / what did we learn?<textarea data-v3180-changed placeholder="Only what matters for the next decision">${escapeHtml(draft.changed||"")}</textarea></label><label>What needs to carry forward?<textarea data-v3180-carry>${escapeHtml(draft.carry||"")}</textarea></label><div class="v3180-finish-actions"><button type="button" data-v3180-finish-capture="audio">🎙 Audio</button><button type="button" class="secondary" data-v3180-finish-capture="photo">📷 Photo</button><button type="button" class="secondary" data-v3180-finish-capture="video">🎥 Video</button></div><button type="button" class="v3180-complete" data-v3180-complete>Finish as delivered</button><div class="help" data-v3180-finish-status></div></div></details>`};
+const v3228BindBoardBase=typeof v3170BindBoard==="function"?v3170BindBoard:null;
+v3170BindBoard=function(host,session){const out=v3228BindBoardBase?.(host,session);host?.querySelectorAll?.("[data-v3228-finish-here]").forEach(button=>button.onclick=()=>{const blocks=v3170BoardBlocks?.(session)||[],index=Math.max(0,Math.min(blocks.length-1,Number(appState.settings.v3129_active_block_index)||0));v3202OpenFinishHere?.(session,index)});requestAnimationFrame(()=>v3228ApplyColourThreads(session,host));return out};
+
+// -----------------------------------------------------------------------------
+// 7. Temporary swimmer colour threads for modifications. Initials remain the
+// primary identifier; colour is a session-only secondary cue and automatically
+// gets readable text. Tapping a grouped initials pill cycles its session colour.
+// -----------------------------------------------------------------------------
+const V3228_COLOURS=["#0f6f8f","#8a4b9d","#b05d16","#286a45","#9a3f54","#5b5ea6","#7b6411","#4f6d7a"];
+function v3228ColourStore(){if(!appState.settings.v3228_session_colours)appState.settings.v3228_session_colours={};return appState.settings.v3228_session_colours}
+function v3228Luma(hex){const m=String(hex).match(/^#([0-9a-f]{6})$/i);if(!m)return 0;const n=parseInt(m[1],16),r=(n>>16)&255,g=(n>>8)&255,b=n&255;return .299*r+.587*g+.114*b}
+function v3228AthleteColour(session,athlete){const store=v3228ColourStore(),key=session?.id||"session";if(!store[key])store[key]={};if(!store[key][athlete.id]){const ordered=(appState.athletes||[]).filter(a=>a.active!==false).sort(rosterSort),index=Math.max(0,ordered.findIndex(a=>a.id===athlete.id));store[key][athlete.id]=V3228_COLOURS[index%V3228_COLOURS.length]}return store[key][athlete.id]}
+function v3228CycleColour(session,athlete){const store=v3228ColourStore(),current=v3228AthleteColour(session,athlete),index=Math.max(0,V3228_COLOURS.indexOf(current));store[session.id][athlete.id]=V3228_COLOURS[(index+1)%V3228_COLOURS.length];saveState(appState)}
+function v3228ApplyColourThreads(session,host=document){if(!session||!host)return;host.querySelectorAll?.(".v3226-mod-athlete").forEach(row=>{const pill=row.querySelector(":scope > b"),athlete=(appState.athletes||[]).find(a=>v3228Text(a.full_name)===v3228Text(pill?.title));if(!pill||!athlete)return;const colour=v3228AthleteColour(session,athlete);row.style.borderLeft=`3px solid ${colour}`;pill.style.background=colour;pill.style.color=v3228Luma(colour)>150?"#14232b":"#fff";pill.style.borderRadius="999px";pill.style.display="grid";pill.style.placeItems="center";pill.style.minHeight="28px";pill.style.cursor="pointer";pill.title=`${athlete.full_name} · tap to change session colour`;pill.onclick=event=>{event.preventDefault();event.stopPropagation();v3228CycleColour(session,athlete);v3228ApplyColourThreads(session,host)}})}
+
+// -----------------------------------------------------------------------------
+// 8. Phone containment. Every Board/card/detail branch is allowed to wrap; no
+// swimmer or target panel can widen the viewport or hide the right-hand edge.
+// -----------------------------------------------------------------------------
+const v3228Style=document.createElement("style");v3228Style.id="v3228Styles";v3228Style.textContent=`
+.v3228-head-coach-question{border-left:4px solid #174f70}.v3228-head-coach-question h3{margin:.2rem 0 .45rem}.v3228-head-coach-question p{margin:.35rem 0}.v3228-finish-distance{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;align-items:center;padding:9px;border:1px solid #bfd2dc;border-radius:11px;background:#f7fafb}.v3228-finish-distance>div{display:grid;gap:1px}.v3228-finish-distance span{font-size:.62rem;color:#657d88;font-weight:800;text-transform:uppercase}.v3228-finish-distance strong{font-size:1rem;color:#174f70}.v3228-finish-distance>b{font-size:.72rem;color:#526d79}.v3228-finish-route{display:grid;margin:7px 0}.v3228-finish-route button{width:100%}
+@media(max-width:900px){html,body{max-width:100vw!important;overflow-x:hidden!important}#deck,#coachhub,#coachHub,.view,.card,.v3170-current-card,.v3205-board-block,.v3205-board-lines,.v3205-board-line,.v3205-board-line details,.v3205-board-line summary,.v3205-line-copy,.v3205-line-open,.v3205-mod-rail,.v3205-mod-row,.v3226-parent-toolbar,.v3226-parent-mods,.v3226-mod-athlete,.v3226-mod-athlete>div,.v3226-target-grid,.v3226-target-head,.v3226-target-row,.v3140-target-details,.v3180-target-groups,.v3163-hub-detail,.v3163-hub-detail-body{box-sizing:border-box!important;min-width:0!important;max-width:100%!important}.v3205-board-line,.v3205-board-line details,.v3205-board-line summary,.v3205-line-open,.v3226-parent-mods,.v3226-target-grid,.v3163-hub-detail-body{overflow:visible!important}.v3205-board-line summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:7px!important}.v3205-line-copy strong,.v3205-line-copy small,.v3205-line-open,.v3205-mod-row span,.v3205-mod-row em,.v3226-mod-athlete span,.v3226-target-row span,.v3163-hub-detail-body *{overflow-wrap:anywhere!important;word-break:normal!important;white-space:normal!important}.v3226-target-grid{width:100%!important}.v3226-target-head,.v3226-target-row{width:100%!important}.v3226-target-head>*{font-size:.52rem!important;padding:3px 1px!important}.v3226-target-row>span{font-size:.56rem!important;padding:4px 1px!important}.v3226-parent-toolbar{margin-left:4px!important;margin-right:4px!important}.v3226-parent-mods{margin-left:4px!important;margin-right:4px!important}.v3228-finish-distance{grid-template-columns:1fr 1fr}.v3228-finish-distance>b{grid-column:1/-1}.v3180-finish{padding-bottom:calc(76px + env(safe-area-inset-bottom))}.v3163-context-grid{grid-template-columns:1fr!important}.v3163-workbench-actions,.v3163-hub-tools{grid-template-columns:1fr 1fr!important}}
+`;document.head.appendChild(v3228Style);
+
+// -----------------------------------------------------------------------------
+// Current build authority.
+// -----------------------------------------------------------------------------
+function v3228Brand(){const title=`McLay Swimming OS — v${V3228_VERSION} Phone Truth`;const subtitle=`v${V3228_VERSION} · canonical Board metres · stimulus truth · T400 separation · Head Coach focus`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3228_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3228_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3228_VERSION}`;badge.dataset.build=V3228_BUILD;badge.title=V3228_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V3228_BUILD)}
+async function v3228RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3228_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.28 service worker update",error)}}
+try{v3227BrandObserver?.disconnect?.()}catch{}
+const v3228BrandObserver=new MutationObserver(()=>queueMicrotask(v3228Brand));if(document.querySelector("title"))v3228BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3228BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+window.v3228Debug={version:V3228_VERSION,build:V3228_BUILD,fixBlocks:v3228FixBlocks,total:v3228Total,rows:v390SessionRows,interpret:v3140SessionInterpretation,thread:v3150PreviousNext,t400Seed:v3227T400Seed,selected:()=>v3228SelectedAthleteId,planDistance:v3228SourcePlanDistance,delivered:v3228DeliveredDistance};
+v3228Brand();setTimeout(()=>{v3228Brand();v3228RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);setTimeout(v3228Brand,900);setTimeout(v3228Brand,3100);setTimeout(v3228Brand,13100);setTimeout(v3228Brand,30100);
+
+// v3.20.28 final Hub evidence view: canonical Board metres only; stale saved
+// parser totals do not create a second truth. Detail stays available underneath.
+v3163HubReasoningDetails=function(data){
+  const session=selectedSession?.(),rows=data?.rows||[],review=session?sessionReview?.(session.id):null,parsed=Number(data?.rawTotal||0),boardTotal=session?v3228Total(v3170BoardBlocks?.(session)||[]):0,planned=session?v3228SourcePlanDistance(session):0,raw=Object.entries(data?.raw||{}).filter(([,value])=>Number(value)>0).sort((a,b)=>b[1]-a[1]),targetRows=rows.filter(row=>v3140RoleForRow(row,data.primary)==="Primary target"),supportRows=rows.filter(row=>v3140RoleForRow(row,data.primary)==="Supporting work"),mismatch=Math.abs(boardTotal-parsed)>.5;
+  const evidence=rows.map(row=>{const role=v3140RoleForRow(row,data.primary),text=v3228Line(row.item);return `<details class="v3200-evidence-row"><summary><span><strong>${escapeHtml(text)}</strong><small>${escapeHtml(row.block?.title||"Set")} · ${Math.round(Number(row.distance)||0).toLocaleString()}m counted</small></span><b>${escapeHtml(v3163ZoneDisplay(row.zone))}</b></summary><div><p><strong>Role:</strong> ${escapeHtml(role)}</p><p><strong>Why:</strong> ${escapeHtml(row.reasoning||"Interpreted from the written set, session purpose and block context.")}</p></div></details>`}).join("");
+  return `<details class="card v3163-hub-detail" data-v3163-state="coachhub-reasoning"><summary><span><strong>Why the session reads this way</strong><small>${Math.round(boardTotal).toLocaleString()}m canonical Board · weighted stimulus separate</small></span><b>＋</b></summary><div class="v3163-hub-detail-body">${mismatch?`<div class="warning-box"><strong>Canonical read mismatch</strong><br>Board ${boardTotal.toLocaleString()}m · analysis ${parsed.toLocaleString()}m. Stimulus learning is paused until these agree.</div>`:""}<div class="v3200-truth-grid"><div><span>Planned purpose</span><strong>${escapeHtml(v3150SessionPurpose?.(session)||session?.primary_system||"Session plan")}</strong></div><div><span>Canonical session</span><strong>${boardTotal.toLocaleString()}m</strong></div><div><span>Plan distance</span><strong>${planned?`${planned.toLocaleString()}m`:"Not frozen yet"}</strong></div><div><span>Delivered / reviewed</span><strong>${review?.actual_distance?`${Number(review.actual_distance).toLocaleString()}m recorded`:"Live Board still open"}</strong></div></div><p class="help">Raw distance shows exposure. Weighted stimulus asks what the work was actually designed to develop. Recovery and skill metres stay visible without winning the session simply by being numerous.</p><div class="v3163-raw-zones">${raw.map(([zone,value])=>`<span><b>${escapeHtml(v3163ZoneDisplay(zone))}</b>${Math.round(value).toLocaleString()}m</span>`).join("")||'<span>No runnable work parsed.</span>'}</div><div class="v3163-evidence-grid"><div><span>Primary-stimulus evidence</span><strong>${targetRows.length} runnable line${targetRows.length===1?"":"s"}</strong></div><div><span>Supporting evidence</span><strong>${supportRows.length} runnable line${supportRows.length===1?"":"s"}</strong></div></div><div class="v3200-line-evidence"><h4>Counted line evidence</h4>${evidence||'<div class="help">No runnable line evidence.</div>'}</div><p class="v3163-t400-note"><strong>Lee T400:</strong> calibrates supported aerobic speeds only. Official race PBs remain in the race/results domain; T400 remains a training-test domain.</p></div></details>`;
+};
+
+// Any older generic 400-test helper must obey the same T400 separation while a
+// T400 is active. Non-T400 timed 400s keep their existing benchmark behaviour.
+const v3228TestBenchmarkBase=typeof v3201TestBenchmark==="function"?v3201TestBenchmark:null;
+if(v3228TestBenchmarkBase)v3201TestBenchmark=function(athlete,distance,stroke){const mode=appState.settings?.v3204_timing_mode||appState.settings?.v3201_test_mode;if(Number(distance)===400&&mode?.kind==="t400"){const prior=v3227T400Prior?.(athlete.id,stroke);return prior?{seconds:Number(prior.result_seconds),source:"T400 PB"}:{seconds:null,source:"T400 NT"}}return v3228TestBenchmarkBase(athlete,distance,stroke)};
+
+// Refresh aliases that were assigned to older function objects before this layer.
+v3140RenderCoachHub=v3163RenderCoachHub;v390RenderCoachHub=v3163RenderCoachHub;v390IntelligenceTab=v3163CoachHubPlanTab;
