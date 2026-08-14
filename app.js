@@ -78,6 +78,12 @@ for(const [key,value] of Object.entries({selected_session_id:"",selected_squad:"
   if(window.appState.settings[key]===undefined) window.appState.settings[key]=value;
 }
 saveState(window.appState);
+// v3.20.30 preflight: capture the persisted coaching context before inherited startup layers run.
+window.__MSOS_V3230_BOOT_SELECTION={
+  session_id:String(window.appState.settings?.selected_session_id||""),
+  athlete_id:String(window.appState.settings?.selected_athlete_id||""),
+  squad:String(window.appState.settings?.selected_squad||"")
+};
 
 function getConfig(){
   const base = window.MCLAY_CONFIG || {};
@@ -11653,7 +11659,7 @@ v3131Brand=v3140Brand;v3129Brand=v3140Brand;if(typeof v3130Brand!=="undefined")v
 function v3140AfterRender(){
   v3140Navigation();for(const id of ["coachhub","athletes","testsets","results"])v3140AddContextCapture(id);document.querySelectorAll(".v390-deck-intelligence").forEach(node=>node.hidden=true);if((document.querySelector(".view.active")?.id||"deck")==="deck")v3140BoardBind();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();v3140Brand();
 }
-setTimeout(v3140Brand,0);setTimeout(v3140Brand,400);setTimeout(v3140Brand,1200);
+/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 function v3140CompactFinder(){
   const host=$("v3131SessionFinder");if(!host)return;host.classList.add("v3140-compact-finder");let button=host.querySelector("[data-v3140-toggle-finder]");
@@ -11844,7 +11850,7 @@ v3140BoardBind=function(){v3141BoardBindBase?.();const active=$("v3126ActiveView
 const v3141AfterRenderBase=v3140AfterRender;
 v3140AfterRender=function(){v3141AfterRenderBase?.();renderActiveContext();if((document.querySelector(".view.active")?.id||"")==="sessions")renderSessions();v3141Brand()};
 setTimeout(()=>{renderActiveContext();v3141Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()},0);
-setTimeout(v3141Brand,1500);
+/* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.14.1 compatibility: v3.6 repointed the older adaptation helper to the
 // structured table. Read both structured adaptations and legacy saved captures.
@@ -11993,7 +11999,7 @@ function v3142Brand(){document.title=`McLay Swimming OS — v${V3142_VERSION} Pe
 v3141Brand=v3142Brand;v3140Brand=v3142Brand;v3131Brand=v3142Brand;v3129Brand=v3142Brand;
 
 function v3142Refresh(){v3142EnsureBaselineProfiles();v3142Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState?.();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();v371RenderProfileStarter?.()}
-setTimeout(v3142Refresh,0);setTimeout(v3142Refresh,500);setTimeout(v3142Brand,1500);
+setTimeout(v3142Refresh,0);setTimeout(v3142Refresh,500);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.14.3 — current / next session priority
@@ -12111,7 +12117,7 @@ renderAll=function(){v3143AutoSelectCurrentSession(false);return v3143RenderAllB
 function v3143Brand(){document.title=`McLay Swimming OS — v${V3143_VERSION} Session Priority`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3143_VERSION} · today / next session first · permanent modified baselines · Board flow repair`}
 v3142Brand=v3143Brand;v3141Brand=v3143Brand;v3140Brand=v3143Brand;v3131Brand=v3143Brand;v3129Brand=v3143Brand;
 function v3143Refresh(){const changed=v3143AutoSelectCurrentSession(false);v3143Brand();renderActiveContext();if(changed)renderAll();else{if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState?.();if((document.querySelector(".view.active")?.id||"")==="sessions")renderSessions()}}
-setTimeout(v3143Refresh,0);setTimeout(v3143Refresh,450);setTimeout(v3143Brand,1500);
+setTimeout(v3143Refresh,0);setTimeout(v3143Refresh,450);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.14.4 — plan bridge + instant swimmer profiles
@@ -12315,7 +12321,7 @@ selectAthleteEverywhere=function(id){
 function v3144Brand(){document.title=`McLay Swimming OS — v${V3144_VERSION} Plan Bridge`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3144_VERSION} · Board baseline retained · season / week plan bridge · instant swimmer profiles`}
 v3143Brand=v3144Brand;v3142Brand=v3144Brand;v3141Brand=v3144Brand;v3140Brand=v3144Brand;v3131Brand=v3144Brand;v3129Brand=v3144Brand;
 function v3144Refresh(){v3144Brand();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3140RenderCoachHub();if((document.querySelector(".view.active")?.id||"")==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)v3144RefreshSelectedAthlete(athlete.id)}}
-setTimeout(v3144Refresh,0);setTimeout(v3144Refresh,500);setTimeout(v3144Brand,1500);
+setTimeout(v3144Refresh,0);setTimeout(v3144Refresh,500);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.14.4 — instant local delivery + race target ranges
@@ -12600,7 +12606,7 @@ v3144Brand();
 v3144Brand=function(){document.title=`McLay Swimming OS — v${V3145_VERSION} Race Targets`;const subtitle=document.querySelector(".header-subtitle");if(subtitle)subtitle.textContent=`Version ${V3145_VERSION} · Board baseline retained · individual race targets · #1 / #1F stroke bridge`};
 v3144Brand();
 
-v3143Brand=v3144Brand;v3142Brand=v3144Brand;v3141Brand=v3144Brand;v3140Brand=v3144Brand;v3131Brand=v3144Brand;setTimeout(v3144Brand,1600);
+v3143Brand=v3144Brand;v3142Brand=v3144Brand;v3141Brand=v3144Brand;v3140Brand=v3144Brand;v3131Brand=v3144Brand;/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.15.0 — coaching workflow + race-planning rollout
@@ -12930,7 +12936,7 @@ v3144Brand=v3150Brand;v3143Brand=v3150Brand;v3142Brand=v3150Brand;v3141Brand=v31
 window.v3150Debug={parse:v3150ParseBlocks,total:v3150DraftTotal,model:v3150TargetFromTotal,fifties:v3150FiftyProfile,buildDraft:v3150BuildDraft,version:V3150_VERSION};
 
 function v3150Startup(){v3150Brand();v3150BindComposer();v3126ConfigureComposer();V3144_TARGET_CACHE?.clear?.();if(document.querySelector(".view.active")?.id==="deck")v3121RenderBoardState?.()}
-setTimeout(v3150Startup,30);setTimeout(v3150Startup,900);setTimeout(v3150Startup,1900);setTimeout(v3150Brand,3200);
+setTimeout(v3150Startup,30);setTimeout(v3150Startup,900);setTimeout(v3150Startup,1900);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.15.0 mixed-roster modified columns: a Fitness joiner with a permanent
 // baseline still appears beside the National work; ordinary Fitness joiners do not.
@@ -12938,7 +12944,7 @@ v3140ModifiedColumns=function(session){
   if(!session)return[];const roster=v310AllSessionRoster(session),attendance=(appState.attendance||[]).filter(row=>row.session_id===session.id),status=new Map(attendance.map(row=>[row.athlete_id,String(row.status||"").toLowerCase()])),rollStarted=attendance.some(row=>["present","modified","late","absent"].includes(String(row.status||"").toLowerCase()));
   return roster.filter(athlete=>{const state=status.get(athlete.id)||"";if(rollStarted&&!['present','modified','late'].includes(state))return false;return state==="modified"||v3142HasActiveAdaptation(athlete,session)}).sort(rosterSort);
 };
-setTimeout(v3150Brand,4200);
+/* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.15.0 race-engine refinements: use the supplied dive-to-25 anchor for
 // arbitrary opening distances, support IM-order targets, and keep a clearly
@@ -12983,7 +12989,7 @@ v3150LineItem=function(raw,index=0){
   line=line.replace(/\bone\s+build\s*,?\s*two\s+fast\b/ig,"1 Build / 2 Fast");
   return v3150LineItemBase(line,index);
 };
-setTimeout(v3150Brand,5200);
+/* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.15.0 operational lane grouping: Fitness Monday-AM joiners and manually
 // added move-up swimmers work within the National lane plan, while Roll keeps
@@ -13006,7 +13012,7 @@ v3150AdaptItem=function(athlete,session,block,item,profile){
   if(reps===1&&distance>25&&!quality){const unit=distance<=100?5:25,reduced=Math.max(unit,Math.round((distance*ratio)/unit)*unit);adapted=adapted.replace(/^\s*1\s*[x×]\s*\d+\b/i,`1 × ${reduced}`).replace(/^\s*\d+\b/i,String(reduced))}
   return adapted;
 };
-setTimeout(v3150Brand,6200);
+/* v3.20.30: legacy delayed brand timer suppressed */
 
 
 // Approved v3.15.0 drafts already contain coach-checked structured items.
@@ -13021,7 +13027,7 @@ v3123SessionBlocks=function(session){
   if(raw.length&&(locked||approved))return raw.map(block=>({...block,items:v34Array(block.items).map(item=>({...item}))}));
   return v3150SanitisedSessionBlocks(session);
 };
-setTimeout(v3150Brand,7000);
+/* v3.20.30: legacy delayed brand timer suppressed */
 
 
 // =============================================================================
@@ -13144,7 +13150,7 @@ function v3151Brand(){
 }
 v3150Brand=v3151Brand;v3144Brand=v3151Brand;v3143Brand=v3151Brand;v3142Brand=v3151Brand;v3141Brand=v3151Brand;v3140Brand=v3151Brand;
 window.v3151Debug={version:V3151_VERSION,build:V3151_BUILD,adapt:v3150AdaptItem,bestCase:v3151BestCaseSeconds,sequence:v3151SequenceLength};
-v3151Brand();setTimeout(v3151Brand,50);setTimeout(v3151Brand,1000);setTimeout(v3151Brand,7500);
+v3151Brand();/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.16.4 — VERIFIED PATHWAY + LIVE COVERAGE REPAIR
@@ -13415,7 +13421,7 @@ for(const name of ["v3151Brand","v3150Brand","v3144Brand","v3143Brand","v3142Bra
 const v3163BrandObserver=new MutationObserver(()=>{const expected=`McLay Swimming OS — v${V3163_VERSION} Verified Pathway`,subtitle=document.querySelector(".header-subtitle"),subExpected=`Version ${V3163_VERSION} · one verified pathway resolver · compact swimmer page · exact poolside resume`;if(document.title!==expected||subtitle&&subtitle.textContent!==subExpected)queueMicrotask(v3163Brand)});const v3163Title=document.querySelector("title"),v3163Subtitle=document.querySelector(".header-subtitle");if(v3163Title)v3163BrandObserver.observe(v3163Title,{childList:true,subtree:true,characterData:true});if(v3163Subtitle)v3163BrandObserver.observe(v3163Subtitle,{childList:true,subtree:true,characterData:true});
 window.v3163Debug={version:V3163_VERSION,build:V3163_BUILD,pbInventory:v3163PbInventory,stages:v3163Stages,resolve:v3163ResolveEvent,standardReason:v3163StandardReason,hydrate:v3163HydrateSelectedAthlete,snapshot:v3163Snapshot,historicalDerived:v3163HistoricalDerived,classMatches:v3163ClassMatches,inferCourse:v3163InferCourse,profileWarning:v3163ProfileWarning};
 document.body.dataset.v3163View=document.querySelector(".view.active")?.id||"deck";
-v3163Brand();setTimeout(()=>{v3163Brand();v3163RestoreUi();v3163MarkSourceControls()},0);setTimeout(v3163Brand,1200);setTimeout(v3163Brand,8000);setTimeout(v3163Brand,12000);
+v3163Brand();setTimeout(()=>{v3163Brand();v3163RestoreUi();v3163MarkSourceControls()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // v3.16.3 Coach Hub qualification — one whole-session picture, not line-by-line
@@ -13720,7 +13726,7 @@ const v3170RenderAllBase=renderAll;renderAll=function(){const result=v3170Render
 const v3170RenderViewBase=renderView;renderView=function(id){const result=v3170RenderViewBase(id);v3170CompactContext();if(id==="deck")v3121RenderBoardState();v3170Brand();return result};
 
 window.v3170Debug={version:V3170_VERSION,build:V3170_BUILD,parse:v3170ParseBlocks,blocks:v3170BoardBlocks,total:v3170Total,activeHtml:v3170ActiveHtml,wholeHtml:v3170WholeHtml};
-v3170Migrate();v3170CompactContext();v3170Brand();setTimeout(()=>{v3170Migrate();v3170CompactContext();v3170Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()},0);setTimeout(v3170Brand,1200);setTimeout(v3170Brand,9000);
+v3170Migrate();v3170CompactContext();v3170Brand();setTimeout(()=>{v3170Migrate();v3170CompactContext();v3170Brand();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3121RenderBoardState()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.17.0 paint-order guard. Older compatibility layers schedule their Board
 // paint in requestAnimationFrame; apply the poolside rebuild only after those
@@ -14051,7 +14057,7 @@ function v3171RefreshOperationalUi(){
   v3171Brand();
 }
 window.v3171Debug={version:V3171_VERSION,build:V3171_BUILD,sessionSquads,modified:v3140ModifiedColumns,fitnessJoin:v3171MondayAmFitnessJoin};
-setTimeout(v3171RefreshOperationalUi,40);setTimeout(v3171RefreshOperationalUi,500);setTimeout(v3171Brand,1800);
+setTimeout(v3171RefreshOperationalUi,40);setTimeout(v3171RefreshOperationalUi,500);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // Active squad drives the dedicated Roll screen. This keeps a mixed Monday
 // booking fast to use: tap National or Fitness in the sticky context, then mark
@@ -14216,7 +14222,7 @@ if(v3172Subtitle)v3172BrandObserver.observe(v3172Subtitle,{childList:true,subtre
 
 function v3172Refresh(){renderActiveContext?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();v3172Brand()}
 window.v3172Debug={version:V3172_VERSION,build:V3172_BUILD,activeSquad:v3172ActiveSquadName,roster:v3172SquadRoster,modified:v3172ModifiedAthletes,fitnessInherited:v3172IsInheritedFitnessView};
-setTimeout(v3172Refresh,0);setTimeout(v3172Refresh,350);setTimeout(v3172Brand,1600);
+setTimeout(v3172Refresh,0);setTimeout(v3172Refresh,350);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.18.0 — POOLSIDE FLOW
@@ -15482,7 +15488,7 @@ function v3192BindComposerActions(){
   document.addEventListener("toggle",event=>{if(event.target?.id==="sessionImportDetails")queueMicrotask(v3192ConfigureComposerUi)},true);
 }
 function v3192Startup(){v3192Brand();v3192BindComposerActions();v3192ConfigureComposerUi();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.()}
-setTimeout(v3192Startup,0);setTimeout(v3192Startup,500);setTimeout(v3192Startup,1800);setTimeout(v3192Brand,3500);
+setTimeout(v3192Startup,0);setTimeout(v3192Startup,500);setTimeout(v3192Startup,1800);/* v3.20.30: legacy delayed brand timer suppressed */
 
 
 function v3192LockWholeBoardState(session){
@@ -15758,7 +15764,7 @@ const v3193Style=document.createElement("style");v3193Style.id="v3193Styles";v31
 `;document.head.appendChild(v3193Style);
 try{v3192BrandObserver?.disconnect?.()}catch{}
 window.v3193Debug={version:V3193_VERSION,build:V3193_BUILD,parse:v3193ParseBlocks,distance:v3193Distance,review:v3193ReviewDraft,commit:v3192CommitToBoard};
-setTimeout(v3193Startup,0);setTimeout(v3193Startup,500);setTimeout(v3193Startup,1800);setTimeout(v3193Brand,3500);
+setTimeout(v3193Startup,0);setTimeout(v3193Startup,500);setTimeout(v3193Startup,1800);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.19.4 — POOLSIDE BOARD IRONING PASS
@@ -15970,7 +15976,7 @@ function v3194Startup(){
   v3194Brand();v3129LaneCache?.clear?.();v3129TargetCache?.clear?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
 }
 window.v3194Debug={version:V3194_VERSION,build:V3194_BUILD,sanitise:v3194SanitiseBlocks,parse:v3193ParseBlocks,poolMode:v3194PoolMode,sharedPool:v3194SharedPool};
-setTimeout(v3194Startup,0);setTimeout(v3194Startup,450);setTimeout(v3194Startup,1500);setTimeout(v3194Brand,3500);
+setTimeout(v3194Startup,0);setTimeout(v3194Startup,450);setTimeout(v3194Startup,1500);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.19.5 — Roll + Squad Model
@@ -16203,7 +16209,7 @@ function v3195Startup(){
   v3191DedupeAttendance?.({queue:true});v3195RepairAlexHanson();v3195EnhanceSquadPlanning();v3195Brand();v3195ClearBoardCaches();renderAttendance?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
 }
 window.v3195Debug={version:V3195_VERSION,build:V3195_BUILD,included:v3195IncludedKeys,mode:v3195Mode,roster:v3195RosterForMode,liveRoster:v3195LiveRoster,setAttendance:v3195WriteAttendance,removeParticipant:v3195RemoveParticipant,repairAlex:v3195RepairAlexHanson};
-setTimeout(v3195Startup,0);setTimeout(v3195Startup,500);setTimeout(v3195Startup,1600);setTimeout(v3195Brand,3600);
+setTimeout(v3195Startup,0);setTimeout(v3195Startup,500);setTimeout(v3195Startup,1600);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.19.6 — ROLL TRUTH + IDENTIFIED TARGETS
@@ -16479,7 +16485,7 @@ function v3196Startup(){
   v3196MigrateAttendance();v3191DedupeAttendance?.({queue:true});v3195RepairAlexHanson?.();v3195EnhanceSquadPlanning?.();v3196Brand();v3195ClearBoardCaches?.();renderAttendance?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3170PaintBoard?.();
 }
 window.v3196Debug={version:V3196_VERSION,build:V3196_BUILD,modification:v3196ModificationFor,rule:v3196ResolveRule,roster:v3195RosterForMode,liveRoster:v3195LiveRoster,setModification:v3196SetModification,toggleHere:v3196ToggleHere,remove:v3196RemoveParticipant};
-setTimeout(v3196Startup,0);setTimeout(v3196Startup,500);setTimeout(v3196Startup,1700);setTimeout(v3196Brand,3600);setTimeout(v3196Brand,8200);setTimeout(v3196Brand,12200);
+setTimeout(v3196Startup,0);setTimeout(v3196Startup,500);setTimeout(v3196Startup,1700);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.19.7 — STABLE BOARD INTERACTIONS
@@ -16673,7 +16679,7 @@ try{v3196BrandObserver?.disconnect?.()}catch{}
 for(const name of ["v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v3197Brand}catch{}}
 function v3197Startup(){v3197Brand();v3195EnhanceSquadPlanning?.();if(v3197ViewId()==="deck")v3197PaintNow()}
 window.v3197Debug={version:V3197_VERSION,build:V3197_BUILD,mode:v3195Mode,lead:v3195LeadKey,applySquads:v3197ApplySquads,openNewSession:v3197OpenNewSessionEditor,finishDraft:v3197FinishDraft};
-setTimeout(v3197Startup,0);setTimeout(v3197Startup,650);setTimeout(v3197Brand,2200);
+setTimeout(v3197Startup,0);setTimeout(v3197Startup,650);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.19.8 — POOLSIDE SESSION ROUTE RESTORE
@@ -16952,7 +16958,7 @@ v3198Brand=function(){
 };
 for(const name of ["v3197Brand","v3196Brand","v3195Brand","v3194Brand","v3193Brand","v3192Brand","v3191Brand","v3190Brand","v3180Brand","v3172Brand","v3171Brand","v3170Brand"]){try{globalThis[name]=v3198Brand}catch{}}
 const v3198BrandObserver=new MutationObserver(()=>queueMicrotask(v3198Brand));if(document.querySelector("title"))v3198BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3198BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
-setTimeout(v3198Brand,3600);setTimeout(v3198Brand,8300);setTimeout(v3198Brand,12300);
+/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 const v3198VisibilityStyle=document.createElement("style");v3198VisibilityStyle.textContent=`
 .v3198-poolside-composer #sessionImportPreview,.v3198-poolside-composer #saveImportedSessionBtn,.v3198-poolside-composer #runImportedSessionBtn{display:block!important}
 `;document.head.appendChild(v3198VisibilityStyle);
@@ -17155,7 +17161,7 @@ for(const name of ['v3198Brand','v3197Brand','v3196Brand','v3195Brand','v3194Bra
 const v3199BrandObserver=new MutationObserver(()=>queueMicrotask(v3199Brand));if(document.querySelector('title'))v3199BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3199BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
 function v3199Startup(){v3199Brand();v3199EnhanceComposer();v3198InjectBoardEntry?.();v3199EnhanceBoard()}
 window.v3199Debug={version:V3199_VERSION,build:V3199_BUILD,raceDistance:v3199RaceDistance,pbRows:v3199PbRows,enhance:v3199EnhanceBoard};
-setTimeout(v3199Startup,0);setTimeout(v3199Startup,600);setTimeout(v3199Startup,2200);setTimeout(v3199Brand,6000);
+setTimeout(v3199Startup,0);setTimeout(v3199Startup,600);setTimeout(v3199Startup,2200);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.0 — SESSION TRUTH (protected append-only upgrade)
@@ -17384,7 +17390,7 @@ for(const name of ["v3199Brand","v3198Brand","v3197Brand","v3196Brand","v3195Bra
 const v3200BrandObserver=new MutationObserver(()=>queueMicrotask(v3200Brand));if(document.querySelector("title"))v3200BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3200BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3200Startup(){v3200Brand();requestAnimationFrame(()=>{v3170PaintBoard?.();if((document.querySelector(".view.active")?.id||"")==="coachhub")v3163RenderCoachHub?.()})}
 window.v3200Debug={version:V3200_VERSION,build:V3200_BUILD,parse:v3200ParseBlocks,distance:v3200Distance,itemContribution:v3200ItemContribution,explicitTotal:v3200ExplicitTotal,repairCharlotte:v3200RepairCharlotteTarget};
-setTimeout(v3200Startup,0);setTimeout(v3200Startup,700);setTimeout(v3200Brand,2500);setTimeout(v3200Brand,8000);
+setTimeout(v3200Startup,0);setTimeout(v3200Startup,700);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.20.0 focused refinements after protected regression pass.
 function v3200ScopePrefix(block,item,itemIndex){
@@ -18280,7 +18286,7 @@ for(const name of ["v3201Brand","v32002Brand","v32001Brand","v3200Brand","v3199B
 const v3202BrandObserver=new MutationObserver(()=>queueMicrotask(v3202Brand));if(document.querySelector("title"))v3202BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3202BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3202Startup(){const alex=v3202RepairAlexT400({queue:true});const seeded=v3202SeedMorningLearning();if(alex||seeded)syncIfPossible?.().catch?.(()=>{});v3202Brand();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(false)}
 window.v3202Debug={version:V3202_VERSION,build:V3202_BUILD,key:v3202Key,restSeconds:v3202RestSeconds,sendOff:v3202SendOff,canonicalAlex:v3202CanonicalAlex,repairAlex:v3202RepairAlexT400,inferPurpose:v3202InferPurpose,poolLength:v3202PoolLength,courseChoice:v3202CourseChoice,seedMorningLearning:v3202SeedMorningLearning};
-setTimeout(v3202Startup,0);setTimeout(v3202Startup,700);setTimeout(v3202Brand,2400);
+setTimeout(v3202Startup,0);setTimeout(v3202Startup,700);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.3 — Intelligent Modification Layer
@@ -18496,7 +18502,7 @@ for(const name of ["v3202Brand","v3201Brand","v32002Brand","v32001Brand","v3200B
 const v3203BrandObserver=new MutationObserver(()=>queueMicrotask(v3203Brand));if(document.querySelector("title"))v3203BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3203BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3203Startup(){v3203Array("adaptation_learning_events");v3203Array("session_adaptations");v3203Array("athlete_adaptation_rules");v3203Brand();renderAttendance?.();if((document.querySelector(".view.active")?.id||"deck")==="deck"){v3201RequestBoardPaint?.(false);setTimeout(v3203DecorateBoard,100)}}
 window.v3203Debug={version:V3203_VERSION,build:V3203_BUILD,purpose:v3203Purpose,setContext:v3203SetContext,rollContext:v3203RollContext,events:v3203Events,pending:v3203PendingContexts,rules:v3203PatternRules,badge:v3203BadgeState,resolveUntil:v3203ResolveUntil,saveIndividualEdit:v3203SaveIndividualEdit};
-setTimeout(v3203Startup,0);setTimeout(v3203Startup,650);setTimeout(v3203Brand,2200);
+setTimeout(v3203Startup,0);setTimeout(v3203Startup,650);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.4 — Stability and Test Truth
@@ -18775,7 +18781,7 @@ function v3204Startup(){
   v3204SeedRubyScope();for(const session of appState.sessions||[])v3204RepairSession(session);v3204Brand();v3204RenderTimesShell();renderAttendance?.();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(false);setTimeout(v3204DecorateIntegrity,120);
 }
 window.v3204Debug={version:V3204_VERSION,build:V3204_BUILD,cueReason:v3204CueReason,parse:v3200ParseBlocks,integrity:v3204SessionIntegrity,present:v3204PresentAthletes,profileApplicable:v3204ProfileApplicable,seedTest:v3204SeedTimedTest,renderTimes:v3204RenderTimesShell};
-setTimeout(v3204Startup,0);setTimeout(v3204Startup,700);setTimeout(v3204Brand,2400);
+setTimeout(v3204Startup,0);setTimeout(v3204Startup,700);/* v3.20.30: legacy delayed brand timer suppressed */
 
 
 // =============================================================================
@@ -18959,7 +18965,7 @@ try{v3204BrandObserver?.disconnect?.()}catch{}
 const v3205BrandObserver=new MutationObserver(()=>queueMicrotask(v3205Brand));if(document.querySelector("title"))v3205BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3205BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3205Startup(){v3205Brand();v3205InjectComposerContext();v3205PrepareTimingUi();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(false);setTimeout(()=>v3205CloseNestedTargetDetails(document),150)}
 window.v3205Debug={version:V3205_VERSION,build:V3205_BUILD,groups:v3205BoardGroups,rounds:v3205RoundCount,t400:v3205T400Spec,heatRows:v3205HeatRows,autoSave:v3205AutoSaveChannel,composer:v3205ComposerContext};
-setTimeout(v3205Startup,0);setTimeout(v3205Startup,650);setTimeout(v3205Brand,2200);
+setTimeout(v3205Startup,0);setTimeout(v3205Startup,650);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // Final Board paint authority. Older compatibility layers may briefly repaint an
 // earlier Board after a workout or attendance change. Re-apply the protected
@@ -19318,7 +19324,7 @@ try{v3205BrandObserver?.disconnect?.()}catch{}
 const v3206BrandObserver=new MutationObserver(()=>queueMicrotask(v3206Brand));if(document.querySelector("title"))v3206BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3206BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3206Startup(){v3206Brand();try{const session=(appState.sessions||[]).find(row=>row.id===appState.settings.selected_session_id)||selectedSession?.();if(session){const integrity=v3204SessionIntegrity?.(session);if(integrity?.ok&&Number(session.planned_distance)!==Number(integrity.total)){session.planned_distance=Number(integrity.total);session.updated_at=nowIso();queueRecord?.("sessions",session.id);saveState(appState)}}}catch(error){console.warn("v3.20.6 integrity migration",error)}v3206RestorePoolsideState();v3107UpdateWakeLock?.();try{v3195ClearBoardCaches?.()}catch{}if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(true)}
 window.v3206Debug={version:V3206_VERSION,build:V3206_BUILD,parse:v3206ParseBlocks,targets:v3206RacePaceRows,conversion:v3206LcmToScmConversion,persist:v3206PersistBlocks,applyGroupEdit:v3206ApplyGroupEdit,saveState:v3206SavePoolsideState,restoreState:v3206RestorePoolsideState,missed:v3206MissedWork};
-setTimeout(v3206Startup,0);setTimeout(v3206Startup,700);setTimeout(v3206Brand,2200);
+setTimeout(v3206Startup,0);setTimeout(v3206Startup,700);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.7 — Sync + Board Truth
@@ -19669,7 +19675,7 @@ async function v3207Startup(){
   v3206RestorePoolsideState?.();v3107UpdateWakeLock?.();v3195ClearBoardCaches?.();if((document.querySelector(".view.active")?.id||"deck")==="deck")v3201RequestBoardPaint?.(true);v36RenderSyncDetails?.();if(cloudReady()&&(appState.pending||[]).length)v3207ScheduleFocusSync(250);
 }
 window.v3207Debug={version:V3207_VERSION,build:V3207_BUILD,expectedBuild:V3207_EXPECTED_BUILD,repairSync:v3207RepairSync,compactPending:v3207CompactPending,primaryStroke:v3207PrimaryStroke,resolvePaceStroke:v3207ResolvePaceStroke,dive15:v3207Dive15Target,commitBlocks:v3207CommitBlocks,parseEditorBlock:v3207ParseEditorBlock,t400Eligible:v3207T400Eligible,snapDistance:v3207SnapDistance,ensureConversions:v3207EnsureCourseConversions,conversion:v3207LcmToScmConversion,windowImpact:v3207EditWindowImpact};
-setTimeout(()=>v3207Startup().catch(error=>console.warn("v3.20.7 startup",error)),0);setTimeout(v3207Brand,900);setTimeout(v3207Brand,2600);
+setTimeout(()=>v3207Startup().catch(error=>console.warn("v3.20.7 startup",error)),0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.8 — Stable Test Platform Sync Repair
@@ -19791,7 +19797,7 @@ function v3208Startup(){
   if(cloudReady()&&(appState.pending||[]).length)setTimeout(()=>syncIfPossible?.().catch?.(()=>{}),350);
 }
 window.v3208Debug={version:V3208_VERSION,build:V3208_EXPECTED_BUILD,legacyBlock:v3208SessionBlockLegacyPayload,capturePayload:v3208CapturePayload,transcriptionPayload:v3208TranscriptionPayload,conflict:v3208ConflictTarget,post:v3208PostRecord};
-setTimeout(v3208Startup,0);setTimeout(v3208Brand,1000);setTimeout(v3208Brand,3000);
+setTimeout(v3208Startup,0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 
 // =============================================================================
@@ -19954,7 +19960,7 @@ const v3209BrandObserver=new MutationObserver(()=>queueMicrotask(v3209Brand));
 if(document.querySelector("title"))v3209BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
 if(document.querySelector(".header-subtitle"))v3209BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3209Debug={version:V3209_VERSION,build:V3209_EXPECTED_BUILD,save:()=>v3209MarkHidden("debug-save"),resume:(reason="debug-resume")=>{v3209WasHidden=true;return v3209ScheduleResume(reason,0)},shell:v3209ShellExists,lastResume:()=>v3209LastResumeAt,reason:()=>v3209ResumeReason};
-setTimeout(()=>{v3209Brand();v3209RegisterWorker()},0);setTimeout(v3209Brand,900);setTimeout(v3209Brand,2600);
+setTimeout(()=>{v3209Brand();v3209RegisterWorker()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.10 — Poolside Foreground Freeze Repair
@@ -20090,7 +20096,7 @@ const v3210BrandObserver=new MutationObserver(()=>queueMicrotask(v3210Brand));
 if(document.querySelector("title"))v3210BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
 if(document.querySelector(".header-subtitle"))v3210BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3210Debug={version:V3210_VERSION,build:V3210_EXPECTED_BUILD,poolside:v3210PoolsideForeground,boardReady:v3210BoardDomReady,deferredCloud:()=>v3210DeferredCloud,resumeHold:()=>v3210ResumeHoldUntil};
-v3210OnVisible();setTimeout(()=>{v3210Brand();v3210RegisterWorker()},0);setTimeout(v3210Brand,900);setTimeout(v3210Brand,3000);
+v3210OnVisible();setTimeout(()=>{v3210Brand();v3210RegisterWorker()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 // Ensure startup callbacks from 3.20.7/3.20.8 resolve to the one current worker.
 try{v3208RegisterWorker=v3210RegisterWorker}catch{}
 try{v3207RegisterWorker=v3210RegisterWorker}catch{}
@@ -20292,7 +20298,7 @@ try{v3210BrandObserver?.disconnect?.()}catch{}try{v3210Brand=v3211Brand}catch{}t
 const v3211BrandObserver=new MutationObserver(()=>queueMicrotask(v3211Brand));if(document.querySelector("title"))v3211BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3211BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3211Startup(){const repaired=v3211RepairFridayMain(),cleared=v3211ClearResolvedAttendanceIssue();v3211Brand();v3211RegisterWorker();if(repaired||cleared){v36RenderSyncDetails?.();v3111RenderSyncDetails?.();setTimeout(()=>{v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)},5400)}}
 window.v3211Debug={version:V3211_VERSION,build:V3211_EXPECTED_BUILD,ratio:v3211Ratio,fallback:v3211FallbackChoice,sameEnd:v3211SameEnd,cumulative:v3211RaceCumulative,segment:v3211NamedSegment,sessionRaceDistance:v3211SessionRaceDistance,repairFriday:v3211RepairFridayMain,clearAttendanceIssue:v3211ClearResolvedAttendanceIssue};
-setTimeout(v3211Startup,0);setTimeout(v3211Brand,900);setTimeout(v3211Brand,3000);setTimeout(()=>{v3211RepairFridayMain();v3211ClearResolvedAttendanceIssue();v3211Brand()},5600);
+setTimeout(v3211Startup,0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */setTimeout(()=>{v3211RepairFridayMain();v3211ClearResolvedAttendanceIssue();v3211Brand()},5600);
 
 // =============================================================================
 // McLay Swimming OS v3.20.12 — Poolside Field Repair
@@ -20529,7 +20535,7 @@ try{v3211BrandObserver?.disconnect?.()}catch{}try{v3211Brand=v3212Brand}catch{}t
 const v3212BrandObserver=new MutationObserver(()=>queueMicrotask(v3212Brand));if(document.querySelector("title"))v3212BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3212BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3212Startup(){const repaired=v3212RepairTuesdayFixture();v3212Brand();v3212RegisterWorker();const ui=v3212ReadUiState();if(ui?.view&&ui.view!=="deck"&&$(ui.view)&&v3212ActiveView()!==ui.view)showView(ui.view);if(v3212ActiveView()==="reports")v3212RenderSessionReport();if(repaired){v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}setTimeout(()=>{if(v3212BootDeferredCloud&&document.visibilityState==="visible"&&navigator.onLine&&cloudReady?.()){v3212BootDeferredCloud=false;v3212SyncBase?.().catch?.(()=>{})}},V3212_BOOT_QUIET_MS+400)}
 window.v3212Debug={version:V3212_VERSION,build:V3212_EXPECTED_BUILD,cueOnly:v3212CueOnly,repairTuesday:v3212RepairTuesdayFixture,t400Eligible:v3207T400Eligible,sessionReport:v3212SelectedSessionReportHtml,uiState:v3212ReadUiState,saveUi:v3212SaveUiState};
-setTimeout(v3212Startup,0);setTimeout(v3212Brand,800);setTimeout(v3212Brand,2600);setTimeout(()=>{v3212Brand();if(v3212ActiveView()==="reports")v3212RenderSessionReport()},5200);
+setTimeout(v3212Startup,0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */setTimeout(()=>{v3212Brand();if(v3212ActiveView()==="reports")v3212RenderSessionReport()},5200);
 
 // =============================================================================
 // McLay Swimming OS v3.20.13 — Modification Truth + PB-ready Poolside Repair
@@ -20686,7 +20692,7 @@ try{v3212BrandObserver?.disconnect?.()}catch{}try{v3212Brand=v3213Brand}catch{}t
 const v3213BrandObserver=new MutationObserver(()=>queueMicrotask(v3213Brand));if(document.querySelector("title"))v3213BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3213BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3213Startup(){const repaired=v3213RepairStoredCueMeters(),seeded=v3213SeedConfirmedConstraints(),archived=v3213ArchiveDeparted();v3213Brand();v3213RegisterWorker();if(repaired||seeded||archived){v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)}}
 window.v3213Debug={version:V3213_VERSION,build:V3213_EXPECTED_BUILD,targetDriven:v3213TargetDriven,poolEnd:v3213PoolEndChoice,noLeg:v3213NoLegUse,noBreastKickFins:v3213NoBreastKickFins,repairCues:v3213RepairStoredCueMeters,archiveDeparted:v3213ArchiveDeparted,focus:v3213FocusId};
-setTimeout(v3213Startup,0);setTimeout(v3213Brand,700);setTimeout(v3213Brand,2200);setTimeout(v3213Brand,5200);
+setTimeout(v3213Startup,0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.14 — POINTS PATHWAY + RACE-PACE STEPS
@@ -20823,7 +20829,7 @@ try{v3213BrandObserver?.disconnect?.()}catch{}try{v3213Brand=v3214Brand}catch{}t
 const v3214BrandObserver=new MutationObserver(()=>queueMicrotask(v3214Brand));if(document.querySelector("title"))v3214BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3214BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3214Startup(){v3214EnsureClassFields();v3214BindProfileSave();const athlete=(appState.athletes||[]).find(a=>a.id===appState.settings.selected_athlete_id)||(appState.athletes||[])[0];if(athlete)fillAthleteProfile?.(athlete);try{V3144_TARGET_CACHE?.clear?.();v3129TargetCache?.clear?.()}catch{}v3214Brand();v3214RegisterWorker();if((document.querySelector(".view.active")?.id||"")==="athletes")renderAthletes?.();if((document.querySelector(".view.active")?.id||"")==="deck")v3201RequestBoardPaint?.(true)}
 window.v3214Debug={version:V3214_VERSION,build:V3214_EXPECTED_BUILD,paraSignal:v3214ParaSignal,scale:v3214Scale,pointsAtTime:v3214PointsAtTime,timeForPoints:v3214TimeForPoints,stageRoad:v3214StageRoad,resolve:v3163ResolveEvent,pointStep:v3214PointStep};
-setTimeout(v3214Startup,0);setTimeout(v3214Brand,700);setTimeout(v3214Brand,2200);setTimeout(v3214Brand,5200);
+setTimeout(v3214Startup,0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.20.14 para record safety: never use the generic results_record_gaps
 // fallback as a primary pathway for an athlete already known to be on the para route.
@@ -21067,7 +21073,7 @@ try{v3190BrandObserver?.disconnect?.()}catch{}
 try{v3163BrandObserver?.disconnect?.()}catch{}
 const v3215BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3215_VERSION} Phone Stability`||document.querySelector(".header-subtitle")?.textContent!==`v${V3215_VERSION} · protected Board/pathway · phone state lock · no background UI takeover`)queueMicrotask(v3215Brand)});if(document.querySelector("title"))v3215BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3215BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3215Debug={version:V3215_VERSION,build:V3215_BUILD,phone:v3215Phone,activeView:v3215ActiveView,canonicalUi:v3215CanonicalUi,initials:v3215Initials,selected:()=>appState.settings.selected_athlete_id,hydrateDepth:()=>v3215HydrateDepth};
-v3215Brand();setTimeout(()=>{v3215Brand();v3215RegisterWorker();const deck=document.getElementById("deckAthlete");if(deck&&v3215DeckAthlete())renderDeckAthleteBrief?.()},0);setTimeout(v3215Brand,900);setTimeout(v3215Brand,2800);setTimeout(v3215Brand,5600);
+v3215Brand();setTimeout(()=>{v3215Brand();v3215RegisterWorker();const deck=document.getElementById("deckAthlete");if(deck&&v3215DeckAthlete())renderDeckAthleteBrief?.()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.16 — Lane Sync ID Repair
@@ -21142,7 +21148,7 @@ async function v3216RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3215BrandObserver?.disconnect?.()}catch{}
 const v3216BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3216_VERSION} Lane Sync Repair`)queueMicrotask(v3216Brand)});if(document.querySelector("title"))v3216BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3216BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3216Debug={version:V3216_VERSION,build:V3216_BUILD,canonical:v3216LaneCanonicalId,repair:v3216RepairLaneSyncState,copy:v3216SyncCopyText};
-v3216RepairLaneSyncState();v3216Brand();setTimeout(()=>{v3216RepairLaneSyncState();v3216Brand();v3216RegisterWorker();v3216FixSyncDiagnostics()},0);setTimeout(v3216Brand,900);setTimeout(v3216Brand,2800);
+v3216RepairLaneSyncState();v3216Brand();setTimeout(()=>{v3216RepairLaneSyncState();v3216Brand();v3216RegisterWorker();v3216FixSyncDiagnostics()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.17 — Deck Pathway Snapshot + Selection Lock
@@ -21291,7 +21297,7 @@ async function v3217RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3216BrandObserver?.disconnect?.()}catch{}
 const v3217BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3217_VERSION} Deck Pathway`||document.querySelector(".header-subtitle")?.textContent!==`v${V3217_VERSION} · protected Board/session entry · instant national-target snapshot · swimmer/view lock`)queueMicrotask(v3217Brand)});if(document.querySelector("title"))v3217BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3217BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3217Debug={version:V3217_VERSION,build:V3217_BUILD,nationalCandidates:v3217NationalCandidates,snapshot:v3217SnapshotHtml,lockedAthlete:()=>v3217LockedAthleteId,lockAthlete:v3217LockAthlete,lockedView:()=>v3217LockedView,setViewGuard:value=>{v3217ViewGuard=Boolean(value)},markGesture:()=>{v3217LastGestureAt=Date.now()},hydrate:v3217HydrateSelectedAthlete};
-v3217Brand();setTimeout(()=>{v3217Brand();v3217RegisterWorker();if(v3217ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);setTimeout(v3217Brand,900);setTimeout(v3217Brand,2800);
+v3217Brand();setTimeout(()=>{v3217Brand();v3217RegisterWorker();if(v3217ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.20.17 Connection identity: retain v3.20.16 repair engine but report the
 // currently deployed app build so Connection never looks rolled back/stale.
@@ -21481,7 +21487,7 @@ const v3218RenderSyncBase=typeof v3111RenderSyncDetails==="function"?v3111Render
 const v3218RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;if(v3218RenderLegacySyncBase)v36RenderSyncDetails=function(){const out=v3218RenderLegacySyncBase();v3218FixSyncDiagnostics();return out};
 
 window.v3218Debug={version:V3218_VERSION,build:V3218_BUILD,coachAnswer:v3218CoachAnswerHtml,agePathway:v3218AgePathwayHtml,forwardSteps:v3218ForwardSteps,nationalForPb:v3218NationalForPb,pathOpen:()=>v3218OpenPathwayAthlete,setPathOpen:v3218SetPathwayOpen,clearPathOpen:v3218ClearPathwayOpen,qualIndex:v3218QualifyingIndex,hydrate:v3218HydrateSelectedAthlete,copy:v3218SyncCopyText,repair:v3216RepairLaneSyncState};
-v3218Brand();setTimeout(()=>{v3218Brand();v3218FixSyncDiagnostics();v3218RegisterWorker();if(v3218ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);setTimeout(v3218Brand,900);setTimeout(v3218Brand,2800);
+v3218Brand();setTimeout(()=>{v3218Brand();v3218FixSyncDiagnostics();v3218RegisterWorker();if(v3218ActiveView()==="athletes"){const athlete=(appState.athletes||[]).find(row=>row.id===appState.settings.selected_athlete_id);if(athlete)renderAthleteResultsHub?.(athlete)}},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.19 — Poolside Stability Recovery
@@ -21744,7 +21750,7 @@ async function v3219RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3218BrandObserver?.disconnect?.()}catch{}
 const v3219BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3219_VERSION} Poolside Stability Recovery`||document.querySelector(".header-subtitle")?.textContent!==`v${V3219_VERSION} · local-first Capture · phone action rail · deferred video processing · protected Board/pathway`)queueMicrotask(v3219Brand)});if(document.querySelector("title"))v3219BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3219BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3219Debug={version:V3219_VERSION,build:V3219_BUILD,phone:v3219Phone,poolside:v3219PoolsideView,sections:v3219SubsectionPlan,captureLite:v3219RenderCapturesLite,deferredVideos:()=>appState.settings.v3219_deferred_video_ids||[],sync:()=>v3219SyncBase?.(),decorate:v3219DecorateLargeBlocks,normaliseSource:v3219NormaliseSessionSource,scopeRounds:v3219ScopeNestedRounds,attachRaceCues:v3219AttachDetachedRaceCues};
-v3219Brand();setTimeout(()=>{v3219Brand();v3219RegisterWorker();v3180Logo?.();v3219InstallCaptureHandlers();v3219EnsureActionRail();v3219DecorateLargeBlocks()},0);setTimeout(v3219Brand,900);setTimeout(v3219Brand,2800);
+v3219Brand();setTimeout(()=>{v3219Brand();v3219RegisterWorker();v3180Logo?.();v3219InstallCaptureHandlers();v3219EnsureActionRail();v3219DecorateLargeBlocks()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.20 — Poolside Core Recovery
@@ -21910,7 +21916,7 @@ async function v3220RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3219BrandObserver?.disconnect?.()}catch{}
 const v3220BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3220_VERSION} Poolside Core Recovery`||document.querySelector(".header-subtitle")?.textContent!==`v${V3220_VERSION} · protected live view/session · local-first capture · compact Board · target truth`)queueMicrotask(v3220Brand)});if(document.querySelector("title"))v3220BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3220BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3220Debug={version:V3220_VERSION,build:V3220_BUILD,view:v3220View,saveSafe:v3220SaveSafe,lastDeck:v3220LastDeck,targetDriven:v3213TargetDriven,aerobicDriven:v3213AerobicTargetDriven,raceDriven:v3213RaceTargetDriven,quality:v3220QualityLine,hardConstraint:v3220HardConstraint,timingFloor:v3220TimingFloorFromBlocks,restore:v3220RecoverSafe,lockedSession:()=>v3220LockedSessionId,compact:v3220CompactBoard};
-v3220Brand();setTimeout(()=>{v3220Brand();v3220RegisterWorker();const safe=v3220Json(V3220_SAFE_KEY),current=v3220CurrentSession();v3220LockedSessionId=(safe&&v3220SessionExists(safe.session_id)?safe.session_id:current?.id)||"";v3220InstallRail();v3220CompactBoard();v3220RecoverSafe()},0);setTimeout(()=>{v3220Brand();v3220InstallRail();v3220CompactBoard()},900);setTimeout(v3220Brand,2800);
+v3220Brand();setTimeout(()=>{v3220Brand();v3220RegisterWorker();const safe=v3220Json(V3220_SAFE_KEY),current=v3220CurrentSession();v3220LockedSessionId=(safe&&v3220SessionExists(safe.session_id)?safe.session_id:current?.id)||"";v3220InstallRail();v3220CompactBoard();v3220RecoverSafe()},0);setTimeout(()=>{v3220Brand();v3220InstallRail();v3220CompactBoard()},900);/* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // v3.20.20 addendum — Board shell authority / scroll + session ownership
@@ -22338,7 +22344,7 @@ if(document.querySelector("title"))v3221BrandObserver.observe(document.querySele
 if(document.querySelector(".header-subtitle"))v3221BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 async function v3221RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3221_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.21 service worker update",error)}}
 window.v3221Debug={version:V3221_VERSION,build:V3221_BUILD,historical:v3221Historical,past:v3221PastSessions,source:v3221WorkoutSource,plannedTranscript:v3221PlannedTranscript,blocks:session=>v3170BoardBlocks(session)};
-v3221Brand();setTimeout(()=>{v3221Brand();v3221RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3221Brand,900);setTimeout(v3221Brand,2800);
+v3221Brand();setTimeout(()=>{v3221Brand();v3221RegisterWorker();v3191EnsurePastButton?.()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.22 — LIVE BOARD QUARANTINE + CANONICAL COACHING TRUTH
@@ -22888,7 +22894,7 @@ v3222Brand();
 // boot selection until the coach explicitly touches a control.
 for(const delay of [60,450,1400,3200,5200,7000])setTimeout(v3222ApplyBootSafe,delay);
 setTimeout(()=>{v3222BootSafeActive=false},8100);
-setTimeout(()=>{v3222Brand();v3222RegisterWorker();v3191EnsurePastButton?.()},0);setTimeout(v3222Brand,900);setTimeout(v3222Brand,2800);
+setTimeout(()=>{v3222Brand();v3222RegisterWorker();v3191EnsurePastButton?.()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.23 — STATIC PHONE DECK
@@ -22937,7 +22943,7 @@ try{v3222BrandObserver?.disconnect?.()}catch{}
 function v3223Brand(){const title=`McLay Swimming OS — v${V3223_VERSION} Static Phone Deck`,subtitle=`v${V3223_VERSION} · static live Board · passive scroll · lazy targets · v3.20.22 coaching truth retained`;if(document.title!==title)document.title=title;const node=document.querySelector('.header-subtitle');if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3223_BUILD;try{localStorage.setItem('mclay_last_installed_build',V3223_BUILD)}catch{}const badge=document.getElementById('v3207BuildBadge')||document.getElementById('v3208BuildBadge');if(badge){badge.textContent=`v${V3223_VERSION}`;badge.dataset.build=V3223_BUILD;badge.title=V3223_BUILD}document.querySelectorAll('[data-v3207-sync-build]').forEach(el=>el.textContent=V3223_BUILD)}
 async function v3223RegisterWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3223_CORE}`,{updateViaCache:'none'});await registration.update();if(registration.waiting)registration.waiting.postMessage('SKIP_WAITING')}catch(error){console.warn('v3.20.23 service worker update',error)}}
 window.v3223Debug={version:V3223_VERSION,build:V3223_BUILD,liveDeck:v3223LiveDeck,targetHint:v3223TargetHint,loadTargets:v3223LoadTargets};
-v3223Brand();setTimeout(v3223Brand,13000);setTimeout(()=>{v3223RegisterWorker();v3191EnsurePastButton?.()},0);
+v3223Brand();/* v3.20.30: legacy delayed brand timer suppressed */setTimeout(()=>{v3223RegisterWorker();v3191EnsurePastButton?.()},0);
 
 // =============================================================================
 // McLay Swimming OS v3.20.24 — MORNING STABILITY GATE
@@ -23143,9 +23149,9 @@ window.v3224Debug={version:V3224_VERSION,build:V3224_BUILD,flush:v3224FlushCriti
 try{v3224MergeLiveTruth()}catch{}
 setTimeout(()=>{try{v3143AutoSelectCurrentSession?.(false)}catch{}v3224Brand()},0);
 setTimeout(()=>{v3224Brand();v3224RegisterWorker()},500);
-setTimeout(v3224Brand,3000);
+/* v3.20.30: legacy delayed brand timer suppressed */
 // v3.20.23 has an inherited 13s branding timer; immediately reassert this build.
-setTimeout(v3224Brand,13025);setTimeout(v3224Brand,30000);
+/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.25 — SESSION TRUTH + SIMPLE ENTRY
@@ -23437,7 +23443,7 @@ async function v3225RegisterWorker(){if(!('serviceWorker' in navigator)||!locati
 // cannot make the deployed build appear to roll backwards during startup.
 const v3225BrandObserver=new MutationObserver(()=>queueMicrotask(v3225Brand));if(document.querySelector('title'))v3225BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});if(document.querySelector('.header-subtitle'))v3225BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
 window.v3225Debug={version:V3225_VERSION,build:V3225_BUILD,exact:v3225ExactSession,authoring:v3225AuthoringSession,latch:v3225LatchSession,snapshot:v3225SnapshotSession,restoreDraft:v3225RestoreDraft,parse:v3225ParseBlocks,distance:blocks=>v3200Distance?.(blocks)||0,blockDistance:block=>v3200BlockDistance?.(block)||0,writer:()=>v3192WriteTarget?.(),targetSession:()=>v3126TargetSession?.(),select:id=>setSelectedSession?.(id),rest:text=>v3224ExplicitRest?.(text),targetHint:(item,block)=>v3223TargetHint?.(item,block),t400:(item,block)=>v3205T400Spec?.(item,block),targetDetails:(session,block,item,bi=0,ii=0)=>v3206TargetDetails?.(session,block,item,bi,ii),captureRoster:v3180CaptureRoster,openComposer:options=>v3198OpenComposer?.(options||{}),buildDraft:(raw,type="text")=>v3150BuildDraft?.(raw,type),renderDraft:()=>v3150RenderDraft?.(),persistDraft:v3225PersistDraftNow,commit:()=>v3192CommitToBoard?.(),saveBlock:()=>v32SaveSessionBlock?.(),sessionLabel:v3225SessionLabel,versionKey:V3225_VERSION_KEY,draftKey:V3225_DRAFT_KEY};
-setTimeout(()=>{v3225Brand();v3225EnhanceComposer();v3180CaptureTagsUi?.()},0);setTimeout(()=>{v3225Brand();v3225RegisterWorker();v3225EnhanceComposer()},650);setTimeout(v3225Brand,3100);setTimeout(v3225Brand,13050);setTimeout(v3225Brand,30050);
+setTimeout(()=>{v3225Brand();v3225EnhanceComposer();v3180CaptureTagsUi?.()},0);setTimeout(()=>{v3225Brand();v3225RegisterWorker();v3225EnhanceComposer()},650);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.26 — PARENT SET TRUTH + DECK ACTIONS
@@ -23631,7 +23637,7 @@ async function v3226RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3225BrandObserver?.disconnect?.()}catch{}
 const v3226BrandObserver=new MutationObserver(()=>queueMicrotask(v3226Brand));if(document.querySelector("title"))v3226BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3226BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3226Debug={version:V3226_VERSION,build:V3226_BUILD,parse:v3226ParseBlocks,normalise:v3226NormalizeBlocks,parentAerobic:v3226ParentAerobic,parentRest:v3226ParentRest,restForItem:v3226RestForItem,parentTargets:v3226ParentTargetHtml,setRest:(seconds,blockIndex=0)=>v3226SetParentRest(v3225ExactSession?.()||selectedSession?.(),blockIndex,seconds),applyRepeat:(count,blockIndex=0)=>v3226ApplyRepeat(v3225ExactSession?.()||selectedSession?.(),blockIndex,count),bindStroke:v3226BindStrokeButtons,media:v3226OpenMediaPicker};
-v3226Brand();setTimeout(()=>{v3226Brand();v3226RegisterWorker()},0);setTimeout(v3226Brand,900);setTimeout(v3226Brand,3100);setTimeout(v3226Brand,13075);setTimeout(v3226Brand,30075);
+v3226Brand();setTimeout(()=>{v3226Brand();v3226RegisterWorker()},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // -----------------------------------------------------------------------------
 // v3.20.26 generic Max guide. When no race pace/segment is authored, use the
@@ -23917,7 +23923,7 @@ async function v3227RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3226BrandObserver?.disconnect?.()}catch{}
 const v3227BrandObserver=new MutationObserver(()=>queueMicrotask(v3227Brand));if(document.querySelector("title"))v3227BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3227BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3227Debug={version:V3227_VERSION,build:V3227_BUILD,effectiveLine:v3227EffectiveLine,t400Prior:v3227T400Prior,t400Select:v3227OpenT400Selector,t400Seed:v3227SeedT400,t400Summary:v3227OpenT400Summary,evidence:v3227OpenEvidence,parentRest:(seconds,blockIndex=0)=>v3226SetParentRest?.(v3225ExactSession?.()||selectedSession?.(),blockIndex,seconds)};
-v3227Brand();setTimeout(()=>{v3227Brand();v3227RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);setTimeout(v3227Brand,900);setTimeout(v3227Brand,3100);setTimeout(v3227Brand,13100);setTimeout(v3227Brand,30100);
+v3227Brand();setTimeout(()=>{v3227Brand();v3227RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // =============================================================================
 // McLay Swimming OS v3.20.28 — PHONE TRUTH + HEAD-COACH FOCUS
@@ -24121,7 +24127,7 @@ async function v3228RegisterWorker(){if(!("serviceWorker" in navigator)||!locati
 try{v3227BrandObserver?.disconnect?.()}catch{}
 const v3228BrandObserver=new MutationObserver(()=>queueMicrotask(v3228Brand));if(document.querySelector("title"))v3228BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3228BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 window.v3228Debug={version:V3228_VERSION,build:V3228_BUILD,fixBlocks:v3228FixBlocks,total:v3228Total,rows:v390SessionRows,interpret:v3140SessionInterpretation,thread:v3150PreviousNext,t400Seed:v3227T400Seed,selected:()=>v3228SelectedAthleteId,planDistance:v3228SourcePlanDistance,delivered:v3228DeliveredDistance};
-v3228Brand();setTimeout(()=>{v3228Brand();v3228RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);setTimeout(v3228Brand,900);setTimeout(v3228Brand,3100);setTimeout(v3228Brand,13100);setTimeout(v3228Brand,30100);
+v3228Brand();setTimeout(()=>{v3228Brand();v3228RegisterWorker();try{v36RebindResultsButtons?.()}catch{}},0);/* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed *//* v3.20.30: legacy delayed brand timer suppressed */
 
 // v3.20.28 final Hub evidence view: canonical Board metres only; stale saved
 // parser totals do not create a second truth. Detail stays available underneath.
@@ -24420,7 +24426,7 @@ try{v3228BrandObserver?.disconnect?.()}catch{}
 const v3229BrandObserver=new MutationObserver(()=>queueMicrotask(v3229Brand));if(document.querySelector("title"))v3229BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3229BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 function v3229Startup(){v3229InstallSessionGuard();v3229Brand();try{v3195ClearBoardCaches?.()}catch{}const session=selectedSession?.();if(session&&v3229View()==="deck")requestAnimationFrame(()=>v3229ApplyColourThreads(session,document.getElementById("deck")||document));}
 window.v3229Debug={version:V3229_VERSION,build:V3229_BUILD,repair:v3229RepairBlocks,replay:v3229ReplayLiveEdits,total:v3229BlocksTotal,groups:v3205BoardGroups,sessionLock:()=>v3229SessionLockId,pathCourse:v3229PathCourse,rankedPbs:v3229RankedPbs,finishPosition:v3229FinishPosition,programme:v3229ProgrammeForSession,bootQuietUntil:()=>v3229BootAt+V3229_BOOT_QUIET_MS};
-v3229Startup();setTimeout(()=>{v3229Startup();v3229RegisterWorker()},0);setTimeout(v3229Startup,900);setTimeout(v3229Startup,3100);setTimeout(v3229Startup,13100);setTimeout(v3229Startup,30100);
+v3229Startup();setTimeout(()=>v3229RegisterWorker(),0);
 
 // -----------------------------------------------------------------------------
 // 15. Coach-facing note cleanup + explicit block Finish labels.
@@ -24438,3 +24444,447 @@ v3170BindBoard=function(host,session){
   host?.querySelectorAll?.("[data-v3202-finish-here]").forEach(button=>{const index=Number(button.dataset.v3202FinishHere),block=blocks[index],label=block?.title||v32BlockLabel?.(block?.block_type)||`Block ${index+1}`;button.textContent=`Finish here — ${label}`;button.title=`Finish session after ${label}`;button.onclick=()=>v3202OpenFinishHere(session,index)});
   return out;
 };
+
+// =============================================================================
+// McLay Swimming OS v3.20.30 — PHONE TRUTH / ONE PATHWAY / STABLE FOREGROUND
+// 14 Aug 2026
+// Field-repair release. One immutable plan tree + one delivered tree, one PB /
+// pathway engine across phone and desktop, explicit-session ownership, quiet
+// foreground startup, phone-width target/modification cards, and milestone-led
+// swimmer pathways. No SQL migration.
+// =============================================================================
+const V3230_VERSION="3.20.30";
+const V3230_BUILD="3.20.30-phone-truth-one-pathway-stable-foreground-20260814";
+const V3230_CORE="20260814-core3230";
+const V3230_PLAN_CAPTURE="session_plan_snapshot";
+const V3230_FRIDAY_IDENTITY_DATE="2026-08-14";
+const V3230_FRIDAY_ORIGINAL=`WARM-UP
+400 Choice
+
+PRE-SET
+2 Rounds:
+300 Regeneration
+200 Development
+100 Overload
+10s Rest
+
+MAIN SET
+2 Rounds:
+4 x 25 #1 Build @ 0:45
+4 x 25 #1
+15m Max @ 0:45
+8 x 25 Dive Start
+6 x 12.5 Max @ 0:45
+1 x 35 Dive Start
+100 HBS
+150 Scull
+
+POST-SET
+8 x 25 Fins @ 1:15
+1 Underwater / 1 15m Max
+4 x 100 Fins
+1 Kick / 1 Free
+20s Rest
+3 x 100
+1 Pull / 1 Paddles / 1 Swim
+15s Rest
+
+WARM-DOWN
+Easy`;
+
+function v3230Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3230Norm(value){return v3230Text(value).toLowerCase().replace(/[–—]/g,"-").replace(/×/g,"x").replace(/[^a-z0-9.#:@/]+/g," ").replace(/\s+/g," ").trim()}
+function v3230Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v3230Phone(){try{return window.matchMedia?.("(max-width:900px),(pointer:coarse)")?.matches||window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3230ActiveView(){return document.querySelector(".view.active")?.id||"deck"}
+function v3230SessionStarted(session){if(!session)return false;return Boolean((appState.attendance||[]).some(r=>r.session_id===session.id)||(appState.captures||[]).some(r=>r.session_id===session.id)||(appState.session_reviews||[]).some(r=>r.session_id===session.id)||/complete|finished/i.test(String(session.status||"")))}
+function v3230BlockText(item){return v3230Text(item?.raw||item?.instruction||item?.label)}
+function v3230SetItemText(item,text){item.raw=text;item.label=text;item.instruction=text;return item}
+function v3230Total(blocks){return (blocks||[]).reduce((n,b)=>n+Number(v3170BlockDistance?.(b)||0),0)}
+function v3230SessionSquad(session){return (typeof sessionSquads==="function"?sessionSquads(session):session?.squads||[])[0]||""}
+function v3230IsFridayNational(session){return Boolean(session&&session.session_date===V3230_FRIDAY_IDENTITY_DATE&&String(session.day_part||"").toUpperCase()==="AM"&&squadKey(v3230SessionSquad(session))==="national"&&/fri|friday/i.test(String(session.title||"Fri AM")))}
+
+// -----------------------------------------------------------------------------
+// A. Immutable PLAN source. Prefer an explicit plan snapshot, then a true planned
+// transcription, then a pre-edit local version. Current workout is last resort.
+// The known Friday field session is recovered narrowly from coach-confirmed truth.
+// -----------------------------------------------------------------------------
+function v3230PlanSnapshotCapture(session){return (appState.captures||[]).filter(r=>r.session_id===session?.id&&r.capture_type===V3230_PLAN_CAPTURE&&v3230Text(r.text_content)).sort((a,b)=>String(a.created_at||"").localeCompare(String(b.created_at||"")))[0]||null}
+function v3230PlannedTranscriptions(session){return (appState.session_transcriptions||[]).filter(r=>r.session_id===session?.id&&v3230Text(r.raw_text)&&/(?:planned|workout|session)/i.test(String(r.purpose||""))&&!/(?:quick_note|poolside_evidence|session_debrief|finish)/i.test(String(r.purpose||""))).sort((a,b)=>String(a.created_at||a.updated_at||"").localeCompare(String(b.created_at||b.updated_at||"")))}
+function v3230LocalVersions(session){try{return JSON.parse(localStorage.getItem(typeof V3225_VERSION_KEY!=="undefined"?V3225_VERSION_KEY:"mclay_v3225_session_versions")||"[]").filter(v=>v.session_id===session?.id&&v?.session?.workout)}catch{return[]}}
+function v3230SourceScore(raw){const t=v3230Text(raw);if(!t)return-999;let s=0;s+=(t.match(/(?:^|\n)\s*(?:warm[- ]?up|pre[- ]?set|main[- ]?set|post[- ]?set|warm[- ]?down)\b/gim)||[]).length*20;s+=(t.match(/(?:^|\n)\s*\d+\s*rounds?\s*:?\s*$/gim)||[]).length*12;s+=(t.match(/(?:^|\n)\s*\d+\s*[x×]\s*\d+(?:\.5)?\b/gim)||[]).length*3;s+=(t.match(/(?:^|\n)\s*\d{2,4}\b/gim)||[]).length; if(/post[- ]?set/i.test(t))s+=15;if(/warm[- ]?down/i.test(t))s+=10;return s}
+function v3230PlanSource(session){
+  if(!session)return"";
+  const snap=v3230PlanSnapshotCapture(session);if(snap)return v3230Text(snap.text_content);
+  if(v3230IsFridayNational(session))return V3230_FRIDAY_ORIGINAL;
+  const candidates=[];
+  for(const tr of v3230PlannedTranscriptions(session))candidates.push({raw:tr.raw_text,rank:400});
+  for(const version of v3230LocalVersions(session))candidates.push({raw:version.session.workout,rank:300-Number(new Date(version.created_at||0))/1e15});
+  if(session.workout)candidates.push({raw:session.workout,rank:100});
+  candidates.sort((a,b)=>(b.rank+v3230SourceScore(b.raw))-(a.rank+v3230SourceScore(a.raw)));return v3230Text(candidates[0]?.raw||session.workout||"");
+}
+function v3230EnsurePlanSnapshot(session){
+  if(!session||v3230PlanSnapshotCapture(session))return v3230PlanSnapshotCapture(session);
+  const raw=v3230PlanSource(session);if(!raw)return null;
+  const record={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:V3230_PLAN_CAPTURE,text_content:raw,session_block_id:null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};
+  upsertLocal("captures",record);queueRecord("captures",record.id);saveState(appState);return record;
+}
+
+// -----------------------------------------------------------------------------
+// B. Source parser. Repeat markers own the block; within-length and composition
+// instructions are cues, never phantom metres. Every cue keeps its parent link.
+// -----------------------------------------------------------------------------
+function v3230Heading(line){return (typeof v3198Heading==="function"?v3198Heading(line):null)||(typeof v3170Heading==="function"?v3170Heading(line):null)}
+function v3230RepeatMarker(line){let m=v3230Text(line).match(/^\s*(\d{1,2})\s*(?:rounds?|x\s*rounds?)\s*:?\s*$/i);if(!m)m=v3230Text(line).match(/^\s*(?:repeat\s*)?[x×]\s*(\d{1,2})\s*$/i);return m?Math.max(1,Number(m[1])||1):null}
+function v3230RestCue(line){return /^\s*\d{1,2}\s*(?:s|sec|secs|seconds?)\s*rest\b/i.test(v3230Text(line))}
+function v3230PatternCue(line){const t=v3230Text(line);return /^\s*\d+(?:\.5)?m\s+max\b/i.test(t)||/^\s*1\s+(?:underwater|pull|paddles?|swim|kick|free|freestyle|choice|drill|fins?|\d+(?:\.5)?m\s+max)\b/i.test(t)||/^\s*1\s+[^\n]+\/\s*1\s+/i.test(t)}
+function v3230CanonicalLine(line){let t=v3230Text(line).replace(/^[-•*]+\s*/,"");t=t.replace(/^100\s+TRS\b/i,"100 HBS").replace(/^150\s+Scap\s+Weight\b/i,"150 Scull");return t}
+function v3230ParseItem(line,index){const text=v3230CanonicalLine(line);let parsed=typeof v3198ParseItem==="function"?v3198ParseItem(text,index):v3170ParseItem?.(text,index);if(parsed?.kind==="ignore")return null;let item=parsed?.item||parsed;if(!item||typeof item!=="object")item={id:uid("block-line"),sort_order:index+1,raw:text,label:text,instruction:text,runnable:false,reps:0,distance:null,line_type:"cue"};item={...item,id:item.id||uid("block-line"),sort_order:index+1};v3230SetItemText(item,text);return item}
+function v3230ParseSource(raw){
+  const source=String(raw||"").replace(/\r/g,"").replace(/\u00a0/g," ").trim();if(!source)return[];
+  const lines=source.split(/\n+/).map(v3230CanonicalLine).filter(Boolean),segments=[];let current=null;
+  const start=h=>{if(current)segments.push(current);current={block_type:h.type||"main_set",title:h.title||"Main set",repeat_count:Math.max(1,Number(h.repeat)||1),lines:[]};if(h.rest)current.lines.push(v3230CanonicalLine(h.rest))};
+  for(const line of lines){const h=v3230Heading(line);if(h){start(h);continue}if(!current)current={block_type:segments.length?"main_set":"warm_up",title:segments.length?"Main set":"Warm-up",repeat_count:1,lines:[]};const rep=v3230RepeatMarker(line);if(rep){current.repeat_count=rep;continue}current.lines.push(line)}if(current)segments.push(current);
+  return segments.map((seg,bi)=>{const items=[];let previousRunnableIndex=-1;for(const [i,line] of seg.lines.entries()){
+      const item=v3230ParseItem(line,i);if(!item)continue;
+      if(v3230RestCue(line)||v3230PatternCue(line)){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3204_cue_reason=v3230RestCue(line)?"rest_instruction":/^\s*\d+(?:\.5)?m\s+max/i.test(line)?"within_length_instruction":"pattern_instruction";if(previousRunnableIndex>=0)item.v3230_parent_index=previousRunnableIndex;items.push(item);continue}
+      if(item.runnable!==false)previousRunnableIndex=items.length;items.push(item)
+    }
+    items.forEach((item,i)=>item.sort_order=i+1);const type=seg.block_type,title=type==="post_set"?"Post-set":seg.title;return{id:`v3230-${bi}-${type}`,block_type:type,title,sort_order:bi+1,items,raw_text:items.map(v3230BlockText).join("\n"),purpose:"",cues:"",keep_together:true,repeat_count:Math.max(1,Number(seg.repeat_count)||1),source_import:"v3230_canonical_source"}
+  }).filter(b=>b.items.length||b.raw_text)
+}
+
+// -----------------------------------------------------------------------------
+// C. Delivered tree = immutable plan + auditable whole-group changes + current
+// non-structural delivery metadata (e.g. parent rest). Never use a corrupted
+// stored block as authority for reps, section labels, or composition grammar.
+// -----------------------------------------------------------------------------
+function v3230ChangeCaptures(session){return (appState.captures||[]).filter(r=>r.session_id===session?.id&&r.capture_type==="session_change").sort((a,b)=>String(a.created_at||a.updated_at||"").localeCompare(String(b.created_at||b.updated_at||"")))}
+function v3230FindBlock(blocks,label){const key=v3230Norm(label).replace(/\bset\b/g,"").trim();return blocks.find(b=>{const k=v3230Norm(b.title||v32BlockLabel?.(b.block_type)).replace(/\bset\b/g,"").trim();return k===key||k.includes(key)||key.includes(k)})||null}
+function v3230ApplyLineReplacement(block,before,after){if(!block||!before||!after)return false;const needle=v3230Norm(before),done=v3230Norm(after);let idx=block.items.findIndex(i=>v3230Norm(v3230BlockText(i))===needle);if(idx<0&&block.items.some(i=>v3230Norm(v3230BlockText(i))===done))return true;if(idx<0)idx=block.items.findIndex(i=>{const k=v3230Norm(v3230BlockText(i));return k&&needle&&(k.includes(needle)||needle.includes(k))});if(idx<0)return false;const prior=block.items[idx],next=v3230ParseItem(after,idx)||{...prior};next.id=prior.id;next.sort_order=prior.sort_order;for(const key of ["v3230_parent_index","v3204_cue_reason"])if(prior[key]!==undefined&&next[key]===undefined)next[key]=prior[key];block.items[idx]=next;return true}
+function v3230ReplayChanges(session,planBlocks){const out=v3230Clone(planBlocks);for(const row of v3230ChangeCaptures(session)){
+    const text=v3230Text(row.text_content);let m=text.match(/^\[Whole-group live edit\]\s*([^:]+):\s*(.+)$/i);if(m){const block=v3230FindBlock(out,m[1]);let body=m[2].replace(/\s*·\s*Why:.*$/i,"");const pairRx=/(.+?)\s*→\s*(.+?)(?=\s*·\s*.+?\s*→|$)/g;let p;while((p=pairRx.exec(body)))v3230ApplyLineReplacement(block,v3230Text(p[1]),v3230Text(p[2]));continue}
+    m=text.match(/^Everyone:\s*(.+?)\s+repeat\s+changed\s+to\s+[×x](\d+)/i);if(m){const block=v3230FindBlock(out,m[1]);if(block)block.repeat_count=Math.max(1,Number(m[2])||1);continue}
+    m=text.match(/^Everyone:\s*(.+?)\s+rest\s+changed\s+to\s+(\d+)s/i);if(m){const block=v3230FindBlock(out,m[1]);if(block){block.v3226_parent_rest=Number(m[2]);block.parent_rest_seconds=Number(m[2])}continue}
+  }
+  return out.map((b,bi)=>({...b,sort_order:bi+1,items:b.items.map((i,ii)=>({...i,sort_order:ii+1})),raw_text:b.items.map(v3230BlockText).join("\n")}))}
+function v3230StoredDeliveryBlocks(session){return (appState.session_blocks||[]).filter(r=>r.session_id===session?.id).sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0))}
+function v3230OverlayDeliveryMetadata(session,blocks){const stored=v3230StoredDeliveryBlocks(session);return blocks.map((block,bi)=>{const match=stored.find(s=>s.block_type===block.block_type)||stored[bi];if(!match)return block;const rest=Number(match.v3226_parent_rest||match.parent_rest_seconds||0);if(rest>=5&&rest<=60){block.v3226_parent_rest=rest;block.parent_rest_seconds=rest;for(const item of block.items)if(item.runnable!==false&&/regeneration|development|overload/i.test(v3230BlockText(item)))item.pace_rest=rest;for(const cue of block.items)if(cue.runnable===false&&v3230RestCue(v3230BlockText(cue)))v3230SetItemText(cue,`${rest}s Rest`)}return block})}
+function v3230PlanBlocks(session){return v3230ParseSource(v3230PlanSource(session))}
+function v3230DeliveredBlocks(session){if(!session)return[];return v3230OverlayDeliveryMetadata(session,v3230ReplayChanges(session,v3230PlanBlocks(session)))}
+function v3230PlanDistance(session){return v3230Total(v3230PlanBlocks(session))}
+// From v3.20.30 onward every planned-distance surface consumes the immutable canonical plan.
+// This replaces inherited v3.20.28/29 helpers that could still return the stale 4,050m Friday value.
+v3228SourcePlanDistance=function(session){return v3230PlanDistance(session)};
+function v3230DeliveredDistance(session){return v3230Total(v3230DeliveredBlocks(session))}
+
+// Board, Coach Hub, Finish and athlete training exposure share this exact tree.
+v3170BoardBlocks=v3230DeliveredBlocks;v3125BoardBlocks=v3230DeliveredBlocks;
+v3180ReconcileDistance=function(session){return v3230DeliveredDistance(session)};
+
+// Keep attached cues with their parent row for classification and target semantics.
+const v3230GroupsFallback=typeof v3205BoardGroups==="function"?v3205BoardGroups:null;
+v3205BoardGroups=function(block){const groups=[],orphans=[];let runnableIndex=0,pending=[];for(const [itemIndex,item] of (block?.items||[]).entries()){if(item.runnable!==false){const group={item,itemIndex,runnableIndex:runnableIndex++,attachments:pending.splice(0)};groups.push(group);continue}const cue={item,itemIndex,kind:v3205CueKind?.(item)||item.v3204_cue_reason||"cue",text:v3230BlockText(item)};if(item.v3230_parent_index!==undefined&&groups.length){groups.at(-1).attachments.push(cue);continue}if(groups.length&&["rest","pattern","round","within_length_instruction","rest_instruction","pattern_instruction"].includes(cue.kind)){groups.at(-1).attachments.push(cue);continue}if(!groups.length&&["pattern","within_length_instruction","pattern_instruction"].includes(cue.kind)){pending.push(cue);continue}orphans.push(cue)}if(pending.length)orphans.push(...pending);return{groups,orphans}}
+function v3230EffectiveLine(block,item,itemIndex){const group=v3205BoardGroups(block).groups.find(g=>g.itemIndex===itemIndex);return [v3230BlockText(item),...(group?.attachments||[]).filter(a=>!/^\d+s\s+rest/i.test(a.text)).map(a=>a.text)].filter(Boolean).join(" · ")}
+const v3230EffectiveLineBase=typeof v3227EffectiveLine==="function"?v3227EffectiveLine:null;
+v3227EffectiveLine=function(block,item,itemIndex){return v3230EffectiveLine(block,item,itemIndex)||v3230EffectiveLineBase?.(block,item,itemIndex)||v3230BlockText(item)};
+
+// -----------------------------------------------------------------------------
+// D. One-time recovery of the exact Friday field session. This is deliberately
+// narrow: only the confirmed 14 Aug National AM session is rewritten. The plan
+// becomes 4,020m; existing audited live changes create the 4,220m delivery.
+// -----------------------------------------------------------------------------
+function v3230MigrateFriday(){let changed=false;for(const session of appState.sessions||[]){if(!v3230IsFridayNational(session))continue;const currentRest=(v3230StoredDeliveryBlocks(session).find(b=>b.block_type==="pre_set")||{});const rest=Number(currentRest.v3226_parent_rest||currentRest.parent_rest_seconds||0);if(rest&&rest!==10&&!v3230ChangeCaptures(session).some(c=>new RegExp(`Pre[- ]?set rest changed to ${rest}s`,"i").test(c.text_content||""))){const cap={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`Everyone: Pre-set rest changed to ${rest}s`,session_block_id:currentRest.id||null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",cap);queueRecord("captures",cap.id)}
+    if(v3230Norm(session.workout)!==v3230Norm(V3230_FRIDAY_ORIGINAL)||Number(session.planned_distance)!==4020){session.workout=V3230_FRIDAY_ORIGINAL;session.sets=typeof extractStructuredSets==="function"?extractStructuredSets(V3230_FRIDAY_ORIGINAL):session.sets;session.planned_distance=4020;session.updated_at=nowIso();upsertLocal("sessions",session);queueRecord("sessions",session.id);changed=true}
+  }if(changed){saveState(appState);scheduleFastSync?.()}return changed}
+
+// -----------------------------------------------------------------------------
+// E. Protect planned truth during live edits. Snapshot first; edit the delivered
+// blocks/audit trail; then restore plan source + plan distance on the session row.
+// -----------------------------------------------------------------------------
+const v3230GroupEditBase=typeof v3206ApplyGroupEdit==="function"?v3206ApplyGroupEdit:null;
+if(v3230GroupEditBase)v3206ApplyGroupEdit=function(args){const session=args?.session;if(!session)return v3230GroupEditBase(args);v3230EnsurePlanSnapshot(session);const plan=v3230PlanSource(session),planDistance=v3230Total(v3230ParseSource(plan)),result=v3230GroupEditBase(args);session.workout=plan;session.planned_distance=planDistance;session.updated_at=nowIso();upsertLocal("sessions",session);queueRecord("sessions",session.id);saveState(appState);return result};
+v3203ApplyGroupEdit=v3206ApplyGroupEdit;
+const v3230CommitBase=typeof v3207CommitBlocks==="function"?v3207CommitBlocks:null;
+if(v3230CommitBase)v3207CommitBlocks=function(session,blocks,options={}){const started=v3230SessionStarted(session),poolside=started&&/live|parent|poolside|repeat|rest/i.test(String(options?.source||options?.note||""));if(!poolside)return v3230CommitBase(session,blocks,options);v3230EnsurePlanSnapshot(session);const plan=v3230PlanSource(session),planDistance=v3230Total(v3230ParseSource(plan)),out=v3230CommitBase(session,blocks,options);session.workout=plan;session.planned_distance=planDistance;session.updated_at=nowIso();upsertLocal("sessions",session);queueRecord("sessions",session.id);saveState(appState);return out};
+
+// Parent rest: one authoritative value for Reg / Dev / OL, without rewriting plan.
+function v3230ParentRest(block){const n=Number(block?.v3226_parent_rest||block?.parent_rest_seconds||0);if(n>=5&&n<=60)return n;const cue=(block?.items||[]).find(i=>i.runnable===false&&v3230RestCue(v3230BlockText(i)));return Number(v3230BlockText(cue).match(/(\d+)\s*s/i)?.[1]||10)}
+const v3230RestForItemBase=typeof v3226RestForItem==="function"?v3226RestForItem:null;
+v3226RestForItem=function(item,block){const explicit=Number(item?.pace_rest);if(explicit>=5&&explicit<=60)return explicit;if(/regeneration|development|overload/i.test(v3230BlockText(item))&&/pre[- ]?set|aerobic/i.test(`${block?.title||""} ${block?.raw_text||""}`))return v3230ParentRest(block);return v3230RestForItemBase?.(item,block)||null};
+const v3230TargetRowsBase=typeof v3205TargetRows==="function"?v3205TargetRows:null;
+v3205TargetRows=function(session,block,item,blockIndex,itemIndex){const rest=v3226RestForItem?.(item,block),corrected=rest?{...item,pace_rest:rest}:item;return v3230TargetRowsBase?.(session,block,corrected,blockIndex,itemIndex)||[]};
+v3226SetParentRest=function(session,blockIndex,seconds){if(!session)return false;v3230EnsurePlanSnapshot(session);const rest=Math.max(5,Math.min(60,Number(seconds)||10)),blocks=v3230DeliveredBlocks(session),block=blocks[blockIndex];if(!block||!/pre[- ]?set|aerobic/i.test(`${block.title||""} ${block.raw_text||""}`))return false;block.v3226_parent_rest=rest;block.parent_rest_seconds=rest;for(const item of block.items){if(item.runnable!==false&&/regeneration|development|overload/i.test(v3230BlockText(item)))item.pace_rest=rest;if(item.runnable===false&&v3230RestCue(v3230BlockText(item)))v3230SetItemText(item,`${rest}s Rest`)}v3206PersistBlocks?.(session,blocks);const duplicate=v3230ChangeCaptures(session).some(c=>new RegExp(`${block.title||"Pre-set"} rest changed to ${rest}s`,"i").test(c.text_content||""));if(!duplicate){const cap={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`Everyone: ${block.title||"Pre-set"} rest changed to ${rest}s`,session_block_id:block.id||null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",cap);queueRecord("captures",cap.id)}saveState(appState);try{V3144_TARGET_CACHE?.clear?.();v3129TargetCache?.clear?.();v3195ClearBoardCaches?.()}catch{};v3230PermitUi(2200);v3201RequestBoardPaint?.(true);scheduleFastSync?.();return true};
+
+// -----------------------------------------------------------------------------
+// F. Explicit session ownership. Background auto-select may initialise only when
+// nothing valid is selected. A coach tap always wins and never resets swimmer.
+// -----------------------------------------------------------------------------
+let v3230ExplicitUntil=0,v3230UiPermitUntil=0,v3230UserBusyUntil=0,v3230ForegroundReady=false;
+function v3230PermitUi(ms=1800){v3230UiPermitUntil=Math.max(v3230UiPermitUntil,Date.now()+ms);v3230ExplicitUntil=Math.max(v3230ExplicitUntil,Date.now()+ms)}
+function v3230SelectedValid(){const id=String(appState.settings?.selected_session_id||v3229SessionLockId||"");return Boolean(id&&(appState.sessions||[]).some(s=>s.id===id))}
+const v3230AutoSelectBase=typeof v3143AutoSelectCurrentSession==="function"?v3143AutoSelectCurrentSession:null;
+v3143AutoSelectCurrentSession=function(force=false){if(v3230SelectedValid()&&!force)return false;return v3230AutoSelectBase?.(force)||false};
+setSelectedSession=function(id){const session=(appState.sessions||[]).find(s=>s.id===id);if(!session)return false;const athleteId=appState.settings?.selected_athlete_id||"";v3230PermitUi(2600);try{v3229ExplicitSession?.(3200)}catch{};try{v3229GuardValue=String(id);v3229SessionLockId=String(id);v3229ExplicitSessionUntil=Date.now()+3200}catch{};appState.settings.selected_session_id=String(id);const squads=sessionSquads(session);if(!squads.some(s=>squadKey(s)===squadKey(appState.settings.selected_squad)))appState.settings.selected_squad=squads[0]||"";if(athleteId&&(appState.athletes||[]).some(a=>a.id===athleteId))appState.settings.selected_athlete_id=athleteId;try{v3225ComposerSessionId=session.id;v3126ImportTargetSessionId=session.id}catch{};saveState(appState);resetLiveRoster?.();renderAll?.();queueMicrotask(()=>v3225RefreshComposerContext?.());return true};
+
+// Past list selectors are explicit session controls too.
+function v3230SessionControl(target){return target?.closest?.("#contextSessionPicker,#deckSessionPicker,#sessionPicker,[data-use-session],[data-v3191-past],[data-v3191-return-live],[data-v3221-history],[data-v3222-history],[data-session-id],[data-session-select],[data-manage-session-edit],#saveSessionAndUseBtn,.session-picker,.v3191-session-row,.v3222-past-row")}
+for(const eventName of ["pointerdown","click","change","input"]){document.addEventListener(eventName,event=>{if(v3230SessionControl(event.target)||event.target?.closest?.("#deck button,#deck summary,#athletes button,#athletes select,#coachhub button,#coachHub button"))v3230PermitUi(2200)},true)}
+for(const eventName of ["touchstart","touchmove","wheel"]){document.addEventListener(eventName,event=>{if(event.target?.closest?.("#deck"))v3230UserBusyUntil=Date.now()+900},{capture:true,passive:true})}
+
+// -----------------------------------------------------------------------------
+// G. Stable foreground. On phone Board, background renders are suppressed after
+// initial paint. User actions get a short permit. No delayed scroll restoration.
+// -----------------------------------------------------------------------------
+function v3230ShouldSuppressBoardRender(){return v3230ForegroundReady&&v3230Phone()&&v3230ActiveView()==="deck"&&Date.now()>v3230UiPermitUntil}
+const v3230RenderAllBase=typeof renderAll==="function"?renderAll:null;
+if(v3230RenderAllBase)renderAll=function(...args){if(v3230ShouldSuppressBoardRender())return false;return v3230RenderAllBase(...args)};
+const v3230BoardStateBase=typeof v3121RenderBoardState==="function"?v3121RenderBoardState:null;
+if(v3230BoardStateBase)v3121RenderBoardState=function(...args){if(v3230ShouldSuppressBoardRender())return false;return v3230BoardStateBase(...args)};
+const v3230PaintBase=typeof v3170PaintBoard==="function"?v3170PaintBoard:null;
+if(v3230PaintBase)v3170PaintBoard=function(...args){if(v3230ShouldSuppressBoardRender())return false;return v3230PaintBase(...args)};
+
+// -----------------------------------------------------------------------------
+// H. One canonical PB inventory. Every screen — phone, desktop, Board targets,
+// quick profile and pathway — consumes the same deduped race truth.
+// -----------------------------------------------------------------------------
+function v3230CanonicalRace(raw,athlete,source="cached"){
+  if(!raw||!athlete)return null;let row=null;try{row=v3145NormaliseRace?.(raw,athlete)||null}catch{};if(!row){try{row=v3163PbRow?.(raw,source,athlete.id,v3163ResultEvidence?.(athlete.id))||null}catch{}}
+  if(!row)return null;const course=v3163ExplicitCourse?.(row.course)||v3Course(row.course),distance=Number(row.distance),stroke=v3Stroke(row.stroke),seconds=Number(row.result_seconds||v3Seconds(row.result_time_text));if(!["LCM","SCM"].includes(course)||!distance||!stroke||!(seconds>0))return null;const points=Number(v3145RawPoints?.({...raw,...row},athlete)||v3Points(row)||0);return{...raw,...row,athlete_id:athlete.id,course,distance,stroke,result_seconds:seconds,result_time_text:row.result_time_text||raw.pb_time||raw.result_time_text||v3140Clock?.(seconds)||v3Time(seconds),v3230_points:points,source_type:row.source_type||source}}
+function v3230CanonicalPbs(athlete){if(!athlete)return[];const candidates=[];const add=(rows,source)=>{for(const raw of rows||[]){if(raw.athlete_id&&raw.athlete_id!==athlete.id)continue;if(raw.excluded_from_pb===true)continue;const row=v3230CanonicalRace(raw,athlete,source);if(row)candidates.push(row)}};add((appState.results_pb_board||[]).filter(r=>r.athlete_id===athlete.id),"official-pb");add((appState.results_event_history||[]).filter(r=>r.athlete_id===athlete.id),"event-history");add((appState.coach_results||[]).filter(r=>r.athlete_id===athlete.id),"coach");try{for(const raw of v3145ProfilePbRows?.(athlete)||[]){const row=v3230CanonicalRace(raw,athlete,"profile");if(row)candidates.push(row)}}catch{}
+  const best=new Map();for(const row of candidates){const key=`${row.course}|${row.distance}|${row.stroke}`,old=best.get(key);if(!old||row.result_seconds<old.result_seconds-.005||(Math.abs(row.result_seconds-old.result_seconds)<.005&&row.v3230_points>old.v3230_points))best.set(key,row)}return[...best.values()].sort((a,b)=>{const ap=v3230PbPoints(athlete,a).points,bp=v3230PbPoints(athlete,b).points;return bp-ap||a.result_seconds-b.result_seconds||a.distance-b.distance||a.stroke.localeCompare(b.stroke)})}
+function v3230PbPoints(athlete,pb){let scale=null;try{scale=v3214Scale?.(athlete,pb)||null}catch{};const points=Math.round(Number(scale?.points)||Number(pb?.v3230_points)||Number(v3Points?.(pb))||0);return{scale,points}}
+athleteOfficialPbs=function(athleteId){const athlete=(appState.athletes||[]).find(a=>a.id===athleteId);return athlete?v3230CanonicalPbs(athlete):[]};
+v3140Pbs=v3230CanonicalPbs;
+v3163PbInventory=function(athlete){return{pbs:v3230CanonicalPbs(athlete),unresolved:[]}};
+v382PbFor=function(athlete,course,distance,stroke){const c=v3Course(course),d=Number(distance),s=v3Stroke(stroke);return v3230CanonicalPbs(athlete).find(r=>r.course===c&&r.distance===d&&r.stroke===s)||null};
+v3180BestEvent=function(athlete){const row=v3230CanonicalPbs(athlete).sort((a,b)=>v3230PbPoints(athlete,b).points-v3230PbPoints(athlete,a).points||a.result_seconds-b.result_seconds)[0];if(!row)return null;return{label:`${row.course} ${row.distance} ${row.stroke}`,points:v3230PbPoints(athlete,row).points,stroke:row.stroke,row}};
+
+// -----------------------------------------------------------------------------
+// I. Milestone-led pathway. Points place every milestone on one scale; named
+// achievements carry the swimmer-facing meaning. Achieved Division II etc remain
+// visible as progress history but can never be offered as the next target.
+// -----------------------------------------------------------------------------
+function v3230PathStore(){if(!appState.settings.v3230_path_course)appState.settings.v3230_path_course={};if(!appState.settings.v3230_path_show_all)appState.settings.v3230_path_show_all={};return appState.settings}
+function v3230RankedPbs(athlete,course){return v3230CanonicalPbs(athlete).filter(pb=>pb.course===course).map(pb=>({...pb,v3230:v3230PbPoints(athlete,pb)})).sort((a,b)=>b.v3230.points-a.v3230.points||a.result_seconds-b.result_seconds)}
+function v3230PathCourse(athlete){const store=v3230PathStore(),saved=store.v3230_path_course[athlete.id]||appState.settings.v3229_path_course?.[athlete.id];if(["LCM","SCM"].includes(saved))return saved;const best=[...v3230RankedPbs(athlete,"LCM"),...v3230RankedPbs(athlete,"SCM")].sort((a,b)=>b.v3230.points-a.v3230.points)[0],course=best?.course||"SCM";store.v3230_path_course[athlete.id]=course;return course}
+function v3230Milestones(athlete,pb){const current=Number(pb.result_seconds),scale=v3230PbPoints(athlete,pb).scale,out=[];for(const stage of v3163Stages?.(athlete,pb)||[]){const seconds=Number(stage.targetSeconds||v3163StageSeconds?.(stage.source||stage));if(!(seconds>0))continue;const state=v3163StageState?.(stage,current)||(current<=seconds?"achieved":"unmet"),label=stage.name||v3163StageLabel?.(stage.source)||"Benchmark",kind=stage.kind||v3163Kind?.(stage.source)||"performance",points=Math.round(Number(v3214PointsAtTime?.(athlete,pb,seconds,scale))||0);out.push({label,kind,seconds,points:points||null,state})}const uniq=new Map();for(const m of out){const key=`${v3230Norm(m.label)}|${m.seconds.toFixed(3)}`;if(!uniq.has(key))uniq.set(key,m)}return[...uniq.values()].sort((a,b)=>b.seconds-a.seconds||Number(a.points||0)-Number(b.points||0))}
+function v3230ProgressBridge(athlete,pb,nextNamed){const point=v3230PbPoints(athlete,pb);if(!point.points)return null;const next=v3214NextPoint?.(point.points)||point.points+25,seconds=v3214TimeForPoints?.(athlete,pb,next,point.scale);if(!(seconds>0&&seconds<Number(pb.result_seconds)))return null;if(nextNamed?.points&&next>=nextNamed.points-5)return null;return{label:`${next} ${point.scale?.short||"WA"} progress marker`,kind:"points",seconds,points:next,state:"unmet"}}
+function v3230PathRows(athlete,pb){const milestones=v3230Milestones(athlete,pb),achieved=milestones.filter(m=>m.state!=="unmet").sort((a,b)=>a.seconds-b.seconds).slice(0,3),future=milestones.filter(m=>m.state==="unmet").sort((a,b)=>b.seconds-a.seconds),nextNamed=future[0]||null,gap=nextNamed?(Number(pb.result_seconds)-Number(nextNamed.seconds))/Math.max(1,Number(pb.result_seconds)):1,bridge=(!nextNamed||gap>=0.05)?v3230ProgressBridge(athlete,pb,nextNamed):null,next=[];if(bridge)next.push(bridge);next.push(...future.slice(0,6));return{achieved,future:next.sort((a,b)=>b.seconds-a.seconds).slice(0,6),nextNamed}}
+function v3230MilestoneKind(m){if(m.kind==="record")return"Record";if(m.kind==="qualifying")return"Qualification";if(m.kind==="points")return"Progress marker";return"Performance benchmark"}
+function v3230EventPathHtml(athlete,pb){const pp=v3230PbPoints(athlete,pb),rows=v3230PathRows(athlete,pb),clock=s=>v3214Clock?.(s)||v3163Clock?.(s)||v3Time(s),pbText=pb.result_time_text||clock(pb.result_seconds),achieved=rows.achieved;return `<article class="v3218-event v3230-event"><header><div><strong>${escapeHtml(`${pb.course} ${pb.distance} ${pb.stroke}`)}</strong><small>PB ${escapeHtml(pbText)}${pp.points?` · ${pp.points} ${escapeHtml(pp.scale?.short||"WA")}`:""}</small></div></header>${achieved.length?`<div class="v3230-achieved"><span>Achieved</span>${achieved.map(m=>`<b>✓ ${escapeHtml(m.label)}</b>`).join("")}</div>`:""}<ol class="v3218-steps"><li class="v3218-step current"><span>Current</span><strong>PB${pp.points?` · ${pp.points} ${escapeHtml(pp.scale?.short||"WA")}`:""}</strong><b>${escapeHtml(pbText)}</b></li>${rows.future.map(m=>`<li class="v3218-step ${m.kind==="points"?"points":"named"}"><span>${escapeHtml(v3230MilestoneKind(m))}</span><strong>${escapeHtml(m.label)}${m.points&&m.kind!=="points"?` · ~${m.points} ${escapeHtml(pp.scale?.short||"WA")}`:""}</strong><b>${escapeHtml(clock(m.seconds))}</b></li>`).join("")}</ol>${!rows.future.length?'<div class="help">No higher loaded milestone for this event yet. Current PB remains the performance anchor.</div>':""}</article>`}
+function v3230BindPath(root,athlete){root?.querySelectorAll?.("[data-v3230-course]").forEach(b=>b.onclick=()=>{v3230PathStore().v3230_path_course[athlete.id]=b.dataset.v3230Course;saveState(appState);renderAthleteResultsHub?.(athlete)});root?.querySelectorAll?.("[data-v3230-show-all]").forEach(b=>b.onclick=()=>{v3230PathStore().v3230_path_show_all[athlete.id]=!v3230PathStore().v3230_path_show_all[athlete.id];saveState(appState);renderAthleteResultsHub?.(athlete)})}
+v3218CoachAnswerHtml=function(athlete){const course=v3230PathCourse(athlete),best=v3230RankedPbs(athlete,course)[0];if(!best)return"<div class=\"help\">No verified PB event is loaded yet.</div>";const point=best.v3230,rows=v3230PathRows(athlete,best),named=rows.nextNamed,first=v3230Text(athlete.full_name).split(/\s+/)[0]||"Swimmer",clock=s=>v3214Clock?.(s)||v3163Clock?.(s)||v3Time(s);return `<section class="v3217-snapshot v3218-snapshot v3230-snapshot"><div class="v3217-snapshot-head"><div><div class="eyebrow">Deck answer · strongest current event</div><h4>${escapeHtml(`${course} ${best.distance} ${best.stroke}`)}</h4></div><b>${point.points?`${point.points} ${escapeHtml(point.scale?.short||"WA")}`:"PB"}</b></div><div class="v3218-coach-answer"><span>What to tell ${escapeHtml(first)}</span><strong>${escapeHtml(`${best.result_time_text||clock(best.result_seconds)} is currently ${first}'s strongest ${course} performance${point.points?` at ${point.points} ${point.scale?.short||"WA"}`:""}.`)}</strong>${named?`<small>Next meaningful milestone: ${escapeHtml(named.label)} · ${escapeHtml(clock(named.seconds))}${named.points?` · ~${named.points} ${escapeHtml(point.scale?.short||"WA")}`:""}</small>`:"<small>No higher named milestone is loaded yet.</small>"}</div><div class="v3230-course-switch"><button type="button" data-v3230-course="LCM" class="${course==="LCM"?"active":""}">LCM</button><button type="button" data-v3230-course="SCM" class="${course==="SCM"?"active":""}">SCM</button></div><div class="v3217-rule">Points organise the pathway. Milestones give it meaning. Achieved milestones remain visible; only higher milestones become next targets.</div></section>`};
+v3218AgePathwayHtml=function(athlete){const course=v3230PathCourse(athlete),ranked=v3230RankedPbs(athlete,course),showAll=Boolean(v3230PathStore().v3230_path_show_all[athlete.id]),shown=showAll?ranked:ranked.slice(0,5);return `<section class="v3218-age-path"><div class="v3218-path-note"><strong>${escapeHtml(course)} performance pathway · strongest events first</strong><span>Real milestones lead; points provide the common scale underneath.</span></div><div class="v3230-course-switch"><button type="button" data-v3230-course="LCM" class="${course==="LCM"?"active":""}">LCM</button><button type="button" data-v3230-course="SCM" class="${course==="SCM"?"active":""}">SCM</button></div><div class="v3218-events">${shown.map(pb=>v3230EventPathHtml(athlete,pb)).join("")||'<div class="help">No verified PB events are available for this course.</div>'}</div>${ranked.length>5?`<button type="button" class="secondary v3230-show-all" data-v3230-show-all>${showAll?"Show top 5":"Show all events"}</button>`:""}</section>`};
+v3218FullPathwayShell=function(athlete){const course=v3230PathCourse(athlete);return `<details class="v3217-full-pathway v3218-full-pathway" data-v3218-full-pathway="${escapeHtml(athlete.id)}" open><summary><span><strong>Performance pathway</strong><small>${escapeHtml(course)} · strongest current events</small></span><b>−</b></summary><div class="v3217-full-pathway-body v3218-full-pathway-body">${v3218AgePathwayHtml(athlete)}</div></details>`};
+v3218PopulatePathway=function(details,athlete){if(!details)return;const body=details.querySelector(".v3218-full-pathway-body");if(body)body.innerHTML=v3218AgePathwayHtml(athlete);details.dataset.v3218Loaded="1";v3230BindPath(details,athlete)};
+const v3230ResultsHubBase=typeof renderAthleteResultsHub==="function"?renderAthleteResultsHub:null;
+if(v3230ResultsHubBase)renderAthleteResultsHub=function(athlete){const out=v3230ResultsHubBase(athlete);requestAnimationFrame(()=>v3230BindPath(document.getElementById("athleteResultsHub")||document,athlete));return out};
+
+// Quick athlete cards use the exact same best event as the pathway.
+const v3230QuickBase=typeof athleteQuickHtml==="function"?athleteQuickHtml:null;
+if(v3230QuickBase)athleteQuickHtml=function(athlete){let html=v3230QuickBase(athlete);const best=v3180BestEvent(athlete);if(!best)return html;const row=`<div class="deck-answer-row v3230-best-event"><span>Highest-points event</span><strong>${escapeHtml(best.label)} · ${best.points} pts</strong></div>`;if(/<div class="deck-answer-row"><span>Highest-points event<\/span>[\s\S]*?<\/div>/.test(html))html=html.replace(/<div class="deck-answer-row"><span>Highest-points event<\/span>[\s\S]*?<\/div>/,row);else html=row+html;return html};
+
+// -----------------------------------------------------------------------------
+// J. Athlete profile hydration guard. Never save blank demographic fields over a
+// loaded swimmer simply because a render happened before cloud/profile hydration.
+// -----------------------------------------------------------------------------
+const v3230FillProfileBase=typeof fillAthleteProfile==="function"?fillAthleteProfile:null;
+if(v3230FillProfileBase)fillAthleteProfile=function(athlete){const out=v3230FillProfileBase(athlete);const id=document.getElementById("profileAthleteId");if(id){id.dataset.v3230LoadedAthlete=athlete?.id||"";id.dataset.v3230Dirty="0"}return out};
+document.addEventListener("input",event=>{if(event.target?.closest?.("#athletes")&&event.target?.id?.startsWith?.("profile")){const id=document.getElementById("profileAthleteId");if(id)id.dataset.v3230Dirty="1"}},true);
+const v3230SaveProfileBase=typeof saveAthleteProfile==="function"?saveAthleteProfile:null;
+if(v3230SaveProfileBase)saveAthleteProfile=async function(){const id=document.getElementById("profileAthleteId"),athlete=(appState.athletes||[]).find(a=>a.id===id?.value);if(!athlete)return;const loaded=id?.dataset.v3230LoadedAthlete,dirty=id?.dataset.v3230Dirty==="1",dob=document.getElementById("profileDob")?.value||"",sex=document.getElementById("profileSex")?.value||"";if(loaded!==athlete.id||(!dirty&&((athlete.date_of_birth&&!dob)||(athlete.sex&&!sex)))){fillAthleteProfile(athlete);updateStatus("Swimmer profile refreshed before save — no data was overwritten","normal");return false}const out=await v3230SaveProfileBase();if(id)id.dataset.v3230Dirty="0";return out};
+const saveProfileButton=document.getElementById("saveAthleteProfileBtn");if(saveProfileButton){const cloneBtn=saveProfileButton.cloneNode(true);saveProfileButton.replaceWith(cloneBtn);cloneBtn.addEventListener("click",()=>saveAthleteProfile())}
+
+// -----------------------------------------------------------------------------
+// K. Session/programme context. Calendar generic 'training' is operational only.
+// Previous/next context follows the same squad thread, not global timetable order.
+// -----------------------------------------------------------------------------
+function v3230UsefulPlan(value){const t=v3230Text(value);return /^(?:training|published monthly calendar:?\s*training|session|swim|(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?\s*(?:am|pm)|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*(?:am|pm))$/i.test(t)?"":t}
+v3170SessionRole=function(session){const ctx=v3229ProgrammeForSession?.(session)||{},week=ctx.week;return v3230UsefulPlan(session?.primary_system)||v3230UsefulPlan(session?.week_objective)||v3230UsefulPlan(week?.objective)||"Session focus"};
+v3170TechnicalCue=function(session){const ctx=v3229ProgrammeForSession?.(session)||{};return v3230UsefulPlan(session?.technical_focus)||v3230UsefulPlan(session?.plan_cue)||v3230UsefulPlan(ctx.week?.technical_focus)||"Coach the quality written in the set."};
+function v3230SquadSessions(session){const key=squadKey(v3230SessionSquad(session));return (appState.sessions||[]).filter(s=>sessionSquads(s).some(x=>squadKey(x)===key)).sort((a,b)=>`${a.session_date}-${String(a.day_part||"")}`.localeCompare(`${b.session_date}-${String(b.day_part||"")}`))}
+function v3230AdjacentSquadSession(session,dir){const rows=v3230SquadSessions(session),i=rows.findIndex(s=>s.id===session?.id);return i<0?null:rows[i+dir]||null}
+
+// Coach Hub must display immutable plan distance vs delivered canonical distance.
+const v3230CoachHubBase=typeof v3163RenderCoachHub==="function"?v3163RenderCoachHub:null;
+if(v3230CoachHubBase)v3163RenderCoachHub=function(){const session=selectedSession?.();if(session){const original=session.planned_distance;session.planned_distance=v3230PlanDistance(session);try{return v3230CoachHubBase()}finally{session.planned_distance=original}}return v3230CoachHubBase()};
+v3140RenderCoachHub=v3163RenderCoachHub;v390RenderCoachHub=v3163RenderCoachHub;
+
+// -----------------------------------------------------------------------------
+// L. Finish here: exact active block + active runnable line. If there is no known
+// line, say that explicitly rather than pretending the block is an exact point.
+// -----------------------------------------------------------------------------
+function v3230FinishPosition(session){const blocks=v3230DeliveredBlocks(session),bi=Math.max(0,Math.min(blocks.length-1,Number(appState.settings?.v3129_active_block_index)||0)),block=blocks[bi],runnable=(block?.items||[]).filter(i=>i.runnable!==false),ri=Math.max(0,Math.min(runnable.length-1,Number(appState.settings?.v3129_active_item_index)||0)),item=runnable[ri]||null;return{blocks,index:bi,block,line:item?v3230BlockText(item):null,itemIndex:ri,label:item?`${block?.title||v32BlockLabel?.(block?.block_type)} · ${v3230BlockText(item)}`:`${block?.title||v32BlockLabel?.(block?.block_type)} · exact line not selected`}}
+const v3230BindBoardBase=typeof v3170BindBoard==="function"?v3170BindBoard:null;
+v3170BindBoard=function(host,session){const out=v3230BindBoardBase?.(host,session);requestAnimationFrame(()=>{v3230ApplyColourThreads(session,host);host?.querySelectorAll?.("[data-v3202-finish-here],[data-v3228-finish-here]").forEach(button=>{const pos=v3230FinishPosition(session);button.textContent=`Finish here — ${pos.label}`;button.title=pos.line?`Finish after ${pos.line}`:"Choose the current line first";button.onclick=()=>{v3230PermitUi(2200);v3202OpenFinishHere?.(session,pos.index)}})});return out};
+
+// -----------------------------------------------------------------------------
+// M. Session-wide modification colour thread. Paint by explicit athlete ID first,
+// then by initials/name fallback. Border + pill use the same session colour.
+// -----------------------------------------------------------------------------
+function v3230ColourFor(session,athlete){return v3228AthleteColour?.(session,athlete)||"#174f70"}
+function v3230Contrast(hex){try{return v3228Luma?.(hex)>150?"#14232b":"#fff"}catch{return"#fff"}}
+function v3230PaintMod(session,node,athlete){if(!node||!athlete)return;const colour=v3230ColourFor(session,athlete);node.dataset.v3230Athlete=athlete.id;node.style.setProperty("--v3230-athlete-colour",colour);node.style.setProperty("--v3229-athlete-colour",colour);node.style.borderColor=colour;node.style.borderLeftColor=colour;const pill=node.querySelector(":scope>b,:scope>summary>b,.v3205-mod-row>b")||node.matches("b")&&node;if(pill){pill.style.background=colour;pill.style.color=v3230Contrast(colour);pill.style.borderColor=colour;pill.title=`${athlete.full_name} · session colour`}}
+function v3230ApplyColourThreads(session,host=document){if(!session||!host)return;const athletes=v3180ModifiedAthletes?.(session)||[];const byId=new Map(athletes.map(a=>[a.id,a])),byInitials=new Map(athletes.map(a=>[v3205Initials?.(a)||"",a]));host.querySelectorAll?.("[data-v3229-athlete],[data-v3230-athlete],[data-v3170-modified-athlete]").forEach(node=>{const id=node.dataset.v3230Athlete||node.dataset.v3229Athlete||node.dataset.v3170ModifiedAthlete,athlete=byId.get(id);if(athlete)v3230PaintMod(session,node,athlete)});host.querySelectorAll?.(".v3205-mod-row,.v3212-mod-row,.v3213-mod-card,.v3226-mod-athlete").forEach(node=>{if(node.dataset.v3230Athlete)return;const text=v3230Text(node.querySelector(":scope>b")?.textContent),athlete=byInitials.get(text)||athletes.find(a=>v3230Norm(node.textContent).includes(v3230Norm(a.full_name)));if(athlete)v3230PaintMod(session,node,athlete)})}
+
+// -----------------------------------------------------------------------------
+// N. Phone containment: every target/modification is a full-width card. Parent
+// targets are one swimmer at a time; no horizontal columns are permitted.
+// -----------------------------------------------------------------------------
+const v3230Style=document.createElement("style");v3230Style.id="v3230Styles";v3230Style.textContent=`
+.v3230-course-switch{display:flex;gap:6px;margin:8px 0}.v3230-course-switch button{min-height:34px!important;padding:5px 12px!important;background:#eef4f7!important;color:#174f70!important;border:1px solid #bfd3dd!important}.v3230-course-switch button.active{background:#174f70!important;color:#fff!important}.v3230-achieved{display:flex;gap:5px;flex-wrap:wrap;padding:6px 10px;background:#f2f8f3;border-top:1px solid #d7e5d9}.v3230-achieved span{font-size:.68rem;font-weight:900;color:#5d7463}.v3230-achieved b{font-size:.68rem;color:#285b35;border:1px solid #b9d4bf;background:#fff;border-radius:999px;padding:2px 6px}.v3205-mod-row,.v3212-mod-row,.v3213-mod-card,.v3226-mod-athlete,[data-v3170-modified-athlete]{border-left:5px solid var(--v3230-athlete-colour,var(--v3229-athlete-colour,#d49c27))!important}
+@media(max-width:900px){html{scroll-behavior:auto!important}.v3213-mod-rail{display:grid!important;grid-auto-flow:row!important;grid-template-columns:1fr!important;grid-auto-columns:auto!important;overflow-x:visible!important;scroll-snap-type:none!important;padding-inline:4px!important}.v3213-mod-card{width:100%!important;max-width:100%!important}.v3105-attendee-bar .quick-swimmer-buttons{flex-wrap:wrap!important;overflow-x:visible!important}.v3105-attendee-bar .quick-swimmer-buttons button{max-width:100%!important;white-space:normal!important}html,body,#app,.app-shell,main,.view,#deck,#v3126ActiveView{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:clip!important;box-sizing:border-box!important}.v3205-board-block,.v3205-board-lines,.v3205-board-line,.v3206-line-shell,.v3205-line-open,.v3206-target-list,.v3206-target-row,.v3205-mod-rail,.v3205-mod-row,.v3212-mod-row,.v3213-mod-card,.v3226-parent-toolbar,.v3226-parent-mods,.v3226-mod-athlete,.v3229-parent-targets,.v3229-parent-target-athlete,.v3227-dialog,.v3218-event{width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;overflow-x:clip!important}.v3206-target-row{display:grid!important;grid-template-columns:34px minmax(0,1fr)!important;grid-template-areas:"who stroke" "who target" "who cycle" "source source"!important;gap:3px 8px!important;align-items:start!important;padding:8px!important}.v3206-target-row>b{grid-area:who!important}.v3206-target-row>.v3206-target-stroke{grid-area:stroke!important;min-width:0!important;white-space:normal!important}.v3206-target-row>strong{grid-area:target!important;display:block!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:.82rem!important}.v3206-target-row>em{grid-area:cycle!important;display:block!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:.78rem!important}.v3206-target-row>small{grid-area:source!important;display:block!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:.68rem!important}.v3205-mod-row,.v3212-mod-row,.v3213-mod-card{display:grid!important;grid-template-columns:36px minmax(0,1fr)!important;gap:4px 8px!important;align-items:start!important;padding:8px!important;margin:5px 0!important}.v3205-mod-row>b,.v3212-mod-row>b,.v3213-mod-card>b{grid-row:1/5!important}.v3205-mod-row>span,.v3205-mod-row>em,.v3205-mod-row>button,.v3212-mod-row>span,.v3212-mod-row>em,.v3212-mod-row>button,.v3213-mod-card>span,.v3213-mod-card>em,.v3213-mod-card>button{grid-column:2!important;min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important}.v3226-mod-athlete{display:grid!important;grid-template-columns:36px minmax(0,1fr)!important;gap:4px 8px!important;padding:8px!important}.v3226-mod-athlete>div{min-width:0!important}.v3226-mod-athlete span,.v3226-mod-athlete strong,.v3226-mod-athlete em{white-space:normal!important;overflow-wrap:anywhere!important}.v3226-parent-toolbar{display:grid!important;grid-template-columns:1fr!important;gap:7px!important}.v3226-parent-toolbar details,.v3226-parent-target-body,.v3229-parent-targets{width:100%!important;max-width:100%!important;min-width:0!important}.v3229-parent-target-athlete>div{grid-template-columns:72px minmax(0,1fr)!important}.v3205-open-tab{flex-basis:70px!important;max-width:70px!important}.v3218-event>header{grid-template-columns:minmax(0,1fr)!important}.v3218-event>header>b{justify-self:start!important}.v3218-step{grid-template-columns:minmax(0,1fr)!important}.v3218-step span,.v3218-step strong,.v3218-step b{grid-column:1!important;white-space:normal!important;overflow-wrap:anywhere!important}.v3227-dialog{left:8px!important;right:8px!important;width:auto!important;max-width:calc(100vw - 16px)!important;padding-bottom:calc(82px + env(safe-area-inset-bottom))!important}}
+`;document.head.appendChild(v3230Style);
+
+// -----------------------------------------------------------------------------
+// O. Notes/evidence: keep raw machine JSON in Source only; normal Board notes are
+// human-readable. Voice/video evidence keeps a visible transcript action.
+// -----------------------------------------------------------------------------
+const v3230BlockNotesBase=typeof v3212BlockNotes==="function"?v3212BlockNotes:null;
+if(v3230BlockNotesBase)v3212BlockNotes=function(session,block){const all=(appState.captures||[]).filter(r=>r.session_id===session?.id&&r.session_block_id===block?.id&&!['session_change','stroke_override',V3230_PLAN_CAPTURE].includes(String(r.capture_type||''))).sort(byUpdated),rows=all.slice(0,4);if(!rows.length)return"";return `<div class="v3212-block-notes"><div class="v3212-note-head"><strong>Notes on this block</strong><span>${rows.length}${all.length>rows.length?" recent":""}</span></div>${rows.map(row=>{const tr=(appState.session_transcriptions||[]).filter(t=>t.capture_id===row.id&&t.raw_text).sort(byUpdated)[0],text=v3230Text(tr?.raw_text||row.text_content||`${row.capture_type} saved`),who=row.athlete_id?(appState.athletes||[]).find(a=>a.id===row.athlete_id)?.full_name||"Swimmer":"GROUP";return `<div class="v3212-note-chip"><b>${escapeHtml(who==="GROUP"?"GROUP":v3205Initials?.((appState.athletes||[]).find(a=>a.id===row.athlete_id))||who)}</b><span>${escapeHtml(text.slice(0,180))}${text.length>180?"…":""}</span><small>${escapeHtml(row.capture_type||"note")}</small></div>`}).join("")}</div>`};
+
+// -----------------------------------------------------------------------------
+// P. Brand / one startup. There are no 0.9s / 3.1s / 13.1s / 30.1s full-startup
+// reruns in this build. One foreground render, then background work stays quiet.
+// -----------------------------------------------------------------------------
+function v3230Brand(){const title=`McLay Swimming OS — v${V3230_VERSION} Phone Truth`,subtitle=`v${V3230_VERSION} · stable foreground · one session tree · one pathway · milestone-led`;document.title=title;const node=document.querySelector(".header-subtitle");if(node)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3230_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3230_BUILD)}catch{};const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3230_VERSION}`;badge.dataset.build=V3230_BUILD;badge.title=V3230_BUILD}}
+async function v3230Worker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const r=await navigator.serviceWorker.register(`./sw.js?v=${V3230_CORE}`,{updateViaCache:"none"});await r.update();if(r.waiting)r.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.30 worker update",error)}}
+function v3230Startup(){
+  // Restore the exact persisted coach context captured before inherited startup layers ran.
+  const boot=window.__MSOS_V3230_BOOT_SELECTION||{},wantedSession=(appState.sessions||[]).some(s=>s.id===boot.session_id)?boot.session_id:"",wantedAthlete=(appState.athletes||[]).some(a=>a.id===boot.athlete_id)?boot.athlete_id:"";
+  try{v3222BootSafeActive=false}catch{}
+  if(wantedSession)appState.settings.selected_session_id=wantedSession;if(wantedAthlete)appState.settings.selected_athlete_id=wantedAthlete;if(boot.squad)appState.settings.selected_squad=boot.squad;
+  try{if(wantedSession){v3220LockedSessionId=wantedSession;v3229GuardValue=wantedSession;v3229SessionLockId=wantedSession}if(wantedAthlete){v3220LockedAthleteId=wantedAthlete;v3228SelectedAthleteId=wantedAthlete}}catch{}
+  v3230MigrateFriday();v3230Brand();try{v3229InstallSessionGuard?.();if(v3230SelectedValid()){v3229GuardValue=String(appState.settings.selected_session_id);v3229SessionLockId=String(appState.settings.selected_session_id)}}catch{};v3230PermitUi(2500);try{renderAll?.()}catch(error){console.error("v3.20.30 initial render",error)}v3230ForegroundReady=true;requestAnimationFrame(()=>{const s=selectedSession?.();if(s)v3230ApplyColourThreads(s,document.getElementById("deck")||document)});setTimeout(v3230Worker,0)
+}
+window.v3230Debug={version:V3230_VERSION,build:V3230_BUILD,planSource:v3230PlanSource,parse:v3230ParseSource,planBlocks:v3230PlanBlocks,deliveredBlocks:v3230DeliveredBlocks,planDistance:v3230PlanDistance,deliveredDistance:v3230DeliveredDistance,pbs:v3230CanonicalPbs,ranked:v3230RankedPbs,milestones:v3230Milestones,pathRows:v3230PathRows,pathCourse:v3230PathCourse,finishPosition:v3230FinishPosition,stable:()=>({ready:v3230ForegroundReady,selected:appState.settings.selected_session_id,lock:typeof v3229SessionLockId!=="undefined"?v3229SessionLockId:"",athlete:appState.settings.selected_athlete_id})};
+
+// -----------------------------------------------------------------------------
+// Q. Final foreground invariants before the one v3.20.30 startup render.
+// Legacy repair layers are allowed to persist their own data, but they may not
+// turn a known immutable plan into the delivered distance after poolside work.
+// -----------------------------------------------------------------------------
+const v3230UpsertLocalBase=upsertLocal;
+upsertLocal=function(table,record){
+  if(table==="sessions"&&record){
+    if(record.technical_focus&&!v3230UsefulPlan(record.technical_focus))record.technical_focus="";
+    if(v3230SessionStarted(record)&&(v3230IsFridayNational(record)||v3230PlanSnapshotCapture(record))){const planDistance=v3230PlanDistance(record);if(planDistance>0)record.planned_distance=planDistance}
+  }
+  return v3230UpsertLocalBase(table,record)
+};
+
+// Generic calendar text is operational metadata, never a coaching cue. Keep the
+// calendar itself untouched and clear only the known placeholder from sessions.
+function v3230ClearCalendarPlaceholder(){let changed=false;for(const session of appState.sessions||[]){if(session.technical_focus&&!v3230UsefulPlan(session.technical_focus)){session.technical_focus="";session.updated_at=nowIso();upsertLocal("sessions",session);queueRecord("sessions",session.id);changed=true}}if(changed)saveState(appState);return changed}
+const v3230PlanDataBase=typeof v3180PlanData==="function"?v3180PlanData:null;
+v3180PlanData=function(session){const prior=v3230PlanDataBase?.(session)||{},ctx=v3229ProgrammeForSession?.(session)||{},today=v3230UsefulPlan(session?.primary_system)||v3230UsefulPlan(session?.week_objective)||v3230UsefulPlan(ctx.week?.objective)||v3230UsefulPlan(prior.today)||"Session objective not entered",emphasis=v3230UsefulPlan(session?.technical_focus)||v3230UsefulPlan(session?.plan_cue)||v3230UsefulPlan(ctx.week?.technical_focus)||v3230UsefulPlan(prior.emphasis)||"Coach the quality written in the set",week=v3230UsefulPlan(session?.week_objective)||v3230UsefulPlan(ctx.week?.objective)||v3230UsefulPlan(prior.week)||"Weekly focus not entered",season=v3230UsefulPlan(ctx.season?.overarching_goal)||v3230UsefulPlan(ctx.season?.name)||v3230UsefulPlan(prior.season)||"Season alignment not entered";return{today,emphasis,week,season}};
+// Coach Hub must read the same squad-specific weekly/season context as session entry.
+// Calendar placeholders remain operational metadata and never replace programme intent.
+v3163HubPlanContext=function(session){
+  if(!session)return{brief:{},purpose:"No selected session",season:"Season block",links:{previous:null,next:null},modified:[]};
+  const plan=v3180PlanData(session),ctx=v3229ProgrammeForSession?.(session)||{},base=v3124PlanBriefData?.(session)||{},phase=v3230UsefulPlan(ctx.week?.phase)||v3230UsefulPlan(base?.week?.phase)||"";
+  const brief={...base,weekObjective:plan.week,seasonGoal:plan.season};
+  const season=[phase,plan.emphasis].filter(Boolean).join(" · ")||plan.season;
+  return{brief,purpose:plan.today,season,links:v3150PreviousNext?.(session)||{previous:null,next:null},modified:v3140ModifiedColumns?.(session)||[]};
+};
+
+
+// A block footer means "after this block". The Finish Session route uses the
+// live current block/line. Do not label every footer with some other block's line.
+const v3230BindBoardTruthBase=v3170BindBoard;
+v3170BindBoard=function(host,session){const out=v3230BindBoardTruthBase?.(host,session),blocks=v3230DeliveredBlocks(session);requestAnimationFrame(()=>{
+  v3230ApplyColourThreads(session,host);
+  host?.querySelectorAll?.("[data-v3202-finish-here]").forEach(button=>{const index=Math.max(0,Math.min(blocks.length-1,Number(button.dataset.v3202FinishHere)||0)),block=blocks[index],label=block?.title||v32BlockLabel?.(block?.block_type)||`Block ${index+1}`;button.textContent=`Finish here — after ${label}`;button.title=`Finish after ${label}`;button.onclick=()=>{const runnable=(block?.items||[]).filter(i=>i.runnable!==false);appState.settings.v3129_active_block_index=index;appState.settings.v3129_active_item_index=Math.max(0,runnable.length-1);saveState(appState);v3230PermitUi(2200);v3202OpenFinishHere?.(session,index)}});
+  host?.querySelectorAll?.("[data-v3228-finish-here]").forEach(button=>{const pos=v3230FinishPosition(session);button.textContent=`Finish here — ${pos.label}`;button.title=pos.line?`Finish after ${pos.line}`:"Choose the current line first";button.onclick=()=>{v3230PermitUi(2200);v3202OpenFinishHere?.(session,pos.index)}})
+});return out};
+
+v3230ClearCalendarPlaceholder();
+v3230Startup();
+
+// =============================================================================
+// v3.20.30 FINAL COACHING-TRUTH SURFACES
+// Ensure archive/session labels and swimmer training exposure use the delivered
+// tree rather than the immutable plan-distance field once a session has started.
+// =============================================================================
+function v3230ReviewActual(session){const review=typeof sessionReview==="function"?sessionReview(session?.id):null;const n=Number(review?.actual_distance||0);return n>0?n:null}
+function v3230ActualOrDelivered(session){if(!session)return 0;const reviewed=v3230ReviewActual(session);if(reviewed)return reviewed;if(v3230SessionStarted(session))return v3230DeliveredDistance(session);return v3230PlanDistance(session)||Number(session.planned_distance||0)}
+if(typeof v3222HistoryDistance==="function")v3222HistoryDistance=function(session){return v3230ActualOrDelivered(session)};
+const v3230TrainingPanelPreFinal=typeof v3140SwimmerTrainingPanel==="function"?v3140SwimmerTrainingPanel:null;
+if(v3230TrainingPanelPreFinal)v3140SwimmerTrainingPanel=function(athlete){let html=v3230TrainingPanelPreFinal(athlete);const sessions=(appState.sessions||[]).filter(session=>(appState.attendance||[]).some(row=>row.session_id===session.id&&row.athlete_id===athlete.id&&["present","modified","late"].includes(String(row.status||"").toLowerCase()))).sort((a,b)=>String(b.session_date).localeCompare(String(a.session_date))).slice(0,6);for(const session of sessions){const old=Number(v3230ReviewActual(session)||session.planned_distance||0).toLocaleString()+"m",actual=Number(v3230ActualOrDelivered(session)).toLocaleString()+"m";if(old!==actual)html=html.replace(old,actual)}return html};
+
+// Deck/session summaries may legitimately show the immutable plan elsewhere, but
+// the selected Board badge is delivered truth after the session has started.
+function v3230RefreshVisibleDistanceTruth(session=selectedSession?.()){
+  if(!session)return;const delivered=v3230ActualOrDelivered(session),plan=v3230PlanDistance(session);
+  const deck=document.getElementById("deck");if(deck){
+    const summary=deck.querySelector(".v3126-session-card,.v3170-session-card,.deck-session-summary,.selected-session-card");
+    if(summary){summary.querySelectorAll(".chip,b,strong,span").forEach(n=>{const t=v3230Text(n.textContent);if(/^\d{1,3}(?:,\d{3})*m$/.test(t)&&[Number(session.planned_distance||0),plan,delivered].some(x=>Number(t.replace(/\D/g,""))===Number(x)))n.textContent=`${delivered.toLocaleString()}m`})}
+  }
+}
+const v3230RenderAllFinalBase=renderAll;
+renderAll=function(){const out=v3230RenderAllFinalBase();requestAnimationFrame(()=>v3230RefreshVisibleDistanceTruth());return out};
+const v3230BoardStateFinalBase=v3121RenderBoardState;
+v3121RenderBoardState=function(){const out=v3230BoardStateFinalBase();requestAnimationFrame(()=>v3230RefreshVisibleDistanceTruth());return out};
+
+// Debug/acceptance surfaces used by the controlled fixture.
+Object.assign(window.v3230Debug||{}, {actualOrDelivered:v3230ActualOrDelivered, refreshVisibleDistance:v3230RefreshVisibleDistanceTruth});
+
+// Final build identity owns only identity mutations; it never triggers a render.
+try{v3229BrandObserver?.disconnect?.()}catch{}
+const v3230BrandObserver=new MutationObserver(()=>{if(document.title!==`McLay Swimming OS — v${V3230_VERSION} Phone Truth`||document.querySelector('.header-subtitle')?.textContent!==`v${V3230_VERSION} · stable foreground · one session tree · one pathway · milestone-led`)queueMicrotask(v3230Brand)});
+if(document.querySelector('title'))v3230BrandObserver.observe(document.querySelector('title'),{childList:true,subtree:true,characterData:true});
+if(document.querySelector('.header-subtitle'))v3230BrandObserver.observe(document.querySelector('.header-subtitle'),{childList:true,subtree:true,characterData:true});
+
+// =============================================================================
+// v3.20.30 FINAL FINISH TRUTH
+// The coach never types a whole-session distance that MSOS already knows.
+// "Finish here" is tied to the current canonical Board line (and round/reps
+// when the set repeats), then the same quick-wrap completes the session.
+// =============================================================================
+function v3230LineMetres(item){return item&&item.runnable!==false?Math.max(0,Number(item.reps)||0)*Math.max(0,Number(item.distance)||0):0}
+function v3230PerRoundMetres(block){return (block?.items||[]).reduce((sum,item)=>sum+v3230LineMetres(item),0)}
+function v3230CanonicalBlockMetres(block){return v3230PerRoundMetres(block)*Math.max(1,Number(block?.repeat_count)||1)}
+function v3230FinishHereMath(session,{blockIndex=null,itemIndex=null,round=null,repsDone=null,blockEnd=false}={}){
+  const blocks=v3230DeliveredBlocks(session),fallback=v3230FinishPosition(session),bi=Math.max(0,Math.min(blocks.length-1,Number.isFinite(Number(blockIndex))?Number(blockIndex):fallback.index)),block=blocks[bi],runnable=(block?.items||[]).filter(item=>item.runnable!==false&&v3230LineMetres(item)>0),repeat=Math.max(1,Number(block?.repeat_count)||1),ri=Math.max(0,Math.min(runnable.length-1,Number.isFinite(Number(itemIndex))?Number(itemIndex):fallback.itemIndex)),item=runnable[ri]||null,perRound=v3230PerRoundMetres(block),before=blocks.slice(0,bi).reduce((sum,b)=>sum+v3230CanonicalBlockMetres(b),0);
+  if(!item)return{blocks,bi,block,runnable,ri,item:null,repeat,round:1,repsDone:0,actual:before,full:v3230DeliveredDistance(session),before,perRound,lineBefore:0};
+  const chosenRound=blockEnd?repeat:Math.max(1,Math.min(repeat,Number(round)||1)),maxReps=Math.max(1,Number(item.reps)||1),done=blockEnd?maxReps:Math.max(0,Math.min(maxReps,Number.isFinite(Number(repsDone))?Number(repsDone):maxReps)),lineBefore=runnable.slice(0,ri).reduce((sum,row)=>sum+v3230LineMetres(row),0),actual=before+(chosenRound-1)*perRound+lineBefore+done*Math.max(0,Number(item.distance)||0);
+  return{blocks,bi,block,runnable,ri,item,repeat,round:chosenRound,repsDone:done,maxReps,actual,full:v3230DeliveredDistance(session),before,perRound,lineBefore,blockEnd};
+}
+function v3230OpenFinishHere(session,blockIndex,options={}){
+  if(!session)return;const current=v3230FinishPosition(session),requested=Math.max(0,Math.min(v3230DeliveredBlocks(session).length-1,Number.isFinite(Number(blockIndex))?Number(blockIndex):current.index)),blockEnd=Boolean(options?.blockEnd),block=v3230DeliveredBlocks(session)[requested],runnable=(block?.items||[]).filter(item=>item.runnable!==false&&v3230LineMetres(item)>0),itemIndex=blockEnd?Math.max(0,runnable.length-1):(requested===current.index?current.itemIndex:0),initial=v3230FinishHereMath(session,{blockIndex:requested,itemIndex,round:blockEnd?Math.max(1,Number(block?.repeat_count)||1):1,repsDone:blockEnd?Number(runnable.at(-1)?.reps||1):Number(runnable[itemIndex]?.reps||1),blockEnd});if(!initial.item)return;
+  let modal=$("v3202FinishModal");if(!modal){modal=document.createElement("div");modal.id="v3202FinishModal";modal.className="v3202-modal";document.body.appendChild(modal)}modal.hidden=false;
+  const blockLabel=initial.block?.title||v32BlockLabel?.(initial.block?.block_type)||`Block ${initial.bi+1}`,lineLabel=v3230BlockText(initial.item),roundControl=initial.repeat>1&&!blockEnd?`<label>Which round?<select data-v3230-finish-round>${Array.from({length:initial.repeat},(_,i)=>`<option value="${i+1}">Round ${i+1} of ${initial.repeat}</option>`).join("")}</select></label>`:"",repControl=!blockEnd&&initial.maxReps>1?`<label>Completed reps on this line<input type="number" inputmode="numeric" min="0" max="${initial.maxReps}" step="1" value="${initial.maxReps}" data-v3230-finish-reps><small>0–${initial.maxReps} × ${Number(initial.item.distance).toLocaleString()}m</small></label>`:"";
+  modal.innerHTML=`<div class="v3202-dialog v3230-finish-here-dialog"><header><div><span class="eyebrow">Actual stopping point</span><h3>Finish here — ${escapeHtml(blockEnd?`after ${blockLabel}`:blockLabel)}</h3></div><button type="button" class="secondary" data-v3230-finish-close>Close</button></header><div class="v3230-finish-position"><span>${blockEnd?"Completed through":"Current Board line"}</span><strong>${escapeHtml(blockEnd?blockLabel:lineLabel)}</strong>${initial.repeat>1?`<small>${blockEnd?`All ${initial.repeat} rounds`:`This block has ${initial.repeat} rounds`}</small>`:""}</div>${roundControl}${repControl}<div class="v3230-finish-here-totals"><div><span>Planned</span><strong>${v3230PlanDistance(session).toLocaleString()}m</strong></div><div><span>Delivered to here</span><strong data-v3230-finish-total>${initial.actual.toLocaleString()}m</strong></div><div><span>Later work not swum</span><strong data-v3230-finish-missed>${Math.max(0,initial.full-initial.actual).toLocaleString()}m</strong></div></div><label>Short note <small>(optional)</small><textarea data-v3230-finish-note placeholder="Why did the session end here?"></textarea></label><button type="button" data-v3230-finish-save>Use this stopping point & continue wrap-up</button><div class="help" data-v3230-finish-status></div></div>`;
+  const roundEl=modal.querySelector("[data-v3230-finish-round]"),repsEl=modal.querySelector("[data-v3230-finish-reps]"),totalEl=modal.querySelector("[data-v3230-finish-total]"),missedEl=modal.querySelector("[data-v3230-finish-missed]");
+  const read=()=>{const math=v3230FinishHereMath(session,{blockIndex:requested,itemIndex,round:roundEl?Number(roundEl.value):initial.round,repsDone:repsEl?Number(repsEl.value):initial.repsDone,blockEnd});totalEl.textContent=`${math.actual.toLocaleString()}m`;missedEl.textContent=`${Math.max(0,math.full-math.actual).toLocaleString()}m`;return math};roundEl&&(roundEl.onchange=read);repsEl&&(repsEl.oninput=read);modal.querySelector("[data-v3230-finish-close]").onclick=()=>modal.hidden=true;
+  modal.querySelector("[data-v3230-finish-save]").onclick=()=>{const math=read(),note=v3230Text(modal.querySelector("[data-v3230-finish-note]")?.value),existing=sessionReview?.(session.id)||{},position=`${blockLabel}${blockEnd?" completed":` · ${lineLabel}${math.repeat>1?` · round ${math.round}/${math.repeat}`:""}${math.maxReps>1?` · ${math.repsDone}/${math.maxReps} reps`:""}`}`,record={...existing,id:existing.id||`review-${session.id}`,session_id:session.id,actual_distance:math.actual,actual_duration:Number(existing.actual_duration||0),updated_at:nowIso(),energy_systems:{...(existing.energy_systems||{}),v3230_early_finish:{position,planned_distance:v3230PlanDistance(session),full_delivered_distance:math.full,actual_distance:math.actual,missed_distance:Math.max(0,math.full-math.actual),recorded_at:nowIso()}},what_changed:v3202AppendUnique?.(existing.what_changed,`[Session ended early] ${position}${note?` · ${note}`:""}`)||`${existing.what_changed||""}\n[Session ended early] ${position}${note?` · ${note}`:""}`.trim()};upsertLocal("session_reviews",record);queueRecord("session_reviews",record.id);const capture={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`[Session ended early] ${position} · ${math.actual.toLocaleString()}m delivered · ${Math.max(0,math.full-math.actual).toLocaleString()}m later work not swum${note?` · ${note}`:""}`,session_block_id:math.block?.id||null,created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",capture);queueRecord("captures",capture.id);appState.settings.v3230_finish_here_pending={session_id:session.id,actual_distance:math.actual,position,recorded_at:nowIso()};saveState(appState);scheduleFastSync?.();modal.hidden=true;v3230PermitUi(2500);showView?.("finish",{force:true});renderReview?.()};
+}
+v3202OpenFinishHere=v3230OpenFinishHere;
+
+function v3230RenderFinishPage(){
+  const session=selectedSession?.();if(!session)return;const plan=v3180PlanData?.(session)||{},planned=v3230PlanDistance(session),full=v3230DeliveredDistance(session),review=sessionReview?.(session.id)||{},pending=appState.settings?.v3230_finish_here_pending,early=pending?.session_id===session.id&&Number(pending.actual_distance)>=0,actual=early?Number(pending.actual_distance):full,delta=actual-planned,pos=v3230FinishPosition(session),heading=$("finishSessionHeading");
+  if(heading)heading.innerHTML=`<strong>${escapeHtml(sessionLabel(session))} — ${escapeHtml(plan.today||session.primary_system||"Session")}</strong><div class="v3230-finish-truth"><div><span>Planned</span><b>${planned.toLocaleString()}m</b></div><div><span>${early?"Delivered to here":"Delivered"}</span><b>${actual.toLocaleString()}m</b></div><div><span>${delta===0?"Difference":delta>0?"Above plan":"Below plan"}</span><b>${delta>0?"+":""}${delta.toLocaleString()}m</b></div></div><div class="v3230-finish-current"><span>${early?"Stopping point":"Current Board position"}</span><strong>${escapeHtml(early?pending.position:pos.label)}</strong></div>`;
+  const old=$("v311FinishSummary");if(old)old.hidden=true;const distance=$("finishActualDistance");if(distance){distance.value=String(actual);distance.readOnly=true;const holder=distance.closest("div");if(holder)holder.hidden=true}
+  let route=$("v3230FinishRoute");if(!route){route=document.createElement("div");route.id="v3230FinishRoute";route.className="v3230-finish-route-page";const quick=$("v3124QuickWrap");(quick||heading)?.insertAdjacentElement(quick?"beforebegin":"afterend",route)}
+  route.innerHTML=early?`<div class="v3230-early-note"><strong>Session ends here</strong><span>${actual.toLocaleString()}m delivered · ${Math.max(0,full-actual).toLocaleString()}m of the current prescription not swum.</span></div>`:`<button type="button" class="secondary" data-v3230-page-finish-here>Finish here — ${escapeHtml(pos.label)}</button>`;
+  route.querySelector("[data-v3230-page-finish-here]")?.addEventListener("click",()=>v3230OpenFinishHere(session,pos.index));
+  const btn=$("finishSessionBtn");if(btn)btn.textContent=early?`Finish session at ${actual.toLocaleString()}m`:"Finish as delivered";
+}
+const v3230RenderReviewFinishBase=renderReview;
+renderReview=function(){const out=v3230RenderReviewFinishBase?.();v3230RenderFinishPage();v3124BindQuickWrapSave?.();v3230RenderFinishPage();return out};
+
+v3124SaveQuickWrap=async function(){
+  const session=selectedSession?.();if(!session)return;const host=$("v3124QuickWrap"),outcome=host?.dataset.outcome||"hit",changed=$("reviewWhatChanged")?.value.trim()||"",carry=$("reviewCarry")?.value.trim()||"",message=$("v3124WrapMessage");if((outcome==="mostly"||outcome==="not_yet")&&!carry){if(message){message.className="source-warning";message.textContent="Add one carry-forward line for the next coach. That is the only required extra step."}$("reviewCarry")?.focus();return}if(message){message.className="help";message.textContent=""}
+  const existing=sessionReview?.(session.id)||{},pending=appState.settings?.v3230_finish_here_pending,early=pending?.session_id===session.id&&Number(pending.actual_distance)>=0,actual=early?Number(pending.actual_distance):v3230DeliveredDistance(session),label=outcome==="mostly"?"Mostly":outcome==="not_yet"?"Not yet":"Hit",record={...existing,id:existing.id||`review-${session.id}`,session_id:session.id,what_changed:`[Plan outcome: ${label}]${changed?`\n${changed}`:""}`,went_well:$("reviewWentWell")?.value.trim()||existing.went_well||"",reinforce:$("reviewReinforce")?.value.trim()||existing.reinforce||"",athlete_notes:$("reviewAthletes")?.value.trim()||existing.athlete_notes||"",carry_forward:carry||existing.carry_forward||"",actual_distance:actual,actual_duration:Number($("finishActualDuration")?.value||existing.actual_duration||0),energy_systems:{...(existing.energy_systems||{}),...parseEvidenceMap($("finishEnergySystems")?.value||"")},training_modes:parseEvidenceMap($("finishTrainingModes")?.value||"")||existing.training_modes||{},stroke_exposure:parseEvidenceMap($("finishStrokeExposure")?.value||"")||existing.stroke_exposure||{},athlete_response:$("finishAthleteResponse")?.value.trim()||existing.athlete_response||"",modifications:$("finishModifications")?.value.trim()||existing.modifications||"",race_split_evidence:$("finishRaceEvidence")?.value.trim()||existing.race_split_evidence||"",completed_at:nowIso(),updated_at:nowIso()};upsertLocal("session_reviews",record);queueRecord("session_reviews",record.id);session.status="completed";session.updated_at=nowIso();queueRecord("sessions",session.id);delete appState.settings.v3230_finish_here_pending;appState.settings.selected_session_id=session.id;appState.settings.v3191_viewing_past_session_id=session.id;saveState(appState);await syncIfPossible?.();v3230PermitUi(2500);renderAll?.();showView?.("deck",{force:true});appState.settings.selected_session_id=session.id;appState.settings.v3191_viewing_past_session_id=session.id;saveState(appState);updateStatus?.(outcome==="hit"?"Session completed — objective achieved":"Session completed — carry-forward saved for the next coach","good")
+};
+
+// Rebind Board finish controls with explicit semantics: block footers mean the
+// whole block is complete; the sticky/current route uses the exact current line.
+const v3230BindBoardFinishFinalBase=v3170BindBoard;
+v3170BindBoard=function(host,session){const out=v3230BindBoardFinishFinalBase?.(host,session);requestAnimationFrame(()=>{const blocks=v3230DeliveredBlocks(session);host?.querySelectorAll?.("[data-v3202-finish-here]").forEach(button=>{const index=Math.max(0,Math.min(blocks.length-1,Number(button.dataset.v3202FinishHere)||0)),block=blocks[index],label=block?.title||v32BlockLabel?.(block?.block_type)||`Block ${index+1}`;button.textContent=`Finish here — after ${label}`;button.onclick=()=>v3230OpenFinishHere(session,index,{blockEnd:true})});host?.querySelectorAll?.("[data-v3228-finish-here]").forEach(button=>{const pos=v3230FinishPosition(session);button.textContent=`Finish here — ${pos.label}`;button.onclick=()=>v3230OpenFinishHere(session,pos.index)})});return out};
+
+const v3230FinishStyle=document.createElement("style");v3230FinishStyle.id="v3230FinishStyles";v3230FinishStyle.textContent=`.v3230-finish-truth{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:8px 0}.v3230-finish-truth>div,.v3230-finish-here-totals>div{padding:8px;border:1px solid #cbdde5;border-radius:9px;background:#f7fbfc}.v3230-finish-truth span,.v3230-finish-here-totals span,.v3230-finish-current span,.v3230-finish-position span{display:block;font-size:.68rem;font-weight:900;color:#657d88;text-transform:uppercase;letter-spacing:.03em}.v3230-finish-truth b{display:block;font-size:1.05rem;color:#153f5c;margin-top:2px}.v3230-finish-current,.v3230-finish-position,.v3230-early-note{display:grid;gap:3px;padding:8px 10px;border-left:4px solid #174f70;background:#f1f7fa;border-radius:7px;margin:8px 0}.v3230-finish-route-page{margin:8px 0}.v3230-finish-route-page button{width:100%}.v3230-finish-here-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:9px 0}.v3230-finish-here-totals strong{display:block;margin-top:2px;color:#153f5c}.v3230-finish-here-dialog label{display:grid;gap:4px;margin:8px 0}.v3230-finish-here-dialog label small{color:#6b7f88}@media(max-width:600px){.v3230-finish-truth,.v3230-finish-here-totals{grid-template-columns:1fr}.v3230-finish-here-dialog{max-width:calc(100vw - 16px)!important}}`;document.head.appendChild(v3230FinishStyle);
+
+// Finish evidence is coaching evidence, not raw machine audit state.
+v36RenderFinishEvidence=function(){const host=$("v36FinishEvidence"),session=selectedSession?.();if(!host||!session)return;const attendance=(appState.attendance||[]).filter(a=>a.session_id===session.id&&(a.status==="present"||a.status==="modified")),modified=attendance.filter(a=>a.status==="modified").map(a=>(appState.athletes||[]).find(x=>x.id===a.athlete_id)?.full_name).filter(Boolean),captures=(appState.captures||[]).filter(c=>c.session_id===session.id&&c.text_content&&!/^Finish Session voice/i.test(c.text_content)&&!/^\[Stroke override v3\.14\]\s*\{/i.test(c.text_content)&&c.capture_type!=="stroke_override"&&c.capture_type!==V3230_PLAN_CAPTURE).sort(byUpdated),timed=(appState.timed_sets||[]).filter(t=>t.session_id===session.id),blocks=v3230DeliveredBlocks(session);host.innerHTML=`<div class="v36-finish-grid"><div><span>Attendance</span><strong>${attendance.length} here${modified.length?` · modified: ${escapeHtml(modified.join(", "))}`:""}</strong></div><div><span>Session structure</span><strong>${blocks.length} delivered blocks</strong></div><div><span>Times</span><strong>${timed.length} saved set${timed.length===1?"":"s"}</strong></div><div><span>Captures</span><strong>${captures.length} useful note${captures.length===1?"":"s"}</strong></div></div>${captures.slice(0,5).map(c=>`<div class="v36-evidence-line"><b>${escapeHtml((appState.athletes||[]).find(a=>a.id===c.athlete_id)?.full_name||c.capture_type||"Note")}</b><span>${escapeHtml(v3230Text(c.text_content))}</span></div>`).join("")}${timed.slice(0,5).map(t=>`<div class="v36-evidence-line"><b>${escapeHtml((appState.athletes||[]).find(a=>a.id===t.athlete_id)?.full_name||"Time")}</b><span>${escapeHtml(t.set_label||`${t.distance} ${t.stroke}`)} · best ${formatSeconds(t.best)} · avg ${formatSeconds(t.average)}</span></div>`).join("")}`};
