@@ -20413,7 +20413,7 @@ const v3212ModifiedLineBase=v3205ModifiedLine;
 v3205ModifiedLine=function(session,block,blockIndex,runnableIndex){
   const athletes=v3180ModifiedAthletes?.(session)||[];if(!athletes.length)return"";
   const runnable=v34Array(block?.items).filter(row=>row?.runnable!==false),item=runnable[runnableIndex],itemIndex=v34Array(block?.items).indexOf(item),quality=v3206LongRestQuality?.(item),racePace=Boolean(Number(item?.race_distance)||v3199RaceDistance?.(v3129LineText?.(item)||item?.raw||""));
-  const rows=athletes.map(athlete=>{const explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,runnableIndex,itemIndex);if((quality||racePace)&&!explicit)return"";let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}const row=v34Array(adapt?.rows).filter(x=>!x?.cue)[runnableIndex];if(!row)return"";const line=v3206CleanAdaptedLine?.(explicit?.changed_text||row.line||"")||v3212Text(explicit?.changed_text||row.line);const main=v3206Norm?.(item?.raw||item?.instruction)||v3212Text(item?.raw||item?.instruction).toLowerCase();const same=!explicit&&(v3206Norm?.(line)||line.toLowerCase())===main;if(same&&!row.target)return"";return `<div class="v3205-mod-row v3212-mod-row"><b>${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><span>${escapeHtml(line||"Same as main")}</span>${row.target?`<em>${escapeHtml(row.target)}</em>`:""}<button type="button" class="secondary v3212-mod-edit" data-v3212-edit-mod="${escapeHtml(athlete.id)}|${blockIndex}|${itemIndex}">Edit</button></div>`}).filter(Boolean).join("");
+  const rows=athletes.map(athlete=>{const explicit=v3206ExplicitIndividualEdit?.(athlete,session,block,blockIndex,runnableIndex,itemIndex);if((quality||racePace)&&!explicit)return"";let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{}const row=v34Array(adapt?.rows).filter(x=>!x?.cue)[runnableIndex];if(!row)return"";const line=v3206CleanAdaptedLine?.(explicit?.changed_text||row.line||"")||v3212Text(explicit?.changed_text||row.line);const main=v3206Norm?.(item?.raw||item?.instruction)||v3212Text(item?.raw||item?.instruction).toLowerCase();const same=!explicit&&(v3206Norm?.(line)||line.toLowerCase())===main;if(same&&!row.target)return"";return `<div class="v3205-mod-row v3212-mod-row" data-v3229-athlete="${escapeHtml(athlete.id)}"><b>${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><span>${escapeHtml(line||"Same as main")}</span>${row.target?`<em>${escapeHtml(row.target)}</em>`:""}<button type="button" class="secondary v3212-mod-edit" data-v3212-edit-mod="${escapeHtml(athlete.id)}|${blockIndex}|${itemIndex}">Edit</button></div>`}).filter(Boolean).join("");
   return rows?`<div class="v3205-mod-rail">${rows}</div>`:"";
 };
 
@@ -23562,7 +23562,7 @@ function v3226LoadParentTargets(details,session){if(!details?.open)return;const 
 function v3226ModifiedSummary(session,block,blockIndex){
   if(!v3226ParentAerobic(block))return"";const athletes=v3180ModifiedAthletes?.(session)||[],main=v34Array(block.items).filter(item=>item?.runnable!==false);if(!athletes.length)return"";const rendered=[];
   for(const athlete of athletes){let adapt=null;try{adapt=v3180Adaptation?.(athlete,session,block,blockIndex)}catch{};const rows=v34Array(adapt?.rows).filter(row=>!row?.cue),diff=[];for(let i=0;i<Math.min(main.length,rows.length);i++){const row=rows[i],mainLine=v3226Text(main[i]?.raw||main[i]?.instruction),adapted=v3226Text(row?.line);const same=(typeof v3206Norm==="function"?v3206Norm(adapted)===v3206Norm(mainLine):adapted.toLowerCase()===mainLine.toLowerCase());if(same&&!row?.target)continue;if(!same){const target=v3226Text(row?.target);diff.push(`<span>${escapeHtml(adapted||mainLine)}${target?` — <strong>${escapeHtml(target)}</strong>`:""}</span>`)}}
-    if(diff.length)rendered.push(`<div class="v3226-mod-athlete"><b title="${escapeHtml(athlete.full_name)}">${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><div>${diff.join("")}</div></div>`)
+    if(diff.length)rendered.push(`<div class="v3226-mod-athlete" data-v3229-athlete="${escapeHtml(athlete.id)}"><b title="${escapeHtml(athlete.full_name)}">${escapeHtml(v3205Initials?.(athlete)||athlete.initials||"?")}</b><div>${diff.join("")}</div></div>`)
   }
   return rendered.length?`<div class="v3226-parent-mods"><div class="v3226-mod-head"><strong>Modified within this set</strong><span>Only differences shown</span></div>${rendered.join("")}</div>`:"";
 }
@@ -24138,3 +24138,303 @@ if(v3228TestBenchmarkBase)v3201TestBenchmark=function(athlete,distance,stroke){c
 
 // Refresh aliases that were assigned to older function objects before this layer.
 v3140RenderCoachHub=v3163RenderCoachHub;v390RenderCoachHub=v3163RenderCoachHub;v390IntelligenceTab=v3163CoachHubPlanTab;
+
+// =============================================================================
+// McLay Swimming OS v3.20.29 — PHONE SESSION TRUTH + PATHWAY REPAIR
+// 14 Aug 2026
+// Consolidated field repair over v3.20.28. The phone Board/session is protected
+// from background takeover; the same repaired canonical tree feeds Board, Hub and
+// Finish; composition cues remain attached to their parent work; phone target and
+// modification panels stack instead of clipping; swimmer colour threads are
+// session-wide; explicit race pace remains explicit; pathway leads with strongest
+// WA/Para events by course; evidence exposes transcription; weekly-plan context
+// follows the selected squad programme rather than timetable chronology.
+// =============================================================================
+const V3229_VERSION="3.20.29";
+const V3229_BUILD="3.20.29-phone-session-truth-pathway-repair-20260814";
+const V3229_CORE="20260814-core3229";
+const V3229_BOOT_QUIET_MS=45000;
+const v3229BootAt=Date.now();
+function v3229Text(value){return String(value??"").replace(/\r/g,"").replace(/\u00a0/g," ").trim()}
+function v3229Norm(value){return v3229Text(value).toLowerCase().replace(/[–—]/g,"-").replace(/[^a-z0-9.]+/g," ").replace(/\s+/g," ").trim()}
+function v3229Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v3229Phone(){try{return typeof v3219Phone==="function"?v3219Phone():window.matchMedia?.("(max-width:900px),(pointer:coarse)")?.matches||window.innerWidth<=900}catch{return window.innerWidth<=900}}
+function v3229View(){return document.querySelector(".view.active")?.id||"deck"}
+function v3229BlocksTotal(blocks){return v34Array(blocks).reduce((sum,block)=>sum+Number(v3170BlockDistance?.(block)||0),0)}
+function v3229Line(item){return v3229Text(item?.raw||item?.instruction||item?.label)}
+function v3229SetLine(item,text){item.raw=text;item.instruction=text;item.label=text;return item}
+
+// -----------------------------------------------------------------------------
+// 1. Canonical session grammar + durable live-edit replay.
+// The audit capture is not merely a log: where an older device has stale blocks,
+// replay the coach's exact whole-group edits over the source/tree before display.
+// ----------------------------------------------------------------------------
+function v3229SessionChangeRows(session){
+  if(!session)return[];
+  return (appState.captures||[]).filter(row=>row.session_id===session.id&&/^\[Whole-group live edit\]/i.test(v3229Text(row.text_content))).sort((a,b)=>String(a.created_at||a.updated_at||"").localeCompare(String(b.created_at||b.updated_at||"")));
+}
+function v3229ParseChange(text){
+  const m=v3229Text(text).match(/^\[Whole-group live edit\]\s*([^:]+):\s*(.*?)\s*→\s*(.*?)\s*$/i);return m?{block:v3229Text(m[1]),before:v3229Text(m[2]),after:v3229Text(m[3])}:null;
+}
+function v3229ParseReplacement(text,index,prior){
+  let parsed=null;try{parsed=v3170ParseItem?.(text,index)}catch{};let item=parsed?.item||parsed;
+  if(!item||typeof item!=="object")item={raw:text,instruction:text,label:text,runnable:false,reps:0,distance:null,line_type:"cue"};
+  return {...item,id:prior?.id||item.id||uid("block-line"),sort_order:prior?.sort_order||index+1};
+}
+function v3229ReplayLiveEdits(session,blocks){
+  const out=v34Array(blocks).map(block=>({...v3229Clone(block),items:v34Array(block?.items).map(v3229Clone)}));
+  for(const row of v3229SessionChangeRows(session)){
+    const change=v3229ParseChange(row.text_content);if(!change)continue;
+    const block=out.find(b=>{const title=v3229Norm(b.title||v32BlockLabel?.(b.block_type));return title===v3229Norm(change.block)||title.includes(v3229Norm(change.block))||v3229Norm(change.block).includes(title)});if(!block)continue;
+    const before=v3229Norm(change.before),after=v3229Norm(change.after);let index=block.items.findIndex(item=>v3229Norm(v3229Line(item))===before);
+    if(index<0&&block.items.some(item=>v3229Norm(v3229Line(item))===after))continue;
+    if(index<0)index=block.items.findIndex(item=>{const line=v3229Norm(v3229Line(item));return before&&line&&(line.includes(before)||before.includes(line))});
+    if(index<0)continue;block.items[index]=v3229ParseReplacement(change.after,index,block.items[index]);block.v3229_replayed_edit=true;
+  }
+  return out;
+}
+function v3229ExplicitRepeat(block){
+  let repeat=Math.max(1,Number(block?.repeat_count)||1),text=[block?.title,block?.raw_text,...v34Array(block?.items).map(v3229Line)].join("\n"),m=text.match(/(?:^|\n)\s*(\d{1,2})\s*(?:rounds?|x\s*rounds?)\b/i);if(!m)m=String(block?.title||"").match(/(?:x|×)\s*(\d{1,2})\s*$/i);const n=Number(m?.[1]||0);if(n>=2&&n<=20)repeat=Math.max(repeat,n);return repeat;
+}
+function v3229PatternCue(line){return /^\s*1\s+(?:underwater|\d+(?:\.5)?m\s+max|pull|paddles?|swim|kick|free|freestyle|choice|drill|fins?)\b/i.test(line)||/^\s*\d+(?:\.5)?m\s+max\b/i.test(line)}
+function v3229FixItemGeometry(item){
+  const line=v3229Line(item),out={...item};let m=line.match(/^\s*(\d{1,3})\s*[x×]\s*(\d+(?:\.5)?)\b/i);if(m){out.reps=Number(m[1]);out.distance=Number(m[2]);out.runnable=true;out.line_type="set"}
+  else if((m=line.match(/^\s*(\d{2,4}(?:\.5)?)\s*(?:m\b)?/i))){out.reps=Math.max(1,Number(out.reps)||1);out.distance=Number(m[1]);out.runnable=out.runnable!==false;}
+  return out;
+}
+function v3229RepairBlocks(blocks){
+  let out=v34Array(blocks).map(source=>({...v3229Clone(source),items:v34Array(source?.items).map(item=>v3229FixItemGeometry(v3229Clone(item)))}));
+  try{out=v3226NormalizeBlocks?.(out)||out}catch{}
+  out=out.map(source=>{
+    const block={...source,items:v34Array(source?.items).map(item=>({...item}))};block.repeat_count=v3229ExplicitRepeat(block);
+    // v3.20.0 encoded heading rounds as per-line multipliers. v3.20.26 later
+    // promoted the same heading into block.repeat_count. Never apply both.
+    // Nested/local repeat multipliers remain intact because only the matching
+    // heading-repeat marker is neutralised here.
+    if(Number(block.repeat_count)>1){
+      for(const item of block.items){
+        const heading=Number(item?.v3200_heading_repeat||0),mult=Number(item?.v3200_multiplier||1);
+        if(heading===Number(block.repeat_count)&&mult===heading){item.v3200_multiplier=1;item.v3229_repeat_owned_by_block=true}
+      }
+    }
+    let previousRunnable=null;
+    for(let i=0;i<block.items.length;i++){
+      let item=block.items[i],line=v3229Line(item);
+      if(/^100\s+TRS\b/i.test(line)){line=line.replace(/^100\s+TRS\b/i,"100 HBS");v3229SetLine(item,line)}
+      if(/^150\s+Scap\s+Weight\b/i.test(line)){line=line.replace(/^150\s+Scap\s+Weight\b/i,"150 Scull");v3229SetLine(item,line)}
+      if(/^\s*15\s*m?\s*Max\b/i.test(line)&&previousRunnable&&Number(previousRunnable.distance)===25&&Number(previousRunnable.reps)>=2){
+        const cycle=(line.match(/@\s*(\d{1,2}(?::|\.)\d{2})/i)||[])[1];line=`15m Max${cycle?` · @ ${cycle.replace(".",":")}`:""}`;v3229SetLine(item,line);item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3204_cue_reason="within_length_instruction";item.v3229_parent_cue=true;continue;
+      }
+      if(v3229PatternCue(line)&&(!item.runnable||Number(item.distance||0)<=15||/^\s*1\s+/.test(line))){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3204_cue_reason=/^\s*\d+(?:\.5)?m\s+max/i.test(line)?"within_length_instruction":"pattern_instruction";item.v3229_parent_cue=true;continue}
+      if(item.runnable!==false)previousRunnable=item;
+    }
+    block.items=block.items.map((item,index)=>({...item,sort_order:index+1}));block.raw_text=block.items.map(v3229Line).filter(Boolean).join("\n");
+    if(/post[- ]?set/i.test(block.title||""))block.block_type="post_set";
+    return block;
+  });return out;
+}
+function v3229FreshSourceBlocks(session){
+  try{const raw=v3229Text(v3123SourceText?.(session)||session?.workout||"");if(!raw)return[];return v3229RepairBlocks(v3226ParseBlocks?.(raw)||v3170ParseBlocks?.(raw)||[])}catch{return[]}
+}
+const v3229BoardBlocksBase=typeof v3170BoardBlocks==="function"?v3170BoardBlocks:null;
+v3170BoardBlocks=function(session){
+  if(!session)return[];let current=v3229RepairBlocks(v3229ReplayLiveEdits(session,v3229BoardBlocksBase?.(session)||[])),fresh=v3229RepairBlocks(v3229ReplayLiveEdits(session,v3229FreshSourceBlocks(session)));
+  if(fresh.length&&current.length===fresh.length){current=current.map((block,index)=>{const cur=Number(v3170BlockDistance?.(block)||0),src=Number(v3170BlockDistance?.(fresh[index])||0),sameType=String(block.block_type||"")===String(fresh[index]?.block_type||"");return sameType&&src>0&&cur<src*.78?fresh[index]:block})}
+  else if(!current.length&&fresh.length)current=fresh;
+  current=v3229RepairBlocks(v3229ReplayLiveEdits(session,current));return current;
+};
+try{v3125BoardBlocks=v3170BoardBlocks}catch{}
+v3180ReconcileDistance=function(session,blocks){return v3229BlocksTotal(blocks)};
+
+// Better grouping: a leading pattern cue belongs to the next runnable parent;
+// composition cues after a line stay with the previous runnable line.
+const v3229GroupsBase=typeof v3205BoardGroups==="function"?v3205BoardGroups:null;
+v3205BoardGroups=function(block){
+  const groups=[],orphans=[];let runnableIndex=0,pending=[];
+  for(const [itemIndex,item] of v34Array(block?.items).entries()){
+    if(item?.runnable!==false){const group={item,itemIndex,runnableIndex:runnableIndex++,attachments:pending.splice(0)};groups.push(group);continue}
+    const cue={item,itemIndex,kind:v3205CueKind?.(item)||item?.v3204_cue_reason||"cue",text:v3229Line(item)};if(!cue.text)continue;
+    if(["pattern","within_length_instruction"].includes(cue.kind)&&!groups.length){pending.push(cue);continue}
+    if(groups.length&&["rest","pattern","round","within_length_instruction"].includes(cue.kind))groups.at(-1).attachments.push(cue);else orphans.push(cue);
+  }
+  if(pending.length)orphans.push(...pending);return{groups,orphans};
+};
+
+// -----------------------------------------------------------------------------
+// 2. Session ownership + startup stability. No hydration, timer, sync or completed
+// session helper may replace the selected Board session. Only an explicit session
+// control opens a short write window. Preserve block, details and scroll on paint.
+// -----------------------------------------------------------------------------
+let v3229ExplicitSessionUntil=0,v3229SessionLockId="",v3229GuardValue="";
+function v3229ExplicitSession(ms=2800){v3229ExplicitSessionUntil=Date.now()+ms}
+function v3229ProtectSession(){return v3229Phone()&&v3229View()==="deck"&&Boolean(v3229SessionLockId)}
+function v3229InstallSessionGuard(){
+  const settings=appState?.settings;if(!settings)return;const desc=Object.getOwnPropertyDescriptor(settings,"selected_session_id");if(desc?.get?.v3229)return;
+  v3229GuardValue=String(settings.selected_session_id||v3229GuardValue||"");if(v3229GuardValue&&(appState.sessions||[]).some(s=>s.id===v3229GuardValue))v3229SessionLockId=v3229GuardValue;
+  const getter=function(){return v3229GuardValue};getter.v3229=true;
+  Object.defineProperty(settings,"selected_session_id",{enumerable:true,configurable:true,get:getter,set(next){next=String(next||"");const valid=!next||(appState.sessions||[]).some(s=>s.id===next);if(!valid)return;if(v3229ProtectSession()&&next&&next!==v3229SessionLockId&&Date.now()>v3229ExplicitSessionUntil){console.warn("v3.20.29 blocked background session takeover",next);return}v3229GuardValue=next;if(next&&(Date.now()<=v3229ExplicitSessionUntil||!v3229SessionLockId||v3229View()!=="deck"))v3229SessionLockId=next;}});
+}
+function v3229SessionControl(target){return target?.closest?.("#contextSessionPicker,#deckSessionPicker,#sessionPicker,[data-use-session],[data-v3191-past],[data-v3191-return-live],[data-session-id],[data-session-select],[data-manage-session-edit],#saveSessionAndUseBtn,.session-picker,.v3191-session-row")}
+for(const type of ["pointerdown","click","change"]){document.addEventListener(type,event=>{if(v3229SessionControl(event.target))v3229ExplicitSession(3200)},true)}
+const v3229SetSessionBase=typeof setSelectedSession==="function"?setSelectedSession:null;
+if(v3229SetSessionBase)setSelectedSession=function(id,...args){v3229InstallSessionGuard();const out=v3229SetSessionBase(id,...args);if(Date.now()<=v3229ExplicitSessionUntil&&id){v3229GuardValue=String(id);v3229SessionLockId=String(id);appState.settings.selected_session_id=String(id)}return out};
+const v3229SelectedBase=typeof selectedSession==="function"?selectedSession:null;
+if(v3229SelectedBase)selectedSession=function(){v3229InstallSessionGuard();if(v3229ProtectSession()){const locked=(appState.sessions||[]).find(s=>s.id===v3229SessionLockId);if(locked)return locked}return v3229SelectedBase()};
+function v3229BoardUiSnapshot(){const host=document.getElementById("deck");return{session:v3229SessionLockId||appState.settings?.selected_session_id||"",block:Number(appState.settings?.v3129_active_block_index)||0,scroll:Math.max(0,Math.round(window.scrollY||0)),open:[...host?.querySelectorAll?.("details[open]")||[]].map((d,i)=>d.dataset.v3223Line||d.dataset.v3226ParentTargets||d.dataset.v3180Finish||d.dataset.v3219Subsection||`i:${i}`).filter(Boolean)}}
+function v3229RestoreBoardUi(snapshot){if(!snapshot||v3229View()!=="deck")return;v3229InstallSessionGuard();if(snapshot.session){v3229GuardValue=snapshot.session;v3229SessionLockId=snapshot.session;appState.settings.selected_session_id=snapshot.session}appState.settings.v3129_active_block_index=snapshot.block;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(v3229View()!=="deck")return;window.scrollTo(0,snapshot.scroll);for(const key of snapshot.open){let d=null;if(key.startsWith("i:"))continue;d=document.querySelector(`details[data-v3223-line="${CSS.escape(String(key))}"]`)||document.querySelector(`details[data-v3226-parent-targets="${CSS.escape(String(key))}"]`)||document.querySelector(`[data-v3180-finish]`);if(d)d.open=true}}))}
+const v3229RenderAllBase=typeof renderAll==="function"?renderAll:null;
+if(v3229RenderAllBase)renderAll=function(...args){v3229InstallSessionGuard();const snap=v3229Phone()&&v3229View()==="deck"?v3229BoardUiSnapshot():null,out=v3229RenderAllBase(...args);if(snap)v3229RestoreBoardUi(snap);v3229InstallSessionGuard();return out};
+const v3229BoardStateBase=typeof v3121RenderBoardState==="function"?v3121RenderBoardState:null;
+if(v3229BoardStateBase)v3121RenderBoardState=function(...args){v3229InstallSessionGuard();const snap=v3229Phone()&&v3229View()==="deck"?v3229BoardUiSnapshot():null,out=v3229BoardStateBase(...args);if(snap)v3229RestoreBoardUi(snap);return out};
+
+// -----------------------------------------------------------------------------
+// 3. Stroke edits update in place. Preserve exact session, block, open target pane
+// and scroll rather than forcing a different block after target-cache refresh.
+// -----------------------------------------------------------------------------
+const v3229StrokeBase=typeof v3140SaveStrokeOverride==="function"?v3140SaveStrokeOverride:null;
+if(v3229StrokeBase)v3140SaveStrokeOverride=function(args){const snapshot=v3229BoardUiSnapshot(),out=v3229StrokeBase(args);try{V3144_TARGET_CACHE?.clear?.();v3129TargetCache?.clear?.();v3195ClearBoardCaches?.()}catch{};setTimeout(()=>v3229RestoreBoardUi(snapshot),30);setTimeout(()=>v3229RestoreBoardUi(snapshot),180);return out};
+
+// -----------------------------------------------------------------------------
+// 4. Phone target/modification layout. No target table is horizontally wider than
+// the phone. Parent targets become one swimmer card with Reg/Dev/OL stacked.
+// ----------------------------------------------------------------------------
+const v3229ParentTargetBase=typeof v3226ParentTargetHtml==="function"?v3226ParentTargetHtml:null;
+v3226ParentTargetHtml=function(session,block,blockIndex){
+  if(!v3229Phone())return v3229ParentTargetBase?.(session,block,blockIndex)||"";const groups=v3226ParentGroups?.(block)||[];if(groups.length<2)return'<p class="help">This block does not have a grouped aerobic target set.</p>';
+  const labels=groups.map(group=>v3226ColumnLabel?.(group.item,block)||"Target"),byAthlete=new Map();groups.forEach((group,column)=>{for(const row of v3205TargetRows?.(session,block,group.item,blockIndex,group.itemIndex)||[]){const id=row?.athlete?.id;if(!id)continue;if(!byAthlete.has(id))byAthlete.set(id,{athlete:row.athlete,cells:Array(groups.length).fill(null)});byAthlete.get(id).cells[column]=row}});
+  const rows=[...byAthlete.values()].sort((a,b)=>rosterSort?.(a.athlete,b.athlete)||0);return `<div class="v3229-parent-targets">${rows.map(entry=>`<article class="v3229-parent-target-athlete" data-v3229-athlete="${escapeHtml(entry.athlete.id)}"><header><b>${escapeHtml(v3205Initials?.(entry.athlete)||"?")}</b><strong>${escapeHtml(entry.athlete.full_name||"")}</strong></header>${entry.cells.map((cell,i)=>`<div><span>${escapeHtml(labels[i])}</span><strong>${escapeHtml(v3226CellText?.(cell)||"—")}</strong></div>`).join("")}</article>`).join("")||'<p class="help">No target rows loaded.</p>'}</div>`;
+};
+
+// -----------------------------------------------------------------------------
+// 5. Session-wide swimmer colour threads. The athlete ID is stored on the DOM so
+// changing a title/tooltip cannot break future colouring. Every modified row/box
+// for that athlete uses the same session colour and readable initials.
+// -----------------------------------------------------------------------------
+function v3229PaintAthleteNode(session,node,athlete){if(!node||!athlete)return;const colour=v3228AthleteColour?.(session,athlete)||"#174f70",text=v3228Luma?.(colour)>150?"#14232b":"#fff";node.dataset.v3229Athlete=athlete.id;node.style.setProperty("--v3229-athlete-colour",colour);node.style.borderColor=colour;node.style.borderLeftColor=colour;const pill=node.matches("b")?node:node.querySelector(":scope > b,.v3205-mod-row>b,summary>b");if(pill){pill.dataset.v3229Athlete=athlete.id;pill.style.background=colour;pill.style.color=text;pill.style.borderColor=colour;pill.title=`${athlete.full_name} · session colour`;}}
+function v3229ApplyColourThreads(session,host=document){if(!session||!host)return;const athletes=v3180ModifiedAthletes?.(session)||[];
+  host.querySelectorAll?.(".v3226-mod-athlete").forEach(node=>{let id=node.dataset.v3229Athlete,athlete=athletes.find(a=>a.id===id);if(!athlete){const title=node.querySelector(":scope > b")?.getAttribute("title")||"";athlete=athletes.find(a=>v3229Norm(a.full_name)===v3229Norm(title))}if(athlete)v3229PaintAthleteNode(session,node,athlete)});
+  host.querySelectorAll?.(".v3205-mod-rail").forEach(rail=>{[...rail.querySelectorAll(":scope > .v3205-mod-row")].forEach((row,index)=>{const athlete=athletes[index];if(athlete)v3229PaintAthleteNode(session,row,athlete)})});
+  host.querySelectorAll?.("[data-v3170-modified-athlete]").forEach(node=>{const athlete=athletes.find(a=>a.id===node.dataset.v3170ModifiedAthlete);if(athlete)v3229PaintAthleteNode(session,node,athlete)});
+  host.querySelectorAll?.("[data-v3229-athlete]").forEach(node=>{const athlete=athletes.find(a=>a.id===node.dataset.v3229Athlete);if(athlete)v3229PaintAthleteNode(session,node,athlete)});
+}
+
+// -----------------------------------------------------------------------------
+// 6. Evidence: Voice and Video expose an explicit Transcribe / transcript route.
+// Media stays saved even if cloud transcription fails.
+// -----------------------------------------------------------------------------
+function v3229TranscriptForCapture(capture){return (appState.session_transcriptions||[]).find(tr=>tr.capture_id===capture?.id)||null}
+async function v3229TranscribeEvidence(capture,host,button){if(!capture||!host)return;let tr=v3229TranscriptForCapture(capture);if(!tr){tr={id:uid("transcript"),session_id:capture.session_id,capture_id:capture.id,athlete_id:capture.athlete_id||null,session_block_id:capture.session_block_id||null,source_type:capture.capture_type||"voice",purpose:"poolside_evidence",status:"media_saved",raw_text:"",structured_blocks:[],structured_data:{},error_message:"",created_at:nowIso(),updated_at:nowIso()};upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);saveState(appState)}if(tr.raw_text){host.innerHTML=`<div class="v3229-transcript"><strong>Transcript</strong><p>${escapeHtml(tr.raw_text)}</p></div>`;return}button.disabled=true;button.textContent="Transcribing…";try{await v34TranscribeCapture(tr,capture);host.innerHTML=`<div class="v3229-transcript"><strong>Transcript</strong><p>${escapeHtml(tr.raw_text||"No speech detected")}</p></div>`;button.textContent="Transcribed"}catch(error){host.innerHTML=`<p class="help">Media is still saved. ${escapeHtml(error?.message||"Transcription unavailable")}</p>`;button.disabled=false;button.textContent="Retry transcript"}}
+const v3229EvidenceBase=typeof v3227OpenEvidence==="function"?v3227OpenEvidence:null;
+if(v3229EvidenceBase)v3227OpenEvidence=function(session,blockIndex){const out=v3229EvidenceBase(session,blockIndex),modal=document.getElementById("v3227EvidenceModal"),groups=v3227EvidenceGroups?.(session,blockIndex)||[];modal?.querySelectorAll?.("[data-v3227-evidence-item]").forEach(article=>{const index=Number(article.dataset.v3227EvidenceItem),capture=groups[index]?.row,type=String(capture?.capture_type||"");if(!["voice","video"].includes(type))return;const actions=article.querySelector(".v3227-evidence-actions"),host=article.querySelector(".v3227-media-host");if(!actions||actions.querySelector("[data-v3229-transcribe]"))return;const button=document.createElement("button");button.type="button";button.className="secondary";button.dataset.v3229Transcribe=String(index);const tr=v3229TranscriptForCapture(capture);button.textContent=tr?.raw_text?"View transcript":"Transcribe";button.onclick=()=>v3229TranscribeEvidence(capture,host,button);actions.appendChild(button);if(tr?.raw_text)host.innerHTML=`<div class="v3229-transcript"><strong>Transcript</strong><p>${escapeHtml(tr.raw_text)}</p></div>`});return out};
+
+// -----------------------------------------------------------------------------
+// 7. Finish here names the actual Board position. If only the block is known it
+// says so and asks for that block only; it never pretends to know a rep it cannot.
+// -----------------------------------------------------------------------------
+function v3229VisibleLine(blockIndex){const card=document.querySelector(`[data-v3180-block="${blockIndex}"]`);if(!card)return null;const open=card.querySelector(".v3205-board-line details[open] .v3205-line-copy strong");if(open)return v3229Text(open.textContent);const lines=[...card.querySelectorAll(".v3205-board-line")].filter(node=>{const r=node.getBoundingClientRect();return r.bottom>90&&r.top<window.innerHeight-90});if(lines.length===1)return v3229Text(lines[0].querySelector(".v3205-line-copy strong")?.textContent);return null}
+function v3229FinishPosition(session){const blocks=v3170BoardBlocks?.(session)||[],index=Math.max(0,Math.min(blocks.length-1,typeof v3219BlockIndex==="function"?v3219BlockIndex():Number(appState.settings?.v3129_active_block_index)||0)),block=blocks[index],line=v3229VisibleLine(index);return{blocks,index,block,line,label:[block?.title||v32BlockLabel?.(block?.block_type),line].filter(Boolean).join(" · ")}}
+const v3229FinishPanelBase=typeof v3180FinishPanel==="function"?v3180FinishPanel:null;
+if(v3229FinishPanelBase)v3180FinishPanel=function(session,blocks,options={}){let html=v3229FinishPanelBase(session,blocks,options),pos=v3229FinishPosition(session);return html.replace("Finish here — session ended early",`Finish here — ${escapeHtml(pos.label||"current Board position")}`)};
+const v3229OpenFinishBase=typeof v3202OpenFinishHere==="function"?v3202OpenFinishHere:null;
+if(v3229OpenFinishBase)v3202OpenFinishHere=function(session,blockIndex){const pos=v3229FinishPosition(session),index=Number.isFinite(Number(blockIndex))?Number(blockIndex):pos.index,out=v3229OpenFinishBase(session,index),modal=document.getElementById("v3202FinishModal");if(modal){const heading=modal.querySelector("h3"),p=modal.querySelector("p");if(heading)heading.textContent=`Finish here — ${pos.block?.title||"current block"}${pos.line?` · ${pos.line}`:""}`;if(p&&!pos.line)p.insertAdjacentHTML("afterend",'<p class="help"><strong>Exact rep/line is not known.</strong> Enter only how much of this block was completed; later blocks will be treated as not swum.</p>')}return out};
+
+// -----------------------------------------------------------------------------
+// 8. Programme context: squad programme -> weekly plan -> season plan. Calendar
+// is operational override only and generic words such as "training" never become
+// the session's technical cue or stimulus.
+// -----------------------------------------------------------------------------
+function v3229PrimarySquad(session){return (typeof sessionSquads==="function"?sessionSquads(session):v34Array(session?.squads))[0]||appState.settings?.selected_squad||""}
+function v3229ProgrammeForSession(session){const squad=v3229PrimarySquad(session),programme=(appState.squad_programmes||[]).find(row=>row.active!==false&&v3195OperationalSquadKey?.(row.squad_name)===v3195OperationalSquadKey?.(squad))||null,week=(appState.weekly_plans||[]).find(row=>row.id===session?.weekly_plan_id)||(appState.weekly_plans||[]).find(row=>row.id===programme?.weekly_plan_id)||null,season=(appState.season_plans||[]).find(row=>row.id===session?.season_plan_id)||(appState.season_plans||[]).find(row=>row.id===programme?.season_plan_id)||(appState.season_plans||[]).find(row=>row.id===week?.season_plan_id)||null;return{squad,programme,week,season}}
+function v3229UsefulPlanText(value){const text=v3229Text(value);return /^(?:training|published monthly calendar:?\s*training|session|swim)$/i.test(text)?"":text}
+v3225PlanContext=function(session){if(!session)return[];const ctx=v3229ProgrammeForSession(session),primary=v3229UsefulPlanText(session.primary_system)||v3229UsefulPlanText(session.week_objective)||v3229UsefulPlanText(ctx.week?.objective),technical=v3229UsefulPlanText(session.technical_focus)||v3229UsefulPlanText(session.plan_cue),weekFocus=v3229UsefulPlanText(session.week_objective)||v3229UsefulPlanText(ctx.week?.objective)||v3229UsefulPlanText(ctx.week?.phase),seasonFocus=v3229UsefulPlanText(ctx.season?.overarching_goal)||v3229UsefulPlanText(ctx.season?.name),chips=[];if(ctx.squad)chips.push(`${ctx.squad} · ${session.day_part||""}`.trim());if(primary)chips.push(`Today · ${primary}`);if(weekFocus&&weekFocus!==primary)chips.push(`Week · ${weekFocus}`);if(seasonFocus&&seasonFocus!==weekFocus)chips.push(`Season · ${seasonFocus}`);if(technical)chips.push(`Cue · ${technical}`);if(session.venue)chips.push(session.venue);if(session.pool_course)chips.push(session.pool_course);return chips};
+const v3229ComposerRefreshBase=typeof v3225RefreshComposerContext==="function"?v3225RefreshComposerContext:null;
+if(v3229ComposerRefreshBase)v3225RefreshComposerContext=function(){const out=v3229ComposerRefreshBase(),card=document.getElementById("v3198PoolsideComposer"),session=v3225AuthoringSession?.()||v3225LatchSession?.();if(card&&session){const ctx=v3229ProgrammeForSession(session),target=card.querySelector("#v3198ComposerTarget"),date=typeof formatDate==="function"?formatDate(session.session_date):session.session_date;if(target)target.textContent=`${session.session_date>=localIsoDate(new Date())?"Next ":""}${ctx.squad||"squad"} session · ${date} · ${session.day_part||""}`;const context=card.querySelector("#v3225ComposerContext");if(context&&ctx.week?.objective&&!context.textContent.includes(ctx.week.objective))context.insertAdjacentHTML("beforeend",`<span>Weekly plan · ${escapeHtml(ctx.week.objective)}</span>`)}return out};
+
+// -----------------------------------------------------------------------------
+// 9. Coach Hub: same canonical Board tree; intensity classification reads the line
+// before generic block wording. ANC race-pace is primary, short Max/AP supports it.
+// ----------------------------------------------------------------------------
+v390SessionRows=function(session=selectedSession?.()){
+  if(!session)return[];const blocks=v3170BoardBlocks?.(session)||[],rows=[];blocks.forEach((block,blockIndex)=>v34Array(block.items).forEach((item,itemIndex)=>{if(item?.runnable===false)return;const line=v3227EffectiveLine?.(block,item,itemIndex)||v3229Line(item),low=line.toLowerCase(),type=String(block.block_type||"").toLowerCase();let zone="Unclassified";
+    if(/\bregeneration|\bregen\b|\beasy\b|\bloosen\b/.test(low)||type==="warm_down")zone="Regeneration";
+    else if(/\bscull\b|\bhbs\b|hands? by side|\bdrill\b|alignment|technique/.test(low))zone="Skill / technique";
+    else if(/@\s*100\s*pace|\b100\s*(?:m\s*)?(?:race\s*)?pace|\brace\s*pace\b/.test(low))zone="Anaerobic capacity";
+    else if(/\b12(?:\.5)?m\s*max|\b15m\s*max|\bmax\b|dive\s*start/.test(low))zone="Anaerobic power";
+    else if(/\boverload\b|aerobic\s*power/.test(low))zone="Overload";
+    else if(/\bdevelopment\b|aerobic\s*capacity/.test(low))zone="Development";
+    else if(/\bthreshold\b|\bcss\b/.test(low))zone="Threshold";
+    else if(type==="warm_up")zone="Regeneration";
+    else if(type==="post_set"&&/\b(?:4|3)\s*[x×]\s*100\b/.test(low))zone="Development";
+    const key=typeof v390LineKey==="function"?v390LineKey(block,blockIndex,item,itemIndex):`${blockIndex}:${itemIndex}`,saved=typeof v390SavedClassification==="function"?v390SavedClassification(session.id,key):null,distance=(Number(item.reps)||0)*(Number(item.distance)||0)*Math.max(1,Number(block.repeat_count)||1);rows.push({session,block,blockIndex,item,itemIndex,key,inferred:{zone,confidence:.9,reasoning:`Written line: ${line}`,suggestion:"",distance},saved,zone:saved?.canonical_zone||zone,confidence:saved?.confidence??.9,reasoning:saved?.reasoning||`Interpreted from the exact written line and session purpose.`,suggestion:saved?.suggestion||"",distance})}));return rows};
+v3140RoleForRow=function(row,primary){const zone=row?.zone,text=(v3227EffectiveLine?.(row?.block,row?.item,row?.itemIndex)||v3229Line(row?.item)).toLowerCase(),type=String(row?.block?.block_type||"").toLowerCase();if(type==="warm_up"||type==="warm_down"||zone==="Regeneration")return"Preparation / recovery";if(zone==="Skill / technique"||/\bscull\b|\bhbs\b|\bdrill\b|\bbuild\b/.test(text))return"Maintenance / skill";if(primary==="Anaerobic capacity"&&zone==="Anaerobic capacity")return"Primary target";if(zone===primary)return"Primary target";return"Supporting work"};
+
+// -----------------------------------------------------------------------------
+// 10. Performance Pathway: course-specific, strongest points first. Qualifying is
+// a benchmark/status, not the organising principle. Use all loaded relevant stage
+// evidence (qualification, performance, championship, Canterbury/NZ records).
+// ----------------------------------------------------------------------------
+function v3229PathStore(){if(!appState.settings.v3229_path_course)appState.settings.v3229_path_course={};if(!appState.settings.v3229_path_show_all)appState.settings.v3229_path_show_all={};return appState.settings}
+function v3229PbPoints(athlete,pb){const scale=v3214Scale?.(athlete,pb),points=Math.round(Number(scale?.points)||Number(v3Points?.(pb))||0);return{scale,points}}
+function v3229RankedPbs(athlete,course){const inv=v3163PbInventory?.(athlete)||{pbs:[]};return inv.pbs.filter(pb=>pb.course===course).map(pb=>({...pb,v3229:v3229PbPoints(athlete,pb)})).sort((a,b)=>b.v3229.points-a.v3229.points||Number(a.result_seconds)-Number(b.result_seconds))}
+function v3229PathCourse(athlete){const settings=v3229PathStore(),saved=settings.v3229_path_course[athlete.id];if(["LCM","SCM"].includes(saved))return saved;const all=[...v3229RankedPbs(athlete,"LCM"),...v3229RankedPbs(athlete,"SCM")].sort((a,b)=>b.v3229.points-a.v3229.points);const course=all[0]?.course||"SCM";settings.v3229_path_course[athlete.id]=course;return course}
+function v3229StageRows(athlete,pb){const current=Number(pb.result_seconds)||0,scale=v3214Scale?.(athlete,pb),stages=v3163Stages?.(athlete,pb)||[],out=[];for(const stage of stages){const seconds=Number(stage.targetSeconds||v3163StageSeconds?.(stage.source||stage));if(!(seconds>0))continue;const state=v3163StageState?.(stage,current)|| (current<=seconds?"achieved":"unmet"),label=stage.name||v3163StageLabel?.(stage.source)||"Benchmark",kind=stage.kind||v3163Kind?.(stage.source)||"performance",pts=v3214PointsAtTime?.(athlete,pb,seconds,scale);const important=kind==="record"||kind==="qualifying"||/final|medal|winner|champ|canterbury|new zealand|nz\b|record|national/i.test(label);if(important)out.push({label,kind,seconds,state,points:Number.isFinite(Number(pts))?Math.round(pts):null})}
+  const unique=new Map();for(const row of out){const key=v3229Norm(row.label);const prior=unique.get(key);if(!prior||row.seconds>prior.seconds)unique.set(key,row)}return[...unique.values()].sort((a,b)=>{const au=a.state==="unmet"?0:1,bu=b.state==="unmet"?0:1;if(au!==bu)return au-bu;const ap=Number(a.points)||9999,bp=Number(b.points)||9999;return ap-bp||b.seconds-a.seconds})}
+function v3229EventPathHtml(athlete,pb){const point=v3229PbPoints(athlete,pb),pbText=pb.result_time_text||v3217Clock?.(pb.result_seconds)||v3163Clock?.(pb.result_seconds),bumps=[];let p=point.points;for(let i=0;i<2&&p>0;i++){const next=v3214NextPoint?.(p)||p+25,seconds=v3214TimeForPoints?.(athlete,pb,next,point.scale);if(!(seconds>0&&seconds<Number(pb.result_seconds)))break;bumps.push({points:next,seconds});p=next}const stages=v3229StageRows(athlete,pb),future=stages.filter(s=>s.state==="unmet").slice(0,4),achieved=stages.filter(s=>s.state!=="unmet").filter(s=>s.kind==="qualifying").slice(0,2);return `<article class="v3218-event v3229-event"><header><div><strong>${escapeHtml(`${pb.course} ${pb.distance} ${pb.stroke}`)}</strong><small>PB ${escapeHtml(pbText)}${point.points?` · ${point.points} ${escapeHtml(point.scale?.short||"WA")}`:""}</small></div>${achieved.length?`<b class="qualified">✓ ${escapeHtml(achieved[0].label)}</b>`:""}</header><ol class="v3218-steps"><li class="v3218-step current"><span>Current</span><strong>PB${point.points?` · ${point.points} ${escapeHtml(point.scale?.short||"WA")}`:""}</strong><b>${escapeHtml(pbText)}</b></li>${bumps.map(step=>`<li class="v3218-step points"><span>Next points step</span><strong>${step.points} ${escapeHtml(point.scale?.short||"WA")}</strong><b>${escapeHtml(v3214Clock?.(step.seconds)||v3163Clock?.(step.seconds))}</b></li>`).join("")}${future.map(stage=>`<li class="v3218-step named ${stage.kind}"><span>${escapeHtml(stage.kind==="record"?"Record benchmark":stage.kind==="qualifying"?"Qualification":"Performance benchmark")}</span><strong>${escapeHtml(stage.label)}${stage.points?` · ~${stage.points} ${escapeHtml(point.scale?.short||"WA")}`:""}</strong><b>${escapeHtml(v3163StageTime?.({},stage.seconds)||v3163Clock?.(stage.seconds))}</b></li>`).join("")}</ol>${!future.length&&!achieved.length?`<div class="help">No current ${escapeHtml(pb.course)} benchmark is loaded for this event. PB and points progression remain available.</div>`:""}</article>`}
+v3218CoachAnswerHtml=function(athlete){const course=v3229PathCourse(athlete),ranked=v3229RankedPbs(athlete,course),best=ranked[0];if(!best)return v3217SnapshotHtml?.(athlete)||"";const point=best.v3229,first=v3229Text(athlete.full_name).split(/\s+/)[0]||"the swimmer",next=v3214NextPoint?.(point.points)||point.points+25,nextTime=point.points?v3214TimeForPoints?.(athlete,best,next,point.scale):null;return `<section class="v3217-snapshot v3218-snapshot v3229-snapshot" data-v3218-athlete="${escapeHtml(athlete.id)}"><div class="v3217-snapshot-head"><div><div class="eyebrow">Deck answer · strongest current event</div><h4>${escapeHtml(`${course} ${best.distance} ${best.stroke}`)}</h4></div><b>${point.points?`${point.points} ${escapeHtml(point.scale?.short||"WA")}`:"PB"}</b></div><div class="v3218-coach-answer"><span>What to tell ${escapeHtml(first)}</span><strong>${escapeHtml(`${best.result_time_text||v3217Clock?.(best.result_seconds)} is currently ${first}'s strongest ${course} performance${point.points?` at ${point.points} ${point.scale?.short||"WA"}`:""}.`)}</strong>${nextTime?`<small>Next manageable points step: ${next} ${escapeHtml(point.scale?.short||"WA")} · ${escapeHtml(v3214Clock?.(nextTime)||v3163Clock?.(nextTime))}</small>`:""}</div><div class="v3229-course-switch"><button type="button" data-v3229-course="LCM" class="${course==="LCM"?"active":""}">LCM</button><button type="button" data-v3229-course="SCM" class="${course==="SCM"?"active":""}">SCM</button></div><div class="v3217-rule">Strongest events first by current World Aquatics / World Para points. Qualification is one benchmark, not the pathway identity.</div></section>`};
+v3218AgePathwayHtml=function(athlete){const course=v3229PathCourse(athlete),ranked=v3229RankedPbs(athlete,course),showAll=Boolean(v3229PathStore().v3229_path_show_all[athlete.id]),shown=showAll?ranked:ranked.slice(0,5);return `<section class="v3218-age-path"><div class="v3218-path-note"><strong>${escapeHtml(course)} performance pathway · strongest events first</strong><span>PB + points progression + relevant loaded qualification, championship and record benchmarks.</span></div><div class="v3229-course-switch"><button type="button" data-v3229-course="LCM" class="${course==="LCM"?"active":""}">LCM</button><button type="button" data-v3229-course="SCM" class="${course==="SCM"?"active":""}">SCM</button></div><div class="v3218-events">${shown.map(pb=>v3229EventPathHtml(athlete,pb)).join("")||'<div class="help">No verified PB events are available for this course.</div>'}</div>${ranked.length>5?`<button type="button" class="secondary v3229-show-all" data-v3229-show-all>${showAll?"Show top 5":"Show all events"}</button>`:""}</section>`};
+v3218FullPathwayShell=function(athlete,inventory){const open=v3218PathwayIsOpen?.(athlete.id),course=v3229PathCourse(athlete);return `<details class="v3217-full-pathway v3218-full-pathway" data-v3218-full-pathway="${escapeHtml(athlete.id)}" ${open?"open":""}><summary><span><strong>Performance pathway</strong><small>${escapeHtml(course)} · strongest current events by points</small></span><b>${open?"−":"＋"}</b></summary><div class="v3217-full-pathway-body v3218-full-pathway-body"><div class="help">${open?"Loading performance pathway…":"Open to see strongest events and meaningful next benchmarks."}</div></div></details>`};
+function v3229BindPathwayControls(root=document,athlete=null){athlete=athlete||(appState.athletes||[]).find(a=>a.id===appState.settings.selected_athlete_id);if(!athlete)return;root.querySelectorAll?.("[data-v3229-course]").forEach(button=>button.onclick=()=>{v3229PathStore().v3229_path_course[athlete.id]=button.dataset.v3229Course;saveState(appState);renderAthleteResultsHub?.(athlete)});root.querySelectorAll?.("[data-v3229-show-all]").forEach(button=>button.onclick=()=>{v3229PathStore().v3229_path_show_all[athlete.id]=!v3229PathStore().v3229_path_show_all[athlete.id];saveState(appState);const details=document.querySelector(`[data-v3218-full-pathway="${CSS.escape(athlete.id)}"]`);if(details){details.dataset.v3218Loaded="0";v3218PopulatePathway?.(details,athlete)}})}
+const v3229RenderPathBase=typeof renderAthleteResultsHub==="function"?renderAthleteResultsHub:null;
+if(v3229RenderPathBase)renderAthleteResultsHub=function(athlete){const out=v3229RenderPathBase(athlete);requestAnimationFrame(()=>v3229BindPathwayControls(document.getElementById("athleteResultsHub")||document,athlete));return out};
+const v3229PopulateBase=typeof v3218PopulatePathway==="function"?v3218PopulatePathway:null;
+if(v3229PopulateBase)v3218PopulatePathway=function(details,athlete){if(!details)return;details.dataset.v3218Loaded="loading";const body=details.querySelector(".v3218-full-pathway-body");if(body)body.innerHTML=v3218AgePathwayHtml(athlete);details.dataset.v3218Loaded="1";details.open=true;v3229BindPathwayControls(details,athlete)};
+
+// -----------------------------------------------------------------------------
+// 11. Raw audit noise is available in Source/detail, not normal Board notes.
+// -----------------------------------------------------------------------------
+function v3229CleanAuditText(text){const raw=v3229Text(text);const stroke=raw.match(/^\[Stroke override[^\]]*\]\s*(\{.*\})$/i);if(stroke){try{const data=JSON.parse(stroke[1]);const athlete=(appState.athletes||[]).find(a=>a.id===data.athleteId||a.id===data.athlete_id);return `${athlete?athlete.full_name+" · ":""}${data.stroke||"Stroke"} override`}catch{return"Stroke override"}}return raw}
+const v3229EvidenceWhoBase=typeof v3227EvidenceWho==="function"?v3227EvidenceWho:null;
+
+// -----------------------------------------------------------------------------
+// 12. Board binding: reapply colour threads, explicit Finish position, and phone
+// containment after every paint without navigating away.
+// -----------------------------------------------------------------------------
+const v3229BindBoardBase=typeof v3170BindBoard==="function"?v3170BindBoard:null;
+v3170BindBoard=function(host,session){const out=v3229BindBoardBase?.(host,session);requestAnimationFrame(()=>v3229ApplyColourThreads(session,host));host?.querySelectorAll?.("[data-v3228-finish-here]").forEach(button=>{const pos=v3229FinishPosition(session);button.textContent=`Finish here — ${pos.label||"current Board position"}`;button.onclick=()=>v3202OpenFinishHere(session,pos.index)});return out};
+
+// -----------------------------------------------------------------------------
+// 13. Phone CSS: stack—not shrink—information that matters. Send-offs and full
+// modification text remain visible; no panel creates horizontal page overflow.
+// -----------------------------------------------------------------------------
+const v3229Style=document.createElement("style");v3229Style.id="v3229Styles";v3229Style.textContent=`
+.v3229-course-switch{display:flex;gap:6px;margin:8px 0}.v3229-course-switch button{min-height:34px!important;padding:5px 12px!important;background:#eef4f7!important;color:#174f70!important;border:1px solid #bfd3dd!important}.v3229-course-switch button.active{background:#174f70!important;color:#fff!important}.v3229-show-all{width:100%;margin-top:8px}.v3229-parent-targets{display:grid;gap:7px}.v3229-parent-target-athlete{border:1px solid #d1e0e6;border-radius:10px;padding:7px;background:#fbfcfd;min-width:0}.v3229-parent-target-athlete header{display:flex;gap:7px;align-items:center;margin-bottom:5px}.v3229-parent-target-athlete header b{min-width:30px;text-align:center;border-radius:999px;padding:4px}.v3229-parent-target-athlete header strong{font-size:.76rem;min-width:0;overflow-wrap:anywhere}.v3229-parent-target-athlete>div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:7px;padding:4px 0;border-top:1px solid #e6edf0}.v3229-parent-target-athlete>div span{font-size:.62rem;font-weight:850;color:#607985}.v3229-parent-target-athlete>div strong{font-size:.72rem;color:#174f70;white-space:normal;overflow-wrap:anywhere}.v3229-transcript{margin-top:7px;padding:8px;border-radius:9px;background:#f2f7f9}.v3229-transcript p{white-space:pre-wrap;margin:4px 0 0}.v3226-mod-athlete,.v3205-mod-row,[data-v3170-modified-athlete]{border-left:4px solid var(--v3229-athlete-colour,#d49c27)!important}.v3205-mod-row{border:1px solid color-mix(in srgb,var(--v3229-athlete-colour,#d49c27) 45%,#d8e4e9);border-left-width:4px!important;border-radius:9px;padding:6px;margin:4px 0;background:#fff}.v3205-mod-row>b,.v3226-mod-athlete>b{border:1px solid var(--v3229-athlete-colour,#174f70);padding:4px;min-width:30px;text-align:center}
+@media(max-width:900px){html,body{max-width:100%!important;width:100%!important;overflow-x:clip!important}#deck,.v3205-board-block,.v3205-board-lines,.v3205-board-line,.v3205-line-open,.v3226-parent-toolbar,.v3226-parent-mods,.v3226-mod-athlete,.v3205-mod-rail,.v3205-mod-row,.v3225-target-list,.v3206-target-list,.v3206-target-row,.v3227-dialog,.v3163-hub-detail-body{width:auto!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important;overflow-x:clip!important}.v3225-target-list .v3206-target-row,.v3206-target-list .v3206-target-row{display:grid!important;grid-template-columns:34px minmax(0,1fr)!important;grid-template-areas:"initial stroke" "initial target" "initial cycle" "source source"!important;gap:2px 7px!important;align-items:start!important;padding:7px 5px!important}.v3225-target-list .v3206-target-row>b,.v3206-target-list .v3206-target-row>b{grid-area:initial!important}.v3225-target-list .v3206-target-row>.v3206-target-stroke,.v3206-target-list .v3206-target-row>.v3206-target-stroke{grid-area:stroke!important;min-width:0!important}.v3225-target-list .v3206-target-row>strong,.v3206-target-list .v3206-target-row>strong{grid-area:target!important;white-space:normal!important;font-size:.78rem!important}.v3225-target-list .v3206-target-row>em,.v3206-target-list .v3206-target-row>em{grid-area:cycle!important;display:block!important;white-space:normal!important;font-size:.72rem!important;color:#174f70!important}.v3225-target-list .v3206-target-row>small,.v3206-target-list .v3206-target-row>small{grid-area:source!important;white-space:normal!important;overflow-wrap:anywhere!important;margin-top:3px!important}.v3205-mod-row{display:grid!important;grid-template-columns:34px minmax(0,1fr)!important;gap:3px 7px!important}.v3205-mod-row>b{grid-row:1/4}.v3205-mod-row>span,.v3205-mod-row>em,.v3205-mod-row>button{grid-column:2!important;min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important}.v3226-mod-athlete{display:grid!important;grid-template-columns:34px minmax(0,1fr)!important;gap:5px 7px!important;width:100%!important}.v3226-mod-athlete>div{min-width:0!important}.v3226-mod-athlete>div span{display:block!important;white-space:normal!important;overflow-wrap:anywhere!important;margin:2px 0}.v3226-parent-toolbar{display:grid!important;grid-template-columns:1fr!important;gap:6px!important}.v3226-parent-toolbar details{width:100%!important;min-width:0!important}.v3226-rest-toggle{justify-content:flex-start!important}.v3218-event>header{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important}.v3218-step{grid-template-columns:minmax(0,1fr) auto!important}.v3218-step span{grid-column:1/-1!important}.v3218-step strong{min-width:0!important;overflow-wrap:anywhere!important}.v3227-dialog{padding-bottom:calc(78px + env(safe-area-inset-bottom))!important}}
+`;document.head.appendChild(v3229Style);
+
+// -----------------------------------------------------------------------------
+// 14. Current build identity + service worker refresh. No storage clear.
+// -----------------------------------------------------------------------------
+function v3229Brand(){const title=`McLay Swimming OS — v${V3229_VERSION} Phone Session Truth`,subtitle=`v${V3229_VERSION} · session lock · canonical grammar · full phone targets · WA-first pathway`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V3229_BUILD;try{localStorage.setItem("mclay_last_installed_build",V3229_BUILD)}catch{}const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V3229_VERSION}`;badge.dataset.build=V3229_BUILD;badge.title=V3229_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V3229_BUILD)}
+async function v3229RegisterWorker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;try{const registration=await navigator.serviceWorker.register(`./sw.js?v=${V3229_CORE}`,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.20.29 service worker update",error)}}
+try{v3228BrandObserver?.disconnect?.()}catch{}
+const v3229BrandObserver=new MutationObserver(()=>queueMicrotask(v3229Brand));if(document.querySelector("title"))v3229BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});if(document.querySelector(".header-subtitle"))v3229BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+function v3229Startup(){v3229InstallSessionGuard();v3229Brand();try{v3195ClearBoardCaches?.()}catch{}const session=selectedSession?.();if(session&&v3229View()==="deck")requestAnimationFrame(()=>v3229ApplyColourThreads(session,document.getElementById("deck")||document));}
+window.v3229Debug={version:V3229_VERSION,build:V3229_BUILD,repair:v3229RepairBlocks,replay:v3229ReplayLiveEdits,total:v3229BlocksTotal,groups:v3205BoardGroups,sessionLock:()=>v3229SessionLockId,pathCourse:v3229PathCourse,rankedPbs:v3229RankedPbs,finishPosition:v3229FinishPosition,programme:v3229ProgrammeForSession,bootQuietUntil:()=>v3229BootAt+V3229_BOOT_QUIET_MS};
+v3229Startup();setTimeout(()=>{v3229Startup();v3229RegisterWorker()},0);setTimeout(v3229Startup,900);setTimeout(v3229Startup,3100);setTimeout(v3229Startup,13100);setTimeout(v3229Startup,30100);
+
+// -----------------------------------------------------------------------------
+// 15. Coach-facing note cleanup + explicit block Finish labels.
+// Raw stroke-override JSON remains in Source/audit, never in the normal Board.
+// -----------------------------------------------------------------------------
+const v3229BlockNotesBase=typeof v3212BlockNotes==="function"?v3212BlockNotes:null;
+if(v3229BlockNotesBase)v3212BlockNotes=function(session,block){
+  const all=(appState.captures||[]).filter(row=>row.session_id===session?.id&&row.session_block_id===block?.id&&!['session_change','stroke_override'].includes(String(row.capture_type||''))).sort(byUpdated);
+  const rows=all.slice(0,4);if(!rows.length)return"";
+  return `<div class="v3212-block-notes"><div class="v3212-note-head"><strong>Notes on this block</strong><span>${rows.length}${all.length>rows.length?" recent":""}</span></div>${rows.map(row=>{const tr=(appState.session_transcriptions||[]).filter(t=>t.capture_id===row.id&&t.raw_text).sort(byUpdated)[0],text=v3212Text(tr?.raw_text||row.text_content||`${row.capture_type} saved`),who=row.athlete_id?v3212Initials(row.athlete_id):"GROUP";return `<div class="v3212-note-chip"><b>${escapeHtml(who)}</b><span>${escapeHtml(text.slice(0,180))}${text.length>180?"…":""}</span><small>${escapeHtml(row.capture_type||"note")}</small></div>`}).join("")}</div>`;
+};
+const v3229BindBoardFinalBase=v3170BindBoard;
+v3170BindBoard=function(host,session){
+  const out=v3229BindBoardFinalBase?.(host,session);const blocks=v3170BoardBlocks?.(session)||[];
+  host?.querySelectorAll?.("[data-v3202-finish-here]").forEach(button=>{const index=Number(button.dataset.v3202FinishHere),block=blocks[index],label=block?.title||v32BlockLabel?.(block?.block_type)||`Block ${index+1}`;button.textContent=`Finish here — ${label}`;button.title=`Finish session after ${label}`;button.onclick=()=>v3202OpenFinishHere(session,index)});
+  return out;
+};
