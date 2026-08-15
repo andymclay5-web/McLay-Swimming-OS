@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123a5b">
-  <title>McLay Swimming OS — v3.21.1 Poolside Trust</title>
+  <title>McLay Swimming OS — v3.21.6 System Authority</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b6f9c'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='Arial,sans-serif' font-size='42' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=20260814-core3211">
+  <link rel="stylesheet" href="styles.css?v=20260815-core3216">
 
   <style id="poolside-v2-overrides">
     :root{--poolside-navy:#123a5b;--poolside-blue:#0d5c8d;--poolside-light:#eef6fb;--poolside-danger:#a32626}
@@ -189,10 +189,10 @@
   <header class="app-header">
     <div>
       <h1>McLay Swimming OS</h1>
-      <div class="header-subtitle">v3.21.1 · intent truth · visible adaptations · mixed-squad T400 · openable evidence</div>
+      <div class="header-subtitle">v3.21.6 · commit-readiness audit · one action owner · protected canonical truth</div>
     </div>
     <div class="status-cluster">
-      <span id="v3207BuildBadge" class="badge" data-build="3.21.1-poolside-trust-intent-mods-t400-evidence-20260814" title="3.21.1-poolside-trust-intent-mods-t400-evidence-20260814">v3.21.1</span>
+      <span id="v3207BuildBadge" class="badge" data-build="3.21.6-system-authority-commit-ready-20260815" title="3.21.6-system-authority-commit-ready-20260815">v3.21.6</span>
       <button id="mobileConnectionBtn" type="button" class="header-sync-button" data-view-jump="settings" aria-label="Open connection and sync">Sync</button>
       <span id="dataModeBadge" class="badge warning">Local only</span>
       <span id="syncBadge" class="badge">Ready</span>
@@ -980,27 +980,27 @@ Warm-down..."></textarea>
   // Record the deployed build without deleting the previously working cache.
   // The service worker installs every new core file first and only retires the
   // prior app cache after the replacement worker activates successfully.
-  window.MCLAY_APP_BUILD="3.21.1-poolside-trust-intent-mods-t400-evidence-20260814";
+  window.MCLAY_APP_BUILD="3.21.6-system-authority-commit-ready-20260815";
   try{localStorage.setItem("mclay_last_installed_build",window.MCLAY_APP_BUILD)}catch(error){console.warn("Build marker",error)}
   </script>
   <script src="config.js"></script>
   <script src="seed.js"></script>
   <script>
   (()=>{
-    const BUILD="3.21.1-poolside-trust-intent-mods-t400-evidence-20260814",SW="./sw.js?v=20260814-core3211";
+    const BUILD="3.21.6-system-authority-commit-ready-20260815",SW="./sw.js?v=20260815-core3216";
     window.MCLAY_APP_BUILD=BUILD;
     try{localStorage.setItem("mclay_last_installed_build",BUILD)}catch{}
     if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return;
     let changed=false;
     navigator.serviceWorker.addEventListener("controllerchange",()=>{
       if(changed)return;changed=true;
-      const key="mclay_sw_controller_reload_3208";
+      const key="mclay_sw_controller_reload_3215";
       try{if(sessionStorage.getItem(key)==="1")return;sessionStorage.setItem(key,"1")}catch{}
       location.reload();
     });
-    window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register(SW,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.21.1 early service worker update",error)}});
+    window.addEventListener("load",async()=>{try{const registration=await navigator.serviceWorker.register(SW,{updateViaCache:"none"});await registration.update();if(registration.waiting)registration.waiting.postMessage("SKIP_WAITING")}catch(error){console.warn("v3.21.6 early service worker update",error)}});
   })();
   </script>
-  <script src="app.js?v=20260814-core3211"></script>
+  <script src="app.js?v=20260815-core3216"></script>
 </body>
 </html>

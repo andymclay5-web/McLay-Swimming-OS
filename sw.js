@@ -1,7 +1,7 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-20-30-phone-truth-one-pathway-stable-foreground-20260814";
-const BUILD="3.21.1-poolside-trust-intent-mods-t400-evidence-20260814";
-const CORE=["./","./index.html","./styles.css?v=20260814-core3211","./app.js?v=20260814-core3211","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-21-6-system-authority-commit-ready-20260815";
+const BUILD="3.21.6-system-authority-commit-ready-20260815";
+const CORE=["./","./index.html","./styles.css?v=20260815-core3216","./app.js?v=20260815-core3216","./config.js","./seed.js","./manifest.webmanifest","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
 async function fetchFresh(request){return fetch(request,{cache:"no-store"})}
 self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);for(const url of CORE){const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(!response.ok)throw new Error(`Core cache failed ${url}: ${response.status}`);await cache.put(request,response.clone())}await self.skipWaiting()})()));

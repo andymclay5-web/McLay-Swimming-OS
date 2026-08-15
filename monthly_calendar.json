@@ -865,7 +865,10 @@
           "kind": "squad_event",
           "start_time": "07:15",
           "end_time": "09:15",
-          "venue": "Parakiore"
+          "venue": "Parakiore",
+          "authorable": true,
+          "session_squad": "Development",
+          "note": "Author as Development roster for MSOS; external SCWC T32 coaching window."
         }
       ],
       "notes": []
