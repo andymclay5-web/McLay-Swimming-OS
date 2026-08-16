@@ -1,11 +1,8 @@
-"use strict";
-const CACHE_NAME="mclay-swimming-os-v3-21-10-runtime-migration-authority-20260816";
-const BUILD="3.21.10-runtime-migration-authority-phone-truth-20260816";
-const REQUIRED=["./index.html","./styles.css?v=20260816-core32110","./app.js?v=20260816-core32110","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
-const OPTIONAL=["./","./config.js","./seed.js","./manifest.webmanifest"];
-async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
-async function fetchFresh(request){return fetch(request,{cache:"no-store"})}
-self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);for(const url of REQUIRED){const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(!response.ok)throw new Error(`Core cache failed ${url}: ${response.status}`);await cache.put(request,response.clone())}for(const url of OPTIONAL){try{const request=new Request(url,{cache:"reload"}),response=await fetch(request);if(response.ok)await cache.put(request,response.clone())}catch{}}await self.skipWaiting()})()));
-self.addEventListener("activate",event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith("mclay-swimming-os-")&&key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
-self.addEventListener("message",event=>{if(event.data==="SKIP_WAITING")self.skipWaiting();if(event.data==="MCLAY_BUILD?")event.source?.postMessage?.({type:"MCLAY_BUILD",build:BUILD})});
-self.addEventListener("fetch",event=>{const req=event.request,url=new URL(req.url);if(req.method!=="GET"||url.origin!==self.location.origin)return;if(/\/(rest|auth|storage|functions)\/v1\//.test(url.pathname))return;if(req.mode==="navigate"){event.respondWith((async()=>{const cache=await caches.open(CACHE_NAME);try{const fresh=await fetchFresh(req);if(fresh&&fresh.ok){await cache.put(new Request("./index.html"),fresh.clone());return fresh}}catch{}const cached=await cache.match("./index.html");return cached||Response.error()})());return}event.respondWith((async()=>{const cache=await caches.open(CACHE_NAME),cached=await cache.match(req);if(cached){event.waitUntil((async()=>{try{await cacheResponse(cache,req,await fetchFresh(req))}catch{}})());return cached}try{return await cacheResponse(cache,req,await fetchFresh(req))}catch{return Response.error()}})())});
+'use strict';
+const BUILD='4.0.1-shadow-tv-individual-foundation-20260816';
+const CACHE='mclay-swimming-os-v4-core401';
+const REQUIRED=['./','./index.html','./styles.css?v=20260816-core401','./app.js?v=20260816-core401','./icon-192.png','./icon-512.png','./monthly_calendar.json'];
+self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open(CACHE);await c.addAll(REQUIRED);self.skipWaiting()})()));
+self.addEventListener('activate',e=>e.waitUntil((async()=>{for(const k of await caches.keys())if(k.startsWith('mclay-swimming-os-v4-')&&k!==CACHE)await caches.delete(k);await self.clients.claim()})()));
+self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET')return;if(/\/rest\/v1\/|\/auth\/v1\/|\/storage\/v1\/|\/functions\/v1\//.test(u.pathname))return;if(e.request.mode==='navigate'){e.respondWith((async()=>{try{const r=await fetch(e.request);const c=await caches.open(CACHE);c.put('./index.html',r.clone());return r}catch{return(await caches.match('./index.html'))||Response.error()}})());return}e.respondWith((async()=>{const cached=await caches.match(e.request);if(cached)return cached;try{const r=await fetch(e.request);if(r.ok){const c=await caches.open(CACHE);c.put(e.request,r.clone())}return r}catch{return Response.error()}})())});
+self.addEventListener('message',e=>{if(e.data?.type==='MSOS_BUILD')e.source?.postMessage?.({type:'MSOS_BUILD',build:BUILD,cache:CACHE})});

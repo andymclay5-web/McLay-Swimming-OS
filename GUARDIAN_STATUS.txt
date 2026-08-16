@@ -1,0 +1,39 @@
+McLay Swimming OS v4.0.1 — SHADOW TV / INDIVIDUAL / ASSISTANT / MEET FOUNDATION
+Build: 4.0.1-shadow-tv-individual-foundation-20260816
+Core: 20260816-core401
+Status: SHADOW ONLY — NOT REPLACEMENT READY
+
+New first-class swimmer-facing surfaces
+- Whole-group / TV Board: same canonical session; common work grouped; differing work/target/send-off/cue splits into swimmer-specific cards.
+- Individual Device: one swimmer only; own derived work, targets, pathway, Meet and explicitly shared evidence.
+
+Assistant Coach
+- Deny by default when no squad is assigned.
+- Assigned session/athlete scope enforced in UI and direct Meet timing actions.
+- Default deck permissions: Board, Roll, Timing, Capture, Meet.
+- Owner authoring/release/admin actions remain unavailable unless explicitly granted.
+
+Meet Deck foundation
+- Canonical meet / entry / race / split / evidence identities separate from training-session truth.
+- Per-entry warm-up plan, race plan, goal, result/evidence and explicit next-round lineage.
+- Swimmer Meet is own-athlete + shared-evidence only.
+
+Live display architecture
+- Canonical Store saves publish a v4 live-state event.
+- TV/Individual rederive from canonical session; no copied workout tree.
+- Same-origin BroadcastChannel transport implemented for shadow testing.
+- Production cross-device realtime transport / RLS remains a release blocker.
+
+Guardian
+- Foundation/domain Guardian: 60 / 60 PASS on source bytes.
+- Rendered Chromium: 390x844 TV, Individual, Assistant, Assistant Meet, Swimmer Meet PASS.
+- Rendered TV: 1366x768 PASS, no horizontal overflow.
+- Coach edit -> TV + Individual derivation refresh PASS.
+- Runtime page exceptions: 0.
+
+Replacement parity remains blocked by:
+- packaged physical Android/PWA acceptance;
+- whole-group TV production cross-device live transport;
+- individual-device production auth/RLS + complete workflow;
+- assistant production auth/RLS + complete workflow;
+- complete offline-first Meet programme/import/results workflow.
