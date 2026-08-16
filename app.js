@@ -26023,3 +26023,509 @@ scheduleFastSync=function(){return v32160QueueDeferredSync()};
 const v32160ShowViewSyncBase=typeof showView==="function"?showView:null;
 if(v32160ShowViewSyncBase)showView=function(id,options){const out=v32160ShowViewSyncBase(id,options);if(v32160DeferredSync&&!v32160PoolsideView(id))queueMicrotask(()=>v32160FlushDeferredSync());return out};
 window.v32160CommitReady={...(window.v32160CommitReady||{}),poolsideView:v32160PoolsideView,deferredSync:()=>v32160DeferredSync,flushDeferredSync:v32160FlushDeferredSync};
+
+// =============================================================================
+// McLay Swimming OS v3.21.7 — Sync Guardian + Evidence Parent Repair
+// Correction-only layer over exact v3.21.6 shipping bytes.
+// - Connection diagnostics always report the current build;
+// - repeated browser-level pull failures collapse to one connection problem;
+// - capture/session-block foreign keys are repaired locally before cloud push;
+// - no capture/media is deleted to repair a broken block reference.
+// =============================================================================
+const V32170_VERSION="3.21.7";
+const V32170_BUILD="3.21.7-sync-guardian-evidence-parent-repair-20260815";
+const V32170_CORE="20260815-core3217";
+
+function v32170Text(value){return String(value??"").replace(/\r/g,"").trim()}
+function v32170NetworkFailure(value){return /failed to fetch|networkerror|network request failed|load failed|fetch failed|err_network|network is offline|internet disconnected/i.test(v32170Text(value?.message||value))}
+function v32170FailureList(){return typeof v3111Failures==="function"?v3111Failures():(Array.isArray(appState.settings?.v3111_sync_failures)?appState.settings.v3111_sync_failures:[])}
+function v32170CompactNetworkFailures({record=true}={}){
+  const list=[...v32170FailureList()],network=list.filter(row=>row?.phase==="pull"&&v32170NetworkFailure(row?.message));if(!network.length)return 0;
+  const kept=list.filter(row=>!(row?.phase==="pull"&&v32170NetworkFailure(row?.message))&&row?.key!=="connection|cloud|pull");
+  if(record){const attempts=Math.max(1,...network.map(row=>Number(row?.attempts)||1)),latest=network.slice().sort((a,b)=>String(b?.last_attempt||"").localeCompare(String(a?.last_attempt||"")))[0];kept.unshift({key:"connection|cloud|pull",phase:"connection",table:"cloud",id:"pull",action:"pull",message:`Cloud pull connection failed · ${network.length} repeated table failures collapsed · ${v32170Text(latest?.message||"Failed to fetch")}`,attempts,last_attempt:latest?.last_attempt||nowIso()})}
+  appState.settings.v3111_sync_failures=kept.slice(0,50);saveState(appState);return network.length;
+}
+function v32170ClearConnectionPullFailure(){if(!Array.isArray(appState.settings?.v3111_sync_failures))return;appState.settings.v3111_sync_failures=appState.settings.v3111_sync_failures.filter(row=>row?.key!=="connection|cloud|pull");saveState(appState)}
+function v32170RecordConnectionPullFailure(error,collapsed=1){
+  const list=v32170FailureList(),key="connection|cloud|pull",existing=list.find(row=>row.key===key),row={key,phase:"connection",table:"cloud",id:"pull",action:"pull",message:`Cloud pull connection failed${collapsed>1?` · ${collapsed} table requests collapsed`:""} · ${v32170Text(error?.message||error||"Failed to fetch")}`,attempts:Number(existing?.attempts||0)+1,last_attempt:nowIso()};
+  appState.settings.v3111_sync_failures=[row,...list.filter(item=>item.key!==key&&!(item?.phase==="pull"&&v32170NetworkFailure(item?.message)))].slice(0,50);saveState(appState);return row;
+}
+
+function v32170BlockLabel(block){return v32170Text(block?.title||((block?.block_type||"").replaceAll("_"," "))).toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function v32170CaptureLabel(capture){
+  const text=v32170Text(capture?.text_content),bracket=text.match(/\[\s*Block\s*:\s*([^\]]+)\]/i);if(bracket?.[1])return v32170BlockLabel({title:bracket[1]});
+  for(const [re,label] of [[/\bwarm[ -]?up\b/i,"warm up"],[/\bpre[ -]?set\b/i,"pre set"],[/\bmain\s*set\b/i,"main set"],[/\bpost(?:[- ]?set|[- ]?main)\b/i,"post set"],[/\bwarm[ -]?down\b/i,"warm down"]])if(re.test(text))return label;
+  return "";
+}
+function v32170CurrentBlocks(sessionId){return (appState.session_blocks||[]).filter(block=>block?.session_id===sessionId)}
+function v32170MatchCaptureBlock(capture){
+  const exact=(appState.session_blocks||[]).find(block=>block?.id===capture?.session_block_id&&(!capture?.session_id||block?.session_id===capture.session_id));if(exact)return exact;
+  const label=v32170CaptureLabel(capture);if(!label)return null;const blocks=v32170CurrentBlocks(capture.session_id),matches=blocks.filter(block=>{const b=v32170BlockLabel(block);return b===label||b.includes(label)||label.includes(b)});return matches.length===1?matches[0]:null;
+}
+function v32170AuditBlockRepair(capture,fromId,toId,reason){
+  const id=`capture-block-repair-${capture.id}`,existing=(appState.session_transcriptions||[]).find(row=>row.id===id),stamp=nowIso(),row={...(existing||{}),id,session_id:capture.session_id,capture_id:capture.id,purpose:"capture_block_link_repair",source_type:"text",athlete_id:capture.athlete_id||null,session_block_id:toId||null,status:"structured",raw_text:`Capture block link repaired · ${fromId||"none"} → ${toId||"session"} · ${reason}`,structured_blocks:[],structured_data:{...(existing?.structured_data||{}),v32170_capture_block_repair:true,original_session_block_id:fromId||null,current_session_block_id:toId||null,reason,repaired_at:stamp},created_at:existing?.created_at||stamp,updated_at:stamp};upsertLocal("session_transcriptions",row);queueRecord("session_transcriptions",row.id);return row;
+}
+function v32170PreflightCapture(capture){
+  if(!capture?.id)return{changed:false,block:null};const session=(appState.sessions||[]).find(row=>row.id===capture.session_id);if(session)queueRecord("sessions",session.id);
+  const from=v32170Text(capture.session_block_id);if(!from)return{changed:false,block:null};const block=v32170MatchCaptureBlock(capture);
+  if(block){queueRecord("session_blocks",block.id);if(block.id===from)return{changed:false,block};capture.v32170_original_session_block_id=capture.v32170_original_session_block_id||from;capture.session_block_id=block.id;capture.updated_at=nowIso();upsertLocal("captures",capture);queueRecord("captures",capture.id);for(const tr of (appState.session_transcriptions||[]).filter(row=>row.capture_id===capture.id&&row.session_block_id===from)){tr.session_block_id=block.id;tr.structured_data={...(tr.structured_data||{}),v32170_original_session_block_id:from};tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id)}v32170AuditBlockRepair(capture,from,block.id,"rebound to current canonical block");return{changed:true,block}}
+  capture.v32170_original_session_block_id=capture.v32170_original_session_block_id||from;capture.session_block_id=null;capture.updated_at=nowIso();upsertLocal("captures",capture);queueRecord("captures",capture.id);for(const tr of (appState.session_transcriptions||[]).filter(row=>row.capture_id===capture.id&&row.session_block_id===from)){tr.session_block_id=null;tr.structured_data={...(tr.structured_data||{}),v32170_original_session_block_id:from};tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id)}v32170AuditBlockRepair(capture,from,null,"referenced block no longer exists in current local canonical session");return{changed:true,block:null}
+}
+function v32170PreflightPendingCaptures(){let changed=0;const ids=new Set((appState.pending||[]).filter(item=>item?.table==="captures"&&item?.action!=="delete").map(item=>item.id));for(const capture of (appState.captures||[]).filter(row=>ids.has(row.id))){const out=v32170PreflightCapture(capture);if(out.changed)changed++}if(changed){if(typeof v3207CompactPending==="function")v3207CompactPending();saveState(appState)}return changed}
+
+// Final push authority: repair parent references before the proven v3.21.6 push
+// engine sorts session -> block -> capture. The capture itself is never deleted.
+const v32170PushPendingBase=typeof v3111PushPending==="function"?v3111PushPending:null;
+if(v32170PushPendingBase)v3111PushPending=async function(){v32170PreflightPendingCaptures();return v32170PushPendingBase()};
+try{pushPending=v3111PushPending}catch{}
+
+// Final pull authority: a browser/network failure is one connection failure, not
+// 29 independent database-table defects. Stop after the first network failure;
+// retain table-specific errors only when the cloud actually returned one.
+const v32170PullOperationalBase=typeof v3111PullOperational==="function"?v3111PullOperational:null;
+v3111PullOperational=async function({full=false}={}){
+  await v3103EnsureCloudSession();const org=appState.settings.organisation_id,base=full?V3103_OPERATIONAL_TABLES:V3103_STARTUP_TABLES,tables=[...new Set([...base,"squad_programmes","squad_timetable_slots","sessions","session_reviews"])];let successes=0,failures=0,networkStopped=false;
+  for(const table of tables){if(!CLOUD_TABLES.includes(table))continue;if(typeof v331UnavailableTables==="function"&&v331UnavailableTables().has(table))continue;try{const rows=await cloudFetch(v3103OperationalQuery(table,org));appState[table]=mergeCollection(appState[table]||[],(rows||[]).map(stripCloudFields));v3111ClearFailure("pull",table);successes++}catch(error){if(v32170NetworkFailure(error)){v32170RecordConnectionPullFailure(error,Math.max(1,tables.length-successes));failures++;networkStopped=true;break}const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):"";if(missing===table&&typeof v331MarkTableUnavailable==="function"&&v331MarkTableUnavailable(table,error)){}v3111RecordFailure({phase:"pull",table,error});failures++}}
+  if(!networkStopped)v32170ClearConnectionPullFailure();saveState(appState);return{successes,failures,networkStopped};
+};
+try{v3103PullOperational=v3111PullOperational}catch{}
+
+function v32170SyncCopyText(){v32170CompactNetworkFailures();const failures=v32170FailureList(),summary=typeof v3111SyncSummary==="function"?v3111SyncSummary():`${(appState.pending||[]).length} pending`;return `McLay Swimming ${V32170_BUILD}\n${summary}\n`+failures.map(f=>`${f.phase||"sync"} ${f.table||""} ${f.id||""}: ${f.message||""}`).join("\n")}
+function v32170FixSyncDiagnostics(){v32170CompactNetworkFailures();document.querySelectorAll("[data-v3207-sync-build]").forEach(node=>node.textContent=V32170_BUILD);const copy=$("v3111CopySync");if(copy){copy.dataset.v32170Owned="true";copy.title=`Copy current ${V32170_VERSION} sync diagnostics`}}
+const v32170RenderSyncBase=typeof v3111RenderSyncDetails==="function"?v3111RenderSyncDetails:null;if(v32170RenderSyncBase)v3111RenderSyncDetails=function(){const out=v32170RenderSyncBase();v32170FixSyncDiagnostics();return out};
+const v32170RenderLegacySyncBase=typeof v36RenderSyncDetails==="function"?v36RenderSyncDetails:null;if(v32170RenderLegacySyncBase)v36RenderSyncDetails=function(){const out=v32170RenderLegacySyncBase();v32170FixSyncDiagnostics();return out};
+function v32170Claim(event,action){event.preventDefault?.();event.stopImmediatePropagation?.();event.stopPropagation?.();try{const out=action?.();if(out&&typeof out.catch==="function")out.catch(error=>{console.error("v3.21.7 owned sync action",error);v32160Status?.(error?.message||"Sync action failed","error")});return out}catch(error){console.error("v3.21.7 owned sync action",error);v32160Status?.(error?.message||"Sync action failed","error");return null}}
+function v32170CaptureClick(event){const button=event.target?.closest?.("button");if(!button)return;if(button.id==="v3111CopySync")return v32170Claim(event,async()=>{const text=v32170SyncCopyText();try{await navigator.clipboard.writeText(text);updateStatus?.("Current sync details copied","good")}catch{alert?.(text)}});if(button.id==="v3111RetrySync"||button.matches?.("[data-v3207-repair-sync]"))return v32170Claim(event,async()=>{v32170CompactNetworkFailures();const repaired=v32170PreflightPendingCaptures();if(repaired)updateStatus?.(`${repaired} capture block link${repaired===1?"":"s"} repaired locally · syncing…`,"good");const result=await v3207RepairSync?.({render:true});v32170FixSyncDiagnostics();return result})}
+document.addEventListener("click",v32170CaptureClick,true);
+
+function v32170Brand(){const title=`McLay Swimming OS — v${V32170_VERSION} Sync Guardian`;const subtitle=`v${V32170_VERSION} · current diagnostics · collapsed network failures · capture evidence preserved`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V32170_BUILD;try{localStorage.setItem("mclay_last_installed_build",V32170_BUILD)}catch{}const badge=$("v3207BuildBadge")||$("v3208BuildBadge");if(badge){badge.textContent=`v${V32170_VERSION}`;badge.dataset.build=V32170_BUILD;badge.title=V32170_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V32170_BUILD)}
+let v32170WorkerPromise=null;async function v32170Worker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return false;if(v32170WorkerPromise)return v32170WorkerPromise;v32170WorkerPromise=(async()=>{try{const r=await navigator.serviceWorker.register(`./sw.js?v=${V32170_CORE}`,{updateViaCache:"none"});await r.update();if(r.waiting)r.waiting.postMessage("SKIP_WAITING");return r}catch(error){console.warn("v3.21.7 service worker",error);return false}})();const out=await v32170WorkerPromise;setTimeout(()=>{v32170WorkerPromise=null},2500);return out}
+try{v32160FinalBrandObserver?.disconnect?.()}catch{};const v32170BrandObserver=new MutationObserver(()=>queueMicrotask(v32170Brand));document.querySelector("title")&&v32170BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});document.querySelector(".header-subtitle")&&v32170BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+for(const name of ["v32160Brand","v32150Brand","v32140Brand","v32130Brand","v32120Brand","v32110Brand","v3230Brand","v3229Brand","v3228Brand","v3227Brand","v3226Brand","v3225Brand","v3222Brand","v3221Brand","v3220Brand","v3219Brand","v3218Brand"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32170Brand}catch{}}
+for(const name of ["v32160Worker","v32150Worker","v32140Worker","v32130Worker","v32120Worker","v32110Worker","v3230Worker","v3229RegisterWorker","v3228RegisterWorker","v3227RegisterWorker","v3226RegisterWorker","v3225RegisterWorker","v3222RegisterWorker","v3221RegisterWorker","v3220RegisterWorker","v3219RegisterWorker","v3218RegisterWorker"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32170Worker}catch{}}
+const v32170CollapsedAtBoot=v32170CompactNetworkFailures();v32170Brand();v32170FixSyncDiagnostics();setTimeout(()=>{v32170Brand();v32170FixSyncDiagnostics();v32170Worker()},0);
+window.v32170Guardian={version:V32170_VERSION,build:V32170_BUILD,networkFailure:v32170NetworkFailure,compactNetworkFailures:v32170CompactNetworkFailures,preflightCapture:v32170PreflightCapture,preflightPendingCaptures:v32170PreflightPendingCaptures,copy:v32170SyncCopyText,pull:v3111PullOperational,collapsedAtBoot:v32170CollapsedAtBoot};
+
+// Named final pull owner for auditability and direct Guardian execution.
+async function v32170PullOperational({full=false}={}){
+  await v3103EnsureCloudSession();const org=appState.settings.organisation_id,base=full?V3103_OPERATIONAL_TABLES:V3103_STARTUP_TABLES,tables=[...new Set([...base,"squad_programmes","squad_timetable_slots","sessions","session_reviews"])];let successes=0,failures=0,networkStopped=false;
+  for(const table of tables){if(!CLOUD_TABLES.includes(table))continue;if(typeof v331UnavailableTables==="function"&&v331UnavailableTables().has(table))continue;try{const rows=await cloudFetch(v3103OperationalQuery(table,org));appState[table]=mergeCollection(appState[table]||[],(rows||[]).map(stripCloudFields));v3111ClearFailure("pull",table);successes++}catch(error){if(v32170NetworkFailure(error)){v32170RecordConnectionPullFailure(error,Math.max(1,tables.length-successes));failures++;networkStopped=true;break}const missing=typeof v331MissingRelationTable==="function"?v331MissingRelationTable(error):"";if(missing===table&&typeof v331MarkTableUnavailable==="function"&&v331MarkTableUnavailable(table,error)){}v3111RecordFailure({phase:"pull",table,error});failures++}}
+  if(!networkStopped)v32170ClearConnectionPullFailure();saveState(appState);return{successes,failures,networkStopped};
+}
+v3111PullOperational=v32170PullOperational;try{v3103PullOperational=v32170PullOperational}catch{};window.v32170Guardian={...(window.v32170Guardian||{}),pull:v32170PullOperational};
+
+// -----------------------------------------------------------------------------
+// v3.21.7 final Connection-screen truth after real-phone 15 Aug screenshots.
+// Diagnose first, render second. Do not let the historical renderer paint 30
+// independent table failures before the Guardian compacts one network outage.
+// -----------------------------------------------------------------------------
+function v32170CaptureRepairPreview(){
+  const pendingIds=new Set((appState.pending||[]).filter(item=>item?.table==="captures"&&item?.action!=="delete").map(item=>item.id));
+  const rows=[];
+  for(const capture of (appState.captures||[]).filter(row=>pendingIds.has(row.id))){
+    const from=v32170Text(capture.session_block_id);if(!from)continue;
+    const exact=(appState.session_blocks||[]).some(block=>block?.id===from&&(!capture.session_id||block?.session_id===capture.session_id));
+    if(exact)continue;
+    const match=v32170MatchCaptureBlock(capture);
+    rows.push({capture,from,match,action:match?"rebind":"session"});
+  }
+  return rows;
+}
+function v32170ConnectionGuardianHtml(){
+  const failures=v32170FailureList(),network=failures.find(row=>row?.key==="connection|cloud|pull"),repairs=v32170CaptureRepairPreview(),pushFailures=failures.filter(row=>row?.phase==="push"),other=failures.filter(row=>row!==network&&row?.phase!=="push");
+  const networkHtml=network?`<div class="warning-box v32170-connection"><strong>Cloud pull unavailable</strong><span>${escapeHtml(v32170Text(network.message).replace(/^Cloud pull connection failed\s*·?\s*/i,""))}</span><small>One browser/network problem is shown once; MSOS stops the remaining table pulls instead of reporting each table as broken.</small></div>`:`<div class="good-box v32170-connection"><strong>Cloud pull diagnostics</strong><span>No browser-level pull failure is currently recorded.</span></div>`;
+  const repairHtml=repairs.length?`<div class="warning-box v32170-evidence"><strong>${repairs.length} pending capture${repairs.length===1?"":"s"} need block-link repair</strong><span>${repairs.map(row=>escapeHtml(`${row.capture.id} · ${row.action==="rebind"?`rebind to ${row.match?.title||"current block"}`:"preserve at session level"}`)).join("<br>")}</span><small>Media/evidence is never deleted. Repair runs immediately before that capture is pushed, or when Repair &amp; sync now is tapped.</small></div>`:`<div class="good-box v32170-evidence"><strong>Capture parent links</strong><span>No pending capture has a missing local block parent.</span></div>`;
+  const dataHtml=pushFailures.length||other.length?`<div class="v32170-data-issues"><strong>Record-specific issues</strong><span>${pushFailures.length} push · ${other.length} other</span></div>`:"";
+  return `<section id="v32170GuardianSummary" class="v32170-guardian-summary"><div class="v32170-guardian-head"><div><span class="eyebrow">Current sync guardian</span><strong>McLay Swimming ${escapeHtml(V32170_BUILD)}</strong></div><span class="badge good">v${escapeHtml(V32170_VERSION)}</span></div>${networkHtml}${repairHtml}${dataHtml}</section>`;
+}
+function v32170AugmentSyncDiagnostics(){
+  const host=$("v3111SyncDetails")||$("v36SyncDetails");if(!host)return;
+  host.querySelector("#v32170GuardianSummary")?.remove();
+  const heading=host.querySelector(".card-heading");if(heading)heading.insertAdjacentHTML("afterend",v32170ConnectionGuardianHtml());else host.insertAdjacentHTML("afterbegin",v32170ConnectionGuardianHtml());
+  document.querySelectorAll("[data-v3207-sync-build]").forEach(node=>{node.textContent=V32170_BUILD;node.title=V32170_BUILD});
+  const failed=host.querySelector(".v3111-sync-grid>div:nth-child(4) strong");if(failed)failed.textContent=String(v32170FailureList().length);
+  const title=host.querySelector(".card-heading h3");if(title)title.textContent=typeof v3111SyncSummary==="function"?v3111SyncSummary():title.textContent;
+}
+// Use the pre-v3.21.7 renderer captured above, but compact before it paints.
+if(v32170RenderSyncBase)v3111RenderSyncDetails=function(){v32170CompactNetworkFailures();const out=v32170RenderSyncBase();v32170FixSyncDiagnostics();v32170AugmentSyncDiagnostics();return out};
+if(v32170RenderLegacySyncBase)v36RenderSyncDetails=function(){v32170CompactNetworkFailures();const out=v32170RenderLegacySyncBase();v32170FixSyncDiagnostics();v32170AugmentSyncDiagnostics();return out};
+
+function v32170SyncGuardianStyles(){if($("v32170SyncGuardianStyles"))return;const style=document.createElement("style");style.id="v32170SyncGuardianStyles";style.textContent=`
+.v32170-guardian-summary{display:grid;gap:.55rem;margin:.65rem 0 .8rem}.v32170-guardian-head{display:flex;justify-content:space-between;gap:.7rem;align-items:center;padding:.55rem .65rem;border:1px solid #d5e2e8;border-radius:10px}.v32170-guardian-head>div{display:grid;gap:.1rem;min-width:0}.v32170-guardian-head strong{overflow-wrap:anywhere}.v32170-guardian-summary .warning-box,.v32170-guardian-summary .good-box{display:grid;gap:.25rem}.v32170-guardian-summary small{line-height:1.35}.v32170-data-issues{display:flex;justify-content:space-between;gap:.6rem;padding:.45rem .55rem;border:1px solid #d5e2e8;border-radius:9px}@media(max-width:520px){.v32170-guardian-head,.v32170-data-issues{align-items:flex-start}.v32170-guardian-head strong{font-size:.78rem}}
+`;document.head.appendChild(style)}
+v32170SyncGuardianStyles();v32170CompactNetworkFailures();v32170FixSyncDiagnostics();if(document.querySelector("#settings.view.active")||$("v3111SyncDetails"))v3111RenderSyncDetails?.();
+
+// =============================================================================
+// McLay Swimming OS v3.21.8 — First-Launch Migration + Stable Delivery Identity
+// Correction-only layer over exact v3.21.7 shipping bytes.
+// This layer is aimed at upgrading the actual 3.20.18 phone state safely:
+// - source repair uses the same hardened grammar as new authoring;
+// - parent/composition lines never become phantom metres;
+// - canonical Board blocks preserve stable existing block/item identities;
+// - live structural changes cannot orphan capture/session-block foreign keys;
+// - + Line and parent-repeat are first-class delivered changes that survive reopen;
+// - dependent evidence is moved before a genuinely removed block is deleted.
+// =============================================================================
+const V32180_VERSION="3.21.8";
+const V32180_BUILD="3.21.8-first-launch-migration-stable-delivery-identity-20260816";
+const V32180_CORE="20260816-core3218";
+
+function v32180Text(value){return String(value??"").replace(/\r/g,"").trim()}
+function v32180Clone(value){try{return structuredClone(value)}catch{try{return JSON.parse(JSON.stringify(value))}catch{return value}}}
+function v32180Norm(value){return v32180Text(value).toLowerCase().replace(/[–—]/g,"-").replace(/×/g,"x").replace(/[^a-z0-9.#:@/]+/g," ").replace(/\s+/g," ").trim()}
+function v32180NormaliseSource(raw){
+  const original=String(raw??"");
+  try{const out=typeof v32120NormaliseCompactReps==="function"?v32120NormaliseCompactReps(original):null;return{original,text:typeof out?.text==="string"?out.text:original,changes:Array.isArray(out?.changes)?out.changes:[]}}catch{return{original,text:original,changes:[]}}
+}
+
+// A one-word/pattern count such as “1 Scull”, “1 Build”, or “1 Easy” is a
+// child/pattern instruction, not a 1 metre swimming repeat. Explicit 1 x N and
+// 1 100-style distance lines remain eligible to be real sets.
+const v32180PatternCueBase=typeof v3230PatternCue==="function"?v3230PatternCue:null;
+v3230PatternCue=function(line){const t=v32180Text(line);if(v32180PatternCueBase?.(t))return true;return /^\s*1\s+(?![x×]\b)(?!\d)(?=[A-Za-z#])[^\n]+$/i.test(t)};
+
+const V32180_STANDARD_PARTS=new Set([12.5,15,20,25,35,50,75,100,125,150,175,200,250,300,400,500,600,800,1000,1200,1500]);
+function v32180InlineCompositionSum(text){
+  const raw=v32180Text(text);if(!/[\/+]/.test(raw))return null;const parts=raw.split(/[\/+]/).map(v32180Text).filter(Boolean);if(parts.length<2)return null;let total=0;
+  for(const part of parts){const m=part.match(/^\s*(\d{1,4}(?:\.5)?)\s*m?\b/i);if(!m)return null;const n=Number(m[1]);if(!V32180_STANDARD_PARTS.has(n))return null;total+=n}
+  return total>0?total:null;
+}
+function v32180BareDistance(text){const m=v32180Text(text).match(/^\s*(\d{2,4}(?:\.5)?)\s*m?\s*$/i);return m?Number(m[1]):null}
+function v32180MakeCue(item,reason,parentIndex,metres=null){item.runnable=false;item.reps=0;item.distance=null;item.line_type="cue";item.v3204_cue_reason=reason;if(Number.isInteger(parentIndex)&&parentIndex>=0)item.v3230_parent_index=parentIndex;if(Number.isFinite(Number(metres))&&Number(metres)>0)item.v32180_composition_metres=Number(metres);return item}
+function v32180MarkComposition(blocks){
+  for(const block of blocks||[]){const items=Array.isArray(block?.items)?block.items:[];
+    // A child line whose slash/+ pieces exactly make one parent repeat is
+    // descriptive composition, e.g. 8 x 75 then 50 Perfect / 25 Fast.
+    let parent=-1;
+    for(let i=0;i<items.length;i++){
+      const item=items[i];if(item?.runnable===false)continue;const reps=Math.max(1,Number(item?.reps)||1),distance=Number(item?.distance)||0,text=v32180Text(item?.raw||item?.instruction||item?.label);
+      if(parent>=0&&reps===1){const p=items[parent],pd=Number(p?.distance)||0,sum=v32180InlineCompositionSum(text);if(pd>0&&sum===pd){v32180MakeCue(item,"composition_instruction",parent,sum);continue}}
+      parent=i;
+    }
+    // A bare parent distance followed by single-distance child rows that sum
+    // exactly to it is also composition, e.g. 500 / 300 Free / 200 Reverse IM.
+    for(let i=0;i<items.length;i++){
+      const parentItem=items[i];if(parentItem?.runnable===false||Math.max(1,Number(parentItem?.reps)||1)!==1)continue;const pd=Number(parentItem?.distance)||0,bare=v32180BareDistance(parentItem?.raw||parentItem?.instruction||parentItem?.label);if(!(pd>0&&bare===pd))continue;
+      const candidates=[];let sum=0;
+      for(let j=i+1;j<items.length&&candidates.length<6;j++){
+        const child=items[j];if(child?.runnable===false)break;const reps=Math.max(1,Number(child?.reps)||1),d=Number(child?.distance)||0;if(reps!==1||!(d>0)||d>=pd)break;candidates.push(j);sum+=d;if(sum>=pd)break;
+      }
+      if(candidates.length>=2&&sum===pd){for(const j of candidates)v32180MakeCue(items[j],"composition_instruction",i,Number(items[j]?.distance)||null)}
+    }
+    items.forEach((item,index)=>item.sort_order=index+1);block.raw_text=items.map(item=>v32180Text(item?.raw||item?.instruction||item?.label)).filter(Boolean).join("\n");
+  }
+  return blocks;
+}
+
+// Source-authority repair must understand the same language as new intake.
+const v32180ParseSourceBase=typeof v3230ParseSource==="function"?v3230ParseSource:null;
+v3230ParseSource=function(raw){const normal=v32180NormaliseSource(raw),blocks=v32180ParseSourceBase?.(normal.text)||[];for(const block of blocks)block.v32180_source_repairs=normal.changes;return v32180MarkComposition(blocks)};
+
+function v32180BlockTitleKey(block){return `${String(block?.block_type||"").toLowerCase()}|${v32180Norm(block?.title||"")}`}
+function v32180SameItemShape(a,b){return Boolean(a&&b)&&Boolean(a.runnable!==false)===Boolean(b.runnable!==false)&&Number(a.reps||0)===Number(b.reps||0)&&Number(a.distance||0)===Number(b.distance||0)}
+function v32180AlignBlockIdentity(session,blocks){
+  const out=(blocks||[]).map(block=>({...v32180Clone(block),items:(block?.items||[]).map(v32180Clone)}));if(!session)return out;
+  const stored=(typeof v3230StoredDeliveryBlocks==="function"?v3230StoredDeliveryBlocks(session):[]).map(v32180Clone),used=new Set();
+  for(let bi=0;bi<out.length;bi++){
+    const block=out[bi],key=v32180BlockTitleKey(block),sameType=stored.filter(s=>!used.has(s.id)&&String(s.block_type||"")===String(block.block_type||""));
+    let match=stored.find(s=>!used.has(s.id)&&v32180BlockTitleKey(s)===key)||sameType.find(s=>Number(s.sort_order||0)===bi+1)||(sameType.length===1?sameType[0]:null);
+    if(!match){const indexed=stored[bi];if(indexed&&!used.has(indexed.id)&&v32180Norm(indexed.title)===v32180Norm(block.title))match=indexed}
+    if(!match)continue;used.add(match.id);block.id=match.id;block.session_id=session.id;
+    const oldItems=Array.isArray(match.items)?match.items:[],usedItems=new Set();
+    for(let ii=0;ii<(block.items||[]).length;ii++){
+      const item=block.items[ii],text=v32180Norm(item?.raw||item?.instruction||item?.label);let old=oldItems.find(x=>!usedItems.has(x.id)&&text&&v32180Norm(x?.raw||x?.instruction||x?.label)===text);
+      if(!old&&oldItems[ii]&&!usedItems.has(oldItems[ii].id)&&v32180SameItemShape(item,oldItems[ii]))old=oldItems[ii];
+      if(old?.id){item.id=old.id;usedItems.add(old.id)}
+    }
+  }
+  return out;
+}
+
+// The canonical Board may rebuild content from source, but its logical blocks
+// retain the existing database identity. Content truth and row identity are
+// deliberately separate concerns.
+const v32180OverlayBase=typeof v3230OverlayDeliveryMetadata==="function"?v3230OverlayDeliveryMetadata:null;
+v3230OverlayDeliveryMetadata=function(session,blocks){return v32180AlignBlockIdentity(session,v32180OverlayBase?.(session,blocks)||blocks||[])};
+
+function v32180FindReplacementForOld(old,next){const key=v32180BlockTitleKey(old),exact=(next||[]).filter(b=>v32180BlockTitleKey(b)===key);if(exact.length===1)return exact[0];const same=(next||[]).filter(b=>String(b.block_type||"")===String(old?.block_type||""));return same.length===1?same[0]:null}
+function v32180ProtectBlockEvidence(session,nextBlocks){
+  if(!session)return{blocks:nextBlocks||[],removed:[],moved:0};const aligned=v32180AlignBlockIdentity(session,nextBlocks||[]),prior=typeof v3230StoredDeliveryBlocks==="function"?v3230StoredDeliveryBlocks(session):[],keep=new Set(aligned.map(b=>b.id).filter(Boolean)),removed=prior.filter(b=>b.id&&!keep.has(b.id)),dependencies={};let moved=0;
+  for(const old of removed){const replacement=v32180FindReplacementForOld(old,aligned),toId=replacement?.id||null,deps=[];
+    for(const capture of (appState.captures||[]).filter(r=>r.session_id===session.id&&r.session_block_id===old.id)){
+      capture.v32180_original_session_block_id=capture.v32180_original_session_block_id||old.id;capture.session_block_id=toId;capture.updated_at=nowIso();upsertLocal("captures",capture);queueRecord("captures",capture.id);deps.push(`captures:${capture.id}`);moved++;
+      try{v32170AuditBlockRepair?.(capture,old.id,toId,toId?"block identity changed during canonical replacement":"block removed from delivered session; evidence retained at session level")}catch{}
+    }
+    for(const tr of (appState.session_transcriptions||[]).filter(r=>r.session_id===session.id&&r.session_block_id===old.id)){
+      tr.structured_data={...(tr.structured_data||{}),v32180_original_session_block_id:tr.structured_data?.v32180_original_session_block_id||old.id};tr.session_block_id=toId;tr.updated_at=nowIso();upsertLocal("session_transcriptions",tr);queueRecord("session_transcriptions",tr.id);deps.push(`session_transcriptions:${tr.id}`);moved++;
+    }
+    dependencies[old.id]=deps;
+  }
+  if(removed.length){appState.settings.v32180_block_delete_dependencies={...(appState.settings.v32180_block_delete_dependencies||{}),...dependencies};saveState(appState)}
+  return{blocks:aligned,removed,moved};
+}
+
+// Every writer gets stable IDs and protects evidence before the historical body
+// can delete an old row.
+const v32180PersistBlocksBase=typeof v3206PersistBlocks==="function"?v3206PersistBlocks:null;
+if(v32180PersistBlocksBase)v3206PersistBlocks=function(session,blocks){const prepared=v32180ProtectBlockEvidence(session,blocks);return v32180PersistBlocksBase(session,prepared.blocks)};
+const v32180CommitBlocksBase=typeof v3207CommitBlocks==="function"?v3207CommitBlocks:null;
+if(v32180CommitBlocksBase)v3207CommitBlocks=function(session,blocks,options={}){const prepared=v32180ProtectBlockEvidence(session,blocks),out=v32180CommitBlocksBase(session,prepared.blocks,options);if(out&&session&&/live_add_line|parent_repeat|v3218_live/i.test(String(options?.source||"")))try{v32160PromoteDeliveredSource?.(session,out)}catch{}return out};
+
+// Added lines are delivered truth too. Replay both historical 3.21.x captures
+// and the new block-labelled form so a rerender/reopen cannot make the line vanish.
+function v32180BlockFromCapture(session,blocks,capture,label=""){
+  if(label){const byLabel=v3230FindBlock?.(blocks,label);if(byLabel)return byLabel}
+  const stored=(typeof v3230StoredDeliveryBlocks==="function"?v3230StoredDeliveryBlocks(session):[]).find(b=>b.id===capture?.session_block_id);if(stored){const byStored=v3230FindBlock?.(blocks,stored.title||stored.block_type);if(byStored)return byStored}
+  return null;
+}
+function v32180ReplayAddedLines(session,blocks){
+  const out=(blocks||[]).map(block=>({...v32180Clone(block),items:(block?.items||[]).map(v32180Clone)}));
+  for(const capture of (typeof v3230ChangeCaptures==="function"?v3230ChangeCaptures(session):[])){
+    const text=v32180Text(capture?.text_content);let m=text.match(/^Everyone:\s*([^:]+):\s*added new line\s*[“\"](.+?)[”\"](?:\s*·|$)/i),label="",line="";
+    if(m){label=v32180Text(m[1]);line=v32180Text(m[2])}else{m=text.match(/^Everyone:\s*added new line\s*[“\"](.+?)[”\"](?:\s*·|$)/i);if(m)line=v32180Text(m[1])}
+    if(!line)continue;const block=v32180BlockFromCapture(session,out,capture,label);if(!block)continue;const normal=v32180NormaliseSource(line).text,needle=v32180Norm(normal);if((block.items||[]).some(item=>v32180Norm(item?.raw||item?.instruction||item?.label)===needle))continue;
+    const parsed=v3230ParseItem?.(normal,(block.items||[]).length);if(!parsed)continue;parsed.id=parsed.id||uid("block-line");parsed.sort_order=(block.items||[]).length+1;parsed.v32180_added_on_deck=true;parsed.delivered_scope="Everyone";block.items=[...(block.items||[]),parsed];block.raw_text=block.items.map(i=>v32180Text(i?.raw||i?.instruction||i?.label)).filter(Boolean).join("\n");
+  }
+  return out;
+}
+const v32180ReplayChangesBase=typeof v3230ReplayChanges==="function"?v3230ReplayChanges:null;
+v3230ReplayChanges=function(session,planBlocks){return v32180ReplayAddedLines(session,v32180ReplayChangesBase?.(session,planBlocks)||planBlocks||[])};
+
+// Parent repeat must operate on canonical delivered truth, not an old stored tree.
+// It also gets the same undo/source/evidence semantics as a normal live line edit.
+v3226ApplyRepeat=function(session,blockIndex,count){
+  const n=Math.max(1,Number(count)||1);if(!session)return false;try{v3230EnsurePlanSnapshot?.(session)}catch{};const before=(v3230DeliveredBlocks?.(session)||[]).map(v32180Clone),block=before[Number(blockIndex)];if(!block)return false;
+  const oldWorkout=session.workout||"",oldDistance=Number(session.planned_distance||v3230PlanDistance?.(session)||0),oldLock=v32180Clone(appState.settings?.v3150_locked_session_structures?.[session.id]||null),oldBlocks=before.map(v32180Clone);
+  block.repeat_count=n;block.v3226_parent_repeat=true;block.items=(block.items||[]).filter(item=>!v3226RepeatMarker?.(item?.raw||item?.instruction||item?.label)).map((item,index)=>({...item,sort_order:index+1}));block.raw_text=block.items.map(item=>v32180Text(item?.raw||item?.instruction||item?.label)).filter(Boolean).join("\n");
+  const committed=v3207CommitBlocks?.(session,before,{source:"v3218_parent_repeat",note:`Parent set repeat changed to ×${n}`});if(!committed)return false;const current=committed[Number(blockIndex)]||block;
+  const capture={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`Everyone: ${current.title||"set"} repeat changed to ×${n}`,session_block_id:current.id||null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",capture);queueRecord("captures",capture.id);
+  appState.settings.v3127_last_live_undo={v3206:true,v32180:true,session_id:session.id,had_stored_blocks:true,blocks:oldBlocks,lock:oldLock,workout:oldWorkout,planned_distance:oldDistance,capture_ids:[capture.id],saved_at:nowIso()};
+  try{v32160PromoteDeliveredSource?.(session,committed)}catch{};saveState(appState);scheduleFastSync?.();try{v3195ClearBoardCaches?.();v32140ForceBoardTruth?.()}catch{};return true;
+};
+
+// Own the live +Line save at document-capture phase. This prevents the old target
+// listener from committing a line that the delivered replay engine cannot see.
+const v32180OpenAddLineBase=typeof v3212OpenAddLine==="function"?v3212OpenAddLine:null;
+if(v32180OpenAddLineBase)v3212OpenAddLine=function(blockIndex){const out=v32180OpenAddLineBase(blockIndex),modal=document.getElementById("v3212AddLineModal");if(modal)modal.dataset.v32180BlockIndex=String(blockIndex);return out};
+function v32180SaveAddedLine(event){
+  const button=event.target?.closest?.("[data-v3212-add-save]");if(!button)return false;const modal=button.closest?.("#v3212AddLineModal");if(!modal)return false;event.preventDefault?.();event.stopImmediatePropagation?.();event.stopPropagation?.();
+  const text=v32180Text(modal.querySelector("[data-v3212-add-text]")?.value),why=v32180Text(modal.querySelector("[data-v3212-add-why]")?.value),blockIndex=Number(modal.dataset.v32180BlockIndex);if(!text){const status=modal.querySelector("[data-v3212-add-status]");if(status)status.textContent="Add the new line first.";return true}
+  const session=typeof v3225ExactSession==="function"?v3225ExactSession():selectedSession?.();if(!session)return true;const repeat=typeof v3226RepeatMarker==="function"?v3226RepeatMarker(text):null;if(repeat){v3226ApplyRepeat(session,blockIndex,repeat);modal.remove();return true}
+  const blocks=(v3230DeliveredBlocks?.(session)||[]).map(v32180Clone),target=blocks[blockIndex];if(!target)return true;const normal=v32180NormaliseSource(text).text,parsed=v3230ParseItem?.(normal,(target.items||[]).length);if(!parsed){const status=modal.querySelector("[data-v3212-add-status]");if(status)status.textContent="I could not read that line. It has been left untouched.";return true}
+  const oldWorkout=session.workout||"",oldDistance=Number(session.planned_distance||v3230PlanDistance?.(session)||0),oldLock=v32180Clone(appState.settings?.v3150_locked_session_structures?.[session.id]||null),oldBlocks=blocks.map(v32180Clone);parsed.id=parsed.id||uid("block-line");parsed.sort_order=(target.items||[]).length+1;parsed.v32180_added_on_deck=true;parsed.delivered_scope="Everyone";target.items=[...(target.items||[]),parsed];target.raw_text=target.items.map(row=>v32180Text(row?.raw||row?.instruction||row?.label)).filter(Boolean).join("\n");
+  const committed=v3207CommitBlocks?.(session,blocks,{source:"v3218_live_add_line",note:"New line added on deck"});if(!committed)return true;const current=committed[blockIndex]||target,capture={id:uid("capture"),session_id:session.id,athlete_id:null,capture_type:"session_change",text_content:`Everyone: ${current.title||"set"}: added new line “${normal}”${why?` · Why: ${why}`:""}`,session_block_id:current.id||null,media_path:null,mime_type:"text/plain",created_at:nowIso(),updated_at:nowIso()};upsertLocal("captures",capture);queueRecord("captures",capture.id);
+  appState.settings.v3127_last_live_undo={v3206:true,v32180:true,session_id:session.id,had_stored_blocks:true,blocks:oldBlocks,lock:oldLock,workout:oldWorkout,planned_distance:oldDistance,capture_ids:[capture.id],saved_at:nowIso()};try{v32160PromoteDeliveredSource?.(session,committed)}catch{};saveState(appState);scheduleFastSync?.();modal.remove();try{v3195ClearBoardCaches?.();v32140ForceBoardTruth?.()}catch{};updateStatus?.("New line added to actual session and preserved for reopen","good");return true;
+}
+document.addEventListener("click",v32180SaveAddedLine,true);
+
+// Before a pending capture is pushed from an inherited 3.20.18 state, if the
+// source-derived canonical block can safely retain that old ID, replace only the
+// local parent row with canonical content and queue it first. This repairs the
+// parent rather than uploading a known-corrupt 27,800m block tree merely to make
+// the FK succeed.
+const v32180CapturePreflightBase=typeof v32170PreflightCapture==="function"?v32170PreflightCapture:null;
+if(v32180CapturePreflightBase)v32170PreflightCapture=function(capture){
+  try{const session=(appState.sessions||[]).find(s=>s.id===capture?.session_id);if(session&&capture?.session_block_id){const canonical=v3230DeliveredBlocks?.(session)||[],match=canonical.find(b=>b.id===capture.session_block_id);if(match){const explicit=typeof v3200ExplicitTotal==="function"?Number(v3200ExplicitTotal(v3230PlanSource?.(session)||session.workout||""))||0:0,total=Number(v3230Total?.(canonical)||0),credible=!explicit||Math.abs(total-explicit)<=Math.max(50,explicit*.02);if(credible){const record={...v32180Clone(match),id:match.id,session_id:session.id,sort_order:Number(match.sort_order)||1,source_import:"v3218_canonical_migration",notes:match.notes||"Canonical parent repaired before evidence sync",updated_at:nowIso(),items:(match.items||[]).map((item,i)=>({...v32180Clone(item),id:item.id||uid("block-line"),sort_order:i+1}))};upsertLocal("session_blocks",record);queueRecord("session_blocks",record.id);saveState(appState)}}}}catch(error){console.warn("v3.21.8 capture parent canonical preflight",error)}
+  return v32180CapturePreflightBase(capture);
+};
+
+// Parent deletes are dependency-last. Upserts to captures/transcriptions that
+// move evidence off a removed block must reach cloud before the block DELETE.
+const v32180PushBase=typeof v3111PushPending==="function"?v3111PushPending:null;
+if(v32180PushBase)v3111PushPending=async function(){
+  const deferred=(appState.pending||[]).filter(item=>item?.table==="session_blocks"&&item?.action==="delete");if(!deferred.length)return v32180PushBase();
+  const keys=new Set(deferred.map(item=>`${item.table}|${item.id}`));appState.pending=(appState.pending||[]).filter(item=>!keys.has(`${item.table}|${item.id}`));saveState(appState);let first;
+  try{first=await v32180PushBase()}catch(error){for(const item of deferred)if(!(appState.pending||[]).some(p=>p.table===item.table&&p.id===item.id))appState.pending.push(item);saveState(appState);throw error}
+  const deps=appState.settings?.v32180_block_delete_dependencies||{},ready=[],held=[];
+  for(const item of deferred){const waiting=(deps[item.id]||[]).some(key=>{const [table,id]=String(key).split(":");return(appState.pending||[]).some(p=>p.table===table&&p.id===id)});(waiting?held:ready).push(item)}
+  for(const item of [...ready,...held])if(!(appState.pending||[]).some(p=>p.table===item.table&&p.id===item.id))appState.pending.push(item);saveState(appState);if(!ready.length)return first;
+  if(held.length){const holdKeys=new Set(held.map(item=>`${item.table}|${item.id}`));appState.pending=appState.pending.filter(item=>!holdKeys.has(`${item.table}|${item.id}`));saveState(appState)}
+  let second={successes:0,failures:0};try{second=await v32180PushBase()}finally{for(const item of held)if(!(appState.pending||[]).some(p=>p.table===item.table&&p.id===item.id))appState.pending.push(item);saveState(appState)}
+  return{successes:Number(first?.successes||0)+Number(second?.successes||0),failures:Number(first?.failures||0)+Number(second?.failures||0)};
+};
+try{pushPending=v3111PushPending}catch{}
+
+// Current identity on shell/Connection/service worker. Historical brand and worker
+// callbacks are redirected again so first launch has one release owner.
+function v32180Brand(){const title=`McLay Swimming OS — v${V32180_VERSION} Migration Guardian`,subtitle=`v${V32180_VERSION} · first-launch migration · stable delivery identity · source composition truth`;if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;window.MCLAY_APP_BUILD=V32180_BUILD;try{localStorage.setItem("mclay_last_installed_build",V32180_BUILD)}catch{}const badge=$("v3207BuildBadge")||$("v3208BuildBadge");if(badge){badge.textContent=`v${V32180_VERSION}`;badge.dataset.build=V32180_BUILD;badge.title=V32180_BUILD}document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>el.textContent=V32180_BUILD)}
+let v32180WorkerPromise=null;async function v32180Worker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return false;if(v32180WorkerPromise)return v32180WorkerPromise;v32180WorkerPromise=(async()=>{try{const r=await navigator.serviceWorker.register(`./sw.js?v=${V32180_CORE}`,{updateViaCache:"none"});await r.update();if(r.waiting)r.waiting.postMessage("SKIP_WAITING");return r}catch(error){console.warn("v3.21.8 service worker",error);return false}})();const out=await v32180WorkerPromise;setTimeout(()=>{v32180WorkerPromise=null},2500);return out}
+try{v32170BrandObserver?.disconnect?.()}catch{};const v32180BrandObserver=new MutationObserver(()=>queueMicrotask(v32180Brand));document.querySelector("title")&&v32180BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});document.querySelector(".header-subtitle")&&v32180BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+for(const name of ["v32170Brand","v32160Brand","v32150Brand","v32140Brand","v32130Brand","v32120Brand","v32110Brand","v3230Brand","v3229Brand","v3228Brand","v3227Brand","v3226Brand","v3225Brand","v3222Brand","v3221Brand","v3220Brand","v3219Brand","v3218Brand"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32180Brand}catch{}}
+for(const name of ["v32170Worker","v32160Worker","v32150Worker","v32140Worker","v32130Worker","v32120Worker","v32110Worker","v3230Worker","v3229RegisterWorker","v3228RegisterWorker","v3227RegisterWorker","v3226RegisterWorker","v3225RegisterWorker","v3222RegisterWorker","v3221RegisterWorker","v3220RegisterWorker","v3219RegisterWorker","v3218RegisterWorker"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32180Worker}catch{}}
+v32180Brand();setTimeout(()=>{v32180Brand();v32180Worker()},0);
+window.v32180Guardian={version:V32180_VERSION,build:V32180_BUILD,normaliseSource:v32180NormaliseSource,markComposition:v32180MarkComposition,alignBlockIdentity:v32180AlignBlockIdentity,protectBlockEvidence:v32180ProtectBlockEvidence,replayAddedLines:v32180ReplayAddedLines,saveAddedLine:v32180SaveAddedLine};
+
+// -----------------------------------------------------------------------------
+// v3.21.8 final diagnostics authority.
+// Connection/copy diagnostics must read the one current build authority rather
+// than retaining a release-specific v3.21.7 constant inside an older function.
+// -----------------------------------------------------------------------------
+function v32180CurrentBuild(){return String(window.MCLAY_APP_BUILD||V32180_BUILD)}
+function v32180CurrentVersion(){const build=v32180CurrentBuild(),m=build.match(/^(\d+\.\d+\.\d+)/);return m?.[1]||V32180_VERSION}
+
+v32170SyncCopyText=function(){
+  v32170CompactNetworkFailures();
+  const failures=v32170FailureList(),summary=typeof v3111SyncSummary==="function"?v3111SyncSummary():`${(appState.pending||[]).length} pending`,build=v32180CurrentBuild();
+  return `McLay Swimming ${build}\n${summary}\n`+failures.map(f=>`${f.phase||"sync"} ${f.table||""} ${f.id||""}: ${f.message||""}`).join("\n");
+};
+
+v32170FixSyncDiagnostics=function(){
+  v32170CompactNetworkFailures();
+  const build=v32180CurrentBuild(),version=v32180CurrentVersion();
+  document.querySelectorAll("[data-v3207-sync-build]").forEach(node=>{node.textContent=build;node.title=build});
+  const copy=$("v3111CopySync");if(copy){copy.dataset.v32170Owned="true";copy.title=`Copy current ${version} sync diagnostics`}
+};
+
+v32170ConnectionGuardianHtml=function(){
+  const failures=v32170FailureList(),network=failures.find(row=>row?.key==="connection|cloud|pull"),repairs=v32170CaptureRepairPreview(),pushFailures=failures.filter(row=>row?.phase==="push"),other=failures.filter(row=>row!==network&&row?.phase!=="push"),build=v32180CurrentBuild(),version=v32180CurrentVersion();
+  const networkHtml=network?`<div class="warning-box v32170-connection"><strong>Cloud pull unavailable</strong><span>${escapeHtml(v32170Text(network.message).replace(/^Cloud pull connection failed\s*·?\s*/i,""))}</span><small>One browser/network problem is shown once; MSOS stops the remaining table pulls instead of reporting each table as broken.</small></div>`:`<div class="good-box v32170-connection"><strong>Cloud pull diagnostics</strong><span>No browser-level pull failure is currently recorded.</span></div>`;
+  const repairHtml=repairs.length?`<div class="warning-box v32170-evidence"><strong>${repairs.length} pending capture${repairs.length===1?"":"s"} need block-link repair</strong><span>${repairs.map(row=>escapeHtml(`${row.capture.id} · ${row.action==="rebind"?`rebind to ${row.match?.title||"current block"}`:"preserve at session level"}`)).join("<br>")}</span><small>Media/evidence is never deleted. Repair runs immediately before that capture is pushed, or when Repair &amp; sync now is tapped.</small></div>`:`<div class="good-box v32170-evidence"><strong>Capture parent links</strong><span>No pending capture has a missing local block parent.</span></div>`;
+  const dataHtml=pushFailures.length||other.length?`<div class="v32170-data-issues"><strong>Record-specific issues</strong><span>${pushFailures.length} push · ${other.length} other</span></div>`:"";
+  return `<section id="v32170GuardianSummary" class="v32170-guardian-summary"><div class="v32170-guardian-head"><div><span class="eyebrow">Current sync guardian</span><strong>McLay Swimming ${escapeHtml(build)}</strong></div><span class="badge good">v${escapeHtml(version)}</span></div>${networkHtml}${repairHtml}${dataHtml}</section>`;
+};
+
+v32170AugmentSyncDiagnostics=function(){
+  const host=$("v3111SyncDetails")||$("v36SyncDetails");if(!host)return;
+  const build=v32180CurrentBuild();host.querySelector("#v32170GuardianSummary")?.remove();
+  const heading=host.querySelector(".card-heading");if(heading)heading.insertAdjacentHTML("afterend",v32170ConnectionGuardianHtml());else host.insertAdjacentHTML("afterbegin",v32170ConnectionGuardianHtml());
+  document.querySelectorAll("[data-v3207-sync-build]").forEach(node=>{node.textContent=build;node.title=build});
+  const failed=host.querySelector(".v3111-sync-grid>div:nth-child(4) strong");if(failed)failed.textContent=String(v32170FailureList().length);
+  const title=host.querySelector(".card-heading h3");if(title)title.textContent=typeof v3111SyncSummary==="function"?v3111SyncSummary():title.textContent;
+};
+
+// Keep the existing final render/action owners but make their dynamic calls
+// resolve to the current-build diagnostics above.
+window.v32170Guardian={...(window.v32170Guardian||{}),version:v32180CurrentVersion(),build:v32180CurrentBuild(),copy:v32170SyncCopyText};
+window.v32180Guardian={...(window.v32180Guardian||{}),currentBuild:v32180CurrentBuild,currentVersion:v32180CurrentVersion};
+v32180Brand();v32170FixSyncDiagnostics();
+
+// -----------------------------------------------------------------------------
+// v3.21.8 stale saved-adaptation migration guard.
+// A repaired canonical session must not continue displaying an athlete override
+// generated from the old corrupt block tree (e.g. CM 7 x 600 beside a 600m
+// group block). Preserve the saved row for audit; ignore only a grossly
+// incompatible generated block. Explicit v3203 individual edits remain owned by
+// their structured edit journal and are never discarded by this guard.
+// -----------------------------------------------------------------------------
+function v32180BlockMetres(block){return Math.max(1,Number(block?.repeat_count)||1)*(block?.items||[]).reduce((sum,item)=>sum+(item?.runnable===false?0:(Math.max(1,Number(item?.reps)||1)*(Number(item?.distance)||0))),0)}
+function v32180SavedAdaptationRow(athlete,session){return (appState.session_adaptations||[]).filter(row=>row?.athlete_id===athlete?.id&&row?.session_id===session?.id).sort(byUpdated)[0]||null}
+function v32180SavedAdaptationCandidate(row,block,blockIndex){if(!row?.adapted_text)return null;try{const parsed=v3230ParseSource(row.adapted_text)||[];return parsed[Number(blockIndex)]||parsed.find(candidate=>candidate?.block_type===block?.block_type)||null}catch{return null}}
+function v32180SavedAdaptationCredible(athlete,session,block,blockIndex){
+  const row=v32180SavedAdaptationRow(athlete,session);if(!row?.adapted_text)return{credible:true,row:null};
+  if(String(row.generation_method||"")==="v3203_individual_edits")return{credible:true,row,structured:true};
+  const candidate=v32180SavedAdaptationCandidate(row,block,blockIndex);if(!candidate)return{credible:true,row};
+  const main=v32180BlockMetres(block),adapted=v32180BlockMetres(candidate),ratio=main>0?adapted/main:1;
+  // Adaptations normally preserve or reduce workload. Do not reject a small
+  // intentional expansion; reject only the old-corruption shape: >160% and at
+  // least 250m more than the current canonical block.
+  const credible=!(adapted>main+250&&ratio>1.6);
+  return{credible,row,candidate,main,adapted,ratio};
+}
+const v32180AdaptationBlockBase=typeof v3131AdaptationBlock==="function"?v3131AdaptationBlock:null;
+if(v32180AdaptationBlockBase)v3131AdaptationBlock=function(athlete,session,block,blockIndex){
+  const check=v32180SavedAdaptationCredible(athlete,session,block,blockIndex);
+  if(!check.credible){
+    try{if(!window.v32180Guardian.staleAdaptations)window.v32180Guardian.staleAdaptations=new Set();window.v32180Guardian.staleAdaptations.add(check.row.id)}catch{}
+    const baseline=typeof v3142BaselineBlock==="function"?v3142BaselineBlock(athlete,session,block,blockIndex):null;
+    if(baseline)return{...baseline,source:`${baseline.source||"Current profile"} · stale pre-migration override ignored`};
+    const text=typeof v3106ActiveModification==="function"?v32180Text(v3106ActiveModification(athlete,session.session_date)):v32180Text(athlete?.modifications);
+    return text?{source:"Current profile · stale pre-migration override ignored",lines:[text],same:false}:{source:"Stale pre-migration override ignored",lines:[],same:true};
+  }
+  return v32180AdaptationBlockBase(athlete,session,block,blockIndex);
+};
+window.v32180Guardian={...(window.v32180Guardian||{}),savedAdaptationCredible:v32180SavedAdaptationCredible,blockMetres:v32180BlockMetres};
+
+// -----------------------------------------------------------------------------
+// v3.21.8 structured-session editor migration truth.
+// The Board may already be repaired from source while the inherited
+// session_blocks rows still contain 7x600/7x400 corruption. The editor must not
+// show or re-commit that stale tree. For a source whose canonical total agrees
+// with its explicit/planned total, the editor reads the same delivered tree as
+// Board. Block operations then commit that canonical tree through the current
+// evidence-safe writer.
+// -----------------------------------------------------------------------------
+const v32180StoredBlocksFallback=typeof v32160StoredBlocks==="function"?v32160StoredBlocks:null;
+function v32180EditorBlocks(session){
+  if(!session)return[];try{const canonical=(v3230DeliveredBlocks?.(session)||[]).map(v32180Clone),total=Number(v3230Total?.(canonical)||0),source=v3230PlanSource?.(session)||session.workout||"",explicit=Number(v3200ExplicitTotal?.(source)||0),planned=Number(session.planned_distance||0),close=(a,b)=>a>0&&b>0&&Math.abs(a-b)<=Math.max(50,b*.02);if(canonical.length&&total>0&&(!explicit||close(total,explicit))&&(!planned||close(total,planned)||explicit&&close(total,explicit)))return canonical}catch{}return v32180StoredBlocksFallback?.(session)||[]
+}
+if(v32180StoredBlocksFallback)v32160StoredBlocks=v32180EditorBlocks;
+
+v32RenderSessionBlocks=function(){
+  const host=$("sessionBlockList");if(!host)return;const session=(appState.sessions||[]).find(s=>s.id===($("editSessionId")?.value||selectedSession?.()?.id))||selectedSession?.();if(!session){host.innerHTML='<div class="help">Save or select a session first.</div>';return}const blocks=v32180EditorBlocks(session);
+  host.innerHTML=blocks.length?blocks.map((b,bi)=>`<div class="session-block-card"><div class="session-block-head"><div><div class="eyebrow">${escapeHtml(v32BlockLabel(b.block_type))}</div><strong>${escapeHtml(b.title||v32BlockLabel(b.block_type))}</strong><div class="list-meta">${escapeHtml(v32BlockSummary(b))}</div></div><span class="badge">${bi+1}</span></div><div class="session-block-items">${v34Array(b.items).map((item,i)=>`<div class="session-block-item"><span class="order">${i+1}</span><div><strong>${escapeHtml(item.raw||item.label||"Set line")}</strong>${item.instruction&&item.instruction!==item.raw?`<div class="list-meta">${escapeHtml(item.instruction)}</div>`:""}</div></div>`).join("")}</div><div class="session-block-actions"><button data-block-run="${escapeHtml(b.id)}">Coach on Deck</button><button class="secondary" data-block-edit="${escapeHtml(b.id)}">Edit</button><button class="secondary" data-block-up="${escapeHtml(b.id)}">↑</button><button class="secondary" data-block-down="${escapeHtml(b.id)}">↓</button><button class="secondary" data-block-copy="${escapeHtml(b.id)}">Duplicate</button><button class="danger-button" data-block-delete="${escapeHtml(b.id)}">Delete</button></div></div>`).join(""):'<div class="warning-box">No complete blocks saved yet.</div><div class="button-row"><button id="buildBlocksFromWorkoutBtn" type="button">Build blocks from current workout</button></div>';
+  host.querySelectorAll("[data-block-run]").forEach(button=>button.onclick=()=>{const blocks=v32180EditorBlocks(session),index=blocks.findIndex(b=>b.id===button.dataset.blockRun);appState.settings.selected_session_id=session.id;appState.settings.v3129_active_block_index=Math.max(0,index);saveState(appState);showView?.("deck");v3195ClearBoardCaches?.();v3201RequestBoardPaint?.(true)});
+  host.querySelectorAll("[data-block-edit]").forEach(button=>button.onclick=()=>v32FillBlockEditor?.(v32180EditorBlocks(session).find(b=>b.id===button.dataset.blockEdit)));
+  host.querySelectorAll("[data-block-up]").forEach(button=>button.onclick=()=>v32MoveBlock?.(button.dataset.blockUp,-1));host.querySelectorAll("[data-block-down]").forEach(button=>button.onclick=()=>v32MoveBlock?.(button.dataset.blockDown,1));host.querySelectorAll("[data-block-copy]").forEach(button=>button.onclick=()=>v32DuplicateSessionBlock?.(button.dataset.blockCopy));host.querySelectorAll("[data-block-delete]").forEach(button=>button.onclick=()=>v32DeleteSessionBlock?.(button.dataset.blockDelete));if($("buildBlocksFromWorkoutBtn"))$("buildBlocksFromWorkoutBtn").onclick=()=>v32ImportWorkoutBlocks?.(session);
+};
+
+v32DeleteSessionBlock=async function(id=$("sessionBlockId")?.value){const session=(appState.sessions||[]).find(s=>s.id===($("editSessionId")?.value||selectedSession?.()?.id))||selectedSession?.(),blocks=v32180EditorBlocks(session),block=blocks.find(row=>row.id===id);if(!session||!block)return;if(!confirm(`Delete ${block.title||v32BlockLabel(block.block_type)}?`))return;const next=blocks.filter(row=>row.id!==id).map(v32180Clone);v3207CommitBlocks?.(session,next,{source:"v3218_block_editor_delete",note:"Validated canonical block delete"});if($("sessionBlockEditor"))$("sessionBlockEditor").hidden=true;renderAll?.();updateStatus?.("Session block deleted and Board recalculated","good")};
+v32DuplicateSessionBlock=async function(id=$("sessionBlockId")?.value){const session=(appState.sessions||[]).find(s=>s.id===($("editSessionId")?.value||selectedSession?.()?.id))||selectedSession?.(),blocks=v32180EditorBlocks(session).map(v32180Clone),index=blocks.findIndex(row=>row.id===id);if(!session||index<0)return;const source=blocks[index],copy={...v32180Clone(source),id:uid("block"),title:`${source.title} copy`,items:v34Array(source.items).map(item=>({...v32180Clone(item),id:uid("block-line")})),source_import:"v3218_block_editor",updated_at:nowIso()};blocks.splice(index+1,0,copy);v3207CommitBlocks?.(session,blocks,{source:"v3218_block_editor_duplicate",note:"Validated canonical block duplicate"});v32FillBlockEditor?.(copy);renderAll?.()};
+v32MoveBlock=async function(id,direction){const session=(appState.sessions||[]).find(s=>s.id===($("editSessionId")?.value||selectedSession?.()?.id))||selectedSession?.(),blocks=v32180EditorBlocks(session).map(v32180Clone),i=blocks.findIndex(row=>row.id===id),j=i+Number(direction||0);if(!session||i<0||j<0||j>=blocks.length)return;[blocks[i],blocks[j]]=[blocks[j],blocks[i]];v3207CommitBlocks?.(session,blocks,{source:"v3218_block_editor_reorder",note:"Validated canonical block reorder"});renderAll?.()};
+window.v32180Guardian={...(window.v32180Guardian||{}),editorBlocks:v32180EditorBlocks};
+
+// -----------------------------------------------------------------------------
+// v3.21.8 calendar-context migration truth.
+// A date-level external event must not leak into every ordinary squad session's
+// plan cue. 15 Aug exposed this: National/AquaGym displayed "SCWC T32 Squad"
+// even though that is a separate 07:15–09:15 Parakiore coaching window.
+// -----------------------------------------------------------------------------
+const v32180CreateShellContextBase=typeof v3111CreateShell==="function"?v3111CreateShell:null;
+if(v32180CreateShellContextBase)v3111CreateShell=function(date,slot){const shell=v32180CreateShellContextBase(date,slot);if(!shell||slot?.external_squad_event||slot?.source!=="monthly_calendar")return shell;shell.plan_cue=[`Published monthly calendar: ${slot.calendar_status||"training"}`,slot.calendar_note||""].filter(Boolean).join(" · ");delete shell.calendar_event_title;delete shell.external_squad_event;return shell};
+
+function v32180RepairCalendarContext(){let changed=0;for(const session of appState.sessions||[]){let entry=null;try{entry=v312DateEntry?.(session.session_date)}catch{}if(!entry)continue;const venue=v32180Norm(session.venue),external=Boolean(session.external_squad_event),events=(entry.events||[]).filter(event=>String(event?.kind||"").toLowerCase()==="squad_event");if(!events.length||external)continue;let cue=v32180Text(session.plan_cue),next=cue;for(const event of events){const name=v32180Text(event.name),eventVenue=v32180Norm(event.venue),belongs=Boolean(name&&(v32180Norm(session.calendar_event_title)===v32180Norm(name)||(eventVenue&&venue&&eventVenue===venue&&/squad event|published squad event/i.test(cue))));if(belongs)continue;if(name)next=next.replace(new RegExp(`\\s*[·|]\\s*${name.replace(/[.*+?^${}()|[\\]\\]/g,"\\$&")}`,"ig"),"").replace(new RegExp(`${name.replace(/[.*+?^${}()|[\\]\\]/g,"\\$&")}\\s*[·|]?\\s*`,"ig"),"").trim()}next=next.replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·|·\s*$/g,"").trim();if(next!==cue){session.plan_cue=next||`Published monthly calendar: ${entry.status||"training"}`;if(session.calendar_event_title&&!events.some(event=>v32180Norm(event.name)===v32180Norm(session.calendar_event_title)&&v32180Norm(event.venue)===venue))session.calendar_event_title="";session.updated_at=nowIso();queueRecord?.("sessions",session.id);changed++}}
+  if(changed){saveState(appState);scheduleFastSync?.()}return changed;
+}
+const v32180LoadCalendarContextBase=typeof v312LoadPublishedCalendar==="function"?v312LoadPublishedCalendar:null;
+if(v32180LoadCalendarContextBase){v312LoadPublishedCalendar=async function(...args){const out=await v32180LoadCalendarContextBase(...args);v32180RepairCalendarContext();return out};window.v312LoadPublishedCalendar=v312LoadPublishedCalendar}
+const v32180CalendarContextRepaired=v32180RepairCalendarContext();
+window.v32180Guardian={...(window.v32180Guardian||{}),repairCalendarContext:v32180RepairCalendarContext,calendarContextRepaired:v32180CalendarContextRepaired};
+
+
+// =============================================================================
+// McLay Swimming OS v3.21.9 — PRELOAD TAKEOVER GUARDIAN
+// Correction-only layer over exact v3.21.8 packaged bytes.
+// - one native service-worker registration authority for every historical caller;
+// - old captured worker function objects cannot force a historical query/core;
+// - build/version diagnostics remain inherited from one current authority.
+// =============================================================================
+const V32190_VERSION="3.21.9";
+const V32190_BUILD="3.21.9-preload-takeover-guardian-20260816";
+const V32190_CORE="20260816-core3219";
+
+let v32190NativeRegister=null,v32190WorkerPromise=null;
+function v32190InstallWorkerGate(){
+  try{
+    if(!("serviceWorker" in navigator)||!navigator.serviceWorker)return false;
+    const box=navigator.serviceWorker,proto=Object.getPrototypeOf(box),native=proto&&typeof proto.register==="function"?proto.register.bind(box):null;
+    if(!native)return false;
+    v32190NativeRegister=native;
+    const gate=function(scriptURL,options){
+      const raw=String(scriptURL||"");
+      if(/(?:^|\/)sw\.js(?:\?|$)/i.test(raw))return native(`./sw.js?v=${V32190_CORE}`,{...(options||{}),updateViaCache:"none"});
+      return native(scriptURL,options);
+    };
+    try{Object.defineProperty(gate,"v32190_current_gate",{value:true})}catch{}
+    try{box.register=gate}catch{try{Object.defineProperty(box,"register",{value:gate,configurable:true,writable:true})}catch{}}
+    return box.register===gate||box.register?.v32190_current_gate===true;
+  }catch(error){console.warn("v3.21.9 worker gate",error);return false}
+}
+async function v32190Worker(){
+  if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return false;
+  if(v32190WorkerPromise)return v32190WorkerPromise;
+  v32190InstallWorkerGate();
+  v32190WorkerPromise=(async()=>{try{const r=await navigator.serviceWorker.register(`./sw.js?v=${V32190_CORE}`,{updateViaCache:"none"});await r.update();if(r.waiting)r.waiting.postMessage("SKIP_WAITING");return r}catch(error){console.warn("v3.21.9 service worker",error);return false}})();
+  const out=await v32190WorkerPromise;setTimeout(()=>{v32190WorkerPromise=null},2500);return out;
+}
+function v32190Brand(){
+  const title=`McLay Swimming OS — v${V32190_VERSION} Preload Takeover Guardian`,subtitle=`v${V32190_VERSION} · deterministic worker takeover · protected migration truth`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V32190_BUILD;try{localStorage.setItem("mclay_last_installed_build",V32190_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V32190_VERSION}`;badge.dataset.build=V32190_BUILD;badge.title=V32190_BUILD}
+  document.querySelectorAll("[data-v3207-sync-build]").forEach(el=>{el.textContent=V32190_BUILD;el.title=V32190_BUILD});
+}
+v32190InstallWorkerGate();
+for(const name of ["v32180Worker","v32170Worker","v32160Worker","v32150Worker","v32140Worker","v32130Worker","v32120Worker","v32110Worker","v3230Worker","v3229RegisterWorker","v3228RegisterWorker","v3227RegisterWorker","v3226RegisterWorker","v3225RegisterWorker","v3222RegisterWorker","v3221RegisterWorker","v3220RegisterWorker","v3219RegisterWorker","v3218RegisterWorker"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32190Worker}catch{}}
+for(const name of ["v32180Brand","v32170Brand","v32160Brand","v32150Brand","v32140Brand","v32130Brand","v32120Brand","v32110Brand","v3230Brand"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v32190Brand}catch{}}
+try{v32180BrandObserver?.disconnect?.()}catch{};const v32190BrandObserver=new MutationObserver(()=>queueMicrotask(v32190Brand));document.querySelector("title")&&v32190BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});document.querySelector(".header-subtitle")&&v32190BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+v32190Brand();try{v32170FixSyncDiagnostics?.()}catch{};setTimeout(()=>{v32190Brand();v32190Worker()},0);
+window.v32190Guardian={version:V32190_VERSION,build:V32190_BUILD,core:V32190_CORE,installWorkerGate:v32190InstallWorkerGate};
