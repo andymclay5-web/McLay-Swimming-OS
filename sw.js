@@ -1,7 +1,7 @@
 "use strict";
-const CACHE_NAME="mclay-swimming-os-v3-21-9-preload-takeover-guardian-20260816";
-const BUILD="3.21.9-preload-takeover-guardian-20260816";
-const REQUIRED=["./index.html","./styles.css?v=20260816-core3219","./app.js?v=20260816-core3219","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
+const CACHE_NAME="mclay-swimming-os-v3-21-10-runtime-migration-authority-20260816";
+const BUILD="3.21.10-runtime-migration-authority-phone-truth-20260816";
+const REQUIRED=["./index.html","./styles.css?v=20260816-core32110","./app.js?v=20260816-core32110","./icon-192.png","./icon-512.png","./monthly_calendar.json"];
 const OPTIONAL=["./","./config.js","./seed.js","./manifest.webmanifest"];
 async function cacheResponse(cache,key,response){if(response&&response.ok){await cache.put(key,response.clone())}return response}
 async function fetchFresh(request){return fetch(request,{cache:"no-store"})}

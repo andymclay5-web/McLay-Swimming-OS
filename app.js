@@ -26529,3 +26529,267 @@ for(const name of ["v32180Brand","v32170Brand","v32160Brand","v32150Brand","v321
 try{v32180BrandObserver?.disconnect?.()}catch{};const v32190BrandObserver=new MutationObserver(()=>queueMicrotask(v32190Brand));document.querySelector("title")&&v32190BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});document.querySelector(".header-subtitle")&&v32190BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
 v32190Brand();try{v32170FixSyncDiagnostics?.()}catch{};setTimeout(()=>{v32190Brand();v32190Worker()},0);
 window.v32190Guardian={version:V32190_VERSION,build:V32190_BUILD,core:V32190_CORE,installWorkerGate:v32190InstallWorkerGate};
+
+// =============================================================================
+// McLay Swimming OS v3.21.10 — RUNTIME MIGRATION AUTHORITY + PHONE TRUTH RECOVERY
+// Correction-only layer over exact v3.21.9 shipping bytes.
+// The 16 Aug phone gate proved that a stale v3.21.1 structured-plan capture could
+// outrank a correct current session.workout and render the old 27,800m tree.
+// This layer makes one current-source authority own Board/integrity/targets at
+// render time, validates cached structure against that source, preserves stable
+// block identity, restores post-parent zone patterns, and owns the actual phone
+// modified-card layout used by v3223/v32110.
+// =============================================================================
+const V321100_VERSION="3.21.10";
+const V321100_BUILD="3.21.10-runtime-migration-authority-phone-truth-20260816";
+const V321100_CORE="20260816-core32110";
+
+function v321100Text(value){return String(value??"").replace(/\r/g,"").trim()}
+function v321100Close(a,b){a=Number(a)||0;b=Number(b)||0;return a>0&&b>0&&Math.abs(a-b)<=Math.max(50,b*.02)}
+function v321100Explicit(raw){try{return Number(v3200ExplicitTotal?.(raw)||0)}catch{return 0}}
+function v321100SourceHash(raw){try{return v32110Hash?.(raw)||""}catch{return""}}
+
+// CURRENT session.workout is the live/delivered source of truth. The old immutable
+// plan snapshot remains history for plan-vs-actual reporting; it is not allowed to
+// compete with the current workout for Board ownership.
+const v321100PlanSourceBase=typeof v3230PlanSource==="function"?v3230PlanSource:null;
+v3230PlanSource=function(session){
+  const current=v321100Text(session?.workout);
+  if(current)return current;
+  return v321100Text(v321100PlanSourceBase?.(session)||"");
+};
+
+function v321100ZoneName(value){const x=v321100Text(value);if(/^(?:regeneration|regen|reg)$/i.test(x))return"Regeneration";if(/^(?:development|dev)$/i.test(x))return"Development";if(/^(?:overload|o\s*[/.-]?\s*l|ol)$/i.test(x))return"Overload";if(/^(?:threshold|thr)$/i.test(x))return"Threshold";if(/^(?:clearance|cl)$/i.test(x))return"Clearance";return""}
+function v321100ZoneSegments(text){
+  const t=v321100Text(text),out=[];
+  // Explicit ordinal syntax (#1 Reg, #2 Dev) means rep number, not a count.
+  const ordinal=/#\s*(\d{1,2})\s*[-:.]?\s*(regeneration|regen|reg|development|dev|overload|o\s*[/.-]?\s*l|ol|threshold|thr|clearance|cl)\b/ig;let m;
+  while((m=ordinal.exec(t))){const zone=v321100ZoneName(m[2]);if(zone)out.push({kind:"ordinal",rep:Number(m[1]),count:1,zone})}
+  if(out.length)return out;
+  // Coach shorthand such as "1-Reg", "1 Dev", "3 OL / 3 Threshold" is a
+  // count sequence. Expand only when the surrounding parent repeat count agrees.
+  const countRx=/(?:^|[\/·,;])\s*(\d{1,2})\s*[-:.]?\s*(regeneration|regen|reg|development|dev|overload|o\s*[/.-]?\s*l|ol|threshold|thr|clearance|cl)\b/ig;
+  while((m=countRx.exec(t))){const zone=v321100ZoneName(m[2]);if(zone)out.push({kind:"count",count:Number(m[1]),zone})}
+  return out;
+}
+
+// The actual Saturday board used "1-Reg / 1-Dev" style child cues and "15SR".
+// Treat those as coaching/zone instructions, never metres.
+const v321100PatternCueBase=typeof v3230PatternCue==="function"?v3230PatternCue:null;
+v3230PatternCue=function(line){const t=v321100Text(line);if(v321100PatternCueBase?.(t))return true;return v321100ZoneSegments(t).length>0};
+const v321100RestCueBase=typeof v3230RestCue==="function"?v3230RestCue:null;
+v3230RestCue=function(line){const t=v321100Text(line);return Boolean(v321100RestCueBase?.(t)||/^\s*(\d{1,2})\s*s\s*r\s*$/i.test(t)||/^\s*(\d{1,2})\s*sr\s*$/i.test(t))};
+const v321100RestSecondsBase=typeof v32110RestSeconds==="function"?v32110RestSeconds:null;
+v32110RestSeconds=function(text){const base=Number(v321100RestSecondsBase?.(text)||0);if(base)return base;const m=v321100Text(text).match(/^\s*(\d{1,2})\s*(?:s\s*r|sr)\s*$/i),n=Number(m?.[1]||0);return n>=5&&n<=90?n:0};
+
+function v321100AttachZonePatterns(blocks){
+  for(const block of blocks||[]){const items=Array.isArray(block?.items)?block.items:[];
+    for(let i=0;i<items.length;i++){
+      const parent=items[i],reps=Math.max(1,Number(parent?.reps)||1);if(parent?.runnable===false||reps<2)continue;
+      const segments=[];let rest=Number(parent.pace_rest)||0;
+      for(let j=i+1;j<items.length;j++){
+        const child=items[j];if(child?.runnable!==false)break;
+        const linked=child?.v3230_parent_index===i||child?.v32110_parent_index===i||child?.v32180_parent_index===i;
+        if(!linked&&Number.isInteger(child?.v3230_parent_index))continue;
+        const text=v321100Text(child?.raw||child?.instruction||child?.label),z=v321100ZoneSegments(text),r=v32110RestSeconds?.(text)||0;
+        if(z.length)segments.push(...z);if(r)rest=r;
+      }
+      if(rest)parent.pace_rest=rest;
+      if(!segments.length)continue;
+      const ordinal=segments.filter(s=>s.kind==="ordinal"),counts=segments.filter(s=>s.kind==="count");let pattern=[];
+      if(ordinal.length>=2&&ordinal.length===segments.length){const uniq=new Map();for(const s of ordinal)if(s.rep>=1&&s.rep<=reps)uniq.set(s.rep,{rep:s.rep,zone:s.zone,instruction:""});pattern=[...uniq.values()].sort((a,b)=>a.rep-b.rep);if(pattern.length!==reps)pattern=[]}
+      else if(counts.length===segments.length){let rep=1;for(const s of counts){for(let k=0;k<s.count&&rep<=reps;k++,rep++)pattern.push({rep,zone:s.zone,instruction:""})}if(pattern.length!==reps)pattern=[]}
+      if(pattern.length===reps)parent.v32110_rep_pattern=pattern;
+    }
+  }
+  return blocks;
+}
+
+// Ensure the hardened parser also attaches post-parent zone/count cues that older
+// structured captures or deterministic parsing left as separate rows.
+const v321100ParseSourceBase=typeof v3230ParseSource==="function"?v3230ParseSource:null;
+v3230ParseSource=function(raw){return v321100AttachZonePatterns(v321100ParseSourceBase?.(raw)||[])};
+
+function v321100StructuredCandidate(session,raw,currentBlocks){
+  const row=typeof v32110PlanCapture==="function"?v32110PlanCapture(session):null;if(!row)return null;
+  try{
+    const payload=JSON.parse(row.text_content),safe=v32110EnhanceBlocks?.(Array.isArray(payload?.blocks)?payload.blocks:[],raw)||[],blocks=v321100AttachZonePatterns(safe);
+    if(!blocks.length)return null;
+    const currentTotal=Number(v3230Total?.(currentBlocks)||0),cachedTotal=Number(v3230Total?.(blocks)||0),explicit=v321100Explicit(raw),hash=v321100SourceHash(raw),hashMatches=Boolean(hash&&payload?.raw_hash&&payload.raw_hash===hash),totalMatches=currentTotal>0&&v321100Close(cachedTotal,currentTotal),explicitMatches=!explicit||v321100Close(cachedTotal,explicit);
+    // A cache is only semantic acceleration. It never outranks current source.
+    if(hashMatches&&totalMatches&&explicitMatches)return blocks;
+  }catch(error){console.warn("v3.21.10 structured plan credibility",error)}
+  return null;
+}
+
+// Replace the v3.21.1 "structured capture always wins" rule. Parse the current
+// source first; a cached structure may be used only when its hash AND metres agree.
+v3230PlanBlocks=function(session){
+  if(!session)return[];const raw=v3230PlanSource(session),current=v3230ParseSource(raw)||[],cached=v321100StructuredCandidate(session,raw,current);return cached||current;
+};
+
+// Calendar contamination repair must happen when a real hydrated session is
+// about to render, not only once during JavaScript evaluation before hydration.
+function v321100RepairRuntimeSession(session){
+  if(!session)return false;let changed=false;
+  try{const before=v321100Text(session.plan_cue);v32180RepairCalendarContext?.();changed=before!==v321100Text(session.plan_cue)||changed}catch{}
+  return changed;
+}
+
+const v321100DeliveredBase=typeof v3230DeliveredBlocks==="function"?v3230DeliveredBlocks:null;
+v3230DeliveredBlocks=function(session){v321100RepairRuntimeSession(session);const blocks=v321100DeliveredBase?.(session)||[];return v321100AttachZonePatterns(blocks)};
+v3170BoardBlocks=v3230DeliveredBlocks;v3125BoardBlocks=v3230DeliveredBlocks;
+v3180ReconcileDistance=function(session){return Number(v3230Total?.(v3230DeliveredBlocks(session))||0)};
+
+// Integrity must judge the exact same source/tree that Board displays.
+v3204SessionIntegrity=function(session=selectedSession?.()){
+  if(!session)return{ok:false,total:0,reason:"No active session"};
+  const source=v3230PlanSource(session),blocks=v3230DeliveredBlocks(session),total=Number(v3230Total?.(blocks)||0),explicit=v321100Explicit(source),mismatch=Boolean(explicit&&!v321100Close(total,explicit)),invalid=typeof v3204InvalidLockedBlocks==="function"?v3204InvalidLockedBlocks(blocks):false;
+  return{ok:Boolean(blocks.length&&total>0&&!invalid&&!mismatch),total,explicit,invalid,mismatch,reason:invalid?"Coaching instructions are still being counted as distance":mismatch?`Parsed ${total}m but source says ${explicit}m`:total<=0?"No runnable distance":"Verified"};
+};
+
+// Make the runtime repair happen before context/emphasis HTML is composed too.
+const v321100PaintBase=typeof v3170PaintBoard==="function"?v3170PaintBoard:null;
+if(v321100PaintBase)v3170PaintBoard=function(...args){try{v321100RepairRuntimeSession(selectedSession?.())}catch{}return v321100PaintBase(...args)};
+const v321100RequestPaintBase=typeof v3201RequestBoardPaint==="function"?v3201RequestBoardPaint:null;
+if(v321100RequestPaintBase)v3201RequestBoardPaint=function(...args){try{v321100RepairRuntimeSession(selectedSession?.())}catch{}return v321100RequestPaintBase(...args)};
+
+// Actual phone Board uses v3223 line shell + v32110-mod-list. v3.21.6 targeted the
+// older v3205-mod-rail class, so the real CM card auto-placed below and became a
+// narrow word-breaking box. Own the classes the shipping renderer actually emits.
+const v321100PhoneStyle=document.createElement("style");v321100PhoneStyle.id="v321100PhoneTruthStyle";v321100PhoneStyle.textContent=`
+@media(max-width:900px){
+  .v3223-board-line:has(>.v32110-mod-list){display:grid!important;grid-template-columns:minmax(0,60fr) minmax(150px,40fr)!important;grid-template-areas:"main mod" "pb pb"!important;align-items:stretch!important;overflow:visible!important}
+  .v3223-board-line:has(>.v32110-mod-list)>.v3206-line-shell{grid-area:main!important;min-width:0!important;width:100%!important;border-right:1px solid #dfcf9c!important}
+  .v3223-board-line:has(>.v32110-mod-list)>.v32110-mod-list{grid-area:mod!important;display:grid!important;align-content:start!important;width:100%!important;min-width:0!important;padding:5px!important;margin:0!important;border-left:0!important;border-top:0!important;background:#fff8e8!important}
+  .v3223-board-line:has(>.v32110-mod-list)>.v3205-pb-strip{grid-area:pb!important}
+  .v3223-board-line:has(details[open]):has(>.v32110-mod-list){grid-template-columns:minmax(0,1fr)!important;grid-template-areas:"main" "mod" "pb"!important}
+  .v3223-board-line:has(details[open])>.v3206-line-shell{border-right:0!important}
+  .v3223-board-line:has(details[open])>.v32110-mod-list{border-top:1px solid #dfcf9c!important}
+  .v32110-mod-card{grid-template-columns:30px minmax(0,1fr) 34px!important;width:100%!important;min-width:0!important;max-width:100%!important;gap:5px!important}
+  .v32110-mod-work,.v32110-mod-work strong,.v32110-mod-work small{min-width:0!important;max-width:100%!important;white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;hyphens:none!important}
+}
+@media(max-width:360px){
+  .v3223-board-line:has(>.v32110-mod-list){grid-template-columns:minmax(0,57fr) minmax(132px,43fr)!important}
+  .v32110-mod-card{grid-template-columns:27px minmax(0,1fr) 30px!important;padding:5px!important}
+}
+`;document.head.appendChild(v321100PhoneStyle);
+
+function v321100Brand(){
+  const title=`McLay Swimming OS — v${V321100_VERSION} Runtime Migration Authority`,subtitle=`v${V321100_VERSION} · current-source Board truth · hydrated migration · phone modification layout`;
+  if(document.title!==title)document.title=title;const node=document.querySelector(".header-subtitle");if(node&&node.textContent!==subtitle)node.textContent=subtitle;
+  window.MCLAY_APP_BUILD=V321100_BUILD;try{localStorage.setItem("mclay_last_installed_build",V321100_BUILD)}catch{}
+  const badge=document.getElementById("v3207BuildBadge")||document.getElementById("v3208BuildBadge");if(badge){badge.textContent=`v${V321100_VERSION}`;badge.dataset.build=V321100_BUILD;badge.title=V321100_BUILD}
+}
+
+// One current service-worker authority on top of v3.21.9's native API gate.
+let v321100WorkerPromise=null;
+function v321100InstallWorkerGate(){try{if(!("serviceWorker" in navigator)||!navigator.serviceWorker)return false;const box=navigator.serviceWorker,proto=Object.getPrototypeOf(box),native=proto&&typeof proto.register==="function"?proto.register.bind(box):null;if(!native)return false;const gate=function(scriptURL,options){const raw=String(scriptURL||"");if(/(?:^|\/)sw\.js(?:\?|$)/i.test(raw))return native(`./sw.js?v=${V321100_CORE}`,{...(options||{}),updateViaCache:"none"});return native(scriptURL,options)};try{box.register=gate}catch{try{Object.defineProperty(box,"register",{value:gate,configurable:true,writable:true})}catch{}}return true}catch{return false}}
+async function v321100Worker(){if(!("serviceWorker" in navigator)||!location.protocol.startsWith("http"))return false;if(v321100WorkerPromise)return v321100WorkerPromise;v321100InstallWorkerGate();v321100WorkerPromise=(async()=>{try{const r=await navigator.serviceWorker.register(`./sw.js?v=${V321100_CORE}`,{updateViaCache:"none"});await r.update();if(r.waiting)r.waiting.postMessage("SKIP_WAITING");return r}catch(error){console.warn("v3.21.10 service worker",error);return false}})();const out=await v321100WorkerPromise;setTimeout(()=>{v321100WorkerPromise=null},2500);return out}
+
+// Prevent historical branding observers from winning after this release.
+try{v32190BrandObserver?.disconnect?.()}catch{};try{v32180FinalBrandObserver?.disconnect?.()}catch{};try{v32160FinalBrandObserver?.disconnect?.()}catch{};
+v321100Brand();v321100InstallWorkerGate();setTimeout(v321100Worker,0);
+window.v321100Guardian={version:V321100_VERSION,build:V321100_BUILD,core:V321100_CORE,source:v3230PlanSource,planBlocks:v3230PlanBlocks,delivered:v3230DeliveredBlocks,zoneSegments:v321100ZoneSegments,repairSession:v321100RepairRuntimeSession};
+
+// Captured historical brand callbacks can still fire after this tail has loaded.
+// Own the rendered identity reactively so any old title/subtitle mutation is
+// immediately restored to the current release, including window.MCLAY_APP_BUILD.
+const v321100BrandObserver=new MutationObserver(()=>queueMicrotask(v321100Brand));
+if(document.querySelector("title"))v321100BrandObserver.observe(document.querySelector("title"),{childList:true,subtree:true,characterData:true});
+if(document.querySelector(".header-subtitle"))v321100BrandObserver.observe(document.querySelector(".header-subtitle"),{childList:true,subtree:true,characterData:true});
+for(const name of ["v32190Brand","v32180Brand","v32170Brand","v32160Brand","v32150Brand","v32140Brand","v32130Brand","v32120Brand","v32110Brand","v3230Brand","v3229Brand","v3228Brand","v3227Brand","v3226Brand","v3225Brand","v3222Brand","v3221Brand","v3220Brand","v3219Brand","v3218Brand","v3217Brand","v3216Brand","v3215Brand","v3214Brand","v3213Brand","v3212Brand"]){try{if(typeof globalThis[name]==="function")globalThis[name]=v321100Brand}catch{}}
+v321100Brand();setTimeout(v321100Brand,50);setTimeout(v321100Brand,5600);
+
+// =============================================================================
+// v3.21.10 final phone-truth target correction
+// Per-repetition aerobic patterns must not be re-expanded through the parent
+// effective-line wrapper: doing so collapses Reg/Dev/OL synthetic reps back to
+// the same parent wording and can make every target identical.
+// The T400 coefficient library has explicit 10s/30s models only. For an authored
+// intermediate rest (for example 15s), retain the nearest supported pace model
+// selected by the existing engine, but calculate the deck send-off with the exact
+// authored rest and say so in the evidence text. No interpolated coefficient is
+// invented.
+// =============================================================================
+function v321100ExactRestSeconds(item,block){
+  const direct=Number(item?.pace_rest);if(Number.isFinite(direct)&&direct>=5&&direct<=60)return direct;
+  try{const r=Number(v3226RestForItem?.(item,block));if(Number.isFinite(r)&&r>=5&&r<=60)return r}catch{}
+  const text=[item?.raw,item?.instruction,item?.label].filter(Boolean).join(" "),m=text.match(/\b(\d{1,2})\s*(?:s|sec|secs|second|seconds)\s*(?:of\s*)?(?:rest|recovery)\b/i);const n=Number(m?.[1]||0);return n>=5&&n<=60?n:null;
+}
+function v321100SupportedRestModel(rest){return Number(rest)===30?30:10}
+function v321100ExactSendOff(targetSeconds,restSeconds,step=5){const target=Number(targetSeconds),rest=Number(restSeconds),unit=Math.max(1,Number(step)||5);if(!Number.isFinite(target)||target<=0||!Number.isFinite(rest)||rest<0)return null;return Math.ceil((Math.floor(target)+rest)/unit)*unit}
+function v321100PatternRows(session,block,item,blockIndex,itemIndex){
+  // v3140TargetRows is intentionally used here rather than v3205TargetRows.
+  // v3205 owns physical Board-line attachment semantics; a synthetic rep is not
+  // a physical Board line and must keep its own explicit zone.
+  const rows=typeof v3140TargetRows==="function"?v3140TargetRows(session,block,item,blockIndex,itemIndex):[];
+  const authored=v321100ExactRestSeconds(item,block);if(!authored)return rows;
+  return v34Array(rows).map(row=>{
+    if(row?.missing||!Number.isFinite(Number(row?.targetSeconds)))return row;
+    const cycle=v321100ExactSendOff(row.targetSeconds,authored,5);if(!Number.isFinite(cycle))return row;
+    const model=v321100SupportedRestModel(authored),source=String(row.secondary||row.source_label||row.source||"");
+    const note=authored===model?`${authored}s rest`:`${model}s T400 pace model · ${authored}s authored rest`;
+    return {...row,cycleSeconds:cycle,primary:`${v32110Clock?.(row.targetSeconds)||v380Clock?.(row.targetSeconds)||row.targetSeconds} on ${v32110Clock?.(cycle)||v380Clock?.(cycle)||cycle}`,secondary:[source,note].filter(Boolean).join(" · "),v321100_authored_rest:authored,v321100_model_rest:model};
+  });
+}
+function v321100PatternTargetsHtml(session,block,item,blockIndex,itemIndex){
+  const pattern=v34Array(item?.v32110_rep_pattern);if(!pattern.length)return"";
+  const cells=pattern.map(entry=>({entry,item:{...v32110PatternSynthetic(item,entry),pace_mode:"aerobic",race_distance:0,v321100_pattern_synthetic:true}})),byAthlete=new Map();
+  for(const cell of cells){for(const row of v321100PatternRows(session,block,cell.item,blockIndex,itemIndex)||[]){const id=row?.athlete?.id;if(!id)continue;if(!byAthlete.has(id))byAthlete.set(id,{athlete:row.athlete,rows:{}});byAthlete.get(id).rows[cell.entry.rep]=row}}
+  const athletes=[...byAthlete.values()].sort((a,b)=>rosterSort?.(a.athlete,b.athlete)||v32110Text(a.athlete?.full_name).localeCompare(v32110Text(b.athlete?.full_name))),labels=pattern.map(p=>p.zone==="Regeneration"?"Reg":p.zone==="Development"?"Dev":p.zone==="Overload"?"OL":p.zone==="Threshold"?"Thr":p.zone.slice(0,4));
+  return `<div class="v32110-pattern-targets"><div class="v32110-pattern-head"><b>Swim</b>${labels.map(x=>`<strong>${escapeHtml(x)}</strong>`).join("")}</div>${athletes.map(entry=>`<div class="v32110-pattern-row" title="${escapeHtml(entry.athlete?.full_name||"")}"><b>${escapeHtml(v3205Initials?.(entry.athlete)||"?")}</b>${pattern.map(p=>{const row=entry.rows[p.rep];return `<span><strong>${escapeHtml(v32110TargetNumber(row))}</strong><small>on ${escapeHtml(v32110SendNumber(row))}</small></span>`}).join("")}</div>`).join("")||'<p class="help">No T400 target evidence loaded for this set.</p>'}</div>`;
+}
+v32110PatternTargetsHtml=v321100PatternTargetsHtml;
+
+
+// =============================================================================
+// v3.21.10 final runtime phone gate corrections discovered by the full 390px DOM
+// fixture: modified swimmers must remain target-eligible, and the known legacy
+// SCWC T32 cue contamination must be repairable even if monthly_calendar.json is
+// not hydrated at the exact moment the old session record arrives.
+// =============================================================================
+function v321100PatternAthleteRows(session,block,item,blockIndex,itemIndex){
+  const plan=typeof v3129LanePlan==="function"?v3129LanePlan(session):{roster:[],assignments:new Map()},rows=[];
+  for(const athlete of plan.roster||[]){
+    let resolved={stroke:v3Stroke?.(item?.stroke||"Freestyle")||"Freestyle",source:"Set"};
+    try{resolved=v3140ResolveStroke?.(athlete,session,block,item,blockIndex,itemIndex)||resolved}catch{}
+    const zone=v3129Zone?.(item,block)||item?.pace_zone||"",stroke=resolved?.stroke||"Freestyle";
+    let pace=null;
+    try{
+      const spec=v382PaceSpec?.({...item,stroke,pace_mode:"aerobic",pace_zone:zone,race_distance:0},block,session)||{};
+      pace=v382RowTarget?.(athlete,{...spec,mode:"aerobic",zone,raceDistance:null,genericAnaerobic:false,stroke,repDistance:Number(item?.distance)||Number(spec.repDistance)||0,cycle:null});
+    }catch(error){pace={status:"missing",message:error?.message||"Target unavailable"}}
+    const ok=pace?.status==="ok",targetSeconds=Number(pace?.targetSeconds)||v3140TargetSeconds?.(pace?.primary),cycleText=String(pace?.primary||"").match(/\bon\s+(\d{1,2}:\d{2}(?:\.\d+)?)/i)?.[1],cycleSeconds=Number(pace?.cycleSeconds)||(cycleText?Number(v3Seconds?.(cycleText)):null);
+    rows.push({athlete,lane:plan.assignments?.get?.(athlete.id)||1,resolved,status:pace?.status||"missing",kind:"aerobic",source:pace?.source_label||pace?.method||"Lee T400",source_label:pace?.source_label||"Lee T400",targetSeconds:Number.isFinite(targetSeconds)?targetSeconds:null,cycleSeconds:Number.isFinite(cycleSeconds)?cycleSeconds:null,primary:pace?.primary||"",secondary:pace?.secondary||pace?.message||"Target needed",missing:!ok});
+  }
+  return rows;
+}
+v321100PatternRows=function(session,block,item,blockIndex,itemIndex){
+  let rows=v321100PatternAthleteRows(session,block,item,blockIndex,itemIndex),authored=v321100ExactRestSeconds(item,block);if(!authored)return rows;
+  return v34Array(rows).map(row=>{
+    if(row?.missing||!Number.isFinite(Number(row?.targetSeconds)))return row;
+    const cycle=v321100ExactSendOff(row.targetSeconds,authored,5);if(!Number.isFinite(cycle))return row;
+    const model=v321100SupportedRestModel(authored),source=String(row.secondary||row.source_label||row.source||""),note=authored===model?`${authored}s rest`:`${model}s T400 pace model · ${authored}s authored rest`;
+    return {...row,cycleSeconds:cycle,primary:`${v32110Clock?.(row.targetSeconds)||v380Clock?.(row.targetSeconds)||row.targetSeconds} on ${v32110Clock?.(cycle)||v380Clock?.(cycle)||cycle}`,secondary:[source,note].filter(Boolean).join(" · "),v321100_authored_rest:authored,v321100_model_rest:model};
+  });
+};
+
+function v321100StripKnownLegacyEventCue(session){
+  if(!session||session.external_squad_event)return false;const venue=v321100Text(session.venue).toLowerCase(),cue=v321100Text(session.plan_cue);if(!cue)return false;
+  // This exact contamination was created by the old 15-Aug calendar shell logic:
+  // the separate Parakiore SCWC T32 event was appended to every ordinary session.
+  if(venue!=="parakiore"&&/\bSCWC\s*T32\s*Squad\b/i.test(cue)){
+    let next=cue.replace(/\s*[·|]\s*SCWC\s*T32\s*Squad\b/ig,"").replace(/\bSCWC\s*T32\s*Squad\b\s*[·|]?\s*/ig,"").replace(/\s*·\s*·\s*/g," · ").replace(/^\s*·|·\s*$/g,"").trim();
+    session.plan_cue=next||"Published monthly calendar: adjusted";if(/SCWC\s*T32/i.test(v321100Text(session.calendar_event_title)))session.calendar_event_title="";session.updated_at=nowIso?.()||new Date().toISOString();try{queueRecord?.("sessions",session.id)}catch{};return true;
+  }
+  return false;
+}
+const v321100RepairRuntimeSessionPrev=v321100RepairRuntimeSession;
+v321100RepairRuntimeSession=function(session){let changed=false;try{changed=Boolean(v321100RepairRuntimeSessionPrev?.(session))||changed}catch{};try{changed=v321100StripKnownLegacyEventCue(session)||changed}catch{};if(changed){try{saveState?.(appState)}catch{}}return changed};
+// Rebind the current delivered/paint owners again because the previous closures
+// captured the earlier repair function object.
+const v321100DeliveredBeforeFinalRepair=v3230DeliveredBlocks;
+v3230DeliveredBlocks=function(session){v321100RepairRuntimeSession(session);return v321100DeliveredBeforeFinalRepair(session)};
+v3170BoardBlocks=v3230DeliveredBlocks;v3125BoardBlocks=v3230DeliveredBlocks;
+
