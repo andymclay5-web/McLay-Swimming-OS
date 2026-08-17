@@ -6,6 +6,7 @@ on:
     paths:
       - 'engines/**'
       - 'tests/session-truth-contract.test.js'
+      - 'tests/session-truth-debug.js'
       - 'ENGINE_CATALOG.md'
       - 'REBUILD_ENGINE_CONTRACTS.md'
       - '.github/workflows/rebuild-engine-contracts.yml'
@@ -21,5 +22,7 @@ jobs:
           node-version: '20'
       - name: Session Truth syntax
         run: node --check engines/session-truth.js
+      - name: Session Truth diagnostics
+        run: node tests/session-truth-debug.js
       - name: Session Truth isolated contract
         run: node tests/session-truth-contract.test.js
