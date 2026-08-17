@@ -115,6 +115,20 @@ test('equal-count child sets become one-pass phases',()=>{
  const s=E.parse(`Post set\n16 x 50 @ 1:15\n8 x 50 Bands Only\n4 Build\n4 Descend 1-4\n8 x 50 Swim\n#4 + #8 @ 100 Pace`,id),x=block(s,'post_set').items[0];assert.equal(E.totalDistance(s),800);assert.equal(x.phases.length,2);assert.equal(x.pattern.length,0);assert.deepEqual(x.phases[1].repInstructions.map(r=>r.rep),[4,8]);
 });
 
+test('X2 repeats the preceding parent segment and following rest applies to all children',()=>{
+ const s=E.parse(`Main Set\n300 Regeneration\n200 Development\n100 Overload\nX2\n10s Rest`,id),b=block(s,'main_set');assert.equal(E.blockDistance(b),1200);assert.equal(b.items.length,1);assert.equal(b.items[0].kind,'group');assert.equal(b.items[0].rounds,2);assert.deepEqual(b.items[0].items.map(x=>x.restSeconds),[10,10,10]);
+});
+
+test('Repeat x2 belongs only to Main set and stops at Post-main heading',()=>{
+ const src=`Warm-up\n800 Choice\nPre-set\n6 x 100 Choice\nMain set\n5 x 100 Threshold\n400 Easy\nRepeat x2\nPost-main set\n8 x 200 Choice\nWarm-down\n400 Easy\nTOTAL: 5200m`;
+ const s=E.parse(src,id);assert.equal(E.totalDistance(s),5200);assert.deepEqual(s.blocks.map(b=>b.title),['Warm-up','Pre-set','Main set','Post-main set','Warm-down']);assert.deepEqual(s.blocks.map(b=>E.blockDistance(b)),[800,600,1800,1600,400]);assert.equal(block(s,'main_set').items[0].rounds,2);assert.equal(s.blocks.find(b=>b.title==='Post-main set').items[0].kind,'set');
+});
+
+test('natural out-of-order dictation becomes canonical coaching order with local repeat',()=>{
+ const src='Main set, six hundreds threshold with ten seconds rest, then two hundred easy, and repeat that three times. Warm-up will be four hundred choice. After that pre-set eight fifties build on a minute. Warm-down two hundred easy.';
+ const s=E.parse(src,id);assert.equal(E.totalDistance(s),3400);assert.deepEqual(s.blocks.map(b=>b.type),['warm_up','pre_set','main_set','warm_down']);assert.deepEqual(s.blocks.map(b=>E.blockDistance(b)),[400,400,2400,200]);const main=block(s,'main_set');assert.equal(main.items[0].kind,'group');assert.equal(main.items[0].rounds,3);assert.equal(main.items[0].items[0].reps,6);assert.equal(main.items[0].items[0].distance,100);assert.equal(main.items[0].items[0].restSeconds,10);assert.equal(block(s,'pre_set').items[0].cycleSeconds,60);
+});
+
 test('round scope ends on blank line instead of multiplying reset work',()=>{
  const s=E.parse(`Main Set\n2 Rounds:\n4 x 100 Free Threshold 10 sr\n200 Easy\n\n100 Easy reset`,id),b=block(s,'main_set');assert.equal(b.items.length,2);assert.equal(b.items[0].kind,'group');assert.equal(E.blockDistance(b),1300);
 });
@@ -128,12 +142,20 @@ test('bare parent distance absorbs exact composition once',()=>{
  s=E.parse(`Warm up\n4 x 300\n200 Free\n100 Reverse IM`,id);b=block(s,'warm_up');assert.equal(E.blockDistance(b),1200);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,2);
 });
 
+test('parenthetical makeup remains inside parent set without phantom metres',()=>{
+ const s=E.parse(`Pre set\n4 x 50 (25 Build / 25 Underwater) @ 1:00`,id),x=block(s,'pre_set').items[0];assert.equal(E.totalDistance(s),200);assert.equal(x.composition.length,2);assert.deepEqual(x.composition.map(c=>c.distance),[25,25]);
+});
+
 test('labelled sequential work is never swallowed as composition',()=>{
  const s=E.parse(`Main Set\n400 Pull\n200 Easy\n200 Free`,id),b=block(s,'main_set');assert.equal(E.blockDistance(b),800);assert.equal(b.items.length,3);assert.equal(b.items[0].composition.length,0);
 });
 
 test('rest and short-distance cues never create phantom metres',()=>{
  const s=E.parse(`Pre set\n4 x 25\n15m Max\n10 sr`,id),x=block(s,'pre_set').items[0];assert.equal(E.totalDistance(s),100);assert(x.cues.includes('15m Max'));assert.equal(x.restSeconds,10);
+});
+
+test('all with 30 sr applies authored rest to the preceding segment',()=>{
+ const s=E.parse(`Main Set\n300 Regeneration\n200 Development\n100 Overload\nall with 30 sr period`,id),b=block(s,'main_set');assert.deepEqual(b.items.map(x=>x.restSeconds),[30,30,30]);assert.equal(E.blockDistance(b),600);
 });
 
 test('cycle shorthand survives as authored timing',()=>{
@@ -159,6 +181,10 @@ test('#1 stroke shorthand is not misread as rep number one',()=>{
 
 test('unknown coaching language is retained verbatim and contributes zero metres',()=>{
  const line='Hold shape through the final 15m and feel the water';const s=E.parse(`Main Set\n5 x 100 Free Threshold 10 sr\n${line}`,id),x=block(s,'main_set').items[0];assert.equal(E.totalDistance(s),500);assert(x.cues.includes(line));
+});
+
+test('non-session text with zero runnable distance fails validation',()=>{
+ const s=E.parse('Tuesday morning notes only, remember to speak to the group.',id),v=E.validate(s);assert.equal(E.totalDistance(s),0);assert.equal(v.ok,false);assert(v.errors.includes('No runnable distance'));
 });
 
 test('written mismatch fails validation instead of being silently accepted',()=>{
