@@ -30,7 +30,15 @@ Each engine has:
 
 No screen or late-loaded script is allowed to redefine another engine's domain functions.
 
-## Engine sequence
+A consumer may request information from another engine, but it may not duplicate that engine's calculation or search its storage directly.
+
+## Canonical flow
+
+`Plan context -> Session intake -> Session Truth -> Session Lifecycle -> Attendance -> Evidence/Results -> Targets + Adaptation -> Board/TV/Swimmer/Assistant projections -> Capture/Delivered truth -> Dose analysis -> Reporting/Learning -> next plan decision`
+
+The canonical session is interpreted once. Every later surface consumes that understood structure rather than reparsing coach language.
+
+## Engine sequence and contracts
 
 ### Engine 1 — Session Truth
 
@@ -45,6 +53,7 @@ Owns:
 - authored rest/cycle;
 - composition;
 - repeating rep patterns;
+- rep-specific instructions;
 - cues;
 - race-pace intent metadata;
 - written-total comparison;
@@ -76,6 +85,8 @@ Hard regressions include:
 - `12 x 50 Total` = summary metadata, zero extra metres;
 - `12 x 50` plus `1 Scull / 1 Drill / 1 Swim` = 600m once;
 - `16 x 50` plus `8 x 50 Bands / 8 x 50 Swim` = parent 800m with two child phases, not 1,600m;
+- `1 @ 200 Pace` survives as rep-specific race intent;
+- `#4 + #8 @ 100 Pace` survives as rep-specific race intent;
 - unknown coaching language preserved;
 - no phantom metres from `10 sr`, `15m Max`, cues, composition or summary lines.
 
@@ -88,12 +99,14 @@ Owns:
 - draft IDs;
 - explicit create/replace/edit transactions;
 - original-plan history;
-- delivered/current truth revisions.
+- delivered/current truth revisions;
+- local-first canonical session persistence.
 
 Forbidden:
 - reparsing or rewriting an existing saved session merely because the app loaded;
 - clearing attendance on parser/version changes;
-- making a draft authoritative until the coach explicitly creates/replaces a session.
+- making a draft authoritative until the coach explicitly creates/replaces a session;
+- changing date/squad/slot identity without explicit coach action.
 
 ### Engine 3 — Attendance
 
@@ -103,20 +116,51 @@ Owns attendance records only.
 
 Targets/adaptations/Board read attendance; they never infer it from previous sessions.
 
-### Engine 4 — Evidence / Performance Data
+### Engine 4 — Evidence Retrieval
 
-Purpose: retrieve verified athlete evidence through one interface.
+Purpose: provide one verified read interface over athlete evidence regardless of where it is physically stored.
 
 Owns retrieval contracts for:
-- T400;
+- T400 and other test evidence;
 - PB/event history;
 - course conversion source;
-- timed tests;
-- coach-entered verified evidence.
+- timed-set evidence;
+- coach-entered verified results;
+- evidence provenance and recency.
 
-Legacy/local/cloud storage locations are implementation details behind this engine. Consumers never search stores themselves.
+Legacy/local/cloud storage locations are implementation details behind this engine. Consumers never search those stores themselves.
 
-### Engine 5 — Target Engine
+Forbidden:
+- calculating training targets;
+- calculating pathway positions;
+- rewriting result history because a consumer requested it.
+
+### Engine 5 — Results / Performance Pathway
+
+Purpose: verified swimmer evidence -> swimmer performance and pathway answers.
+
+Owns:
+- current PB per event/course;
+- qualification standards and gap-to-standard;
+- pathway/points ladder position;
+- closest/furthest events;
+- progress history and meaningful trend;
+- meet/event readiness facts;
+- swimmer profile performance summary.
+
+Reads:
+- Evidence Retrieval;
+- meet standards/pathway rules;
+- swimmer identity/classification where applicable.
+
+Outputs deterministic answer objects that Times, Swimmer Device, Coach profile and Reports may display.
+
+Forbidden:
+- Board rendering;
+- changing PB/result evidence;
+- creating training targets directly.
+
+### Engine 6 — Target Engine
 
 Purpose: canonical set + athlete + evidence -> target prescription.
 
@@ -124,14 +168,18 @@ Owns:
 - aerobic T400 calculations;
 - race-pace/PB calculations;
 - practical send-off calculation;
+- rep-specific target rows;
 - evidence provenance;
 - explicit missing-evidence result.
 
+Reads Evidence Retrieval and, where useful, Results/Pathway for event/PB context.
+
 Forbidden:
 - changing the canonical set;
-- inventing targets when evidence is missing.
+- inventing targets when evidence is missing;
+- searching local/cloud stores itself.
 
-### Engine 6 — Adaptation Engine
+### Engine 7 — Adaptation Engine
 
 Purpose: canonical set + athlete profile/constraints -> athlete prescription.
 
@@ -158,11 +206,11 @@ Forbidden:
 - Board-specific formatting;
 - blindly applying a volume percentage when it destroys the set.
 
-### Engine 7 — Board Projection
+### Engine 8 — Board Projection
 
 Purpose: present canonical squad work + attendance + target results + actual modifications compactly.
 
-The Board is a projection only.
+The Board is a projection only. It does not interpret coach language and does not calculate targets or modifications.
 
 Rules:
 - whole session visible compactly;
@@ -171,23 +219,92 @@ Rules:
 - common group work left/main;
 - only genuine modifications shown beside it;
 - no swimmer shown unless present/selected for that session;
-- target evidence is requested from Target Engine, never calculated in Board code.
+- target evidence is requested from Target Engine, never calculated in Board code;
+- an engine failure is contained: squad work still renders and the failed derived item is visibly marked unavailable.
 
-### Engine 8 — Capture / Evidence Write
+### Engine 9 — Capture / Evidence Write
 
 Purpose: attach note/voice/photo/video/timing evidence to exact session/block/set/athlete identity, local-first.
 
-### Engine 9 — Plan Context
+Owns:
+- evidence record creation;
+- media/local save acknowledgement;
+- stable links to session/block/set/athlete/coach/time;
+- later cloud replication state.
 
-Purpose: annual/season -> phase -> week -> session purpose/stimulus context.
+Forbidden:
+- changing session prescription;
+- deciding what an observation means.
 
-It informs session creation/review without rewriting delivered session truth.
+### Engine 10 — Delivered Session / Finish
 
-### Engine 10 — Reporting / Learning
+Purpose: record what was actually delivered from canonical session revisions plus explicit Finish state.
 
-Purpose: project stored truth into athlete, squad, coach and programme reports.
+Owns:
+- delivered-through point;
+- planned-vs-delivered structural record;
+- live edit journal linkage;
+- final delivered session snapshot.
+
+Forbidden:
+- silently regenerating delivered truth from the original plan.
+
+### Engine 11 — Plan Context
+
+Purpose: annual/season -> phase/cycle -> week -> session purpose/stimulus context.
+
+Owns the planning hierarchy and intended emphasis.
+
+It informs session creation and review without rewriting delivered session truth.
+
+### Engine 12 — Session Dose / Coaching Analysis
+
+Purpose: canonical planned session + delivered session + attendance/evidence -> objective description of the training dose actually delivered.
+
+Owns:
+- distance/duration composition by training system/stimulus;
+- primary versus supporting work;
+- recovery/reset context so recovery metres do not distort the session's intended tone;
+- athlete-specific delivered dose where modifications materially change it;
+- planned-versus-delivered comparison;
+- week/phase exposure accumulation;
+- evidence-linked coaching flags such as under/over-exposure, repeated missed work, or a mismatch with the planned emphasis.
+
+Reads:
+- Plan Context;
+- Session Truth;
+- Delivered Session;
+- Attendance;
+- Adaptation outputs actually delivered;
+- captured/test evidence where relevant.
+
+Outputs analysis facts and coaching prompts. It does not write the session or plan.
+
+This is where the existing 'dose' logic belongs. Coach Hub and Reports display these answers; they do not independently classify the session.
+
+### Engine 13 — Reporting / Learning
+
+Purpose: project stored truth and analysis into athlete, squad, coach and programme reports.
+
+Owns report assembly only.
+
+Examples:
+- swimmer progression/pathway report;
+- squad exposure and attendance report;
+- session/week/cycle dose report;
+- planned versus delivered report;
+- coach behaviour/observation report;
+- evidence-linked next-action summary.
+
+Reads Results/Pathway, Session Dose/Analysis, Attendance, Capture evidence and Plan Context.
 
 Reports write no coaching truth.
+
+### Engine 14 — Presentation Surfaces
+
+Coach Board, TV Board, Individual Swimmer Device, Assistant Coach, Times and Meet views are separate presentation channels over the engines above.
+
+They may choose different information density and privacy rules, but they do not own duplicate swimming logic.
 
 ## Integration rule
 
@@ -198,19 +315,24 @@ An engine does not enter the production composition root until:
 3. side-effect tests pass;
 4. previous owner for that domain is removed, not wrapped;
 5. no second implementation remains later in the load order;
-6. phone acceptance is completed where the engine affects deck use.
+6. failure behaviour is explicit and contained;
+7. phone acceptance is completed where the engine affects deck use.
 
 ## Immediate rebuild order
 
 1. finish Session Truth grammar and regression corpus;
 2. build Session Lifecycle so drafts and saved sessions cannot compete;
-3. build one Evidence API for T400/PB/results;
-4. port Target Engine behind that API;
-5. rebuild Adaptation around coaching rules rather than percentage scaling;
-6. connect compact Board as a pure projection;
-7. add Attendance before target/adaptation projection;
-8. only then reconnect capture, Finish, swimmer/TV/assistant surfaces and reporting.
+3. build one Evidence Retrieval API for T400/PB/results;
+4. build Results/Pathway over that evidence API;
+5. port Target Engine behind Evidence/Results contracts;
+6. rebuild Adaptation around coaching rules rather than percentage scaling;
+7. build Attendance as exact current-session truth;
+8. connect compact Board as a pure projection;
+9. reconnect Capture and Delivered/Finish truth;
+10. rebuild Plan Context and Session Dose/Analysis;
+11. build Reports/Learning over those engines;
+12. then expose TV, Swimmer, Assistant and Times surfaces over the same contracts.
 
 ## Release gate
 
-The rebuild branch must not replace `main` until the canonical owner map shows exactly one owner for Parser, Session Lifecycle, Attendance, Evidence, Targets, Adaptation and Board projection, and all protected sessions pass their regression suite.
+The rebuild branch must not replace `main` until the canonical owner map shows exactly one owner for Session Truth, Session Lifecycle, Attendance, Evidence Retrieval, Results/Pathway, Targets, Adaptation, Board Projection, Capture, Delivered Truth, Plan Context, Session Dose/Analysis and Reporting/Learning, and all protected historical sessions pass their regression suites.
