@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardRenderer=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.1.1';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=v=>esc(text(v));
@@ -62,7 +62,7 @@
     return`<div class="msos-mod-phase-targets">${rows.map(t=>renderTarget({...t,label:`P${t.phaseIndex}`})).join('')}</div>`;
   }
   function renderModification(m={}){
-    const meta=workMeta(m.work),target=m.target&&m.target.status!=='none'?`<div class="msos-mod-target">${esc(targetText(m.target))}</div>`:'',phaseTargets=renderModifiedPhaseTargets(m.phaseTargets||[]);
+    const meta=workMeta(m.work),target=m.target&&m.target.status!=='none'?`<div class="msos-mod-target">${renderTarget({...m.target,label:'Target'})}</div>`:'',phaseTargets=renderModifiedPhaseTargets(m.phaseTargets||[]);
     return`<div class="msos-mod-card ${m.status==='error'?'is-error':''}" data-athlete-id="${attr(m.athleteId)}"><div class="msos-mod-head"><strong>${esc(m.label||m.athleteName)}</strong><span>${esc(m.attendanceStatus)}</span></div><div class="msos-mod-work">${esc(workLabel(m.work))}</div>${meta?`<div class="msos-work-meta">${esc(meta)}</div>`:''}${text(m.reason)?`<div class="msos-mod-reason">${esc(m.reason)}</div>`:''}${target}${phaseTargets}</div>`;
   }
   function renderCaptures(captures={},context={}){
