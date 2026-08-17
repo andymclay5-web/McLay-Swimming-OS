@@ -1,7 +1,7 @@
 'use strict';
-const BUILD='v4-deck-emergency-20260817c';
-const CACHE='mclay-swimming-os-v4-deck-emergency-20260817c';
-const REQUIRED=['./','./index.html','./manifest.webmanifest','./config.js','./seed.js','./styles.css?v=20260816-core401','./v4-correct.css?v=20260817-transcriptfinal','./app.js?v=20260816-core401','./v4-correct.js?v=20260817-transcriptfinal','./v4-deck-recovery.js?v=20260817-poolside','./v4-deck-hotfix.js?v=20260817b','./v4-deck-emergency.js?v=20260817c','./icon-192.png','./icon-512.png','./monthly_calendar.json'];
+const BUILD='v4-deck-final-20260817d';
+const CACHE='mclay-swimming-os-v4-deck-final-20260817d';
+const REQUIRED=['./','./index.html','./manifest.webmanifest','./config.js','./seed.js','./styles.css?v=20260816-core401','./v4-correct.css?v=20260817-transcriptfinal','./app.js?v=20260816-core401','./v4-correct.js?v=20260817-transcriptfinal','./v4-deck-recovery.js?v=20260817-poolside','./v4-deck-hotfix.js?v=20260817b','./v4-deck-emergency.js?v=20260817c','./v4-deck-final.js?v=20260817d','./icon-192.png','./icon-512.png','./monthly_calendar.json'];
 self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open(CACHE);await c.addAll(REQUIRED);self.skipWaiting()})()));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{for(const k of await caches.keys())if(k.startsWith('mclay-swimming-os-v4-')&&k!==CACHE)await caches.delete(k);await self.clients.claim()})()));
 self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET')return;if(/\/rest\/v1\/|\/auth\/v1\/|\/storage\/v1\/|\/functions\/v1\//.test(u.pathname))return;if(e.request.mode==='navigate'){e.respondWith((async()=>{try{const r=await fetch(e.request);const c=await caches.open(CACHE);c.put('./index.html',r.clone());return r}catch{return(await caches.match('./index.html'))||Response.error()}})());return}e.respondWith((async()=>{const cached=await caches.match(e.request);if(cached)return cached;try{const r=await fetch(e.request);if(r.ok){const c=await caches.open(CACHE);c.put(e.request,r.clone())}return r}catch{return Response.error()}})())});
