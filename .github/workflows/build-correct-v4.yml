@@ -1,0 +1,48 @@
+name: Build Correct Version 4
+on:
+  push:
+    paths:
+      - '.v4build/go'
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify transfer chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '6ac374a543c65425da9fc0d5205169797a6429a6e9bc138279834712fc1dce1a  .v4build/part01.b64' | sha256sum -c -
+          echo 'cdc2a391cfd91174b533cd38c09fcfb156a5097518df3742dbe991099b2e7105  .v4build/part02.b64' | sha256sum -c -
+          echo '588e65782f306694dd5b2f43e955e55d805abd73f3dde1a4b42b1e719eb2ed27  .v4build/part03.b64' | sha256sum -c -
+          echo 'd75ee07d5e6b219129ba989c5b90df1f0aceb9e08e77a51bb6720f858b8fe9e2  .v4build/part04.b64' | sha256sum -c -
+          echo 'c4c3b0c21305c535c069a1647e1b6dcb00bf80661347962db5ddac88ee318087  .v4build/part05.b64' | sha256sum -c -
+          echo '1c13c55d23f7d0c83077660da7288f46a11237572a46396906df762d9f46b630  .v4build/part06.b64' | sha256sum -c -
+          echo '8b507cb96f7ad62112a3d00e9735e12dc00452c5c7b26dc8622842da89c9842b  .v4build/part07.b64' | sha256sum -c -
+          echo 'd77ace4380cd6a02ccab536486292baa4dc370fc1df8c0f45d993a4da9c3a110  .v4build/part08.b64' | sha256sum -c -
+          echo '0a0e77b92e1aa6177725bb82e66864548384eaa5e69a39eb8dbf38e8e6343daf  .v4build/part09.b64' | sha256sum -c -
+          echo '1bbe132bf830e85e4881c0bd2393503aab0cd5802ed346a842bb3aabcffc9e36  .v4build/part10.b64' | sha256sum -c -
+      - name: Reconstruct and validate correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .v4build/part*.b64 | tr -d '\n' | base64 -d > v4-correct.js
+          test "$(wc -c < v4-correct.js)" = '84097'
+          echo '18788d42cc3004b3052b3df1ed376efdda348e0b40e45809ae3ae6b3ae1a7aee  v4-correct.js' | sha256sum -c -
+          node --check v4-correct.js
+          grep -q "Poolside voice evidence: audio local-first + transcript" v4-correct.js
+          grep -q "M.BUILD='v4-correct-20260817-transcriptfinal'" v4-correct.js
+      - name: Commit validated correction and remove transfer material
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .v4build
+          git rm .github/workflows/build-correct-v4.yml
+          git add v4-correct.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Build validated Correct Version 4 correction source'
+          git push
