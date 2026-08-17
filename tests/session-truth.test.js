@@ -210,3 +210,33 @@ test('Charlotte aerobic volume modifies but short quality stays together',()=>{
  s=E.parse(`Main Set
 4 x 25 Max @ 1:00`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,state,s);assert.equal(m.reps,4);
 });
+
+test('legacy training-test evidence merges into Morning Coaching state',()=>{
+ const st={athletes:[{id:'mk',full_name:'McKenzie Drage'}],trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],coachResults:[]};
+ C.internals.mergeLegacyEvidence(st,{training_test_types:[{id:'tt',test_key:'t400_freestyle'}],training_test_results:[{id:'r',athlete_id:'mk',test_type_id:'tt',result_seconds:450.1,result_date:'2026-06-01',pool_course:'SCM',valid_for_anchor:true}]});
+ const a=C.t400(st.athletes[0],st,'SCM','Freestyle');assert(a);assert.equal(a.result_seconds,450.1);
+});
+
+test('T400 anchor uses latest valid result, not fastest historical result',()=>{
+ const ath={id:'a',full_name:'A'},st={trainingTestTypes:[{id:'tt',test_key:'t400_freestyle'}],trainingTestResults:[{id:'old',athlete_id:'a',test_type_id:'tt',result_seconds:300,result_date:'2026-01-01',pool_course:'SCM',valid_for_anchor:true},{id:'new',athlete_id:'a',test_type_id:'tt',result_seconds:320,result_date:'2026-08-01',pool_course:'SCM',valid_for_anchor:true}]};
+ assert.equal(C.t400(ath,st,'SCM','Freestyle').id,'new');
+});
+
+test('McKenzie continuous volume returns to start end in SCM',()=>{
+ const ath={id:'mk',full_name:'McKenzie Drage'},st={adaptationProfiles:[],adaptationOverrides:[]};
+ let s=E.parse(`Main Set
+400 Pull`,id),x=s.blocks[0].items[0],m=C.adaptItem(x,ath,st,s);assert.equal(m.distance,300);
+ s=E.parse(`Warm down
+200 Easy Choice`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,st,s);assert.equal(m.distance,150);
+});
+
+test('McKenzie pattern-dependent short sets preserve the full pattern',()=>{
+ const ath={id:'mk',full_name:'McKenzie Drage'},st={adaptationProfiles:[],adaptationOverrides:[]};
+ let s=E.parse(`Main Set
+4 x 100 IM Descend 1-4
+@ 1:40`,id),x=s.blocks[0].items[0],m=C.adaptItem(x,ath,st,s);assert.equal(m.reps,4);
+ s=E.parse(`Main Set
+2 x 100 Paddles + Fins @ 2:00
+1 Build
+1 Fast`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,st,s);assert.equal(m.reps,2);
+});
