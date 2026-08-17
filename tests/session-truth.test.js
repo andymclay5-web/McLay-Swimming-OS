@@ -96,7 +96,7 @@ TOTAL: 5,400m`;
  assert.equal(E.blockDistance(block(s,'warm_up')),1200);assert.equal(E.blockDistance(block(s,'pre_set')),600);assert.equal(E.blockDistance(block(s,'main_set')),2600);assert.equal(E.blockDistance(block(s,'post_set')),800);assert.equal(E.blockDistance(block(s,'warm_down')),200);
  const pre=block(s,'pre_set');assert.equal(pre.items[0].kind,'group');assert.equal(pre.items[0].rounds,4);assert.equal(pre.items[0].items.length,1);const p=pre.items[0].items[0];assert.equal(p.reps,3);assert.equal(p.pattern.length,2);assert.equal(p.repInstructions.find(x=>x.rep===3).raceIntent.distance,200);assert(pre.items.some(x=>x.role==='summary'&&x.summaryMetres===600));
  const main=block(s,'main_set');const im=main.items.find(x=>x.kind==='set'&&x.reps===4&&x.distance===100&&x.stroke==='IM');assert.deepEqual(im.cycleOptions,[100,110]);const bf=main.items.find(x=>x.kind==='set'&&x.reps===2&&x.distance===100);assert.equal(bf.pattern.length,2);assert.deepEqual(bf.pattern.map(x=>x.text),['Build','Fast']);
- const post=block(s,'post_set');assert.equal(post.items.length,1);const parent=post.items[0];assert.equal(parent.reps,16);assert.equal(parent.phases.length,2);assert.equal(parent.phases[0].reps,8);assert(parent.phases[0].equipment.includes('Bands'));assert(parent.phases[0].cues.includes('4 Build'));assert(parent.phases[1].cues.includes('Descend 1—4 twice'));assert.deepEqual(parent.phases[1].repInstructions.map(x=>x.rep),[4,8]);assert(parent.phases[1].repInstructions.every(x=>x.raceIntent?.distance===100));
+ const post=block(s,'post_set');assert.equal(post.items.length,1);const parent=post.items[0];assert.equal(parent.reps,16);assert.equal(parent.phases.length,2);assert.equal(parent.phases[0].reps,8);assert(parent.phases[0].equipment.includes('Bands'));assert.deepEqual(parent.phases[0].pattern.map(x=>x.text),['Build','Descend 1—4']);assert(parent.phases[1].cues.includes('Descend 1—4 twice'));assert.deepEqual(parent.phases[1].repInstructions.map(x=>x.rep),[4,8]);assert(parent.phases[1].repInstructions.every(x=>x.raceIntent?.distance===100));
 });
 
 test('12x50 Total is summary metadata and zero runnable metres',()=>{
@@ -151,6 +151,10 @@ test('spoken warm down creates its own block',()=>{
 test('odd/even and explicit rep race instructions survive canonically',()=>{
  let x=E.parse(`Main Set\n4 x 50 Free Odd 100 pace / Even Drill`,id).blocks[0].items[0];assert.equal(x.repInstructions.length,4);assert.equal(x.repInstructions[0].raceIntent.distance,100);assert.equal(x.repInstructions[1].raceIntent,null);
  x=E.parse(`Main Set\n8 x 50 Swim\n#4 + #8 @ 100 Pace`,id).blocks[0].items[0];assert.deepEqual(x.repInstructions.map(r=>r.rep),[4,8]);assert(x.repInstructions.every(r=>r.raceIntent.distance===100));
+});
+
+test('#1 stroke shorthand is not misread as rep number one',()=>{
+ const x=E.parse(`Main Set\n12 x 50 #1 Stroke @ 1:10\n1 Scull / 1 Drill / 1 Swim`,id).blocks[0].items[0];assert.equal(x.repInstructions.length,12);assert(!x.repInstructions.some(r=>r.source==='explicit_rep'));
 });
 
 test('unknown coaching language is retained verbatim and contributes zero metres',()=>{
