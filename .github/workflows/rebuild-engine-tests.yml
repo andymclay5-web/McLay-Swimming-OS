@@ -27,3 +27,15 @@ jobs:
             echo "Running $f"
             node "$f"
           done
+
+  session-lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Session Lifecycle
+        run: node --check engines/session-lifecycle.js
+      - name: Session Lifecycle isolated regressions
+        run: node tests/session-lifecycle.test.js
