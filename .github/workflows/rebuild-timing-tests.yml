@@ -1,0 +1,22 @@
+name: Rebuild timing tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/timing.js'
+      - 'tests/timing.test.js'
+      - '.github/workflows/rebuild-timing-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  timing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/timing.js
+      - run: node tests/timing.test.js
