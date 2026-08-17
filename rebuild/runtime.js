@@ -20,7 +20,7 @@
     });
   }else root.MSOSRebuildRuntime=factory(root.MSOSEngines||{});
 })(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const required=['SessionTruth','SessionLifecycle','SessionEdit','EvidenceRetrieval','ResultsPathway','Targets','Adaptation','Attendance','BoardProjection','CaptureEvidence','DeliveredSession','PlanContext','SessionDose','Reporting','Learning'];
@@ -38,8 +38,8 @@
       this.targets=E.Targets.create({evidence:this.evidence,pathway:this.pathway});
       this.adaptation=E.Adaptation.create({evidence:this.evidence,profiles,overrides});
       this.attendance=E.Attendance.create({storage:stores.attendance,evidence:this.evidence,clock});
-      this.board=E.BoardProjection.create({attendance:this.attendance,adaptation:this.adaptation,targets:this.targets});
       this.capture=E.CaptureEvidence.create({storage:stores.capture,evidence:this.evidence,clock});
+      this.board=E.BoardProjection.create({truth:this.truth,attendance:this.attendance,adaptation:this.adaptation,targets:this.targets,captures:this.capture});
       this.delivered=E.DeliveredSession.create({storage:stores.delivery,clock});
       this.plan=E.PlanContext.create({seasons:plan.seasons||[],phases:plan.phases||[],weeks:plan.weeks||[],sessionIntents:plan.sessionIntents||[],meets:plan.meets||[]});
       this.dose=E.SessionDose.create();
