@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardRenderer=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.1';
+  const VERSION='1.2.0';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=v=>esc(text(v));
@@ -41,7 +41,8 @@
     const rows=[];
     if((w.composition||[]).length){const repeat=Number(w.compositionRepeats)>1?` × ${w.compositionRepeats}`:'';rows.push(`<div class="msos-work-detail"><span class="msos-detail-label">MAKEUP${esc(repeat)}</span>${(w.composition||[]).map(x=>`<span>${esc(`${x.distance} ${text(x.text||x.raw)}`)}</span>`).join('')}</div>`)}
     if((w.pattern||[]).length)rows.push(`<div class="msos-work-detail"><span class="msos-detail-label">PATTERN</span>${(w.pattern||[]).map(x=>`<span>${esc(`${x.count} ${text(x.text)}`)}</span>`).join('')}</div>`);
-    if((w.repInstructions||[]).length){const meaningful=(w.repInstructions||[]).filter(x=>text(x.label));if(meaningful.length)rows.push(`<div class="msos-work-detail"><span class="msos-detail-label">REPS</span>${meaningful.map(x=>`<span>#${esc(x.rep)} ${esc(x.label)}</span>`).join('')}</div>`)}
+    const explicitReps=(w.repInstructions||[]).filter(x=>text(x.label)&&x.source!=='pattern');
+    if(explicitReps.length)rows.push(`<div class="msos-work-detail"><span class="msos-detail-label">REPS</span>${explicitReps.map(x=>`<span>#${esc(x.rep)} ${esc(x.label)}</span>`).join('')}</div>`);
     if((w.cues||[]).length)rows.push(`<div class="msos-work-detail msos-cues"><span class="msos-detail-label">CUE</span>${(w.cues||[]).map(x=>`<span>${esc(x)}</span>`).join('')}</div>`);
     return rows.join('');
   }
@@ -91,8 +92,8 @@
   function renderAttendance(a={}){return`<div class="msos-board-attendance"><strong>${esc(`${Number(a.here)||0} here`)}</strong>${(a.athletes||[]).map(x=>`<span class="msos-athlete-chip status-${attr(x.status)}" data-athlete-id="${attr(x.id)}">${esc(x.label)}<small>${esc(x.status)}</small></span>`).join('')}</div>`}
   function renderBoard(model={}){
     if(model.schema!=='msos.board.v2')throw new Error('Board Renderer requires msos.board.v2 projection');
-    const i=model.identity||{},sessionContext={sessionId:model.sessionId,blockId:'',itemId:''},warning=model.validation?.totalMatches===false?`<div class="msos-board-warning">${esc((model.validation.warnings||[]).join(' · ')||'Session total needs checking')}</div>`:'';
-    return`<main class="msos-board" data-session-id="${attr(model.sessionId)}"><header class="msos-board-hero"><div><span class="msos-board-kicker">${esc([i.date,i.dayPart].filter(Boolean).join(' · '))}</span><h1>${esc(i.title||'Session Board')}</h1><p>${esc([...(i.squads||[]),i.venue,i.course].filter(Boolean).join(' · '))}</p></div><strong class="msos-board-total">${esc(fmtDistance(model.totalDistance))}</strong></header><nav class="msos-board-sticky-actions" aria-label="Poolside actions">${actionButton('roll','Roll',sessionContext)}${actionButton('capture','Capture',sessionContext)}${actionButton('voice','Voice',sessionContext)}${actionButton('photo','Photo',sessionContext)}${actionButton('video','Video',sessionContext)}${actionButton('finish','Finish',sessionContext,'is-primary')}</nav>${warning}${renderAttendance(model.attendance||{})}<div class="msos-board-blocks">${(model.blocks||[]).map(renderBlock).join('')}</div></main>`;
+    const i=model.identity||{},sessionContext={sessionId:model.sessionId,blockId:'',itemId:''},warning=model.validation?.totalMatches===false?`<div class="msos-board-warning">${esc((model.validation.warnings||[]).join(' · ')||'Session total needs checking')}</div>`:'',here=Number(model.attendance?.here)||0;
+    return`<main class="msos-board" data-session-id="${attr(model.sessionId)}"><header class="msos-board-hero"><div><span class="msos-board-kicker">${esc([i.date,i.dayPart].filter(Boolean).join(' · '))}</span><h1>${esc(i.title||'Session Board')}</h1><p>${esc([...(i.squads||[]),i.venue,i.course].filter(Boolean).join(' · '))}</p></div><strong class="msos-board-total">${esc(fmtDistance(model.totalDistance))}</strong></header><nav class="msos-board-sticky-actions" aria-label="Poolside actions">${actionButton('roll',`Roll · ${here}`,sessionContext)}${actionButton('times','T400 / Times',sessionContext)}${actionButton('capture','Capture',sessionContext)}${actionButton('voice','Voice',sessionContext)}${actionButton('photo','Photo',sessionContext)}${actionButton('video','Video',sessionContext)}${actionButton('finish','Finish',sessionContext,'is-primary')}</nav>${warning}${renderAttendance(model.attendance||{})}<div class="msos-board-blocks">${(model.blocks||[]).map(renderBlock).join('')}</div></main>`;
   }
   return{VERSION,renderBoard,renderBlock,renderNode,renderSet,renderGroup,canonicalRaw,workLabel,workMeta,fmtSeconds,fmtDistance,esc};
 });
