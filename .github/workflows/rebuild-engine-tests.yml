@@ -92,3 +92,15 @@ jobs:
         run: node --check engines/adaptation.js
       - name: Adaptation Engine isolated regressions
         run: node tests/adaptation.test.js
+
+  attendance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Attendance Engine
+        run: node --check engines/attendance.js
+      - name: Attendance Engine isolated regressions
+        run: node tests/attendance.test.js
