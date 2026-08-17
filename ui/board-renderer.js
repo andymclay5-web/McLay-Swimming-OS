@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardRenderer=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=v=>esc(text(v));
@@ -13,8 +13,17 @@
   function actionAttrs(context={}){return`data-session-id="${attr(context.sessionId)}" data-block-id="${attr(context.blockId)}" data-item-id="${attr(context.itemId||context.setId||context.cueId)}"`}
   function actionButton(action,label,context,cls=''){return`<button type="button" class="msos-board-action ${cls}" data-board-action="${attr(action)}" ${actionAttrs(context)}>${esc(label)}</button>`}
 
+  function canonicalRaw(w={}){
+    const raw=text(w.raw);if(!raw)return'';
+    const reps=Math.max(1,Number(w.reps)||1),distance=Number(w.distance)||0;
+    let m=raw.match(/^(\d{1,3})\s*[x×✕]\s*(\d{1,4}(?:\.5)?)(?:\s*m\b)?\s*(.*)$/i);
+    if(m){const rr=Number(m[1]),dd=Number(m[2]);if(rr===reps&&dd===distance)return raw;return`${reps} × ${distance}${text(m[3])?` ${text(m[3])}`:''}`}
+    m=raw.match(/^(\d{1,4}(?:\.5)?)(?:\s*m\b)?\s+(.+)$/i);
+    if(m&&reps===1){const dd=Number(m[1]);if(dd===distance)return raw;return`${distance} ${text(m[2])}`}
+    return raw;
+  }
   function workLabel(w={}){
-    if(text(w.raw))return text(w.raw);
+    const raw=canonicalRaw(w);if(raw)return raw;
     const reps=Math.max(1,Number(w.reps)||1),distance=Number(w.distance)||0,parts=[];
     if(distance)parts.push(reps>1?`${reps} × ${distance}`:`${distance}`);
     if(text(w.stroke))parts.push(text(w.stroke));if(text(w.zone))parts.push(text(w.zone));
@@ -81,5 +90,5 @@
     const i=model.identity||{},sessionContext={sessionId:model.sessionId,blockId:'',itemId:''},warning=model.validation?.totalMatches===false?`<div class="msos-board-warning">${esc((model.validation.warnings||[]).join(' · ')||'Session total needs checking')}</div>`:'';
     return`<main class="msos-board" data-session-id="${attr(model.sessionId)}"><header class="msos-board-hero"><div><span class="msos-board-kicker">${esc([i.date,i.dayPart].filter(Boolean).join(' · '))}</span><h1>${esc(i.title||'Session Board')}</h1><p>${esc([...(i.squads||[]),i.venue,i.course].filter(Boolean).join(' · '))}</p></div><strong class="msos-board-total">${esc(fmtDistance(model.totalDistance))}</strong></header><nav class="msos-board-sticky-actions" aria-label="Poolside actions">${actionButton('roll','Roll',sessionContext)}${actionButton('capture','Capture',sessionContext)}${actionButton('voice','Voice',sessionContext)}${actionButton('photo','Photo',sessionContext)}${actionButton('video','Video',sessionContext)}${actionButton('finish','Finish',sessionContext,'is-primary')}</nav>${warning}${renderAttendance(model.attendance||{})}<div class="msos-board-blocks">${(model.blocks||[]).map(renderBlock).join('')}</div></main>`;
   }
-  return{VERSION,renderBoard,renderBlock,renderNode,renderSet,renderGroup,workLabel,workMeta,fmtSeconds,fmtDistance,esc};
+  return{VERSION,renderBoard,renderBlock,renderNode,renderSet,renderGroup,canonicalRaw,workLabel,workMeta,fmtSeconds,fmtDistance,esc};
 });
