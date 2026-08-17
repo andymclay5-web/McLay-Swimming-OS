@@ -32,6 +32,78 @@ Post set
  const post=s.blocks.find(b=>b.type==='post_set');assert.equal(E.blockDistance(post),600);assert.equal(post.items.length,1);assert.equal(post.items[0].composition.length,3);
 });
 
+test('Tuesday AM 5400 session treats 12x50 Total as summary, not another set',()=>{
+ const src=`TUESDAY AM — AEROBIC CAPACITY / REGENERATION
+
+WARM UP
+
+4 x 300
+200 Free
+100 Reverse IM
+15s Rest
+
+PRE-SET
+
+4 Rounds:
+3 x 50 #1 @ 1:00
+2 Drill
+1 @ 200 Pace
+
+12 x 50 Total
+
+MAIN SET
+
+400 Pull
+Minimum Stroke Count
+
+6 x 100 Freestyle Development
+10s Rest
+
+400 Paddles Only
+Minimum Stroke Count
+
+3 x 200 Development
+10s Rest
+
+4 x 100 IM Descend 1–4
+@ 1:40 / 1:50
+
+2 x 100 Paddles + Fins @ 2:00
+1 Build
+1 Fast
+
+POST-SET
+
+16 x 50 @ 1:15
+
+8 x 50 Bands Only
+4 Build
+4 Descend 1–4
+
+8 x 50 Swim
+Descend 1–4 twice
+#4 + #8 @ 100 Pace
+
+WARM DOWN
+
+200 Easy Choice
+
+TOTAL: 5,400m`;
+ const s=E.parse(src,id);
+ assert.equal(E.totalDistance(s),5400);
+ assert.equal(s.metadata.writtenTotal,5400);
+ assert.equal(s.metadata.totalMatches,true);
+ const warm=s.blocks.find(b=>b.type==='warm_up'),pre=s.blocks.find(b=>b.type==='pre_set'),main=s.blocks.find(b=>b.type==='main_set'),post=s.blocks.find(b=>b.type==='post_set'),wd=s.blocks.find(b=>b.type==='warm_down');
+ assert.equal(E.blockDistance(warm),1200);
+ assert.equal(E.blockDistance(pre),600);
+ assert.equal(E.blockDistance(main),2600);
+ assert.equal(E.blockDistance(post),800);
+ assert.equal(E.blockDistance(wd),200);
+ assert.equal(pre.items.filter(x=>x.kind==='set').length,0);
+ assert.equal(pre.items.filter(x=>x.kind==='group').length,1);
+ assert(pre.items.some(x=>x.role==='summary'&&x.summaryMetres===600));
+});
+
 test('12x50 repeating 1x50 pattern counts only parent distance',()=>{
  const s=E.parse(`Pre set
 12 x 50 #1 Stroke @ 1:10
