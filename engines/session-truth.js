@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.SessionTruth=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='2.0.0';
+  const VERSION='2.0.1';
   const BLOCK_TYPES={
     'warm up':'warm_up','warm-up':'warm_up','warmup':'warm_up',
     'pre set':'pre_set','pre-set':'pre_set','preset':'pre_set',
@@ -71,9 +71,11 @@
     return null;
   }
   function explicitRepInstructions(raw,reps){
-    const refs=[...String(raw??'').matchAll(/#\s*(\d{1,3})/g)].map(m=>Number(m[1])).filter(n=>n>=1&&n<=Math.max(1,Number(reps)||1));
-    if(!refs.length)return[];const ri=raceIntent(raw),label=text(raw);
-    return [...new Set(refs)].map(rep=>({rep,label,raceIntent:ri,source:'explicit_rep'}));
+    const src=String(raw??''),refs=[...src.matchAll(/#\s*(\d{1,3})/g)].map(m=>Number(m[1])).filter(n=>n>=1&&n<=Math.max(1,Number(reps)||1));
+    if(!refs.length)return[];
+    const explicitMultiple=refs.length>1&&/\+/.test(src),explicitSingle=refs.length===1&&/#\s*\d{1,3}\s*(?:@|at\b|pace\b|fast\b|max\b|easy\b|build\b|descend\b|race\b)/i.test(src);
+    if(!explicitMultiple&&!explicitSingle)return[];
+    const ri=raceIntent(src),label=text(src);return [...new Set(refs)].map(rep=>({rep,label,raceIntent:ri,source:'explicit_rep'}));
   }
   function oddEvenInstructions(raw,reps){
     if(!/\bodd\b/i.test(raw)||!/\beven\b/i.test(raw))return[];
@@ -124,23 +126,15 @@
     }
     return a;
   }
-  function appendCue(set,line){
-    const t=text(line);set.cues.push(t);const refs=explicitRepInstructions(t,set.reps);if(refs.length)set.repInstructions=dedupeRepInstructions([...(set.repInstructions||[]),...refs]);
-  }
+  function appendCue(set,line){const t=text(line);set.cues.push(t);const refs=explicitRepInstructions(t,set.reps);if(refs.length)set.repInstructions=dedupeRepInstructions([...(set.repInstructions||[]),...refs])}
   function parseBlock(sessionId,type,rawLines){
-    const root=[];let order=0,currentSet=null;const groups=[];
-    const list=()=>groups.length?groups.at(-1).items:root;
-    const push=n=>{list().push(n);if(n.kind==='set')currentSet=n};
+    const root=[];let order=0,currentSet=null;const groups=[];const list=()=>groups.length?groups.at(-1).items:root;const push=n=>{list().push(n);if(n.kind==='set')currentSet=n};
     for(const rawLine of rawLines){
-      const line=text(rawLine);
-      if(!line){currentSet=null;groups.length=0;continue}
-      const rl=roundLine(line);
-      if(rl){const g={id:stable('group',sessionId,type,++order,line),kind:'group',order,rounds:rl.rounds,label:rl.tail||'',items:[]};list().push(g);groups.push(g);currentSet=null;continue}
-      const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);
-      if(restOnly&&currentSet){currentSet.restSeconds=Number(restOnly[1]);continue}
+      const line=text(rawLine);if(!line){currentSet=null;groups.length=0;continue}
+      const rl=roundLine(line);if(rl){const g={id:stable('group',sessionId,type,++order,line),kind:'group',order,rounds:rl.rounds,label:rl.tail||'',items:[]};list().push(g);groups.push(g);currentSet=null;continue}
+      const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);if(restOnly&&currentSet){currentSet.restSeconds=Number(restOnly[1]);continue}
       if(/^(?:@|on)\s*/i.test(line)&&cycleOptions(line).length&&currentSet){const opts=cycleOptions(line);currentSet.cycleOptions=opts;currentSet.cycleSeconds=opts[0]??null;continue}
-      const summary=summaryRepeat(line);
-      if(summary){root.push({id:stable('summary',sessionId,type,++order,line),kind:'cue',role:'summary',order,text:line,raw:line,summaryMetres:summary.reps*summary.distance});currentSet=null;groups.length=0;continue}
+      const summary=summaryRepeat(line);if(summary){root.push({id:stable('summary',sessionId,type,++order,line),kind:'cue',role:'summary',order,text:line,raw:line,summaryMetres:summary.reps*summary.distance});currentSet=null;groups.length=0;continue}
       const rep=explicitRepeat(line);if(rep){push(makeSet(sessionId,type,++order,line,rep.reps,rep.distance));continue}
       const one=singleDistance(line);if(one){push(makeSet(sessionId,type,++order,line,1,one.distance));continue}
       const inline=parseInlinePattern(line);if(inline&&currentSet){currentSet.pattern.push(...inline);expandPattern(currentSet);continue}
@@ -150,27 +144,13 @@
     }
     return foldChildren(root);
   }
-  function createSession(identity,source){
-    const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);
-    return{schema:'msos.session.v2',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}};
-  }
+  function createSession(identity,source){const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);return{schema:'msos.session.v2',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}}}
   function parse(source,identity={}){
     const normalized=normaliseSource(source),session=createSession(identity,source),chunks=[];let currentType=null,currentLines=[],pendingRounds=null,writtenTotal=null;const notes=[];
     const flush=()=>{if(!currentType)return;let blockLines=currentLines;if(pendingRounds)blockLines=[`${pendingRounds} Rounds:`,...blockLines];chunks.push({type:currentType,lines:blockLines});currentLines=[];pendingRounds=null};
-    for(const raw of lines(normalized)){
-      const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);
-      if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}
-      const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;if(h.tail)currentLines.push(h.tail);continue}
-      if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw);
-    }
-    flush();
-    session.blocks=chunks.map((c,i)=>({id:stable('block',session.id,c.type,i),type:c.type,title:BLOCK_TITLES[c.type]||'Block',order:i+1,items:parseBlock(session.id,c.type,c.lines)}));
-    session.metadata.normalizedSource=normalized;session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;
-    if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);
-    return session;
+    for(const raw of lines(normalized)){const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;if(h.tail)currentLines.push(h.tail);continue}if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw)}
+    flush();session.blocks=chunks.map((c,i)=>({id:stable('block',session.id,c.type,i),type:c.type,title:BLOCK_TITLES[c.type]||'Block',order:i+1,items:parseBlock(session.id,c.type,c.lines)}));session.metadata.normalizedSource=normalized;session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);return session;
   }
-  function validate(session){
-    const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');return{ok:errors.length===0,errors,total};
-  }
+  function validate(session){const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');return{ok:errors.length===0,errors,total}}
   return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,summaryRepeat,countInstruction,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds,cycleOptions,raceIntent,explicitRepInstructions,oddEvenInstructions}};
 });
