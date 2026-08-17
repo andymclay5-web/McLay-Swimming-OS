@@ -6,6 +6,7 @@ on:
       - rebuild/engine-contracts-v1
     paths:
       - 'engines/**'
+      - 'rebuild/**'
       - 'ui/**'
       - 'tests/**'
       - 'REBUILD_ENGINE_CONTRACTS.md'
@@ -106,9 +107,21 @@ jobs:
       - name: Attendance Engine isolated regressions
         run: node tests/attendance.test.js
 
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Core architecture boundaries
+        run: node tests/architecture-boundaries.test.js
+      - name: Extended architecture boundaries
+        run: node tests/architecture-boundaries-extended.test.js
+
   board-projection:
     runs-on: ubuntu-latest
-    needs: [session-truth, targets, adaptation, attendance]
+    needs: [session-truth, targets, adaptation, attendance, architecture]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -122,3 +135,20 @@ jobs:
         run: node tests/board-projection.test.js
       - name: Board Renderer isolated regressions
         run: node tests/board-renderer.test.js
+
+  poolside-integration:
+    runs-on: ubuntu-latest
+    needs: [session-truth, session-lifecycle, evidence-retrieval, results-pathway, targets, adaptation, attendance, architecture, board-projection]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check composition root
+        run: node --check rebuild/runtime.js
+      - name: Capture Evidence regression
+        run: node tests/capture-evidence.test.js
+      - name: Poolside flow integration
+        run: node tests/poolside-flow.integration.test.js
+      - name: Runtime integration
+        run: node tests/runtime.integration.test.js
