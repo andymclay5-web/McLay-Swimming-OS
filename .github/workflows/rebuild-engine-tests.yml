@@ -68,3 +68,15 @@ jobs:
         run: node --check engines/results-pathway.js
       - name: Results Pathway isolated regressions
         run: node tests/results-pathway.test.js
+
+  targets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Target Engine
+        run: node --check engines/targets.js
+      - name: Target Engine isolated regressions
+        run: node tests/targets.test.js
