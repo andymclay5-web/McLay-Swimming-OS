@@ -22,4 +22,8 @@ jobs:
       - name: Syntax check Session Truth
         run: node --check engines/session-truth.js
       - name: Session Truth isolated regressions
-        run: node tests/session-truth.test.js
+        run: |
+          for f in tests/session-truth*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
