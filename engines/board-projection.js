@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.BoardProjection=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='2.0.1';
+  const VERSION='2.1.0';
   const SCHEMA='msos.board.v2';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -94,26 +94,42 @@
       try{return displayTarget(this.targets.forItem(session,prescription,athlete.id))}
       catch(e){return{status:'error',message:`Target unavailable · ${text(e?.message||e)}`}}
     }
+    phaseTargetFor(session,parent,phase,athlete){
+      try{return displayTarget(this.targets.forPhase?this.targets.forPhase(session,parent,phase,athlete.id):this.targets.forItem(session,{...parent,...phase},athlete.id))}
+      catch(e){return{status:'error',message:`Target unavailable · ${text(e?.message||e)}`}}
+    }
     adaptFor(session,item,athlete){
       try{return this.adaptation.forItem(session,item,athlete.id)}
       catch(e){return{status:'error',sameAsGroup:true,prescription:clone(item),reason:`Modification unavailable · ${text(e?.message||e)}`}}
     }
+    modifiedPhaseTargets(session,item,actual,athlete,blockId){
+      if(!(item?.phases||[]).length)return[];
+      const actualPhases=(actual?.phases||[]);
+      return(item.phases||[]).map((groupPhase,i)=>{
+        const adaptedPhase=actualPhases[i]||groupPhase,target=this.phaseTargetFor(session,actual||item,adaptedPhase,athlete);
+        return{phaseIndex:i+1,context:this.context(session.id,blockId,{setId:item.id,phaseIndex:i+1}),...target};
+      }).filter(x=>x.status!=='none');
+    }
     athleteRows(session,blockId,item,attendanceRows,labelMap){
-      const modifications=[],targets=[];
+      const modifications=[],targets=[],adaptations=new Map();
       for(const row of attendanceRows){
         const athlete=row.athlete,adapted=this.adaptFor(session,item,athlete),actual=adapted?.prescription||clone(item),target=this.targetFor(session,actual,athlete),context=this.context(session.id,blockId,{setId:item.id}),base={athleteId:athlete.id,athleteName:text(athlete.full_name||athlete.name),label:labelMap.get(athlete.id)||text(athlete.full_name||athlete.name),attendanceStatus:row.status,context:clone(context)};
-        if(adapted?.status==='error')modifications.push({...base,status:'error',message:text(adapted.reason),work:work(item)});
-        else if(adapted?.sameAsGroup===false)modifications.push({...base,status:'modified',reason:text(adapted.reason),work:work(actual),target:clone(target)});
-        if(target.status!=='none')targets.push({...base,...target});
+        adaptations.set(athlete.id,{adapted,actual});
+        if(adapted?.status==='error'){
+          modifications.push({...base,status:'error',message:text(adapted.reason),work:work(item)});
+          if(target.status!=='none')targets.push({...base,...target});
+        }else if(adapted?.sameAsGroup===false){
+          modifications.push({...base,status:'modified',reason:text(adapted.reason),work:work(actual),target:clone(target),phaseTargets:this.modifiedPhaseTargets(session,item,actual,athlete,blockId)});
+        }else if(target.status!=='none')targets.push({...base,...target});
       }
-      return{modifications,targets};
+      return{modifications,targets,adaptations};
     }
-    phaseRows(session,blockId,parent,phase,phaseIndex,attendanceRows,labelMap){
+    phaseRows(session,blockId,parent,phase,phaseIndex,attendanceRows,labelMap,adaptations){
       const rows=[];
       for(const attendance of attendanceRows){
-        const athlete=attendance.athlete;let target;
-        try{target=displayTarget(this.targets.forPhase?this.targets.forPhase(session,parent,phase,athlete.id):this.targets.forItem(session,{...parent,...phase},athlete.id))}
-        catch(e){target={status:'error',message:`Target unavailable · ${text(e?.message||e)}`}}
+        const athlete=attendance.athlete,state=adaptations?.get(athlete.id);
+        if(state?.adapted?.status!=='error'&&state?.adapted?.sameAsGroup===false)continue;
+        const target=this.phaseTargetFor(session,parent,phase,athlete);
         if(target.status!=='none')rows.push({athleteId:athlete.id,athleteName:text(athlete.full_name||athlete.name),label:labelMap.get(athlete.id)||text(athlete.full_name||athlete.name),attendanceStatus:attendance.status,context:this.context(session.id,blockId,{setId:parent.id,phaseIndex}),...target});
       }
       return rows;
@@ -123,7 +139,7 @@
       const phases=(item.phases||[]).map((phase,i)=>({
         index:i+1,context:this.context(session.id,blockId,{setId:item.id,phaseIndex:i+1}),
         work:work({...item,...phase,reps:num(phase?.reps)||num(phase?.count)||1,distance:num(phase?.distance)||num(item.distance),phases:[]}),
-        targets:this.phaseRows(session,blockId,item,phase,i+1,attendanceRows,labelMap)
+        targets:this.phaseRows(session,blockId,item,phase,i+1,attendanceRows,labelMap,athleteData.adaptations)
       }));
       return{
         id:item.id,kind:'set',context,distance:this.truth.nodeDistance(item),groupWork:work(item),phases,
