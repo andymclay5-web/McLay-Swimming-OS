@@ -1,11 +1,10 @@
 'use strict';
 (function(root,factory){
-  const truth=(typeof module==='object'&&module.exports)?require('./session-truth.js'):root?.MSOSEngines?.SessionTruth;
-  const api=factory(truth);
+  const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.BoardProjection=api;}
-})(typeof globalThis!=='undefined'?globalThis:this,function(DefaultTruth){
-  const VERSION='2.0.0';
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  const VERSION='2.0.1';
   const SCHEMA='msos.board.v2';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -70,7 +69,7 @@
   }
 
   class BoardProjection{
-    constructor({truth=DefaultTruth,attendance,adaptation,targets,captures=null}={}){
+    constructor({truth,attendance,adaptation,targets,captures=null}={}){
       if(!truth||typeof truth.nodeDistance!=='function'||typeof truth.blockDistance!=='function'||typeof truth.totalDistance!=='function')throw new Error('Board Projection requires Session Truth distance contract');
       if(!attendance||typeof attendance.hereAthletes!=='function')throw new Error('Board Projection requires Attendance Engine');
       if(!adaptation||typeof adaptation.forItem!=='function')throw new Error('Board Projection requires Adaptation Engine');
