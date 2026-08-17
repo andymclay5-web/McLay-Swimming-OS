@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.SessionTruth=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   const BLOCK_TYPES={
     'warm up':'warm_up','warm-up':'warm_up','warmup':'warm_up',
     'pre set':'pre_set','pre-set':'pre_set','preset':'pre_set',
@@ -21,6 +21,7 @@
   const hash=s=>{let h=2166136261;for(const ch of String(s??'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0).toString(36)};
   const stable=(prefix,...parts)=>`${prefix}-${hash(parts.map(text).join('|').toLowerCase())}`;
   const clone=v=>JSON.parse(JSON.stringify(v));
+
   function normaliseNaturalLine(line){
     let x=String(line??'').trim();
     x=x.replace(/\bon\s+a\s+minute\b/ig,'on 60');
@@ -47,12 +48,50 @@
   function equipment(v){const t=text(v);return['Fins','Paddles','Pull','Bands','Snorkel'].filter(x=>new RegExp(`\\b${x}\\b`,'i').test(t))}
   function restSeconds(v){const m=text(v).match(/\b(\d{1,3})\s*(?:sr|s\s*r|sec(?:onds?)?\s*rest|s\s*rest|rest)\b/i);return m?Number(m[1]):null}
   function cycleSeconds(v){const t=text(v);let m=t.match(/(?:@|\bon\b)\s*(\d{1,2})[:.]([0-5]\d)\b/i);if(m)return Number(m[1])*60+Number(m[2]);m=t.match(/\bon\s+(\d{2,3})\b/i);if(m){const n=Number(m[1]);if(n>=20&&n<=599)return n}return null}
-  function makeSet(sessionId,blockTypeName,order,raw,reps,distance){return{id:stable('set',sessionId,blockTypeName,order,raw),kind:'set',order,reps:Math.max(1,Number(reps)||1),distance:Math.max(0,Number(distance)||0),stroke:strokeName(raw),zone:zoneName(raw),restSeconds:restSeconds(raw),cycleSeconds:cycleSeconds(raw),equipment:equipment(raw),raw:text(raw),composition:[],pattern:[],repPattern:[],cues:[]}}
+  function raceIntent(v){
+    const t=text(v);
+    let m=t.match(/\b(50|100|200|400|800|1500)\s*(IM|Free(?:style)?|Back(?:stroke)?|Breast(?:stroke)?|Fly|Butterfly)?\s*(?:race\s*)?pace\b/i);
+    if(m)return{distance:Number(m[1]),eventStroke:m[2]?strokeName(m[2]):null,workingStroke:strokeName(t)||null};
+    m=t.match(/(?:^|\s)(?:@|at|race\s*pace)\s*(50|100|200|400|800|1500)\b/i);
+    if(m)return{distance:Number(m[1]),eventStroke:null,workingStroke:strokeName(t)||null};
+    return null;
+  }
+  function repInstructions(raw,reps){
+    if(!/\bodd\b/i.test(raw)||!/\beven\b/i.test(raw))return[];
+    const odd=text(raw.match(/\bOdd\b\s*([^/]*)/i)?.[1]||'');
+    const even=text(raw.match(/\bEven\b\s*(.*)$/i)?.[1]||'');
+    return Array.from({length:Math.max(1,Number(reps)||1)},(_,i)=>{
+      const label=(i+1)%2?odd:even;
+      return{rep:i+1,label,raceIntent:raceIntent(label),drill:/\b(?:drill|scull|technique)\b/i.test(label)};
+    });
+  }
+  function makeSet(sessionId,blockTypeName,order,raw,reps,distance){
+    const n=Math.max(1,Number(reps)||1),r=text(raw);
+    return{id:stable('set',sessionId,blockTypeName,order,r),kind:'set',order,reps:n,distance:Math.max(0,Number(distance)||0),stroke:strokeName(r),zone:zoneName(r),restSeconds:restSeconds(r),cycleSeconds:cycleSeconds(r),equipment:equipment(r),raw:r,composition:[],pattern:[],repPattern:[],cues:[],raceIntent:raceIntent(r),repInstructions:repInstructions(r,n),targetSeconds:null};
+  }
   function setDistance(set){return(Number(set?.reps)||1)*(Number(set?.distance)||0)}
   function nodeDistance(node){if(!node)return 0;if(node.kind==='set')return setDistance(node);if(node.kind==='group')return Math.max(1,Number(node.rounds)||1)*(node.items||[]).reduce((n,x)=>n+nodeDistance(x),0);return 0}
   function blockDistance(block){return(block?.items||[]).reduce((n,x)=>n+nodeDistance(x),0)}
   function totalDistance(session){return(session?.blocks||[]).reduce((n,b)=>n+blockDistance(b),0)}
-  function parseInlinePattern(line){const t=text(line);if(!t.includes('/'))return null;const parts=t.split('/').map(text).filter(Boolean);if(parts.length<2)return null;const out=[];for(const p of parts){const m=p.match(/^(\d{1,2})\s+(.+)$/);if(!m)return null;out.push({count:Number(m[1]),text:text(m[2])})}return out}
+  function parseInlinePattern(line){
+    const t=text(line);if(!t.includes('/'))return null;
+    const parts=t.split('/').map(text).filter(Boolean);if(parts.length<2)return null;
+    const out=[];for(const p of parts){const m=p.match(/^(\d{1,2})\s+(.+)$/);if(!m)return null;out.push({count:Number(m[1]),text:text(m[2])})}
+    return out;
+  }
+  function applyPattern(set,inline){
+    set.pattern.push(...inline);
+    const zones=inline.map(x=>({count:x.count,zone:zoneName(x.text),text:x.text}));
+    if(zones.every(x=>x.zone)){
+      const span=zones.reduce((n,x)=>n+x.count,0);
+      if(span>0&&set.reps%span===0){
+        set.repPattern=[];
+        for(let rep=1;rep<=set.reps;){
+          for(const z of zones)for(let k=0;k<z.count&&rep<=set.reps;k++,rep++)set.repPattern.push({rep,zone:z.zone,text:z.text});
+        }
+      }
+    }
+  }
   function foldChildren(items){
     const a=clone(items||[]);
     for(let i=0;i<a.length;i++){
@@ -60,17 +99,29 @@
       if(Number(parent.reps)>=2){
         let j=i+1,kids=[],cycleCount=0;
         while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)!==Number(parent.distance)||Number(c.reps)>=Number(parent.reps))break;kids.push(c);cycleCount+=Number(c.reps)||1;j++}
-        if(kids.length>=2&&cycleCount>0&&Number(parent.reps)%cycleCount===0){parent.pattern=parent.pattern||[];for(const c of kids)parent.pattern.push({count:Number(c.reps)||1,text:text(c.raw).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')});a.splice(i+1,kids.length);continue}
+        if(kids.length>=2&&cycleCount>0&&Number(parent.reps)%cycleCount===0){
+          parent.pattern=parent.pattern||[];
+          for(const c of kids)parent.pattern.push({count:Number(c.reps)||1,text:text(c.raw).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')});
+          a.splice(i+1,kids.length);continue;
+        }
       }
       if(Number(parent.reps)>=2){
         let j=i+1,parts=[],sum=0;
         while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.reps)!==1||Number(c.distance)<=0||Number(c.distance)>=Number(parent.distance))break;parts.push(c);sum+=Number(c.distance);j++;if(sum>=Number(parent.distance))break}
-        if(parts.length>=2&&Math.abs(sum-Number(parent.distance))<0.001){parent.composition=parent.composition||[];for(const c of parts)parent.composition.push({distance:Number(c.distance),text:text(c.raw).replace(/^\d{1,4}(?:\.5)?\s*/,'')});a.splice(i+1,parts.length);continue}
+        if(parts.length>=2&&Math.abs(sum-Number(parent.distance))<0.001){
+          parent.composition=parent.composition||[];
+          for(const c of parts)parent.composition.push({distance:Number(c.distance),text:text(c.raw).replace(/^\d{1,4}(?:\.5)?\s*/,'')});
+          a.splice(i+1,parts.length);continue;
+        }
       }
       if(Number(parent.reps)===1&&/^\d{2,4}(?:\.5)?$/.test(text(parent.raw))){
         let j=i+1,parts=[],sum=0;
         while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)<=0)break;const metres=setDistance(c);if(metres<=0||sum+metres>Number(parent.distance))break;parts.push(c);sum+=metres;j++;if(sum>=Number(parent.distance))break}
-        if(parts.length>=1&&Math.abs(sum-Number(parent.distance))<0.001){parent.composition=parent.composition||[];for(const c of parts)parent.composition.push({distance:setDistance(c),text:text(c.raw)});a.splice(i+1,parts.length)}
+        if(parts.length>=1&&Math.abs(sum-Number(parent.distance))<0.001){
+          parent.composition=parent.composition||[];
+          for(const c of parts)parent.composition.push({distance:setDistance(c),text:text(c.raw)});
+          a.splice(i+1,parts.length);
+        }
       }
     }
     return a;
@@ -80,25 +131,33 @@
     const list=()=>currentGroup?currentGroup.items:root;
     const push=n=>{list().push(n);if(n.kind==='set')currentSet=n};
     for(const rawLine of rawLines){
-      const line=text(rawLine);if(!line){currentSet=null;continue}
-      const rl=roundLine(line);if(rl){const g={id:stable('group',sessionId,type,order,line),kind:'group',order:++order,rounds:rl.rounds,label:rl.tail||'',items:[]};root.push(g);currentGroup=g;currentSet=null;continue}
-      const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);if(restOnly&&currentSet){currentSet.restSeconds=Number(restOnly[1]);continue}
-      const cycleOnly=line.match(/^(?:@|on)\s*(\d{1,2})[:.](\d{2})$/i)||line.match(/^on\s+(\d{2,3})$/i);if(cycleOnly&&currentSet){currentSet.cycleSeconds=cycleSeconds(line);continue}
+      const line=text(rawLine);
+      if(!line){currentSet=null;currentGroup=null;continue}
+      const rl=roundLine(line);
+      if(rl){const g={id:stable('group',sessionId,type,order,line),kind:'group',order:++order,rounds:rl.rounds,label:rl.tail||'',items:[]};root.push(g);currentGroup=g;currentSet=null;continue}
+      const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);
+      if(restOnly&&currentSet){currentSet.restSeconds=Number(restOnly[1]);continue}
+      const cycleOnly=line.match(/^(?:@|on)\s*(\d{1,2})[:.](\d{2})$/i)||line.match(/^on\s+(\d{2,3})$/i);
+      if(cycleOnly&&currentSet){currentSet.cycleSeconds=cycleSeconds(line);continue}
       const rep=explicitRepeat(line);if(rep){push(makeSet(sessionId,type,++order,line,rep.reps,rep.distance));continue}
       const one=singleDistance(line);if(one){push(makeSet(sessionId,type,++order,line,1,one.distance));continue}
-      const inline=parseInlinePattern(line);if(inline&&currentSet){currentSet.pattern.push(...inline);continue}
+      const inline=parseInlinePattern(line);if(inline&&currentSet){applyPattern(currentSet,inline);continue}
       if(currentSet){currentSet.cues.push(line);continue}
       list().push({id:stable('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});
     }
     return foldChildren(root.map(n=>n.kind==='group'?{...n,items:foldChildren(n.items)}:n));
   }
-  function createSession(identity,source){const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);return{schema:'msos.session.v1',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}}}
+  function createSession(identity,source){
+    const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);
+    return{schema:'msos.session.v1',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}};
+  }
   function parse(source,identity={}){
     const normalized=normaliseSource(source);
     const session=createSession(identity,source),chunks=[];let currentType=null,currentLines=[],pendingRounds=null,writtenTotal=null,notes=[];
     const flush=()=>{if(!currentType)return;let blockLines=currentLines;if(pendingRounds)blockLines=[`${pendingRounds} Rounds:`,...blockLines];chunks.push({type:currentType,lines:blockLines});currentLines=[];pendingRounds=null};
     for(const raw of lines(normalized)){
-      const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}
+      const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);
+      if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}
       const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;if(h.tail)currentLines.push(h.tail);continue}
       if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw);
     }
@@ -108,6 +167,11 @@
     if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);
     return session;
   }
-  function validate(session){const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');return{ok:errors.length===0,errors,total}}
-  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds}};
+  function validate(session){
+    const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');
+    const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');
+    if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');
+    return{ok:errors.length===0,errors,total};
+  }
+  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds,raceIntent,repInstructions}};
 });
