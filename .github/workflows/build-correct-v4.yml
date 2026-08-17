@@ -15,16 +15,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '6ac374a543c65425da9fc0d5205169797a6429a6e9bc138279834712fc1dce1a  .v4build/part01.b64' | sha256sum -c -
-          echo 'cdc2a391cfd91174b533cd38c09fcfb156a5097518df3742dbe991099b2e7105  .v4build/part02.b64' | sha256sum -c -
-          echo '588e65782f306694dd5b2f43e955e55d805abd73f3dde1a4b42b1e719eb2ed27  .v4build/part03.b64' | sha256sum -c -
-          echo 'd75ee07d5e6b219129ba989c5b90df1f0aceb9e08e77a51bb6720f858b8fe9e2  .v4build/part04.b64' | sha256sum -c -
-          echo 'c4c3b0c21305c535c069a1647e1b6dcb00bf80661347962db5ddac88ee318087  .v4build/part05.b64' | sha256sum -c -
-          echo '1c13c55d23f7d0c83077660da7288f46a11237572a46396906df762d9f46b630  .v4build/part06.b64' | sha256sum -c -
-          echo '8b507cb96f7ad62112a3d00e9735e12dc00452c5c7b26dc8622842da89c9842b  .v4build/part07.b64' | sha256sum -c -
-          echo 'd77ace4380cd6a02ccab536486292baa4dc370fc1df8c0f45d993a4da9c3a110  .v4build/part08.b64' | sha256sum -c -
-          echo '0a0e77b92e1aa6177725bb82e66864548384eaa5e69a39eb8dbf38e8e6343daf  .v4build/part09.b64' | sha256sum -c -
-          echo '1bbe132bf830e85e4881c0bd2393503aab0cd5802ed346a842bb3aabcffc9e36  .v4build/part10.b64' | sha256sum -c -
+          check_part(){ got="$(tr -d '\n' < ".v4build/$1" | sha256sum | awk '{print $1}')"; test "$got" = "$2" || { echo "$1 mismatch: $got"; exit 1; }; echo "$1 OK"; }
+          check_part part01.b64 cf0cdcf208bcd843ad55ebb33d273f237ae83e2d60e216aa0c8365c9e0b5c4b1
+          check_part part02.b64 4df113c71901cc299ae40b9b68ec51653bf2e54f3929416656ca5a2bc29a48bf
+          check_part part03.b64 617c2b78dab5d73a766b51b61bbe09d70f1e79bdd7af1bf28f7a14a8bd40ab7d
+          check_part part04.b64 b3eeb312b351a383e295d48ec95d53df6e7eac8053b215b28879ef4ef30cdaf3
+          check_part part05.b64 451fe7544807c34d02035b1ed7c6fe6c3a41d9919bb4ea6918515d26b4302b96
+          check_part part06.b64 6672316263c215b74c3df99c7c3c7c9a33b51fb8e66f640c0d0fa95b185f912d
+          check_part part07.b64 a90ab5c5de2b57ab9a635b888e59637a3686e5565817675bf9f4229db26385da
+          check_part part08.b64 791ae1a5b20bf84847a38974d0482fff8931e8369ccb0793e7e6734177f49ddd
+          check_part part09.b64 9305512fc52810a40b947be77acc93a9ccee189c134a09eed4c9ab2695338b9a
+          check_part part10.b64 5ccccc99609e48a5d867b4a859946175991bd7821935811175554964eb8904a7
       - name: Reconstruct and validate correction
         shell: bash
         run: |
