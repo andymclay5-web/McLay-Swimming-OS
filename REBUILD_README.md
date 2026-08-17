@@ -1,0 +1,3 @@
+# Engine-first rebuild branch
+
+See REBUILD_ENGINE_CONTRACTS.md, REBUILD_STATUS.md and POOL_SIDE_ENGINE_ACCEPTANCE.md.
