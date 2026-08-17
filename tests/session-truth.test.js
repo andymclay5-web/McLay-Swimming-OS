@@ -67,3 +67,48 @@ test('written mismatch blocks validation',()=>{
 5 x 100 Free
 600m`,id),v=E.validate(s);assert.equal(v.ok,false);assert(v.errors.includes('Written total mismatch'));
 });
+
+test('bare 500 breakdown is composition, not phantom metres',()=>{
+ const s=E.parse(`Warm up
+500
+300 Free
+200 Reverse IM`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),500);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,2);
+});
+
+test('bare 400 with 4x100 breakdown is composition',()=>{
+ const s=E.parse(`Warm up
+400
+4 x 100 Choice`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),400);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,1);
+});
+
+test('sequential 400 Pull 200 Easy 200 Free remains sequential',()=>{
+ const s=E.parse(`Main Set
+400 Pull
+200 Easy
+200 Free`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),800);assert.equal(b.items.length,3);
+});
+
+test('15m Max after 4x25 is cue, not phantom distance',()=>{
+ const s=E.parse(`Pre set
+4 x 25
+15m Max`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),100);assert.equal(b.items[0].cues[0],'15m Max');
+});
+
+test('compact repetition grammar 8100s and 875s',()=>{
+ const s=E.parse(`Main Set
+8100s Free
+875s Choice`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),1400);assert.equal(b.items[0].reps,8);assert.equal(b.items[0].distance,100);assert.equal(b.items[1].reps,8);assert.equal(b.items[1].distance,75);
+});
+
+test('spoken repetition grammar and on a minute',()=>{
+ const s=E.parse(`Main Set
+three 200s Free
+six 50s Build on a minute
+eight 25s Fast on 45`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),1100);assert.equal(b.items[1].cycleSeconds,60);assert.equal(b.items[2].cycleSeconds,45);
+});
+
+test('spoken warm down of 200 metres becomes a block',()=>{
+ const s=E.parse(`Main Set
+5 x 100 Free
+warm down of 200 metres`,id);assert.equal(E.totalDistance(s),700);assert.equal(s.blocks.at(-1).type,'warm_down');assert.equal(E.blockDistance(s.blocks.at(-1)),200);
+});
