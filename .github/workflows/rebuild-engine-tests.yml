@@ -52,3 +52,15 @@ jobs:
         run: node --check engines/evidence-retrieval.js
       - name: Evidence Retrieval isolated regressions
         run: node tests/evidence-retrieval.test.js
+
+  results-pathway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Results Pathway
+        run: node --check engines/results-pathway.js
+      - name: Results Pathway isolated regressions
+        run: node tests/results-pathway.test.js
