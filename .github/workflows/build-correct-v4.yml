@@ -25,12 +25,13 @@ jobs:
           check_part part07.b64 a90ab5c5de2b57ab9a635b888e59637a3686e5565817675bf9f4229db26385da
           check_part part08.b64 791ae1a5b20bf84847a38974d0482fff8931e8369ccb0793e7e6734177f49ddd
           check_part part09.b64 9305512fc52810a40b947be77acc93a9ccee189c134a09eed4c9ab2695338b9a
-          check_part part10.b64 5ccccc99609e48a5d867b4a859946175991bd7821935811175554964eb8904a7
+          check_part part10a.b64 c49fae9beebe2c8fe39083fcfdfd1e6bdbb47e247ed7b8900b45535c981fcae3
+          check_part part10b.b64 81d71d414441eb730103f75324c690b791366ccee731ce5a8b1006f12724095b
       - name: Reconstruct and validate correction
         shell: bash
         run: |
           set -euo pipefail
-          cat .v4build/part*.b64 | tr -d '\n' | base64 -d > v4-correct.js
+          { cat .v4build/part01.b64 .v4build/part02.b64 .v4build/part03.b64 .v4build/part04.b64 .v4build/part05.b64 .v4build/part06.b64 .v4build/part07.b64 .v4build/part08.b64 .v4build/part09.b64 .v4build/part10a.b64 .v4build/part10b.b64; } | tr -d '\n' | base64 -d > v4-correct.js
           test "$(wc -c < v4-correct.js)" = '84097'
           echo '18788d42cc3004b3052b3df1ed376efdda348e0b40e45809ae3ae6b3ae1a7aee  v4-correct.js' | sha256sum -c -
           node --check v4-correct.js
