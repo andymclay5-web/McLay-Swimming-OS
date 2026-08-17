@@ -1,0 +1,36 @@
+name: Morning Board check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'engines/session-truth.js'
+      - 'tests/session-truth.test.js'
+      - 'morning-board.html'
+      - 'morning-board.js'
+      - 'morning-board.css'
+      - 'sw.js'
+      - '.github/workflows/morning-board-check.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: |
+          node --check engines/session-truth.js
+          node --check morning-board.js
+          node --check sw.js
+      - name: Session Truth regression
+        run: node tests/session-truth.test.js
+      - name: Morning Board wiring
+        run: |
+          grep -q 'engines/session-truth.js' morning-board.html
+          grep -q 'morning-board.js' morning-board.html
+          grep -q 'morning-board.css' morning-board.html
+          grep -q 'morning-board.html' sw.js
