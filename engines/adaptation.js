@@ -23,7 +23,7 @@
   function rawText(item){return[item?.raw,item?.text,item?.zone,...(item?.cues||[]),...(item?.pattern||[]).map(x=>x.text),...(item?.phases||[]).map(x=>x.text||x.raw)].filter(Boolean).join(' ')}
   function isAerobic(item){return!!item?.zone||/\b(?:regeneration|regen|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(rawText(item))}
   function isQuality(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isAerobic(item))return false;return d>0&&d<=100&&r<=4&&/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i.test(raw)}
-  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1;if(isQuality(item))return true;if(isAerobic(item)||d<=0||d>50||r>20)return false;return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)}
+  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isQuality(item))return true;if(isAerobic(item)||d<=0||d>50||r>20)return false;return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)}
   function sameWork(a,b){
     const arr=v=>(v||[]).map(text).sort().join('|').toLowerCase();
     return (num(a?.reps)||1)===(num(b?.reps)||1)&&(num(a?.distance)||0)===(num(b?.distance)||0)&&text(a?.stroke).toLowerCase()===text(b?.stroke).toLowerCase()&&(num(a?.restSeconds)||0)===(num(b?.restSeconds)||0)&&(num(a?.cycleSeconds)||0)===(num(b?.cycleSeconds)||0)&&arr(a?.equipment)===arr(b?.equipment)&&JSON.stringify(a?.pattern||[])===JSON.stringify(b?.pattern||[])&&JSON.stringify(a?.phases||[])===JSON.stringify(b?.phases||[]);
