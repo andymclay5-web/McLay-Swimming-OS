@@ -1,0 +1,30 @@
+name: MSOS engine regression
+
+on:
+  pull_request:
+    paths:
+      - 'engines/**'
+      - 'tests/**'
+      - 'ENGINE_ARCHITECTURE.md'
+      - '.github/workflows/engine-tests.yml'
+  push:
+    branches:
+      - 'engine/**'
+    paths:
+      - 'engines/**'
+      - 'tests/**'
+      - 'ENGINE_ARCHITECTURE.md'
+      - '.github/workflows/engine-tests.yml'
+
+jobs:
+  session-truth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: node --check engines/session-truth.js
+      - name: Session truth regression
+        run: node tests/session-truth.test.js
