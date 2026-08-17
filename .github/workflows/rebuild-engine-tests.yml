@@ -131,10 +131,12 @@ jobs:
         run: node --check engines/board-projection.js
       - name: Syntax check Board Renderer
         run: node --check ui/board-renderer.js
-      - name: Board Projection isolated regressions
-        run: node tests/board-projection.test.js
-      - name: Board Renderer isolated regressions
-        run: node tests/board-renderer.test.js
+      - name: Board regression family
+        run: |
+          for f in tests/board*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
 
   poolside-integration:
     runs-on: ubuntu-latest
