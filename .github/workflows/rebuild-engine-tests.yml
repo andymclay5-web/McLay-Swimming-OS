@@ -6,6 +6,7 @@ on:
       - rebuild/engine-contracts-v1
     paths:
       - 'engines/**'
+      - 'ui/**'
       - 'tests/**'
       - 'REBUILD_ENGINE_CONTRACTS.md'
       - 'REBUILD_STATUS.md'
@@ -115,5 +116,9 @@ jobs:
           node-version: '20'
       - name: Syntax check Board Projection
         run: node --check engines/board-projection.js
+      - name: Syntax check Board Renderer
+        run: node --check ui/board-renderer.js
       - name: Board Projection isolated regressions
         run: node tests/board-projection.test.js
+      - name: Board Renderer isolated regressions
+        run: node tests/board-renderer.test.js
