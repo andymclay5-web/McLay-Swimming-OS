@@ -25,13 +25,16 @@ jobs:
           check_part part07.b64 a90ab5c5de2b57ab9a635b888e59637a3686e5565817675bf9f4229db26385da
           check_part part08.b64 791ae1a5b20bf84847a38974d0482fff8931e8369ccb0793e7e6734177f49ddd
           check_part part09.b64 9305512fc52810a40b947be77acc93a9ccee189c134a09eed4c9ab2695338b9a
-          check_part part10a.b64 c49fae9beebe2c8fe39083fcfdfd1e6bdbb47e247ed7b8900b45535c981fcae3
+          check_part part10a1.b64 369343643919d80fbde3cd4c0d2f129c2951bec15f93b84e139c516b43b0bdc1
+          check_part part10a2.b64 855ebefbebbd03942529321c1a5d32586d5fda97ebfb80ef20b84891848a3380
+          check_part part10a3.b64 eb1a3bd94e33da19388507a025c9f0c9719cfe2e5327124f2519390169d24973
+          check_part part10a4.b64 41a7bceb9da0d4d8519dcfd594228c87c0210ee1a4173456c2c91dc5205578ec
           check_part part10b.b64 81d71d414441eb730103f75324c690b791366ccee731ce5a8b1006f12724095b
       - name: Reconstruct and validate correction
         shell: bash
         run: |
           set -euo pipefail
-          { cat .v4build/part01.b64 .v4build/part02.b64 .v4build/part03.b64 .v4build/part04.b64 .v4build/part05.b64 .v4build/part06.b64 .v4build/part07.b64 .v4build/part08.b64 .v4build/part09.b64 .v4build/part10a.b64 .v4build/part10b.b64; } | tr -d '\n' | base64 -d > v4-correct.js
+          { cat .v4build/part01.b64 .v4build/part02.b64 .v4build/part03.b64 .v4build/part04.b64 .v4build/part05.b64 .v4build/part06.b64 .v4build/part07.b64 .v4build/part08.b64 .v4build/part09.b64 .v4build/part10a1.b64 .v4build/part10a2.b64 .v4build/part10a3.b64 .v4build/part10a4.b64 .v4build/part10b.b64; } | tr -d '\n' | base64 -d > v4-correct.js
           test "$(wc -c < v4-correct.js)" = '84097'
           echo '18788d42cc3004b3052b3df1ed376efdda348e0b40e45809ae3ae6b3ae1a7aee  v4-correct.js' | sha256sum -c -
           node --check v4-correct.js
