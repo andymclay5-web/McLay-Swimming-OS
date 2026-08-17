@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.SessionTruth=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.2.0';
   const BLOCK_TYPES={
     'warm up':'warm_up','warm-up':'warm_up','warmup':'warm_up',
     'pre set':'pre_set','pre-set':'pre_set','preset':'pre_set',
@@ -43,6 +43,10 @@
   function roundLine(line){const m=text(line).match(/^(\d{1,2})\s+rounds?\s*:?\s*(.*)$/i);return m?{rounds:Number(m[1]),tail:text(m[2])}:null}
   function explicitRepeat(line){const m=text(line).match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);return m?{reps:Number(m[1]),distance:Number(m[2]),tail:text(m[3])}:null}
   function singleDistance(line){const m=text(line).match(/^(\d{2,4}(?:\.5)?)\b\s*(.*)$/);return m?{distance:Number(m[1]),tail:text(m[2])}:null}
+  function summaryRepeat(line){
+    const rep=explicitRepeat(line);
+    return rep&&/\b(?:total|altogether|overall)\b/i.test(rep.tail||'')?rep:null;
+  }
   function zoneName(v){const t=text(v);if(/\b(?:regeneration|regen|reg)\b/i.test(t))return'Regeneration';if(/\b(?:development|dev)\b/i.test(t))return'Development';if(/\b(?:overload|ol)\b/i.test(t))return'Overload';if(/\b(?:threshold|thr)\b/i.test(t))return'Threshold';if(/\b(?:clearance|cl)\b/i.test(t))return'Clearance';return''}
   function strokeName(v){const t=text(v);if(/\b(?:freestyle|free|fr)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back|bk)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';if(/\bIM\b/i.test(t))return'IM';if(/\bchoice\b/i.test(t))return'Choice';return''}
   function equipment(v){const t=text(v);return['Fins','Paddles','Pull','Bands','Snorkel'].filter(x=>new RegExp(`\\b${x}\\b`,'i').test(t))}
@@ -139,6 +143,11 @@
       if(restOnly&&currentSet){currentSet.restSeconds=Number(restOnly[1]);continue}
       const cycleOnly=line.match(/^(?:@|on)\s*(\d{1,2})[:.](\d{2})$/i)||line.match(/^on\s+(\d{2,3})$/i);
       if(cycleOnly&&currentSet){currentSet.cycleSeconds=cycleSeconds(line);continue}
+      const summary=summaryRepeat(line);
+      if(summary){
+        root.push({id:stable('summary',sessionId,type,++order,line),kind:'cue',role:'summary',order,text:line,raw:line,summaryMetres:summary.reps*summary.distance});
+        currentSet=null;currentGroup=null;continue;
+      }
       const rep=explicitRepeat(line);if(rep){push(makeSet(sessionId,type,++order,line,rep.reps,rep.distance));continue}
       const one=singleDistance(line);if(one){push(makeSet(sessionId,type,++order,line,1,one.distance));continue}
       const inline=parseInlinePattern(line);if(inline&&currentSet){applyPattern(currentSet,inline);continue}
@@ -173,5 +182,5 @@
     if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');
     return{ok:errors.length===0,errors,total};
   }
-  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds,raceIntent,repInstructions}};
+  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,summaryRepeat,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds,raceIntent,repInstructions}};
 });
