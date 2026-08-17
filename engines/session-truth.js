@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.SessionTruth=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='2.1.0';
+  const VERSION='2.1.1';
   const BLOCK_TYPES={
     'warm up':'warm_up','warm-up':'warm_up','warmup':'warm_up',
     'pre set':'pre_set','pre-set':'pre_set','preset':'pre_set',
@@ -18,24 +18,22 @@
   const BLOCK_TITLES={warm_up:'Warm-up',pre_set:'Pre-set',main_set:'Main set',post_set:'Post-set',warm_down:'Warm-down',test:'Test',other:'Other'};
   const BLOCK_ORDER={warm_up:10,pre_set:20,main_set:30,post_set:40,test:45,warm_down:50,other:60};
   const WORD_NUMBERS={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20};
-  const DISTANCE_WORDS={twentyfive:25,'twenty-five':25,twentyfives:25,fifty:50,fifties:50,seventyfive:75,'seventy-five':75,seventyfives:75,hundred:100,hundreds:100,twohundred:200,'two-hundred':200,fourhundred:400,'four-hundred':400};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const lines=v=>String(v??'').replace(/\r/g,'').split('\n');
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const hash=s=>{let h=2166136261;for(const ch of String(s??'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0).toString(36)};
   const stable=(prefix,...parts)=>`${prefix}-${hash(parts.map(text).join('|').toLowerCase())}`;
   const wordNumber=v=>WORD_NUMBERS[text(v).toLowerCase()]||Number(v)||null;
+  const NUMBER_WORD='one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty';
 
   function spokenWork(fragment){
     let x=text(fragment).replace(/^(?:and\s+)?then\s+/i,'').replace(/^and\s+/i,'');
-    x=x.replace(/\bwith\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+seconds?\s+rest\b/ig,(_,w)=>`${wordNumber(w)}s rest`);
+    x=x.replace(new RegExp(`\\bwith\\s+(${NUMBER_WORD})\\s+seconds?\\s+rest\\b`,'ig'),(_,w)=>`${wordNumber(w)}s rest`);
     x=x.replace(/\b(on|at)\s+a\s+minute\b/ig,'on 60');
-    let m=x.match(/^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(twenty[- ]?fives?|fift(?:y|ies)|seventy[- ]?fives?|hundreds?)\b\s*(.*)$/i);
+    let m=x.match(new RegExp(`^(${NUMBER_WORD})\\s+(twenty[- ]?fives|fifties|seventy[- ]?fives|hundreds)\\b\\s*(.*)$`,'i'));
     if(m){const reps=wordNumber(m[1]),dw=m[2].toLowerCase().replace(/\s+/g,''),distance=/twenty/.test(dw)?25:/fift/.test(dw)?50:/seventy/.test(dw)?75:100;return`${reps} x ${distance}${text(m[3])?' '+text(m[3]):''}`}
-    m=x.match(/^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(hundred|two\s+hundred|four\s+hundred|eight\s+hundred)\b\s*(.*)$/i);
-    if(m){const n=wordNumber(m[1]),unit=m[2].toLowerCase().replace(/\s+/g,''),distance=unit==='hundred'?100:unit==='twohundred'?200:unit==='fourhundred'?400:800;return n===1?`${distance}${text(m[3])?' '+text(m[3]):''}`:`${n} x ${distance}${text(m[3])?' '+text(m[3]):''}`}
-    m=x.match(/^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+hundred\b\s*(.*)$/i);
-    if(m)return`${wordNumber(m[1])*100}${text(m[2])?' '+text(m[2]):''}`;
+    m=x.match(new RegExp(`^(${NUMBER_WORD})\\s+hundred\\b\\s*(.*)$`,'i'));
+    if(m){const distance=wordNumber(m[1])*100;return`${distance}${text(m[2])?' '+text(m[2]):''}`}
     return x;
   }
   function speechToLines(source){
@@ -48,30 +46,25 @@
       const hm=sentence.match(/^(warm\s*[- ]?up|pre\s*[- ]?set|main\s*[- ]?set|post\s*[- ]?(?:main\s*)?set|warm\s*[- ]?down|cool\s*[- ]?down)\b\s*(?:will\s+be|is|:|,)?\s*(.*)$/i);
       if(!hm){out.push(sentence);continue}
       out.push(hm[1]);let body=text(hm[2]);if(!body)continue;
-      body=body.replace(/,?\s+and\s+repeat\s+that\s+(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+times?\b/i,(_,n)=>`, Repeat x${wordNumber(n)}`);
+      body=body.replace(new RegExp(`,?\\s+and\\s+repeat\\s+that\\s+(${NUMBER_WORD}|\\d+)\\s+times?\\b`,'i'),(_,n)=>`, Repeat x${wordNumber(n)}`);
       const parts=body.split(/\s*,\s*(?:then\s+)?|\s+then\s+/i).map(text).filter(Boolean);
-      for(let p of parts){const rm=p.match(/^(?:and\s+)?repeat\s+(?:that\s+)?(?:x\s*)?(one|two|three|four|five|six|seven|eight|nine|ten|\d+)(?:\s+times?)?$/i);if(rm)out.push(`Repeat x${wordNumber(rm[1])}`);else out.push(spokenWork(p))}
+      for(let p of parts){const rm=p.match(new RegExp(`^(?:and\\s+)?repeat\\s+(?:that\\s+)?(?:x\\s*)?(${NUMBER_WORD}|\\d+)(?:\\s+times?)?$`,'i'));if(rm)out.push(`Repeat x${wordNumber(rm[1])}`);else out.push(spokenWork(p))}
     }
     return out.join('\n');
   }
   function normaliseNaturalLine(line){
     let x=String(line??'').trim();x=x.replace(/[×✕]/g,'x').replace(/[–—]/g,'—');x=x.replace(/\bon\s+a\s+minute\b/ig,'on 60');
     x=x.replace(/^([1-9]\d?)(25|50|75|100|200|400)s\b/i,(_,r,d)=>`${r} x ${d}`);
-    x=x.replace(/^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(25|50|75|100|200|400)s?\b/i,(_,w,d)=>`${WORD_NUMBERS[w.toLowerCase()]} x ${d}`);
+    x=x.replace(new RegExp(`^(${NUMBER_WORD})\\s+(25|50|75|100|200|400)s?\\b`,'i'),(_,w,d)=>`${WORD_NUMBERS[w.toLowerCase()]} x ${d}`);
     x=x.replace(/^(\d{1,2})\s+(25|50|75|100|200|400)s\b/i,'$1 x $2');
     const wd=x.match(/^(warm\s*[- ]?down|cool\s*[- ]?down)\s+(?:of\s+)?(\d{2,4})\s*(?:m|metres?|meters?)?\s*$/i);if(wd)return`${wd[1]}\n${wd[2]}`;
     return x;
   }
   function normaliseSource(source){return lines(speechToLines(source)).flatMap(line=>normaliseNaturalLine(line).split('\n')).join('\n')}
   function blockType(v){const k=text(v).toLowerCase().replace(/\s+/g,' ');return BLOCK_TYPES[k]||'other'}
-  function heading(line){
-    const t=text(line).replace(/[:]+$/,'');
-    const same=t.match(/^(warm\s*[- ]?up|pre\s*[- ]?set|main\s*[- ]?set|post\s*[- ]?(?:main\s*)?set|warm\s*[- ]?down|cool\s*[- ]?down|test)\s*(?:[-—:·]\s*)?(\d{1,2})\s*rounds?\b\s*(.*)$/i);
-    if(same)return{type:blockType(same[1]),rounds:Number(same[2]),tail:text(same[3]),authoredTitle:text(same[1])};
-    const type=blockType(t);return type!=='other'?{type,rounds:null,tail:'',authoredTitle:t}:null;
-  }
+  function heading(line){const t=text(line).replace(/[:]+$/,'');const same=t.match(/^(warm\s*[- ]?up|pre\s*[- ]?set|main\s*[- ]?set|post\s*[- ]?(?:main\s*)?set|warm\s*[- ]?down|cool\s*[- ]?down|test)\s*(?:[-—:·]\s*)?(\d{1,2})\s*rounds?\b\s*(.*)$/i);if(same)return{type:blockType(same[1]),rounds:Number(same[2]),tail:text(same[3]),authoredTitle:text(same[1])};const type=blockType(t);return type!=='other'?{type,rounds:null,tail:'',authoredTitle:t}:null}
   function roundLine(line){const m=text(line).match(/^(\d{1,2})\s+rounds?\s*:?\s*(.*)$/i);return m?{rounds:Number(m[1]),tail:text(m[2])}:null}
-  function repeatMarker(line){let m=text(line).match(/^(?:repeat\s+(?:that\s+)?)?x\s*(\d{1,2})\s*$/i);if(m)return Number(m[1]);m=text(line).match(/^repeat\s+(?:that\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+times?$/i);return m?wordNumber(m[1]):null}
+  function repeatMarker(line){let m=text(line).match(/^(?:repeat\s+(?:that\s+)?)?x\s*(\d{1,2})\s*$/i);if(m)return Number(m[1]);m=text(line).match(new RegExp(`^repeat\\s+(?:that\\s+)?(${NUMBER_WORD}|\\d+)\\s+times?$`,'i'));return m?wordNumber(m[1]):null}
   function explicitRepeat(line){const m=text(line).match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);return m?{reps:Number(m[1]),distance:Number(m[2]),tail:text(m[3])}:null}
   function singleDistance(line){const m=text(line).match(/^(\d{2,4}(?:\.5)?)\b\s*(.*)$/);return m?{distance:Number(m[1]),tail:text(m[2])}:null}
   function summaryRepeat(line){const r=explicitRepeat(line);return r&&/\b(?:total|altogether|overall)\b/i.test(r.tail||'')?r:null}
@@ -101,33 +94,9 @@
   function appendCue(set,line){const t=text(line);set.cues.push(t);const refs=explicitRepInstructions(t,set.reps);if(refs.length)set.repInstructions=dedupeRepInstructions([...(set.repInstructions||[]),...refs])}
   function walkSets(nodes,fn){for(const n of nodes||[]){if(n?.kind==='set')fn(n);else if(n?.kind==='group')walkSets(n.items,fn)}}
   function applyRest(nodes,seconds){walkSets(nodes,s=>{s.restSeconds=seconds})}
-  function parseBlock(sessionId,type,rawLines){
-    const root=[];let order=0,currentSet=null,lastRepeatGroup=null,segmentStart=0;const groups=[];const list=()=>groups.length?groups.at(-1).items:root;const push=n=>{list().push(n);if(n.kind==='set')currentSet=n};
-    for(const rawLine of rawLines){
-      const line=text(rawLine);if(!line){currentSet=null;groups.length=0;segmentStart=root.length;lastRepeatGroup=null;continue}
-      const rl=roundLine(line);if(rl){const g={id:stable('group',sessionId,type,++order,line),kind:'group',order,rounds:rl.rounds,label:rl.tail||'',items:[]};list().push(g);groups.push(g);currentSet=null;continue}
-      const repeat=repeatMarker(line);if(repeat&&repeat>1){const target=list(),start=groups.length?0:segmentStart,items=target.splice(start);if(items.length){const g={id:stable('group',sessionId,type,++order,`repeat-${repeat}-${items.map(x=>x.id).join('|')}`),kind:'group',order,rounds:repeat,label:'Repeat',items};target.push(g);lastRepeatGroup=g;currentSet=null}continue}
-      const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);if(restOnly){const n=Number(restOnly[1]);if(currentSet)currentSet.restSeconds=n;else if(lastRepeatGroup)applyRest(lastRepeatGroup.items,n);continue}
-      const allRest=line.match(/^all\s+(?:with\s+)?(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)(?:\s+period)?$/i);if(allRest){const n=Number(allRest[1]),target=list().slice(groups.length?0:segmentStart);applyRest(target,n);continue}
-      if(/^(?:@|on)\s*/i.test(line)&&cycleOptions(line).length&&currentSet){const opts=cycleOptions(line);currentSet.cycleOptions=opts;currentSet.cycleSeconds=opts[0]??null;continue}
-      const summary=summaryRepeat(line);if(summary){root.push({id:stable('summary',sessionId,type,++order,line),kind:'cue',role:'summary',order,text:line,raw:line,summaryMetres:summary.reps*summary.distance});currentSet=null;groups.length=0;segmentStart=root.length;lastRepeatGroup=null;continue}
-      const rep=explicitRepeat(line);if(rep){push(makeSet(sessionId,type,++order,line,rep.reps,rep.distance));lastRepeatGroup=null;continue}
-      const one=singleDistance(line);if(one){push(makeSet(sessionId,type,++order,line,1,one.distance));lastRepeatGroup=null;continue}
-      const inline=parseInlinePattern(line);if(inline&&currentSet){currentSet.pattern.push(...inline);expandPattern(currentSet);continue}
-      const counted=countInstruction(line);if(counted&&currentSet&&counted.count<=Math.max(1,Number(currentSet.reps)||1)){currentSet.pattern.push(makePatternSegment(counted.count,counted.text));expandPattern(currentSet);continue}
-      if(currentSet){appendCue(currentSet,line);continue}
-      list().push({id:stable('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});
-    }
-    return foldChildren(root);
-  }
+  function parseBlock(sessionId,type,rawLines){const root=[];let order=0,currentSet=null,lastRepeatGroup=null,segmentStart=0;const groups=[];const list=()=>groups.length?groups.at(-1).items:root;const push=n=>{list().push(n);if(n.kind==='set')currentSet=n};for(const rawLine of rawLines){const line=text(rawLine);if(!line){currentSet=null;groups.length=0;segmentStart=root.length;lastRepeatGroup=null;continue}const rl=roundLine(line);if(rl){const g={id:stable('group',sessionId,type,++order,line),kind:'group',order,rounds:rl.rounds,label:rl.tail||'',items:[]};list().push(g);groups.push(g);currentSet=null;continue}const repeat=repeatMarker(line);if(repeat&&repeat>1){const target=list(),start=groups.length?0:segmentStart,items=target.splice(start);if(items.length){const g={id:stable('group',sessionId,type,++order,`repeat-${repeat}-${items.map(x=>x.id).join('|')}`),kind:'group',order,rounds:repeat,label:'Repeat',items};target.push(g);lastRepeatGroup=g;currentSet=null}continue}const restOnly=line.match(/^(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)$/i);if(restOnly){const n=Number(restOnly[1]);if(currentSet)currentSet.restSeconds=n;else if(lastRepeatGroup)applyRest(lastRepeatGroup.items,n);continue}const allRest=line.match(/^all\s+(?:with\s+)?(\d{1,3})\s*(?:sr|s\s*r|s\s*rest|sec(?:onds?)?\s*rest|rest)(?:\s+period)?$/i);if(allRest){const n=Number(allRest[1]),target=list().slice(groups.length?0:segmentStart);applyRest(target,n);continue}if(/^(?:@|on)\s*/i.test(line)&&cycleOptions(line).length&&currentSet){const opts=cycleOptions(line);currentSet.cycleOptions=opts;currentSet.cycleSeconds=opts[0]??null;continue}const summary=summaryRepeat(line);if(summary){root.push({id:stable('summary',sessionId,type,++order,line),kind:'cue',role:'summary',order,text:line,raw:line,summaryMetres:summary.reps*summary.distance});currentSet=null;groups.length=0;segmentStart=root.length;lastRepeatGroup=null;continue}const rep=explicitRepeat(line);if(rep){push(makeSet(sessionId,type,++order,line,rep.reps,rep.distance));lastRepeatGroup=null;continue}const one=singleDistance(line);if(one){push(makeSet(sessionId,type,++order,line,1,one.distance));lastRepeatGroup=null;continue}const inline=parseInlinePattern(line);if(inline&&currentSet){currentSet.pattern.push(...inline);expandPattern(currentSet);continue}const counted=countInstruction(line);if(counted&&currentSet&&counted.count<=Math.max(1,Number(currentSet.reps)||1)){currentSet.pattern.push(makePatternSegment(counted.count,counted.text));expandPattern(currentSet);continue}if(currentSet){appendCue(currentSet,line);continue}list().push({id:stable('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line})}return foldChildren(root)}
   function createSession(identity,source){const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);return{schema:'msos.session.v2',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}}}
-  function parse(source,identity={}){
-    const normalized=normaliseSource(source),session=createSession(identity,source),chunks=[];let currentType=null,currentLines=[],pendingRounds=null,writtenTotal=null,currentTitle='';const notes=[];
-    const flush=()=>{if(!currentType)return;let blockLines=currentLines;if(pendingRounds)blockLines=[`${pendingRounds} Rounds:`,...blockLines];chunks.push({type:currentType,lines:blockLines,authoredTitle:currentTitle});currentLines=[];pendingRounds=null;currentTitle=''};
-    for(const raw of lines(normalized)){const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;currentTitle=h.authoredTitle||'';if(h.tail)currentLines.push(h.tail);continue}if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw)}flush();
-    session.blocks=chunks.map((c,i)=>({id:stable('block',session.id,c.type,i,c.authoredTitle),type:c.type,title:/post\s*[- ]?main/i.test(c.authoredTitle)?'Post-main set':BLOCK_TITLES[c.type]||'Block',authoredTitle:c.authoredTitle||'',sourceOrder:i+1,order:i+1,items:parseBlock(session.id,c.type,c.lines)})).sort((a,b)=>(BLOCK_ORDER[a.type]||99)-(BLOCK_ORDER[b.type]||99)||a.sourceOrder-b.sourceOrder).map((b,i)=>({...b,order:i+1}));
-    session.metadata.normalizedSource=normalized;session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);return session;
-  }
+  function parse(source,identity={}){const normalized=normaliseSource(source),session=createSession(identity,source),chunks=[];let currentType=null,currentLines=[],pendingRounds=null,writtenTotal=null,currentTitle='';const notes=[];const flush=()=>{if(!currentType)return;let blockLines=currentLines;if(pendingRounds)blockLines=[`${pendingRounds} Rounds:`,...blockLines];chunks.push({type:currentType,lines:blockLines,authoredTitle:currentTitle});currentLines=[];pendingRounds=null;currentTitle=''};for(const raw of lines(normalized)){const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;currentTitle=h.authoredTitle||'';if(h.tail)currentLines.push(h.tail);continue}if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw)}flush();session.blocks=chunks.map((c,i)=>({id:stable('block',session.id,c.type,i,c.authoredTitle),type:c.type,title:/post\s*[- ]?main/i.test(c.authoredTitle)?'Post-main set':BLOCK_TITLES[c.type]||'Block',authoredTitle:c.authoredTitle||'',sourceOrder:i+1,order:i+1,items:parseBlock(session.id,c.type,c.lines)})).sort((a,b)=>(BLOCK_ORDER[a.type]||99)-(BLOCK_ORDER[b.type]||99)||a.sourceOrder-b.sourceOrder).map((b,i)=>({...b,order:i+1}));session.metadata.normalizedSource=normalized;session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);return session}
   function validate(session){const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');if(!(total>0))errors.push('No runnable distance');if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');return{ok:errors.length===0,errors,total}}
   return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{speechToLines,spokenWork,normaliseSource,normaliseNaturalLine,heading,roundLine,repeatMarker,explicitRepeat,singleDistance,summaryRepeat,countInstruction,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds,cycleOptions,raceIntent,explicitRepInstructions,oddEvenInstructions,parentheticalComposition}};
 });
