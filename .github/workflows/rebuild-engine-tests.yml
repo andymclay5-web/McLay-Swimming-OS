@@ -51,7 +51,11 @@ jobs:
       - name: Syntax check Evidence Retrieval
         run: node --check engines/evidence-retrieval.js
       - name: Evidence Retrieval isolated regressions
-        run: node tests/evidence-retrieval.test.js
+        run: |
+          for f in tests/evidence*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
 
   results-pathway:
     runs-on: ubuntu-latest
