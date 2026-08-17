@@ -60,7 +60,7 @@ test('common work renders once and genuine modification sits in side rail',()=>{
  const {board,session,attendance}=system('Main Set\n400 Pull');attendance.mark(session,'mk','modified');attendance.mark(session,'molly','present');const html=Render.renderBoard(board.project(session));
  assert.equal((html.match(/400 Pull/g)||[]).length,1);
  assert.equal((html.match(/class="msos-mod-rail"/g)||[]).length,1);
- assert(/McKenzie Drage|MD/.test(html));
+ assert(/McKenzie/.test(html));assert(!/>MD</.test(html));
 });
 
 test('target is rendered directly under its exact set with set context attributes',()=>{
