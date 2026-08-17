@@ -4,8 +4,9 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.MorningCoaching=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   const STORAGE_KEY='mclay_swimming_os_v4';
+  const LEGACY_STORAGE_KEY='mclay_swimming_os_v1';
   const REF_DB='mclay_swimming_v4_reference_cache';
   const LEGACY_REF_DB='mclay_swimming_v374_heavy_cache';
   const AEROBIC={
@@ -30,8 +31,17 @@
   function blankState(){return{athletes:[],trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],adaptationOverrides:[],coachResults:[],resultsEventHistory:[],resultsPbBoard:[],courseConversions:[],_refs:{}}}
   function mergeRows(a=[],b=[]){
     const map=new Map();
-    for(const x of [...(a||[]),...(b||[])]){if(!x)continue;const id=x.id||JSON.stringify([x.athlete_id,x.result_date,x.distance,x.stroke,x.result_seconds]);map.set(id,x)}
+    for(const x of [...(a||[]),...(b||[])]){if(!x)continue;const id=x.id||JSON.stringify([x.athlete_id,x.test_type_id,x.result_date,x.distance,x.stroke,x.result_seconds,x.full_name]);map.set(id,x)}
     return [...map.values()];
+  }
+  function mergeLegacyEvidence(state,legacy){
+    if(!legacy||typeof legacy!=='object')return state;
+    state.athletes=mergeRows(state.athletes,legacy.athletes);
+    state.trainingTestTypes=mergeRows(state.trainingTestTypes||state.training_test_types,legacy.training_test_types);
+    state.trainingTestResults=mergeRows(state.trainingTestResults||state.training_test_results,legacy.training_test_results);
+    state.adaptationProfiles=mergeRows(state.adaptationProfiles||state.athlete_adaptation_profiles,legacy.athlete_adaptation_profiles);
+    state.coachResults=mergeRows(state.coachResults||state.coach_results,legacy.coach_results);
+    return state;
   }
   function readDb(name){
     return new Promise(resolve=>{
@@ -51,8 +61,12 @@
   async function loadState(){
     let state=blankState();
     try{const x=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');if(x&&typeof x==='object')state={...state,...x}}catch{}
+    try{mergeLegacyEvidence(state,JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY)||'null'))}catch{}
     let refs=await readDb(REF_DB);if(!refs)refs=await readDb(LEGACY_REF_DB);refs=refs||{};
     state._refs=refs;
+    state.trainingTestTypes=mergeRows(state.trainingTestTypes,refs.training_test_types);
+    state.trainingTestResults=mergeRows(state.trainingTestResults,refs.training_test_results);
+    state.adaptationProfiles=mergeRows(state.adaptationProfiles,refs.athlete_adaptation_profiles);
     state.coachResults=mergeRows(state.coachResults||state.coach_results,refs.coach_results);
     state.resultsEventHistory=mergeRows(state.resultsEventHistory||state.results_event_history,refs.results_event_history);
     state.resultsPbBoard=mergeRows(state.resultsPbBoard||state.results_pb_board,refs.results_pb_board);
@@ -66,13 +80,14 @@
     let ratio=Number(p?.default_volume_ratio);if(!Number.isFinite(ratio)||ratio<=0)ratio=1;
     const k=key(athlete.full_name),fallbacks={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
     if(ratio===1&&fallbacks[k])ratio=fallbacks[k];
-    return{ratio:Math.max(.25,Math.min(1,ratio)),label:p?.profile_label||athlete.modifications||'',key:k,returnToStart:p?.return_to_starting_end===true||k==='charlottemurphy'};
+    const returnToStart=p?.return_to_starting_end===true||k==='charlottemurphy'||k==='mckenziedrage';
+    return{ratio:Math.max(.25,Math.min(1,ratio)),label:p?.profile_label||athlete.modifications||'',key:k,returnToStart,roundUpReturn:k==='mckenziedrage'};
   }
   function poolLength(session){return /LCM/i.test(text(session?.identity?.course))?50:25}
-  function nearestDistance(distance,ratio,session,returnToStart){
+  function nearestDistance(distance,ratio,session,returnToStart,roundUpReturn=false){
     if(ratio>=.98)return Number(distance)||0;
-    const pool=poolLength(session),unit=returnToStart?pool*2:pool,target=Math.max(pool,Number(distance||0)*ratio);
-    return Math.max(unit,Math.round(target/unit)*unit);
+    const pool=poolLength(session),unit=returnToStart?pool*2:pool,target=Math.max(pool,Number(distance||0)*ratio),steps=roundUpReturn?Math.ceil(target/unit):Math.round(target/unit);
+    return Math.max(unit,steps*unit);
   }
   function scaleReps(reps,distance,ratio,session,returnToStart){
     reps=Math.max(1,Number(reps)||1);if(ratio>=.98)return reps;
@@ -83,7 +98,13 @@
     if(!candidates.length)return Math.max(1,Math.round(reps*ratio));
     candidates.sort((a,b)=>a.delta-b.delta||a.metres-b.metres);return candidates[0].r;
   }
+  function structuredQuality(item){
+    const raw=[item?.raw,item?.text,...(item?.cues||[]),...(item?.pattern||[]).map(x=>x.text||'')].filter(Boolean).join(' '),distance=Number(item?.distance)||0,reps=Number(item?.reps)||1;
+    if(item?.zone||/\b(?:regeneration|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(raw))return false;
+    return distance>0&&distance<=100&&reps<=4&&/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i.test(raw);
+  }
   function sameTeamExposure(item){
+    if(structuredQuality(item))return true;
     const raw=[item?.raw,item?.text,item?.zone,...(item?.cues||[])].filter(Boolean).join(' '),distance=Number(item?.distance)||0,reps=Number(item?.reps)||1;
     if(distance<=0||distance>50||reps>20)return false;
     if(/\b(?:regeneration|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(raw))return false;
@@ -100,7 +121,7 @@
     if(item?.kind==='group'){const g=clone(item);g.items=(item.items||[]).map(x=>adaptItem(x,athlete,state,session));return g}
     const p=profile(athlete,state),x=constrain(item,athlete),keep=sameTeamExposure(item),beforeR=Number(x.reps)||1,beforeD=Number(x.distance)||0;
     if(!keep&&p.ratio<.98){
-      if(beforeR===1&&beforeD>=100)x.distance=nearestDistance(beforeD,p.ratio,session,p.returnToStart);
+      if(beforeR===1&&beforeD>=100)x.distance=nearestDistance(beforeD,p.ratio,session,p.returnToStart,p.roundUpReturn);
       else x.reps=scaleReps(beforeR,beforeD,p.ratio,session,p.returnToStart);
     }
     const changed=(Number(x.reps)||1)!==beforeR||(Number(x.distance)||0)!==beforeD||text(x.raw)!==text(item.raw);
@@ -129,7 +150,7 @@
   }
   function t400(athlete,state,course='',stroke='Freestyle'){
     const wanted=normaliseStroke(stroke),rows=state?.trainingTestResults||state?.training_test_results||[];
-    const found=rows.filter(r=>r.athlete_id===athlete?.id).filter(r=>/t400/i.test(typeKey(state,r))).filter(r=>testStroke(state,r)===wanted).filter(r=>r.valid_for_anchor!==false).filter(r=>!course||!r.pool_course||text(r.pool_course).toUpperCase()===text(course).toUpperCase()).filter(r=>Number.isFinite(resultSeconds(r))).sort((a,b)=>resultSeconds(a)-resultSeconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))[0]||null;
+    const found=rows.filter(r=>r.athlete_id===athlete?.id).filter(r=>/t400/i.test(typeKey(state,r))).filter(r=>testStroke(state,r)===wanted).filter(r=>r.valid_for_anchor!==false).filter(r=>!course||!r.pool_course||text(r.pool_course).toUpperCase()===text(course).toUpperCase()).filter(r=>Number.isFinite(resultSeconds(r))).sort((a,b)=>String(b.result_date||'').localeCompare(String(a.result_date||''))||resultSeconds(a)-resultSeconds(b))[0]||null;
     if(found)return found;
     if(key(athlete?.full_name)==='mollymckernan'&&wanted==='Freestyle')return{athlete_id:athlete.id,result_seconds:324.6,pool_course:course||'SCM',valid_for_anchor:true,source_label:'Coach-confirmed T400 5:24.6'};
     return null;
@@ -230,5 +251,5 @@
     return{status:'none'};
   }
 
-  return{VERSION,loadState,activeAthletes,profile,adaptItem,samePrescription,t400,aerobic,pb,targetForItem,normaliseStroke,clock,internals:{key,sameTeamExposure,practicalSendOff,bestStroke,racePaceTarget}};
+  return{VERSION,loadState,activeAthletes,profile,adaptItem,samePrescription,t400,aerobic,pb,targetForItem,normaliseStroke,clock,internals:{key,sameTeamExposure,structuredQuality,practicalSendOff,bestStroke,racePaceTarget,mergeLegacyEvidence,nearestDistance}};
 });
