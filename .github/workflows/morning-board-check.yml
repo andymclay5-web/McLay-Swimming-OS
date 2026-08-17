@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'engines/session-truth.js'
+      - 'engines/morning-coaching.js'
       - 'tests/session-truth.test.js'
       - 'morning-board.html'
       - 'morning-board.js'
@@ -24,13 +25,16 @@ jobs:
       - name: Syntax check
         run: |
           node --check engines/session-truth.js
+          node --check engines/morning-coaching.js
           node --check morning-board.js
           node --check sw.js
-      - name: Session Truth regression
+      - name: Session + coaching regression
         run: node tests/session-truth.test.js
       - name: Morning Board wiring
         run: |
           grep -q 'engines/session-truth.js' morning-board.html
+          grep -q 'engines/morning-coaching.js' morning-board.html
           grep -q 'morning-board.js' morning-board.html
           grep -q 'morning-board.css' morning-board.html
           grep -q 'morning-board.html' sw.js
+          grep -q 'engines/morning-coaching.js' sw.js
