@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d4566">
+<title>MSOS Morning Board</title>
+<link rel="stylesheet" href="morning-board.css?v=20260817a">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><small>McLAY SWIMMING OS</small><strong>Morning Board</strong></div>
+  <div class="top-actions"><button id="editBtn" class="hidden" type="button">Edit session</button></div>
+</header>
+<main class="shell">
+  <section id="composer" class="composer">
+    <label for="source">Session</label>
+    <textarea id="source" spellcheck="false" autocomplete="off" placeholder="Warm up&#10;400 Choice&#10;&#10;Pre set&#10;12 x 50 #1 @ 1:10&#10;1 Scull / 1 Drill / 1 Swim&#10;&#10;Main set 3 rounds&#10;5 x 100 Free Threshold 10 sr&#10;400 Easy&#10;&#10;Warm down&#10;200 Easy"></textarea>
+    <div class="actions">
+      <button id="parseBtn" class="primary" type="button">Parse → Board</button>
+      <button id="clearBtn" class="danger" type="button">Clear</button>
+    </div>
+    <div id="status" class="status">Paste or type a session. Draft saves on this device.</div>
+  </section>
+  <section id="board" class="hidden" aria-live="polite"></section>
+</main>
+<script src="engines/session-truth.js?v=20260817a"></script>
+<script src="morning-board.js?v=20260817a"></script>
+</body>
+</html>
