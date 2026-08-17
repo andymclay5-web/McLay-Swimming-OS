@@ -4,10 +4,10 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardController=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   const text=v=>String(v??'').trim();
   const CAPTURE_ACTIONS=new Set(['capture','note','voice','photo','video']);
-  const KNOWN_ACTIONS=new Set(['roll','capture','note','voice','photo','video','finish','edit','edit-block','evidence']);
+  const KNOWN_ACTIONS=new Set(['roll','times','capture','note','voice','photo','video','finish','edit','edit-block','evidence']);
 
   function contextFromDataset(dataset={}){
     const sessionId=text(dataset.sessionId),blockId=text(dataset.blockId),itemId=text(dataset.itemId);
@@ -18,6 +18,7 @@
     const ctx={sessionId:text(context.sessionId),blockId:text(context.blockId)||null,itemId:text(context.itemId)||null};
     if(!ctx.sessionId)throw new Error(`Board action ${a} requires sessionId`);
     if(a==='roll')return{type:'roll',context:ctx};
+    if(a==='times')return{type:'openTimes',context:ctx};
     if(a==='finish')return{type:'finish',context:ctx};
     if(a==='edit'){if(!ctx.blockId||!ctx.itemId)throw new Error('Board edit requires blockId + itemId');return{type:'editSet',context:ctx}}
     if(a==='edit-block'){if(!ctx.blockId)throw new Error('Board block edit requires blockId');return{type:'editBlock',context:ctx}}
