@@ -207,3 +207,57 @@ test('Session Truth is pure: parsing does not require browser storage or athlete
  assert.equal(typeof global.localStorage,'undefined');
  assert.equal(s.blocks[0].items[0].zone,'Development');
 });
+
+test('historical controlled spoken session remains 3700m and keeps Sharpness separate',()=>{
+ const spoken='Warm-up, 400 free, 4 50s kick, 10 seconds rest, 200 IM. Pre-set, six times 50 build, four freestyle, two number one on 60, and then 200 IM. Main set, five times 400, one regeneration, one development, one overload, one threshold, one clearance, all based on a T400. Sharpness, 8 times 25 on 40. Warm-down, 200 easy.';
+ const s=E.parse(spoken,id);
+ assert.equal(E.totalDistance(s),3700);
+ assert.equal(s.blocks.length,5);
+ const sharp=s.blocks.find(b=>/sharp/i.test(b.title)||/sharp/i.test(b.authoredTitle));
+ assert(sharp);
+ assert.equal(E.blockDistance(sharp),200);
+});
+
+test('historical 5700m structure preserves child composition without phantom metres',()=>{
+ const src=`Warm Up
+3 x 200
+1 Free
+1 Back
+1 Breast
+15s Rest
+
+Pre Set
+6 x 50
+25 #1 Drill
+25 #1 Swim @ 1:00
+8 x 25 #1 Kick @ 0:45
+12.5 Max
+12.5 Easy
+
+Main Set
+800 Freestyle Regeneration
+30s Rest
+2 x 400 Freestyle Development
+30s Rest
+4 x 200 Freestyle Overload
+30s Rest
+12 x 100 with Fins
+4 Rounds:
+25 Max / 75 Easy
+75 Easy / 25 Underwater
+25 Max / 50 Easy / 25 Max
+800 Pull
+Hypoxic 3 / 5 / 7
+
+Warm Down
+200 Easy
+
+TOTAL 5700m`;
+ const s=E.parse(src,id);
+ assert.equal(E.totalDistance(s),5700);
+ assert.equal(s.metadata.totalMatches,true);
+ assert.equal(E.blockDistance(block(s,'warm_up')),600);
+ assert.equal(E.blockDistance(block(s,'pre_set')),500);
+ assert.equal(E.blockDistance(block(s,'main_set')),4400);
+ assert.equal(E.blockDistance(block(s,'warm_down')),200);
+});
