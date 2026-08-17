@@ -4,14 +4,44 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardRenderer=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.2.0';
+  const VERSION='1.2.1';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=v=>esc(text(v));
   function fmtSeconds(value){const n=Number(value);if(!Number.isFinite(n))return'';const m=Math.floor(n/60),s=n-m*60;return m?`${m}:${s.toFixed(s%1?1:0).padStart(s%1?4:2,'0')}`:s.toFixed(s%1?1:0)}
   function fmtDistance(v){const n=Number(v);return Number.isFinite(n)?`${n.toLocaleString('en-NZ')}m`:''}
   function actionAttrs(context={}){return`data-session-id="${attr(context.sessionId)}" data-block-id="${attr(context.blockId)}" data-item-id="${attr(context.itemId||context.setId||context.cueId)}"`}
   function actionButton(action,label,context,cls=''){return`<button type="button" class="msos-board-action ${cls}" data-board-action="${attr(action)}" ${actionAttrs(context)}>${esc(label)}</button>`}
+
+  function nameParts(value){
+    const parts=text(value).split(/\s+/).filter(Boolean);
+    return{first:parts[0]||'',last:parts.length>1?parts.at(-1):'',full:parts.join(' ')};
+  }
+  function compactNames(athletes=[]){
+    const rows=(athletes||[]).map(a=>({id:a.id,name:text(a.name||a.full_name),...nameParts(a.name||a.full_name)})),out=new Map(),groups=new Map();
+    for(const row of rows){const key=(row.first||row.name||row.id||'').toLowerCase();if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}
+    for(const list of groups.values()){
+      if(list.length===1){const row=list[0];out.set(row.id,row.first||row.name||text(row.id));continue}
+      const unresolved=new Set(list.map(r=>r.id));
+      const maxSurname=Math.max(...list.map(r=>r.last.length),1);
+      for(let width=1;width<=maxSurname&&unresolved.size;width++){
+        const buckets=new Map();
+        for(const row of list.filter(r=>unresolved.has(r.id))){const suffix=row.last?row.last.slice(0,width):text(row.id).slice(0,width);const label=`${row.first||row.name} ${suffix}`.trim();const key=label.toLowerCase();if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push({row,label})}
+        for(const bucket of buckets.values())if(bucket.length===1){out.set(bucket[0].row.id,bucket[0].label);unresolved.delete(bucket[0].row.id)}
+      }
+      for(const row of list.filter(r=>unresolved.has(r.id))){const base=row.full||row.name||row.first||'Swimmer';out.set(row.id,`${base} ${text(row.id).slice(-3)}`.trim())}
+    }
+    return out;
+  }
+  function applyDisplayNames(model={}){
+    const view=clone(model),athletes=view.attendance?.athletes||[],names=compactNames(athletes);
+    for(const athlete of athletes)athlete.label=names.get(athlete.id)||athlete.name||athlete.label;
+    const labelRows=rows=>{for(const row of rows||[])if(row?.athleteId)row.label=names.get(row.athleteId)||row.athleteName||row.label};
+    const walk=nodes=>{for(const node of nodes||[]){if(node?.kind==='group'){walk(node.items);continue}if(node?.kind!=='set')continue;labelRows(node.targets);labelRows(node.modifications);for(const phase of node.phases||[])labelRows(phase.targets)}};
+    for(const block of view.blocks||[])walk(block.items);
+    return view;
+  }
 
   function canonicalRaw(w={}){
     const raw=text(w.raw);if(!raw)return'';
@@ -92,8 +122,8 @@
   function renderAttendance(a={}){return`<div class="msos-board-attendance"><strong>${esc(`${Number(a.here)||0} here`)}</strong>${(a.athletes||[]).map(x=>`<span class="msos-athlete-chip status-${attr(x.status)}" data-athlete-id="${attr(x.id)}">${esc(x.label)}<small>${esc(x.status)}</small></span>`).join('')}</div>`}
   function renderBoard(model={}){
     if(model.schema!=='msos.board.v2')throw new Error('Board Renderer requires msos.board.v2 projection');
-    const i=model.identity||{},sessionContext={sessionId:model.sessionId,blockId:'',itemId:''},warning=model.validation?.totalMatches===false?`<div class="msos-board-warning">${esc((model.validation.warnings||[]).join(' · ')||'Session total needs checking')}</div>`:'',here=Number(model.attendance?.here)||0;
-    return`<main class="msos-board" data-session-id="${attr(model.sessionId)}"><header class="msos-board-hero"><div><span class="msos-board-kicker">${esc([i.date,i.dayPart].filter(Boolean).join(' · '))}</span><h1>${esc(i.title||'Session Board')}</h1><p>${esc([...(i.squads||[]),i.venue,i.course].filter(Boolean).join(' · '))}</p></div><strong class="msos-board-total">${esc(fmtDistance(model.totalDistance))}</strong></header><nav class="msos-board-sticky-actions" aria-label="Poolside actions">${actionButton('roll',`Roll · ${here}`,sessionContext)}${actionButton('times','T400 / Times',sessionContext)}${actionButton('capture','Capture',sessionContext)}${actionButton('voice','Voice',sessionContext)}${actionButton('photo','Photo',sessionContext)}${actionButton('video','Video',sessionContext)}${actionButton('finish','Finish',sessionContext,'is-primary')}</nav>${warning}${renderAttendance(model.attendance||{})}<div class="msos-board-blocks">${(model.blocks||[]).map(renderBlock).join('')}</div></main>`;
+    const view=applyDisplayNames(model),i=view.identity||{},sessionContext={sessionId:view.sessionId,blockId:'',itemId:''},warning=view.validation?.totalMatches===false?`<div class="msos-board-warning">${esc((view.validation.warnings||[]).join(' · ')||'Session total needs checking')}</div>`:'',here=Number(view.attendance?.here)||0;
+    return`<main class="msos-board" data-session-id="${attr(view.sessionId)}"><header class="msos-board-hero"><div><span class="msos-board-kicker">${esc([i.date,i.dayPart].filter(Boolean).join(' · '))}</span><h1>${esc(i.title||'Session Board')}</h1><p>${esc([...(i.squads||[]),i.venue,i.course].filter(Boolean).join(' · '))}</p></div><strong class="msos-board-total">${esc(fmtDistance(view.totalDistance))}</strong></header><nav class="msos-board-sticky-actions" aria-label="Poolside actions">${actionButton('roll',`Roll · ${here}`,sessionContext)}${actionButton('times','T400 / Times',sessionContext)}${actionButton('capture','Capture',sessionContext)}${actionButton('voice','Voice',sessionContext)}${actionButton('photo','Photo',sessionContext)}${actionButton('video','Video',sessionContext)}${actionButton('finish','Finish',sessionContext,'is-primary')}</nav>${warning}${renderAttendance(view.attendance||{})}<div class="msos-board-blocks">${(view.blocks||[]).map(renderBlock).join('')}</div></main>`;
   }
-  return{VERSION,renderBoard,renderBlock,renderNode,renderSet,renderGroup,canonicalRaw,workLabel,workMeta,fmtSeconds,fmtDistance,esc};
+  return{VERSION,renderBoard,renderBlock,renderNode,renderSet,renderGroup,compactNames,applyDisplayNames,canonicalRaw,workLabel,workMeta,fmtSeconds,fmtDistance,esc};
 });
