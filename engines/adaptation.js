@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Adaptation=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
@@ -23,7 +23,14 @@
   function rawText(item){return[item?.raw,item?.text,item?.zone,...(item?.cues||[]),...(item?.pattern||[]).map(x=>x.text),...(item?.phases||[]).map(x=>x.text||x.raw)].filter(Boolean).join(' ')}
   function isAerobic(item){return!!item?.zone||/\b(?:regeneration|regen|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(rawText(item))}
   function isQuality(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isAerobic(item))return false;return d>0&&d<=100&&r<=4&&/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i.test(raw)}
-  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isQuality(item))return true;if(isAerobic(item)||d<=0||d>50||r>20)return false;return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)}
+  function sameTeamExposure(item){
+    const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);
+    if(isQuality(item))return true;
+    // Inclusion is for genuinely short shared quality/skill work. Longer technique
+    // patterns can still be condensed, but only in whole canonical pattern cycles.
+    if(isAerobic(item)||d<=0||d>50||r>8)return false;
+    return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw);
+  }
   function sameWork(a,b){
     const arr=v=>(v||[]).map(text).sort().join('|').toLowerCase();
     return (num(a?.reps)||1)===(num(b?.reps)||1)&&(num(a?.distance)||0)===(num(b?.distance)||0)&&text(a?.stroke).toLowerCase()===text(b?.stroke).toLowerCase()&&(num(a?.restSeconds)||0)===(num(b?.restSeconds)||0)&&(num(a?.cycleSeconds)||0)===(num(b?.cycleSeconds)||0)&&arr(a?.equipment)===arr(b?.equipment)&&JSON.stringify(a?.pattern||[])===JSON.stringify(b?.pattern||[])&&JSON.stringify(a?.phases||[])===JSON.stringify(b?.phases||[]);
@@ -53,12 +60,16 @@
       return{...clone(phase),reps:result.prescription.reps,distance:result.prescription.distance,stroke:result.prescription.stroke||phase.stroke,equipment:clone(result.prescription.equipment||phase.equipment||[]),pattern:clone(result.prescription.pattern||phase.pattern||[]),adaptationReason:result.reason,sameAsGroup:result.sameAsGroup};
     }
     adaptItem(session,item,athleteRef,{profile:profileOverride=null,allowOverride=true}={}){
-      const ath=this.athlete(athleteRef);if(!ath)return{status:'missing_athlete',sameAsGroup:true,prescription:clone(item),reason:'Athlete not found',profile:null};const profile=profileOverride||this.profile(ath.id)||{ratio:1,returnToStart:false,roundUpReturn:false},explicit=allowOverride?this.override(session,item,ath):null;
+      const ath=this.athlete(athleteRef);if(!ath)return{status:'missing_athlete',sameAsGroup:true,prescription:clone(item),reason:'Athlete not found',profile:null};
+      const profile=profileOverride||this.profile(ath.id)||{ratio:1,returnToStart:false,roundUpReturn:false},explicit=allowOverride?this.override(session,item,ath):null;
       if(explicit){const prescription=this.applyOverride(item,explicit);return{status:'ok',sameAsGroup:sameWork(item,prescription),prescription,reason:text(explicit.reason||'Explicit coach override'),profile,source:'override'}}
+      // Decide whether team inclusion is part of the original set purpose before a
+      // capability substitution changes stroke/equipment wording.
+      const preserveTeam=isQuality(item)||sameTeamExposure(item);
       let x=clone(item),reasons=[];const constraint=constraintFor(ath,item);if(constraint){x=constraint.apply(x);reasons.push(constraint.reason)}
       if(profile.ratio<.98){
         if((x.phases||[]).length){x.phases=x.phases.map(p=>this.adaptPhase(session,x,p,ath,profile));x.reps=x.phases.reduce((n,p)=>n+(num(p.reps)||0),0);reasons.push('Phase structure preserved')}
-        else if(isQuality(x)||sameTeamExposure(x)){reasons.push('Same-team quality exposure preserved')}
+        else if(preserveTeam){reasons.push('Same-team quality exposure preserved')}
         else if((num(x.reps)||1)===1){const before=num(x.distance)||0,x2=scaleContinuousDistance(before,profile.ratio,session,profile);x.distance=x2;if(x2!==before)reasons.push(`Continuous volume ${before} → ${x2}m${profile.returnToStart?' · returns to starting end':''}`)}
         else{const before=num(x.reps)||1,after=scaleReps(x,profile.ratio);x.reps=after;if(after!==before)reasons.push(`Volume ${before} → ${after} reps${patternSpan(x)?' · whole pattern preserved':''}`)}
       }
