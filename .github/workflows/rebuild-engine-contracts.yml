@@ -7,6 +7,7 @@ on:
       - 'engines/**'
       - 'tests/session-truth-contract.test.js'
       - 'tests/session-truth-historical.test.js'
+      - 'tests/session-truth-torture.test.js'
       - 'ENGINE_CATALOG.md'
       - 'REBUILD_ENGINE_CONTRACTS.md'
       - '.github/workflows/rebuild-engine-contracts.yml'
@@ -26,3 +27,5 @@ jobs:
         run: node tests/session-truth-contract.test.js
       - name: Session Truth protected historical bank
         run: node tests/session-truth-historical.test.js
+      - name: Session Truth torture bank
+        run: node tests/session-truth-torture.test.js
