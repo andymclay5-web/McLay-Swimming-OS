@@ -80,3 +80,15 @@ jobs:
         run: node --check engines/targets.js
       - name: Target Engine isolated regressions
         run: node tests/targets.test.js
+
+  adaptation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Adaptation Engine
+        run: node --check engines/adaptation.js
+      - name: Adaptation Engine isolated regressions
+        run: node tests/adaptation.test.js
