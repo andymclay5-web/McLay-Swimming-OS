@@ -15,11 +15,23 @@
     'test':'test'
   };
   const BLOCK_TITLES={warm_up:'Warm-up',pre_set:'Pre-set',main_set:'Main set',post_set:'Post-set',warm_down:'Warm-down',test:'Test',other:'Other'};
+  const WORD_NUMBERS={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const lines=v=>String(v??'').replace(/\r/g,'').split('\n');
-  const hash=s=>{let h=2166136261;for(const ch of String(s??'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0).toString(36)};
+  const hash=s=>{let h=2166136261;for(const ch of String(s??'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0).toString(36)};
   const stable=(prefix,...parts)=>`${prefix}-${hash(parts.map(text).join('|').toLowerCase())}`;
   const clone=v=>JSON.parse(JSON.stringify(v));
+  function normaliseNaturalLine(line){
+    let x=String(line??'').trim();
+    x=x.replace(/\bon\s+a\s+minute\b/ig,'on 60');
+    x=x.replace(/^([1-9]\d?)(25|50|75|100|200|400)s\b/i,(_,r,d)=>`${r} x ${d}`);
+    x=x.replace(/^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(25|50|75|100|200|400)s?\b/i,(_,w,d)=>`${WORD_NUMBERS[w.toLowerCase()]} x ${d}`);
+    x=x.replace(/^(\d{1,2})\s+(25|50|75|100|200|400)s\b/i,'$1 x $2');
+    const wd=x.match(/^(warm\s*[- ]?down|cool\s*[- ]?down)\s+(?:of\s+)?(\d{2,4})\s*(?:m|metres?|meters?)?\s*$/i);
+    if(wd)return`${wd[1]}\n${wd[2]}`;
+    return x;
+  }
+  function normaliseSource(source){return lines(source).flatMap(line=>normaliseNaturalLine(line).split('\n')).join('\n')}
   function blockType(v){const key=text(v).toLowerCase().replace(/\s+/g,' ');return BLOCK_TYPES[key]||'other'}
   function heading(line){
     const t=text(line).replace(/[:]+$/,'');
@@ -44,13 +56,22 @@
   function foldChildren(items){
     const a=clone(items||[]);
     for(let i=0;i<a.length;i++){
-      const parent=a[i];if(parent?.kind!=='set'||Number(parent.reps)<2)continue;
-      let j=i+1,kids=[],cycleCount=0;
-      while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)!==Number(parent.distance)||Number(c.reps)>=Number(parent.reps))break;kids.push(c);cycleCount+=Number(c.reps)||1;j++}
-      if(kids.length>=2&&cycleCount>0&&Number(parent.reps)%cycleCount===0){parent.pattern=parent.pattern||[];for(const c of kids)parent.pattern.push({count:Number(c.reps)||1,text:text(c.raw).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')});a.splice(i+1,kids.length);continue}
-      j=i+1;let parts=[],sum=0;
-      while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.reps)!==1||Number(c.distance)<=0||Number(c.distance)>=Number(parent.distance))break;parts.push(c);sum+=Number(c.distance);j++;if(sum>=Number(parent.distance))break}
-      if(parts.length>=2&&Math.abs(sum-Number(parent.distance))<0.001){parent.composition=parent.composition||[];for(const c of parts)parent.composition.push({distance:Number(c.distance),text:text(c.raw).replace(/^\d{1,4}(?:\.5)?\s*/,'')});a.splice(i+1,parts.length)}
+      const parent=a[i];if(parent?.kind!=='set')continue;
+      if(Number(parent.reps)>=2){
+        let j=i+1,kids=[],cycleCount=0;
+        while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)!==Number(parent.distance)||Number(c.reps)>=Number(parent.reps))break;kids.push(c);cycleCount+=Number(c.reps)||1;j++}
+        if(kids.length>=2&&cycleCount>0&&Number(parent.reps)%cycleCount===0){parent.pattern=parent.pattern||[];for(const c of kids)parent.pattern.push({count:Number(c.reps)||1,text:text(c.raw).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')});a.splice(i+1,kids.length);continue}
+      }
+      if(Number(parent.reps)>=2){
+        let j=i+1,parts=[],sum=0;
+        while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.reps)!==1||Number(c.distance)<=0||Number(c.distance)>=Number(parent.distance))break;parts.push(c);sum+=Number(c.distance);j++;if(sum>=Number(parent.distance))break}
+        if(parts.length>=2&&Math.abs(sum-Number(parent.distance))<0.001){parent.composition=parent.composition||[];for(const c of parts)parent.composition.push({distance:Number(c.distance),text:text(c.raw).replace(/^\d{1,4}(?:\.5)?\s*/,'')});a.splice(i+1,parts.length);continue}
+      }
+      if(Number(parent.reps)===1&&/^\d{2,4}(?:\.5)?$/.test(text(parent.raw))){
+        let j=i+1,parts=[],sum=0;
+        while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)<=0)break;const metres=setDistance(c);if(metres<=0||sum+metres>Number(parent.distance))break;parts.push(c);sum+=metres;j++;if(sum>=Number(parent.distance))break}
+        if(parts.length>=1&&Math.abs(sum-Number(parent.distance))<0.001){parent.composition=parent.composition||[];for(const c of parts)parent.composition.push({distance:setDistance(c),text:text(c.raw)});a.splice(i+1,parts.length)}
+      }
     }
     return a;
   }
@@ -73,19 +94,20 @@
   }
   function createSession(identity,source){const id=identity?.id||stable('session',identity?.date||'',identity?.dayPart||'',identity?.title||'',source);return{schema:'msos.session.v1',engineVersion:VERSION,id,identity:{date:identity?.date||'',dayPart:identity?.dayPart||'',title:identity?.title||'',squads:[...(identity?.squads||[])],venue:identity?.venue||'',course:identity?.course||'',start:identity?.start||'',end:identity?.end||''},originalSource:{text:String(source??''),hash:hash(source)},blocks:[],metadata:{writtenTotal:null,parsedTotal:0,totalMatches:true,warnings:[]}}}
   function parse(source,identity={}){
+    const normalized=normaliseSource(source);
     const session=createSession(identity,source),chunks=[];let currentType=null,currentLines=[],pendingRounds=null,writtenTotal=null,notes=[];
     const flush=()=>{if(!currentType)return;let blockLines=currentLines;if(pendingRounds)blockLines=[`${pendingRounds} Rounds:`,...blockLines];chunks.push({type:currentType,lines:blockLines});currentLines=[];pendingRounds=null};
-    for(const raw of lines(source)){
+    for(const raw of lines(normalized)){
       const t=text(raw),total=t.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i)||t.match(/^([\d,]{3,6})\s*m$/i);if(total){writtenTotal=Number(total[1].replace(/,/g,''));continue}
       const h=heading(t);if(h){flush();currentType=h.type;pendingRounds=h.rounds||null;if(h.tail)currentLines.push(h.tail);continue}
       if(!currentType){if(t)notes.push(t);continue}currentLines.push(raw);
     }
     flush();
     session.blocks=chunks.map((c,i)=>({id:stable('block',session.id,c.type,i),type:c.type,title:BLOCK_TITLES[c.type]||'Block',order:i+1,items:parseBlock(session.id,c.type,c.lines)}));
-    session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;
+    session.metadata.normalizedSource=normalized;session.metadata.sessionNotes=notes;session.metadata.writtenTotal=writtenTotal;session.metadata.parsedTotal=totalDistance(session);session.metadata.totalMatches=writtenTotal==null||Math.abs(writtenTotal-session.metadata.parsedTotal)<=1;
     if(writtenTotal!=null&&!session.metadata.totalMatches)session.metadata.warnings.push(`Written total ${writtenTotal}m does not match parsed total ${session.metadata.parsedTotal}m`);
     return session;
   }
   function validate(session){const errors=[];if(!session?.id)errors.push('Missing session id');if(!Array.isArray(session?.blocks))errors.push('Missing blocks');const total=totalDistance(session);if(!Number.isFinite(total)||total<0)errors.push('Invalid distance');if(session?.metadata?.writtenTotal!=null&&!session.metadata.totalMatches)errors.push('Written total mismatch');return{ok:errors.length===0,errors,total}}
-  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{heading,roundLine,explicitRepeat,singleDistance,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds}};
+  return{VERSION,parse,validate,totalDistance,blockDistance,nodeDistance,internals:{normaliseSource,normaliseNaturalLine,heading,roundLine,explicitRepeat,singleDistance,foldChildren,zoneName,strokeName,restSeconds,cycleSeconds}};
 });
