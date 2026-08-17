@@ -1,0 +1,47 @@
+name: Rebuild reporting and learning tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/reporting.js'
+      - 'engines/learning.js'
+      - 'engines/session-dose.js'
+      - 'tests/reporting.test.js'
+      - 'tests/learning.test.js'
+      - 'tests/session-dose.test.js'
+      - '.github/workflows/rebuild-reporting-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  session-dose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/session-dose.js
+      - run: node tests/session-dose.test.js
+
+  reporting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/reporting.js
+      - run: node tests/reporting.test.js
+
+  learning:
+    runs-on: ubuntu-latest
+    needs: [session-dose, reporting]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/learning.js
+      - run: node tests/learning.test.js
