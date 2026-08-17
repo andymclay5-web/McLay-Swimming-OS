@@ -4,27 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d4566">
-<title>MSOS Morning Board</title>
-<link rel="stylesheet" href="morning-board.css?v=20260817a">
+<title>MSOS Morning Coaching Board</title>
+<link rel="stylesheet" href="morning-board.css?v=20260818b">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><small>McLAY SWIMMING OS</small><strong>Morning Board</strong></div>
-  <div class="top-actions"><button id="editBtn" class="hidden" type="button">Edit session</button></div>
+  <div class="brand"><small>McLAY SWIMMING OS</small><strong>Morning Coaching Board</strong></div>
+  <div class="top-actions"><button id="editBtn" class="hidden" type="button">Setup</button></div>
 </header>
 <main class="shell">
   <section id="composer" class="composer">
-    <label for="source">Session</label>
-    <textarea id="source" spellcheck="false" autocomplete="off" placeholder="Warm up&#10;400 Choice&#10;&#10;Pre set&#10;12 x 50 #1 @ 1:10&#10;1 Scull / 1 Drill / 1 Swim&#10;&#10;Main set 3 rounds&#10;5 x 100 Free Threshold 10 sr&#10;400 Easy&#10;&#10;Warm down&#10;200 Easy"></textarea>
-    <div class="actions">
-      <button id="parseBtn" class="primary" type="button">Parse → Board</button>
-      <button id="clearBtn" class="danger" type="button">Clear</button>
+    <div class="setup-row">
+      <label class="course-label">Pool
+        <select id="course"><option value="SCM">SCM · 25m</option><option value="LCM">LCM · 50m</option></select>
+      </label>
+      <div id="dataStatus" class="data-status">Loading swimmer evidence…</div>
     </div>
-    <div id="status" class="status">Paste or type a session. Draft saves on this device.</div>
+
+    <div class="roster-head">
+      <div><strong>Swimming this session</strong><small>Only selected swimmers get targets or modified work.</small></div>
+      <button id="clearRoster" type="button">Clear</button>
+    </div>
+    <div id="squadQuick" class="squad-quick"></div>
+    <div id="roster" class="roster"><div class="data-status">Loading…</div></div>
+
+    <label class="session-label" for="source">Session</label>
+    <textarea id="source" spellcheck="false" autocomplete="off" placeholder="Warm up&#10;400 Choice&#10;&#10;Pre set&#10;12 x 50 #1 @ 1:10&#10;1 Scull / 1 Drill / 1 Swim&#10;&#10;Main set 3 rounds&#10;5 x 100 Free Threshold 10 sr&#10;400 Easy&#10;&#10;Post set&#10;4 x 25 Free @100 pace&#10;&#10;Warm down&#10;200 Easy"></textarea>
+    <div class="actions">
+      <button id="parseBtn" class="primary" type="button">Build coaching board</button>
+      <button id="clearBtn" class="danger" type="button">Clear session</button>
+    </div>
+    <div id="status" class="status">Paste or type the session. Session, course and swimmer selection save on this device.</div>
   </section>
   <section id="board" class="hidden" aria-live="polite"></section>
 </main>
-<script src="engines/session-truth.js?v=20260817a"></script>
-<script src="morning-board.js?v=20260817a"></script>
+<script src="engines/session-truth.js?v=20260818b"></script>
+<script src="engines/morning-coaching.js?v=20260818b"></script>
+<script src="morning-board.js?v=20260818b"></script>
 </body>
 </html>
