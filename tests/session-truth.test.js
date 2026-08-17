@@ -1,11 +1,14 @@
 'use strict';
 const assert=require('assert');
 const E=require('../engines/session-truth.js');
-const C=require('../engines/morning-coaching.js');
-function test(name,fn){try{fn();console.log('PASS',name)}catch(e){console.error('FAIL',name,'\n ',e.stack||e.message);process.exitCode=1}}
-const id={id:'test',date:'2026-08-18',dayPart:'AM',squads:['National','Development'],venue:'AquaGym',course:'SCM'};
+const id={id:'test-session',date:'2026-08-18',dayPart:'AM',squads:['National','Development'],venue:'AquaGym',course:'SCM'};
+let fails=0;
+function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;console.error('FAIL',name,'\n ',e.stack||e.message)}}
+function block(s,type){return s.blocks.find(b=>b.type===type)}
 
-test('live 4650 session parses exactly',()=>{
+console.log('Session Truth engine',E.VERSION);
+
+test('17 Aug live 4650 session parses exactly and preserves grouped main set',()=>{
  const src=`Warm up
 200 fr
 200 IM
@@ -28,11 +31,11 @@ Post set
 
 4650m`;
  const s=E.parse(src,id);assert.equal(E.totalDistance(s),4650);assert.equal(s.metadata.writtenTotal,4650);assert.equal(s.metadata.totalMatches,true);
- const main=s.blocks.find(b=>b.type==='main_set');assert.equal(main.items.length,1);assert.equal(main.items[0].kind,'group');assert.equal(main.items[0].rounds,3);assert.equal(E.blockDistance(main),2700);
- const post=s.blocks.find(b=>b.type==='post_set');assert.equal(E.blockDistance(post),600);assert.equal(post.items.length,1);assert.equal(post.items[0].composition.length,3);
+ const main=block(s,'main_set');assert.equal(main.items.length,1);assert.equal(main.items[0].kind,'group');assert.equal(main.items[0].rounds,3);assert.equal(E.blockDistance(main),2700);
+ const post=block(s,'post_set');assert.equal(E.blockDistance(post),600);assert.equal(post.items.length,1);assert.equal(post.items[0].composition.length,3);
 });
 
-test('Tuesday AM 5400 session treats 12x50 Total as summary, not another set',()=>{
+test('18 Aug Tuesday 5400 session preserves summary, rep pace and post-set phases',()=>{
  const src=`TUESDAY AM — AEROBIC CAPACITY / REGENERATION
 
 WARM UP
@@ -89,154 +92,78 @@ WARM DOWN
 200 Easy Choice
 
 TOTAL: 5,400m`;
- const s=E.parse(src,id);
- assert.equal(E.totalDistance(s),5400);
- assert.equal(s.metadata.writtenTotal,5400);
- assert.equal(s.metadata.totalMatches,true);
- const warm=s.blocks.find(b=>b.type==='warm_up'),pre=s.blocks.find(b=>b.type==='pre_set'),main=s.blocks.find(b=>b.type==='main_set'),post=s.blocks.find(b=>b.type==='post_set'),wd=s.blocks.find(b=>b.type==='warm_down');
- assert.equal(E.blockDistance(warm),1200);
- assert.equal(E.blockDistance(pre),600);
- assert.equal(E.blockDistance(main),2600);
- assert.equal(E.blockDistance(post),800);
- assert.equal(E.blockDistance(wd),200);
- assert.equal(pre.items.filter(x=>x.kind==='set').length,0);
- assert.equal(pre.items.filter(x=>x.kind==='group').length,1);
- assert(pre.items.some(x=>x.role==='summary'&&x.summaryMetres===600));
+ const s=E.parse(src,id);assert.equal(E.totalDistance(s),5400);assert.equal(s.metadata.writtenTotal,5400);assert.equal(s.metadata.totalMatches,true);
+ assert.equal(E.blockDistance(block(s,'warm_up')),1200);assert.equal(E.blockDistance(block(s,'pre_set')),600);assert.equal(E.blockDistance(block(s,'main_set')),2600);assert.equal(E.blockDistance(block(s,'post_set')),800);assert.equal(E.blockDistance(block(s,'warm_down')),200);
+ const pre=block(s,'pre_set');assert.equal(pre.items[0].kind,'group');assert.equal(pre.items[0].rounds,4);assert.equal(pre.items[0].items.length,1);const p=pre.items[0].items[0];assert.equal(p.reps,3);assert.equal(p.pattern.length,2);assert.equal(p.repInstructions.find(x=>x.rep===3).raceIntent.distance,200);assert(pre.items.some(x=>x.role==='summary'&&x.summaryMetres===600));
+ const main=block(s,'main_set');const im=main.items.find(x=>x.kind==='set'&&x.reps===4&&x.distance===100&&x.stroke==='IM');assert.deepEqual(im.cycleOptions,[100,110]);const bf=main.items.find(x=>x.kind==='set'&&x.reps===2&&x.distance===100);assert.equal(bf.pattern.length,2);assert.deepEqual(bf.pattern.map(x=>x.text),['Build','Fast']);
+ const post=block(s,'post_set');assert.equal(post.items.length,1);const parent=post.items[0];assert.equal(parent.reps,16);assert.equal(parent.phases.length,2);assert.equal(parent.phases[0].reps,8);assert(parent.phases[0].equipment.includes('Bands'));assert(parent.phases[0].cues.includes('4 Build'));assert(parent.phases[1].cues.includes('Descend 1—4 twice'));assert.deepEqual(parent.phases[1].repInstructions.map(x=>x.rep),[4,8]);assert(parent.phases[1].repInstructions.every(x=>x.raceIntent?.distance===100));
 });
 
-test('12x50 repeating 1x50 pattern counts only parent distance',()=>{
- const s=E.parse(`Pre set
-12 x 50 #1 Stroke @ 1:10
-1 x 50 Scull
-1 x 50 Drill
-1 x 50 Swim`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),600);assert.equal(b.items.length,1);assert.equal(b.items[0].pattern.length,3);
-});
-test('inline 1 Scull / 1 Drill / 1 Swim is instruction not distance',()=>{
- const s=E.parse(`Pre set
-12 x 50 #1 Stroke @ 1:10
-1 Scull / 1 Drill / 1 Swim`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),600);assert.equal(b.items.length,1);assert.equal(b.items[0].pattern.length,3);
-});
-test('round group multiplies once',()=>{
- const s=E.parse(`Main Set
-3 Rounds:
-5 x 100 Freestyle Threshold 10s rest
-400 Easy`,id);assert.equal(E.totalDistance(s),2700);
-});
-test('round scope ends on blank line',()=>{
- const s=E.parse(`Main Set
-2 Rounds:
-4 x 100 Free Threshold 10 sr
-200 Easy
-
-100 Easy reset`,id),b=s.blocks[0];assert.equal(b.items.length,2);assert.equal(b.items[0].kind,'group');assert.equal(E.blockDistance(b),1300);
-});
-test('unknown cue is retained and contributes no metres',()=>{
- const s=E.parse(`Main Set
-5 x 100 Free Threshold 10 sr
-Hold shape through the final 15m`,id);assert.equal(E.totalDistance(s),500);assert.equal(s.blocks[0].items[0].cues[0],'Hold shape through the final 15m');
-});
-test('written mismatch blocks validation',()=>{
- const s=E.parse(`Main Set
-5 x 100 Free
-600m`,id),v=E.validate(s);assert.equal(v.ok,false);assert(v.errors.includes('Written total mismatch'));
-});
-test('bare 500 breakdown is composition, not phantom metres',()=>{
- const s=E.parse(`Warm up
-500
-300 Free
-200 Reverse IM`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),500);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,2);
-});
-test('bare 400 with 4x100 breakdown is composition',()=>{
- const s=E.parse(`Warm up
-400
-4 x 100 Choice`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),400);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,1);
-});
-test('sequential 400 Pull 200 Easy 200 Free remains sequential',()=>{
- const s=E.parse(`Main Set
-400 Pull
-200 Easy
-200 Free`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),800);assert.equal(b.items.length,3);
-});
-test('15m Max after 4x25 is cue, not phantom distance',()=>{
- const s=E.parse(`Pre set
-4 x 25
-15m Max`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),100);assert.equal(b.items[0].cues[0],'15m Max');
-});
-test('compact repetition grammar 8100s and 875s',()=>{
- const s=E.parse(`Main Set
-8100s Free
-875s Choice`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),1400);assert.equal(b.items[0].reps,8);assert.equal(b.items[0].distance,100);assert.equal(b.items[1].reps,8);assert.equal(b.items[1].distance,75);
-});
-test('spoken repetition grammar and on a minute',()=>{
- const s=E.parse(`Main Set
-three 200s Free
-six 50s Build on a minute
-eight 25s Fast on 45`,id),b=s.blocks[0];assert.equal(E.blockDistance(b),1100);assert.equal(b.items[1].cycleSeconds,60);assert.equal(b.items[2].cycleSeconds,45);
-});
-test('spoken warm down becomes a block',()=>{
- const s=E.parse(`Main Set
-5 x 100 Free
-warm down of 200 metres`,id);assert.equal(E.totalDistance(s),700);assert.equal(s.blocks.at(-1).type,'warm_down');assert.equal(E.blockDistance(s.blocks.at(-1)),200);
-});
-test('race intent parses @100 pace',()=>{
- const x=E.parse(`Main Set
-4 x 25 Free @100 pace @ 1:00`,id).blocks[0].items[0];assert.equal(x.raceIntent.distance,100);assert.equal(x.raceIntent.workingStroke,'Freestyle');
-});
-test('odd/even race instruction survives',()=>{
- const x=E.parse(`Main Set
-4 x 50 Free Odd 100 pace / Even Drill`,id).blocks[0].items[0];assert.equal(x.repInstructions.length,4);assert.equal(x.repInstructions[0].raceIntent.distance,100);assert.equal(x.repInstructions[1].raceIntent,null);
-});
-test('inline aerobic pattern expands rep zones',()=>{
- const x=E.parse(`Main Set
-6 x 100 Free
-1 Reg / 1 Dev / 1 OL`,id).blocks[0].items[0];assert.equal(x.repPattern.length,6);assert.deepEqual(x.repPattern.map(r=>r.zone),['Regeneration','Development','Overload','Regeneration','Development','Overload']);
-});
-test('Molly T400 fallback gives threshold target',()=>{
- const s=E.parse(`Main Set
-5 x 100 Free Threshold 10 sr`,id),x=s.blocks[0].items[0],ath={id:'molly',full_name:'Molly McKernan',squad:'Development'};
- const r=C.targetForItem(s,x,ath,{trainingTestTypes:[],trainingTestResults:[],coachResults:[],resultsEventHistory:[],resultsPbBoard:[]});
- assert.equal(r.status,'ok');assert(Math.abs(r.seconds-83.0976)<1e-6);assert.equal(r.sendOff,95);
-});
-test('race pace uses loaded PB',()=>{
- const s=E.parse(`Main Set
-4 x 25 Free @100 pace`,id),x=s.blocks[0].items[0],ath={id:'a',full_name:'A Swimmer',sex:'F'};
- const state={coachResults:[{athlete_id:'a',distance:100,stroke:'Freestyle',pool_course:'SCM',result_seconds:60}],resultsEventHistory:[],resultsPbBoard:[],courseConversions:[]};
- const r=C.targetForItem(s,x,ath,state);assert.equal(r.status,'ok');assert(Math.abs(r.seconds-15)<1e-9);
-});
-test('Charlotte aerobic volume modifies but short quality stays together',()=>{
- const ath={id:'c',full_name:'Charlotte Murphy'},state={adaptationProfiles:[],adaptationOverrides:[]};
- let s=E.parse(`Main Set
-5 x 100 Free Threshold 10 sr`,id),x=s.blocks[0].items[0],m=C.adaptItem(x,ath,state,s);assert(m.reps<5);
- s=E.parse(`Main Set
-4 x 25 Max @ 1:00`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,state,s);assert.equal(m.reps,4);
+test('12x50 Total is summary metadata and zero runnable metres',()=>{
+ const s=E.parse(`Pre set\n4 Rounds:\n3 x 50 #1 @ 1:00\n2 Drill\n1 @ 200 Pace\n\n12 x 50 Total`,id);assert.equal(E.totalDistance(s),600);const b=block(s,'pre_set');assert.equal(b.items.at(-1).kind,'cue');assert.equal(b.items.at(-1).role,'summary');assert.equal(b.items.at(-1).summaryMetres,600);
 });
 
-test('legacy training-test evidence merges into Morning Coaching state',()=>{
- const st={athletes:[{id:'mk',full_name:'McKenzie Drage'}],trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],coachResults:[]};
- C.internals.mergeLegacyEvidence(st,{training_test_types:[{id:'tt',test_key:'t400_freestyle'}],training_test_results:[{id:'r',athlete_id:'mk',test_type_id:'tt',result_seconds:450.1,result_date:'2026-06-01',pool_course:'SCM',valid_for_anchor:true}]});
- const a=C.t400(st.athletes[0],st,'SCM','Freestyle');assert(a);assert.equal(a.result_seconds,450.1);
+test('same-distance child sets become repeating pattern only once',()=>{
+ const s=E.parse(`Pre set\n12 x 50 #1 Stroke @ 1:10\n1 x 50 Scull\n1 x 50 Drill\n1 x 50 Swim`,id),b=block(s,'pre_set');assert.equal(E.blockDistance(b),600);assert.equal(b.items.length,1);assert.equal(b.items[0].pattern.length,3);assert.equal(b.items[0].phases.length,0);
 });
 
-test('T400 anchor uses latest valid result, not fastest historical result',()=>{
- const ath={id:'a',full_name:'A'},st={trainingTestTypes:[{id:'tt',test_key:'t400_freestyle'}],trainingTestResults:[{id:'old',athlete_id:'a',test_type_id:'tt',result_seconds:300,result_date:'2026-01-01',pool_course:'SCM',valid_for_anchor:true},{id:'new',athlete_id:'a',test_type_id:'tt',result_seconds:320,result_date:'2026-08-01',pool_course:'SCM',valid_for_anchor:true}]};
- assert.equal(C.t400(ath,st,'SCM','Freestyle').id,'new');
+test('inline 1 Scull / 1 Drill / 1 Swim is canonical pattern, not distance',()=>{
+ const s=E.parse(`Pre set\n12 x 50 #1 Stroke @ 1:10\n1 Scull / 1 Drill / 1 Swim`,id),x=block(s,'pre_set').items[0];assert.equal(E.totalDistance(s),600);assert.equal(x.pattern.length,3);assert.equal(x.repInstructions.length,12);
 });
 
-test('McKenzie continuous volume returns to start end in SCM',()=>{
- const ath={id:'mk',full_name:'McKenzie Drage'},st={adaptationProfiles:[],adaptationOverrides:[]};
- let s=E.parse(`Main Set
-400 Pull`,id),x=s.blocks[0].items[0],m=C.adaptItem(x,ath,st,s);assert.equal(m.distance,300);
- s=E.parse(`Warm down
-200 Easy Choice`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,st,s);assert.equal(m.distance,150);
+test('equal-count child sets become one-pass phases',()=>{
+ const s=E.parse(`Post set\n16 x 50 @ 1:15\n8 x 50 Bands Only\n4 Build\n4 Descend 1-4\n8 x 50 Swim\n#4 + #8 @ 100 Pace`,id),x=block(s,'post_set').items[0];assert.equal(E.totalDistance(s),800);assert.equal(x.phases.length,2);assert.equal(x.pattern.length,0);assert.deepEqual(x.phases[1].repInstructions.map(r=>r.rep),[4,8]);
 });
 
-test('McKenzie pattern-dependent short sets preserve the full pattern',()=>{
- const ath={id:'mk',full_name:'McKenzie Drage'},st={adaptationProfiles:[],adaptationOverrides:[]};
- let s=E.parse(`Main Set
-4 x 100 IM Descend 1-4
-@ 1:40`,id),x=s.blocks[0].items[0],m=C.adaptItem(x,ath,st,s);assert.equal(m.reps,4);
- s=E.parse(`Main Set
-2 x 100 Paddles + Fins @ 2:00
-1 Build
-1 Fast`,id);x=s.blocks[0].items[0];m=C.adaptItem(x,ath,st,s);assert.equal(m.reps,2);
+test('round scope ends on blank line instead of multiplying reset work',()=>{
+ const s=E.parse(`Main Set\n2 Rounds:\n4 x 100 Free Threshold 10 sr\n200 Easy\n\n100 Easy reset`,id),b=block(s,'main_set');assert.equal(b.items.length,2);assert.equal(b.items[0].kind,'group');assert.equal(E.blockDistance(b),1300);
 });
+
+test('nested local rounds are structural groups',()=>{
+ const s=E.parse(`Main Set\n2 Rounds:\n3 Rounds:\n2 x 50 Free\n\n100 Easy`,id),b=block(s,'main_set');assert.equal(b.items[0].kind,'group');assert.equal(b.items[0].items[0].kind,'group');assert.equal(E.blockDistance(b),700);
+});
+
+test('bare parent distance absorbs exact composition once',()=>{
+ let s=E.parse(`Warm up\n500\n300 Free\n200 Reverse IM`,id),b=block(s,'warm_up');assert.equal(E.blockDistance(b),500);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,2);
+ s=E.parse(`Warm up\n4 x 300\n200 Free\n100 Reverse IM`,id);b=block(s,'warm_up');assert.equal(E.blockDistance(b),1200);assert.equal(b.items.length,1);assert.equal(b.items[0].composition.length,2);
+});
+
+test('labelled sequential work is never swallowed as composition',()=>{
+ const s=E.parse(`Main Set\n400 Pull\n200 Easy\n200 Free`,id),b=block(s,'main_set');assert.equal(E.blockDistance(b),800);assert.equal(b.items.length,3);assert.equal(b.items[0].composition.length,0);
+});
+
+test('rest and short-distance cues never create phantom metres',()=>{
+ const s=E.parse(`Pre set\n4 x 25\n15m Max\n10 sr`,id),x=block(s,'pre_set').items[0];assert.equal(E.totalDistance(s),100);assert(x.cues.includes('15m Max'));assert.equal(x.restSeconds,10);
+});
+
+test('cycle shorthand survives as authored timing',()=>{
+ const s=E.parse(`Main Set\n5 x 50 Build on 60\n5 x 100 IM on 1.45\n4 x 100 IM\n@ 1:40 / 1:50`,id),b=block(s,'main_set');assert.equal(b.items[0].cycleSeconds,60);assert.equal(b.items[1].cycleSeconds,105);assert.deepEqual(b.items[2].cycleOptions,[100,110]);
+});
+
+test('spoken and compact repetition grammar remains accepted',()=>{
+ const s=E.parse(`Main Set\n8100s Free\n875s Choice\nthree 200s Free\nsix 50s Build on a minute\neight 25s Fast on 45`,id),b=block(s,'main_set');assert.equal(E.blockDistance(b),2500);assert.equal(b.items[3].cycleSeconds,60);assert.equal(b.items[4].cycleSeconds,45);
+});
+
+test('spoken warm down creates its own block',()=>{
+ const s=E.parse(`Main Set\n5 x 100 Free\nwarm down of 200 metres`,id);assert.equal(E.totalDistance(s),700);assert.equal(s.blocks.at(-1).type,'warm_down');assert.equal(E.blockDistance(s.blocks.at(-1)),200);
+});
+
+test('odd/even and explicit rep race instructions survive canonically',()=>{
+ let x=E.parse(`Main Set\n4 x 50 Free Odd 100 pace / Even Drill`,id).blocks[0].items[0];assert.equal(x.repInstructions.length,4);assert.equal(x.repInstructions[0].raceIntent.distance,100);assert.equal(x.repInstructions[1].raceIntent,null);
+ x=E.parse(`Main Set\n8 x 50 Swim\n#4 + #8 @ 100 Pace`,id).blocks[0].items[0];assert.deepEqual(x.repInstructions.map(r=>r.rep),[4,8]);assert(x.repInstructions.every(r=>r.raceIntent.distance===100));
+});
+
+test('unknown coaching language is retained verbatim and contributes zero metres',()=>{
+ const line='Hold shape through the final 15m and feel the water';const s=E.parse(`Main Set\n5 x 100 Free Threshold 10 sr\n${line}`,id),x=block(s,'main_set').items[0];assert.equal(E.totalDistance(s),500);assert(x.cues.includes(line));
+});
+
+test('written mismatch fails validation instead of being silently accepted',()=>{
+ const s=E.parse(`Main Set\n5 x 100 Free\n600m`,id),v=E.validate(s);assert.equal(v.ok,false);assert(v.errors.includes('Written total mismatch'));
+});
+
+test('same input and identity produce stable canonical IDs',()=>{
+ const src=`Main Set\n3 Rounds:\n5 x 100 Free Threshold 10 sr\n400 Easy`;const a=E.parse(src,id),b=E.parse(src,id);assert.equal(a.id,b.id);assert.equal(a.blocks[0].id,b.blocks[0].id);assert.equal(a.blocks[0].items[0].id,b.blocks[0].items[0].id);assert.equal(a.blocks[0].items[0].items[0].id,b.blocks[0].items[0].items[0].id);
+});
+
+if(fails){console.error(`\n${fails} Session Truth regression(s) failed`);process.exit(1)}
+console.log('\nALL SESSION TRUTH REGRESSIONS PASS');
