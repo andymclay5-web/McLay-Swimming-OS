@@ -70,6 +70,26 @@ test('child Odd 200 Pace / Even Drill attaches rep-level meaning to parent',()=>
  assert(x.repInstructions.filter(r=>r.rep%2===0).every(r=>r.drill===true));
 });
 
+test('#1 is primary-stroke notation, never an implicit rep-1 selector',()=>{
+ const s=E.parse('Main Set\n4 x 50 #1 @ 1:15',id),x=s.blocks[0].items[0];
+ assert.equal(E.totalDistance(s),200);
+ assert.equal(x.repInstructions.length,0);
+ assert(/#1/.test(x.raw));
+});
+
+test('explicit rep reference still works when coach says Rep #1',()=>{
+ const s=E.parse('Main Set\n4 x 50 #1 @ 1:15\nRep #1 Fast',id),x=s.blocks[0].items[0];
+ assert.equal(E.totalDistance(s),200);
+ assert(x.repInstructions.some(r=>r.rep===1&&/Fast/i.test(r.label)));
+});
+
+test('#4 + #8 remains explicit rep-specific race pace',()=>{
+ const s=E.parse('Post Set\n8 x 50 Swim\n#4 + #8 @ 100 Pace',id),x=s.blocks[0].items[0];
+ const race=x.repInstructions.filter(r=>r.raceIntent);
+ assert.deepEqual(race.map(r=>r.rep),[4,8]);
+ assert(race.every(r=>r.raceIntent.distance===100));
+});
+
 const threshold3660=`400 Choice
 
 4 x Dive Start to 15m
@@ -168,6 +188,12 @@ test('400 as 100 reset / 100 swim x2 remains one 400 parent with repeated compos
  assert.equal(E.totalDistance(s),400);
  assert.equal(x.composition.length,2);
  assert.equal(x.compositionRepeats,2);
+});
+
+test('non-session coaching note with time and numbers does not invent metres',()=>{
+ const s=E.parse('Main Set\nRemember 90 minute session tonight\nKeep HR around 150\nHold 6 kicks off each wall',id);
+ assert.equal(E.totalDistance(s),0);
+ const v=E.validate(s);assert.equal(v.ok,false);assert(v.errors.includes('No runnable distance'));
 });
 
 test('stable identity produces stable canonical IDs across repeated parse',()=>{
