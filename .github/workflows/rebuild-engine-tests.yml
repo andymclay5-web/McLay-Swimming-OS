@@ -1,0 +1,25 @@
+name: Rebuild engine tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/**'
+      - 'tests/**'
+      - 'REBUILD_ENGINE_CONTRACTS.md'
+      - '.github/workflows/rebuild-engine-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  session-truth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Session Truth
+        run: node --check engines/session-truth.js
+      - name: Session Truth isolated regressions
+        run: node tests/session-truth.test.js
