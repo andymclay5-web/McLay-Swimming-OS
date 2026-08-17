@@ -101,7 +101,7 @@ assert.equal(attendance.status(canonical,'not-here'),'not_marked');
 
 const targets=Targets.create({evidence});
 const adaptation=Adaptation.create({evidence});
-const board=Board.create({attendance,adaptation,targets});
+const board=Board.create({truth:Truth,attendance,adaptation,targets});
 const model=board.project(lifecycle.selected().current);
 assert.equal(model.totalDistance,5400);
 assert.equal(model.attendance.here,3);
@@ -131,6 +131,6 @@ const lifecycleWrites=lifecycleStorage.writes,attendanceWrites=attendanceStorage
 const reopenedLifecycle=Lifecycle.create({storage:lifecycleStorage,clock}),reopenedAttendance=Attendance.create({storage:attendanceStorage,evidence,clock});
 assert.equal(lifecycleStorage.writes,lifecycleWrites);assert.equal(attendanceStorage.writes,attendanceWrites);
 assert.equal(reopenedLifecycle.selectedId(),identity.id);assert.equal(Truth.totalDistance(reopenedLifecycle.selected().current),5400);assert.equal(reopenedAttendance.here(reopenedLifecycle.selected().current).length,3);
-const reopenedModel=Board.create({attendance:reopenedAttendance,adaptation,targets}).project(reopenedLifecycle.selected().current);assert.equal(reopenedModel.totalDistance,5400);assert.equal(reopenedModel.attendance.here,3);assert.equal(capture.query({sessionId:identity.id,athleteId:'molly'}).length,1);
+const reopenedModel=Board.create({truth:Truth,attendance:reopenedAttendance,adaptation,targets}).project(reopenedLifecycle.selected().current);assert.equal(reopenedModel.totalDistance,5400);assert.equal(reopenedModel.attendance.here,3);assert.equal(capture.query({sessionId:identity.id,athleteId:'molly'}).length,1);
 
 console.log('PASS poolside integration · 5400m → save → roll → targets/mods → board → capture → reload');
