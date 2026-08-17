@@ -104,3 +104,16 @@ jobs:
         run: node --check engines/attendance.js
       - name: Attendance Engine isolated regressions
         run: node tests/attendance.test.js
+
+  board-projection:
+    runs-on: ubuntu-latest
+    needs: [session-truth, targets, adaptation, attendance]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Board Projection
+        run: node --check engines/board-projection.js
+      - name: Board Projection isolated regressions
+        run: node tests/board-projection.test.js
