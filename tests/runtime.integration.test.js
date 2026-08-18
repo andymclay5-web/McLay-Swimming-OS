@@ -42,7 +42,7 @@ test('capture, finish, dose and report all keep the same canonical session ident
 });
 
 test('session learning is generated only from stored report facts',()=>{
- const rt=runtime();rt.createSession({source,identity});rt.finish({point:{full:true}});const findings=rt.sessionLearning();assert(Array.isArray(findings));assert(!findings.some(x=>/guarantee|definitely caused|must be because/i.test(x.message||''));
+ const rt=runtime();rt.createSession({source,identity});rt.finish({point:{full:true}});const findings=rt.sessionLearning();assert(Array.isArray(findings));assert(!findings.some(x=>/guarantee|definitely caused|must be because/i.test(x.message||'')));
 });
 
 test('pathway query is available through runtime without Board owning result logic',()=>{
