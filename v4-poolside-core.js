@@ -3,14 +3,14 @@
   const M=g.MSOS4;
   if(!M) throw new Error('MSOS4 missing');
   const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
-  const BUILD='v4-poolside-core-20260819b-releasegate';
-  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-releasegate';
+  const BUILD='v4-poolside-core-20260819c-reloadgate';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-reloadgate';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),
     build:BUILD,
     softwareReady:M.RELEASE_ATTESTATION?.softwareReady===true&&M.correct?.baseBuild?.match===true,
-    generatedAt:'2026-08-19T11:00:00+12:00',
-    suiteDigest:'v4-contract-20260819-releasegate',
+    generatedAt:'2026-08-19T11:30:00+12:00',
+    suiteDigest:'v4-contract-20260819-reloadgate',
     packageDigest:'SHA256SUMS.txt'
   });
   const BASE_PARSE=M.parser.parse.bind(M.parser);

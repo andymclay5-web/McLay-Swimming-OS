@@ -1,5 +1,5 @@
 McLay Swimming OS Version 4
-Build: v4-poolside-core-20260819b-releasegate
+Build: v4-poolside-core-20260819c-reloadgate
 Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
 Complete V4 Guardian
@@ -15,6 +15,7 @@ Resolved in this build
 - Clearing an explicit athlete override resumes the current automatic athlete profile. Charlotte returns to the current 50% profile rather than the obsolete 60% expectation.
 - App, V4 layer and service-worker cache identifiers are advanced together so the corrected bytes replace the previous phone cache.
 - The final poolside build now owns the software attestation used by the release gate; an earlier layer can no longer leave the shipping build marked DEV / NOT ATTESTED.
+- Startup now activates the saved view before rendering, so reloading or reopening on Times, Roll, Coach Hub, Guardian or another non-Board screen cannot leave the main area blank.
 
 Retained V4 scope
 - Full legacy app and data paths remain present; this is not a seven-file replacement shell.

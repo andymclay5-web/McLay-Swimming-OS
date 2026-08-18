@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.resolve(__dirname,'..');
-const build='v4-poolside-core-20260819b-releasegate';
+const build='v4-poolside-core-20260819c-reloadgate';
 const read=file=>fs.readFileSync(path.join(root,file));
 const text=file=>read(file).toString('utf8');
 
@@ -37,11 +37,12 @@ for(const file of required){
   assert.ok(checksumRows.some(row=>row.file===file),`Release checksums omit ${file}`);
   assert.ok(worker.includes(file),`Offline cache omits ${file}`);
 }
-assert.ok(index.includes(`app.js?v=20260819b-releasegate`),'index uses a stale app build');
-assert.ok(index.includes(`v4-correct.js?v=20260819b-releasegate`),'index uses a stale correct-layer build');
-assert.ok(index.includes(`v4-poolside-core.js?v=20260819b-releasegate`),'index uses a stale poolside build');
+assert.ok(index.includes(`app.js?v=20260819c-reloadgate`),'index uses a stale app build');
+assert.ok(index.includes(`v4-correct.js?v=20260819c-reloadgate`),'index uses a stale correct-layer build');
+assert.ok(index.includes(`v4-poolside-core.js?v=20260819c-reloadgate`),'index uses a stale poolside build');
 assert.ok(worker.includes(`const BUILD='${build}'`),'service worker uses a different build');
 assert.ok(app.includes("navigator.serviceWorker.register('./sw.js')"),'Version 4 never registers its offline worker');
+assert.ok(/N\.init=\(\)=>\{[^}]*N\.activateView\(initial\)/.test(app),'saved non-Board view is not activated during startup');
 assert.equal(manifest.name,'McLay Swimming OS — Version 4','manifest uses a stale product name');
 assert.equal(manifest.short_name,'McLay Swim V4','manifest uses a stale install name');
 

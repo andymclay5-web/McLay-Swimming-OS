@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-poolside-core-20260819b-releasegate';
+const BUILD='v4-poolside-core-20260819c-reloadgate';
 const ATHLETE_ID='predeploy-browser-athlete';
 const NOTE='Predeploy poolside note';
 
