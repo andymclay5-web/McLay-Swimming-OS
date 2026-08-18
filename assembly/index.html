@@ -10,11 +10,14 @@
 </head>
 <body>
   <div id="assembly-root"><div style="padding:24px;font-family:system-ui">Loading MSOS assembly…</div></div>
+  <div id="assembly-panel-root"></div>
 
   <script src="../engines/entity-registry.js"></script>
   <script src="../engines/session-schedule.js"></script>
   <script src="../engines/session-truth.js"></script>
   <script src="../engines/session-lifecycle.js"></script>
+  <script src="../engines/session-edit.js"></script>
+  <script src="../engines/delivered-session.js"></script>
   <script src="../engines/evidence-retrieval.js"></script>
   <script src="../engines/standards-records.js"></script>
   <script src="../engines/results-pathway.js"></script>
@@ -28,11 +31,16 @@
   <script src="../rebuild/app-composition.js"></script>
   <script src="../rebuild/navigation-state.js"></script>
   <script src="../ui/board-renderer.js"></script>
+  <script src="../ui/board-controller.js"></script>
+  <script src="../rebuild/board-command-owners.js"></script>
+  <script src="../rebuild/poolside-actions.js"></script>
   <script src="./programme-config.js"></script>
   <script src="./browser-storage.js"></script>
   <script src="./data-loader.js"></script>
   <script src="./shell-model.js"></script>
   <script src="./shell-renderer.js"></script>
+  <script src="./poolside-runtime-adapter.js"></script>
+  <script src="./poolside-presenter.js"></script>
   <script src="./browser-app.js"></script>
 </body>
 </html>
