@@ -1,59 +1,32 @@
 'use strict';
 const assert=require('assert');
-const Evidence=require('../engines/evidence-retrieval.js');
 const Timing=require('../engines/timing.js');
 let fails=0;
 function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;console.error('FAIL',name,'\n ',e.stack||e.message)}}
-const evidence=Evidence.create({sources:[{id:'athletes',priority:100,trust:'verified',data:{athletes:[{id:'a',full_name:'A Swimmer',active:true},{id:'b',full_name:'B Swimmer',active:true},{id:'c',full_name:'C Swimmer',active:true}]}}]});
-const session={id:'timing-session',identity:{date:'2026-08-18',dayPart:'AM',course:'SCM'}};
-function clocks(){let iso=0;return{clockIso:()=>`2026-08-18T06:00:${String(iso++).padStart(2,'0')}+12:00`,clockMs:()=>100000}}
-function engine(initial=null){return Timing.create({storage:new Timing.MemoryStorage(initial),evidence,...clocks()})}
+const athletes=[{id:'a',full_name:'A Swimmer'},{id:'b',full_name:'B Swimmer'},{id:'c',full_name:'C Swimmer'}];
+const entities={resolveAthlete(ref){const key=typeof ref==='string'?ref:ref?.id;return athletes.find(x=>x.id===key||x.full_name===key)||null},athleteId(ref){return this.resolveAthlete(ref)?.id||null}};
+function clock(){let n=0;return()=>`2026-08-18T15:10:${String(n++).padStart(2,'0')}+12:00`}
+function engine(initial=null){return Timing.create({storage:new Timing.MemoryStorage(initial),entities,clock:clock()})}
 
-test('boot is read-only and creates no phantom heat',()=>{const storage=new Timing.MemoryStorage({schema:Timing.SCHEMA,heats:[],updatedAt:'old'});Timing.create({storage,evidence,...clocks()});assert.equal(storage.reads,1);assert.equal(storage.writes,0);assert.equal(storage.value.heats.length,0)});
+test('boot is read-only and creates no phantom timing session',()=>{const storage=new Timing.MemoryStorage({schema:Timing.SCHEMA,sessions:[],journal:[],updatedAt:'old'});Timing.create({storage,entities,clock:clock()});assert.equal(storage.reads,1);assert.equal(storage.writes,0);assert.equal(storage.value.sessions.length,0)});
 
-test('one heat can time multiple swimmers independently from the same start',()=>{
- const t=engine(),h=t.begin(session,{id:'heat-1',blockId:'block',itemId:'item',athleteIds:['a','b'],distance:400,stroke:'Freestyle',typeKey:'t400_freestyle',startMs:100000});t.lap(h.id,'a',{atMs:180000,label:'200'});t.finish(h.id,'a',{atMs:320000});assert.equal(t.heat(h.id).status,'running');t.lap(h.id,'b',{atMs:185000,label:'200'});t.finish(h.id,'b',{atMs:330000});const a=t.result(h.id,'a'),b=t.result(h.id,'b');assert.equal(a.result_seconds,220);assert.equal(b.result_seconds,230);assert.equal(a.laps[0].elapsed_seconds,80);assert.equal(b.laps[0].elapsed_seconds,85);assert.equal(t.heat(h.id).status,'finished');
-});
+test('timing session retains exact external context without interpreting it',()=>{const t=engine(),s=t.createSession({id:'timing-1',context:{sessionId:'training-1',blockId:'b1',itemId:'i1',testProtocolId:'protocol-x'},course:'SCM',poolLength:25,label:'Tuesday test'});assert.deepEqual(s.context,{training_session_id:'training-1',block_id:'b1',item_id:'i1',test_protocol_id:'protocol-x',meet_id:null,event_id:null,race_id:null});assert.equal(s.course,'SCM');assert.equal(s.pool_length_m,25)});
 
-test('lap split is independent and calculated from previous lap for that swimmer',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a'],startMs:1000,distance:200});t.lap(h.id,'a',{atMs:31000,label:'50'});t.lap(h.id,'a',{atMs:63000,label:'100'});const r=t.result(h.id,'a');assert.equal(r.laps[0].split_seconds,30);assert.equal(r.laps[1].split_seconds,32);assert.equal(r.laps[1].elapsed_seconds,62);
-});
+test('one timing session can measure multiple swimmers independently including shared lane',()=>{const t=engine();t.createSession({id:'multi',course:'SCM',poolLength:25});t.assignAthlete('multi','a',{lane:1,position:1});t.assignAthlete('multi','b',{lane:1,position:2});t.start('multi');t.recordSplit('multi','a',{distance:100,elapsedSeconds:80});t.recordSplit('multi','b',{distance:100,elapsedSeconds:85});t.finishAthlete('multi','a',{distance:200,elapsedSeconds:165});assert.equal(t.get('multi').status,'running');t.finishAthlete('multi','b',{distance:200,elapsedSeconds:175});assert.equal(t.timeline('multi','a').at(-1).elapsed_seconds,165);assert.equal(t.timeline('multi','b').at(-1).elapsed_seconds,175);t.closeSession('multi');assert.equal(t.get('multi').status,'finished')});
 
-test('one swimmer finishing never stops another swimmer stopwatch',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a','b'],startMs:0,distance:100});t.finish(h.id,'a',{atMs:60000});assert.equal(t.result(h.id,'a').status,'finished');assert.equal(t.result(h.id,'b').status,'running');assert.equal(t.heat(h.id).status,'running');t.finish(h.id,'b',{atMs:65000});assert.equal(t.heat(h.id).status,'finished');
-});
+test('measurement distance and elapsed time must increase per swimmer',()=>{const t=engine();t.createSession({id:'ordered'});t.assignAthlete('ordered','a');t.start('ordered');t.recordSplit('ordered','a',{distance:100,elapsedSeconds:75});assert.throws(()=>t.recordSplit('ordered','a',{distance:100,elapsedSeconds:80}),/distance must increase/);assert.throws(()=>t.recordSplit('ordered','a',{distance:200,elapsedSeconds:70}),/elapsed time must increase/)});
 
-test('T400 finished result produces evidence-shaped training test record with exact lineage',()=>{
- const t=engine(),h=t.begin(session,{id:'t400-heat',blockId:'test-block',itemId:'test-item',athleteIds:['a'],distance:400,stroke:'Freestyle',course:'SCM',typeKey:'t400_freestyle',startMs:100000});t.finish(h.id,'a',{atMs:424600});const r=t.trainingTestResult(h.id,'a');assert(r);assert.equal(r.athlete_id,'a');assert.equal(r.test_key,'t400_freestyle');assert(Math.abs(r.result_seconds-324.6)<1e-9);assert.equal(r.pool_course,'SCM');assert.equal(r.valid_for_anchor,true);assert.equal(r.source_session_id,'timing-session');assert.equal(r.source_block_id,'test-block');assert.equal(r.source_item_id,'test-item');
-});
+test('one swimmer finish never stops another swimmer',()=>{const t=engine();t.createSession({id:'finish-independent'});t.assignAthlete('finish-independent','a');t.assignAthlete('finish-independent','b');t.start('finish-independent');t.finishAthlete('finish-independent','a',{distance:100,elapsedSeconds:60});t.recordSplit('finish-independent','b',{distance:50,elapsedSeconds:31});assert.equal(t.get('finish-independent').status,'running');assert.equal(t.timeline('finish-independent','b').length,1)});
 
-test('non-T400 timing never masquerades as a T400 training-test result',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a'],distance:100,typeKey:'timed_set',startMs:0});t.finish(h.id,'a',{atMs:60000});assert.equal(t.trainingTestResult(h.id,'a'),null);
-});
+test('correction is explicit journalled measurement revision and preserves neighbouring order',()=>{const t=engine();t.createSession({id:'correct'});t.assignAthlete('correct','a');t.start('correct');const a=t.recordSplit('correct','a',{distance:100,elapsedSeconds:80});t.finishAthlete('correct','a',{distance:200,elapsedSeconds:170});const changed=t.correctMeasurement('correct',a.id,{elapsedSeconds:82,note:'late tap correction',coachId:'andy'});assert.equal(changed.revision,2);assert.equal(changed.elapsed_seconds,82);assert.throws(()=>t.correctMeasurement('correct',a.id,{elapsedSeconds:180}),/later measurement/);assert(t.history('correct').some(x=>x.action==='correct'&&x.before.elapsed_seconds===80&&x.after.elapsed_seconds===82))});
 
-test('unfinished and DNS swimmers do not produce T400 anchors',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a','b'],distance:400,typeKey:'t400_freestyle',startMs:0});t.markDns(h.id,'a',{note:'shoulder'});assert.equal(t.trainingTestResult(h.id,'a'),null);assert.equal(t.trainingTestResult(h.id,'b'),null);
-});
+test('retired measurement remains in audit but disappears from normal timeline',()=>{const t=engine();t.createSession({id:'retire'});t.assignAthlete('retire','a');t.start('retire');const m=t.recordSplit('retire','a',{distance:50,elapsedSeconds:30});t.retireMeasurement('retire',m.id,{note:'accidental tap'});assert.equal(t.timeline('retire','a').length,0);assert.equal(t.timeline('retire','a',{includeRetired:true})[0].status,'retired');assert(t.history('retire').some(x=>x.action==='retire'))});
 
-test('timing exact context is retained on result',()=>{
- const t=engine(),h=t.begin(session,{blockId:'b1',itemId:'i1',athleteIds:['a'],distance:50,stroke:'Butterfly',course:'LCM',label:'Race pace 50',startMs:0});t.finish(h.id,'a',{atMs:30000});const r=t.result(h.id,'a');assert.equal(r.session_id,'timing-session');assert.equal(r.block_id,'b1');assert.equal(r.item_id,'i1');assert.equal(r.distance,50);assert.equal(r.stroke,'Butterfly');assert.equal(r.pool_course,'LCM');assert.equal(r.label,'Race pace 50');
-});
+test('unassigned or unknown swimmers cannot receive measurements',()=>{const t=engine();t.createSession({id:'identity'});t.assignAthlete('identity','a');t.start('identity');assert.throws(()=>t.recordSplit('identity','b',{distance:50,elapsedSeconds:30}),/not assigned/);assert.throws(()=>t.recordSplit('identity','Imaginary',{distance:50,elapsedSeconds:30}),/Athlete not found/)});
 
-test('unknown swimmer and swimmer outside heat are rejected',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a'],startMs:0});assert.throws(()=>t.lap(h.id,'Imaginary',{atMs:1000}),/Athlete not found/);assert.throws(()=>t.lap(h.id,'b',{atMs:1000}),/not in timing heat/);
-});
+test('reopen preserves running timing state without writing or inventing progress',()=>{const storage=new Timing.MemoryStorage(),t=Timing.create({storage,entities,clock:clock()});t.createSession({id:'running'});t.assignAthlete('running','a');t.start('running');t.recordSplit('running','a',{distance:100,elapsedSeconds:75});const writes=storage.writes,reopened=Timing.create({storage,entities,clock:clock()});assert.equal(storage.writes,writes);assert.equal(reopened.get('running').status,'running');assert.equal(reopened.timeline('running','a')[0].elapsed_seconds,75)});
 
-test('lap timestamps cannot go backwards',()=>{
- const t=engine(),h=t.begin(session,{athleteIds:['a'],startMs:10000});t.lap(h.id,'a',{atMs:20000});assert.throws(()=>t.lap(h.id,'a',{atMs:19000}),/cannot go backwards/);assert.throws(()=>t.finish(h.id,'a',{atMs:5000}),/Invalid stopwatch timestamp/);
-});
-
-test('reopen preserves running heat without creating or stopping it',()=>{
- const storage=new Timing.MemoryStorage(),t=Timing.create({storage,evidence,...clocks()}),h=t.begin(session,{id:'running',athleteIds:['a','b'],startMs:100000});t.lap(h.id,'a',{atMs:120000});const writes=storage.writes,reopened=Timing.create({storage,evidence,...clocks()});assert.equal(storage.writes,writes);assert.equal(reopened.heat('running').status,'running');assert.equal(reopened.result('running','a').laps.length,1);assert.equal(reopened.result('running','b').status,'running');
-});
-
-test('Timing Engine never changes athlete evidence',()=>{
- const before=JSON.stringify(evidence.listAthletes()),t=engine(),h=t.begin(session,{athleteIds:['a'],startMs:0});t.finish(h.id,'a',{atMs:60000});assert.equal(JSON.stringify(evidence.listAthletes()),before);
-});
+test('Timing stores measurements only and never marks a result as T400-valid or training-anchor evidence',()=>{const t=engine();t.createSession({id:'no-meaning',context:{testProtocolId:'t400-freestyle'}});t.assignAthlete('no-meaning','a');t.start('no-meaning');t.finishAthlete('no-meaning','a',{distance:400,elapsedSeconds:324.6});const json=JSON.stringify(t.get('no-meaning'));assert(!/valid_for_anchor|test_key|aerobic|threshold/i.test(json));assert.equal(t.get('no-meaning').context.test_protocol_id,'t400-freestyle')});
 
 if(fails){console.error(`\n${fails} Timing regression(s) failed`);process.exit(1)}
 console.log('\nALL TIMING REGRESSIONS PASS');
