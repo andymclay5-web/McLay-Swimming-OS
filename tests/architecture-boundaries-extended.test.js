@@ -7,7 +7,7 @@ function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;consol
 const root=path.join(__dirname,'..','engines');
 const read=f=>fs.readFileSync(path.join(root,f),'utf8');
 
-for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js','meet-lifecycle.js','meet-result-input.js','official-results-reconciliation.js']){
+for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js','meet-lifecycle.js','meet-result-input.js','official-results-reconciliation.js','standards-records.js','race-model.js','evidence-publication.js']){
  test(`${file} contains no browser/storage/network implementation`,()=>{
   const s=read(file);assert(!/\bdocument\s*\.|\bwindow\s*\.|querySelector\s*\(|innerHTML\s*=|\blocalStorage\b|\bindexedDB\b|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(s));
  });
@@ -43,6 +43,18 @@ test('Meet Result Input owns provisional/official race-result evidence without P
 
 test('Official Results Reconciliation compares official truth and delegates writes rather than becoming Results/Pathway',()=>{
  const s=read('official-results-reconciliation.js');assert(/preview/.test(s));assert(/applyOfficial/.test(s));assert(/captureOfficial/.test(s));assert(/provisional_not_confirmed/.test(s));assert(!/personalBest|qualifying|record benchmark|WA points|targetSeconds|AEROBIC_TABLES/i.test(s));
+});
+
+test('Standards and Records owns eligibility points milestones and records but never selects PB evidence',()=>{
+ const s=read('standards-records.js');assert(/statusForResult/.test(s));assert(/pointSteps/.test(s));assert(/record/.test(s));assert(/classificationStatus/.test(s));assert(!/personalBest|latestTrainingTestEvidence|trainingTests\(|coach_results|meet-result-input|test-result-input/.test(s));
+});
+
+test('Race Model owns loaded race split mathematics only and refuses hidden fallback models',()=>{
+ const s=read('race-model.js');assert(/normalizeModel/.test(s));assert(/model_missing/.test(s));assert(/compare\(/.test(s));assert(!/qualifying|personalBest|latestTrainingTestEvidence|t400_|AEROBIC_TABLES|world_para_points|wa_points/i.test(s));
+});
+
+test('Evidence Publication owns verified publication boundary without interpreting standards or PB meaning',()=>{
+ const s=read('evidence-publication.js');assert(/verifiedSource/.test(s));assert(/permanent_eligible/.test(s));assert(/operational_only/.test(s));assert(!/qualifying|personalBest|pointSteps|record benchmark|targetSeconds|AEROBIC_TABLES/i.test(s));
 });
 
 if(fails){console.error(`\n${fails} extended architecture regression(s) failed`);process.exit(1)}
