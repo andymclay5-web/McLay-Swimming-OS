@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.SessionDose=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
@@ -34,7 +34,7 @@
   function analyzeNodes(nodes,multiplier=1,out=null){
     out=out||{dose:{},total:0,classified:0,unclassified:0};for(const n of nodes||[]){if(n?.kind==='group'){analyzeNodes(n.items,(multiplier*Math.max(1,num(n.rounds)||1)),out);continue}if(n?.kind!=='set')continue;const x=classifySet(n);out.total+=x.total*multiplier;out.classified+=x.classified*multiplier;out.unclassified+=x.unclassified*multiplier;for(const [k,v] of Object.entries(x.dose))add(out.dose,k,v*multiplier)}return out;
   }
-  function analyzeOccurrences(occurrences=[]){const out={dose:{},total:0,classified:0,unclassified:0};for(const o of occurrences){const x=classifyFlat(o?.work||{});const expected=num(o?.distance);const scale=expected!==null&&x.total>0?expected/x.total:1;out.total+=expected!==null?expected:x.total;out.classified+=x.classified*scale;out.unclassified+=(expected!==null?expected:x.total)-(x.classified*scale);for(const [k,v] of Object.entries(x.dose))add(out.dose,k,v*scale)}return out}
+  function analyzeOccurrences(occurrences=[]){const out={dose:{},total:0,classified:0,unclassified:0};for(const o of occurrences){const x=classifySet(o?.work||{}),expected=num(o?.distance),scale=expected!==null&&x.total>0?expected/x.total:1;out.total+=expected!==null?expected:x.total;out.classified+=x.classified*scale;out.unclassified+=(expected!==null?expected:x.total)-(x.classified*scale);for(const [k,v] of Object.entries(x.dose))add(out.dose,k,v*scale)}return out}
   function rankDose(dose){return Object.entries(dose||{}).map(([key,metres])=>({key,metres})).sort((a,b)=>b.metres-a.metres||a.key.localeCompare(b.key))}
   function planKeys(planContext={}){const intent=planContext?.intent||{},primary=text(intent.primary_dose_key||intent.primaryDoseKey||planContext.primaryDoseKey),support=[...(intent.supporting_dose_keys||intent.supportingDoseKeys||planContext.supportingDoseKeys||[])].map(text).filter(Boolean),required=[...(intent.required_dose_keys||intent.requiredDoseKeys||[])].map(text).filter(Boolean);return{primary,support,required}}
   function blockRole(type){const t=text(type);return t==='warm_up'?'warm_up':t==='warm_down'?'warm_down':t==='pre_set'?'pre_set':t==='main_set'?'main_set':t==='post_set'?'post_set':t||'other'}
