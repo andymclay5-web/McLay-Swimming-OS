@@ -1,0 +1,147 @@
+name: App assembly tests
+
+on:
+  push:
+    branches:
+      - rebuild/app-assembly-v1
+  pull_request:
+    branches:
+      - rebuild/engine-contracts-v1
+  workflow_dispatch:
+
+jobs:
+  assembly-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check assembly flow
+        run: |
+          node --check rebuild/session-flow-portal.js
+          node --check rebuild/app-composition.js
+          node --check rebuild/poolside-actions.js
+          node --check assembly/shell-model.js
+          node --check assembly/shell-renderer.js
+          node --check assembly/browser-storage.js
+          node --check assembly/data-loader.js
+          node --check assembly/programme-data-adapter.js
+          node --check assembly/media-capture-adapter.js
+          node --check assembly/poolside-runtime-adapter.js
+          node --check assembly/poolside-presenter.js
+          node --check assembly/browser-app.js
+          node --check assembly/programme-config.js
+          node --check tests/assembly-browser-rendered.acceptance.mjs
+      - name: Calendar session intake and custom authoring integration
+        run: |
+          node tests/session-flow-portal.integration.test.js
+          node tests/assembly-custom-session.integration.test.js
+      - name: Unified Calendar Board poolside Timing and current-data composition
+        run: |
+          node tests/app-composition.integration.test.js
+          node tests/assembly-board-actions.integration.test.js
+          node tests/assembly-live-data-flow.integration.test.js
+      - name: Browser data media renderer and poolside presenter
+        run: |
+          node tests/assembly-browser-infrastructure.test.js
+          node tests/assembly-programme-data.test.js
+          node tests/assembly-media-capture.test.js
+          node tests/assembly-shell-renderer.test.js
+          node tests/assembly-poolside-presenter.test.js
+      - name: Schedule and navigation protected regressions
+        run: |
+          node tests/session-schedule.test.js
+          node tests/session-schedule-portal.integration.test.js
+          node tests/navigation-state.test.js
+      - name: Assembly ownership boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const shell=fs.readFileSync('assembly/shell-model.js','utf8');
+          assert(!/require\(['\"]\.\.\/engines\//.test(shell),'Assembly shell directly imports domain engine implementation');
+          assert(!/SessionTruth|ResultsPathway|TargetEngine|AdaptationEngine|StandardsRecords|nodeDistance|trainingTests|personalBest/.test(shell),'Assembly shell contains swimming-domain owner logic');
+          const flow=fs.readFileSync('rebuild/session-flow-portal.js','utf8');
+          assert(/session-intake-flow/.test(flow)&&/session-schedule/.test(flow)&&/session-lifecycle/.test(flow)&&/session-truth/.test(flow),'Session flow does not declare all owners');
+          assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(flow),'Session flow owns browser/network/storage infrastructure');
+          const app=fs.readFileSync('rebuild/app-composition.js','utf8');
+          for(const owner of ['calendar-surface','coach-board-surface','measurement-surface','session-intake-flow','poolside-session-flow','measurement-publication-flow','timing','test-protocol','test-result-input','evidence-publication','board-projection'])assert(app.includes(owner),`Unified app composition missing ${owner}`);
+          assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
+          assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
+          assert(/calendar-surface[\s\S]*session-schedule[\s\S]*createCustomSlot/.test(app),'Custom schedule authoring is not routed through Calendar Surface -> Session Schedule');
+          assert(/evidence-publication[\s\S]*verifiedSource/.test(app)&&/evidence-retrieval[\s\S]*rebuildSources/.test(app),'Verified local test evidence is not explicitly republished into Evidence Retrieval');
+          for(const path of ['assembly/poolside-runtime-adapter.js','assembly/poolside-presenter.js','assembly/programme-data-adapter.js','assembly/media-capture-adapter.js']){
+            const src=fs.readFileSync(path,'utf8');
+            assert(!/require\(['\"]\.\.\/engines\//.test(src),`${path} imports a domain engine implementation`);
+          }
+          const runtime=fs.readFileSync('assembly/poolside-runtime-adapter.js','utf8');
+          assert(/training_session_id/.test(runtime)&&/createT400Timing/.test(runtime),'Poolside Timing is not bound to exact selected training session');
+          const programmeData=fs.readFileSync('assembly/programme-data-adapter.js','utf8');
+          assert(/method:'GET'/.test(programmeData),'Programme data adapter is not explicitly read-only');
+          assert(!/method:\s*['\"](?:POST|PUT|PATCH|DELETE)['\"]/i.test(programmeData),'Programme data adapter contains a write method');
+          const media=fs.readFileSync('assembly/media-capture-adapter.js','utf8');
+          assert(/IndexedDbMediaStore/.test(media)&&/MediaCaptureAdapter/.test(media),'Media capture is not an explicit browser infrastructure adapter');
+          assert(/await this\.store\.put\(row\)/.test(media),'Media capture does not save locally before returning mediaRef');
+          const browser=fs.readFileSync('assembly/browser-app.js','utf8');
+          assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
+          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser)&&/MSOSAssemblyProgrammeData/.test(browser)&&/MSOSAssemblyMediaCapture/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside/data/media boundaries');
+          assert(/state\.app\.createCustomSlot\(/.test(browser)&&!/SessionSchedule\.create|new M\.SessionSchedule/.test(browser),'Browser custom authoring bypasses App Composition or recreates Schedule owner');
+          for(const pattern of [/evidenceSources:programmeData\.evidenceSources/,/profiles:programmeData\.profiles/,/standards:programmeData\.standards/,/baseTimes:programmeData\.baseTimes/,/timingStorage/,/protocolStorage/,/testResultStorage/])assert(pattern.test(browser),'Browser boot does not inject required programme or measurement storage into App Composition');
+          const html=fs.readFileSync('assembly/index.html','utf8');
+          const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
+          assert(!scripts.some(src=>src==='../app.js'||src==='app.js'||/\/(?:v4-correct|v4-poolside-core)\.js$/i.test(src)),'Assembly page loads a legacy competing app implementation');
+          for(const src of ['../config.js','../rebuild/app-composition.js','../rebuild/navigation-state.js','../ui/board-controller.js','../rebuild/board-command-owners.js','../rebuild/poolside-actions.js','../engines/session-edit.js','../engines/delivered-session.js','../engines/timing.js','../engines/test-protocol.js','../engines/test-result-input.js','../engines/evidence-publication.js','./programme-data-adapter.js','./media-capture-adapter.js','./poolside-runtime-adapter.js','./poolside-presenter.js'])assert(scripts.includes(src),`Assembly page missing ${src}`);
+          console.log('PASS App assembly ownership boundary');
+          NODE
+
+  inherited-full-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run every Node regression test in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in tests/*.test.js; do
+            echo "===== $f ====="
+            node "$f"
+          done
+
+  rendered-mobile-browser:
+    needs:
+      - assembly-flow
+      - inherited-full-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pinned Chromium harness
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start static assembly server
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/msos-assembly-http.log 2>&1 &
+          echo $! > /tmp/msos-assembly-http.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/assembly/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/msos-assembly-http.log
+          exit 1
+      - name: Render and drive phone-size coach workflow
+        run: node tests/assembly-browser-rendered.acceptance.mjs
+      - name: Upload rendered phone screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msos-assembly-rendered-mobile
+          path: artifacts/msos-assembly-mobile-board.png
+          if-no-files-found: warn
+          retention-days: 14

@@ -4,7 +4,8 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Adaptation=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.2';
+  const VERSION='1.2.0';
+  const OVERRIDE_SCHEMA='msos.adaptation-overrides.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
@@ -18,6 +19,8 @@
     matthewkofoed:{ratio:2/3,label:'~⅔ volume when condensation is needed',returnToStart:false},
     rubystace:{ratio:2/3,label:'~⅔ volume when condensation is needed',returnToStart:false}
   };
+  class MemoryStorage{constructor(initial=null){this.value=initial==null?null:clone(initial);this.reads=0;this.writes=0}load(){this.reads++;return clone(this.value)}save(value){this.writes++;this.value=clone(value);return true}}
+  function normalizeOverrideState(raw,seed=[]){if(Array.isArray(raw))return{schema:OVERRIDE_SCHEMA,overrides:clone(raw)};if(raw&&typeof raw==='object'&&Array.isArray(raw.overrides))return{schema:OVERRIDE_SCHEMA,overrides:clone(raw.overrides)};return{schema:OVERRIDE_SCHEMA,overrides:clone(seed||[])}}
   function poolLength(session){return /LCM/i.test(text(session?.identity?.course))?50:25}
   function patternSpan(item){return(item?.pattern||[]).reduce((n,x)=>n+(num(x.count)||0),0)}
   function coversPattern(item){const span=patternSpan(item),reps=Math.max(1,num(item?.reps)||1);return span>0&&reps%span===0}
@@ -40,13 +43,14 @@
   }
 
   class Adaptation{
-    constructor({evidence,profiles=[],overrides=[],clock=()=>new Date().toISOString()}={}){if(!evidence||typeof evidence.resolveAthlete!=='function')throw new Error('Adaptation Engine requires Evidence Retrieval for athlete identity');this.evidence=evidence;this.profiles=clone(profiles||[]);this.overrides=clone(overrides||[]);this.clock=clock}
+    constructor({evidence,profiles=[],overrides=[],storage=null,clock=()=>new Date().toISOString()}={}){if(!evidence||typeof evidence.resolveAthlete!=='function')throw new Error('Adaptation Engine requires Evidence Retrieval for athlete identity');if(storage&&(typeof storage.load!=='function'||typeof storage.save!=='function'))throw new Error('Adaptation override storage must implement load/save');this.evidence=evidence;this.profiles=clone(profiles||[]);this.storage=storage;const state=normalizeOverrideState(storage?storage.load():null,overrides);this.overrides=state.overrides;this.clock=clock}
+    persist(){if(this.storage)this.storage.save({schema:OVERRIDE_SCHEMA,overrides:clone(this.overrides)});return true}
     athlete(ref){return this.evidence.resolveAthlete(ref)}
     profile(athleteRef){const ath=this.athlete(athleteRef);if(!ath)return null;const stored=this.profiles.find(x=>x.athlete_id===ath.id&&x.active!==false),fallback=FALLBACKS[key(ath.full_name)]||{},raw=num(stored?.default_volume_ratio),ratio=raw!==null&&raw>0?Math.max(.25,Math.min(1,raw)):(fallback.ratio||1);return{athleteId:ath.id,key:key(ath.full_name),ratio,label:text(stored?.profile_label||fallback.label||ath.modifications),returnToStart:stored?.return_to_starting_end===true||fallback.returnToStart===true,roundUpReturn:stored?.round_up_return===true||fallback.roundUpReturn===true,source:stored?'stored':'fallback'}}
     listOverrides({sessionId='',itemId='',athleteId=''}={}){return clone(this.overrides.filter(x=>x.active!==false).filter(x=>!sessionId||x.sessionId===sessionId).filter(x=>!itemId||x.itemId===itemId).filter(x=>!athleteId||x.athleteId===athleteId))}
     override(session,item,ath){return this.overrides.filter(x=>x.active!==false&&x.athleteId===ath.id&&x.sessionId===session?.id&&x.itemId===item?.id).sort((a,b)=>text(b.updatedAt||b.updated_at).localeCompare(text(a.updatedAt||a.updated_at)))[0]||null}
-    setOverride(session,item,athleteRef,prescription,{reason='Coach override'}={}){const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid)throw new Error('Adaptation override requires exact session id');if(!iid)throw new Error('Adaptation override requires exact item id');if(!ath)throw new Error(`Athlete not found: ${athleteRef}`);const at=this.clock(),row={id:`adapt-${sid}-${iid}-${ath.id}`,sessionId:sid,itemId:iid,athleteId:ath.id,prescription:clone(prescription||{}),reason:text(reason)||'Coach override',active:true,updatedAt:at};const i=this.overrides.findIndex(x=>x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id);if(i>=0)this.overrides[i]=row;else this.overrides.push(row);return clone(row)}
-    clearOverride(session,item,athleteRef){const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid||!iid||!ath)return false;const before=this.overrides.length;this.overrides=this.overrides.filter(x=>!(x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id));return this.overrides.length!==before}
+    setOverride(session,item,athleteRef,prescription,{reason='Coach override'}={}){const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid)throw new Error('Adaptation override requires exact session id');if(!iid)throw new Error('Adaptation override requires exact item id');if(!ath)throw new Error(`Athlete not found: ${athleteRef}`);const at=this.clock(),row={id:`adapt-${sid}-${iid}-${ath.id}`,sessionId:sid,itemId:iid,athleteId:ath.id,prescription:clone(prescription||{}),reason:text(reason)||'Coach override',active:true,updatedAt:at};const i=this.overrides.findIndex(x=>x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id);if(i>=0)this.overrides[i]=row;else this.overrides.push(row);this.persist();return clone(row)}
+    clearOverride(session,item,athleteRef){const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid||!iid||!ath)return false;const before=this.overrides.length;this.overrides=this.overrides.filter(x=>!(x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id));const changed=this.overrides.length!==before;if(changed)this.persist();return changed}
     applyOverride(item,override){const x=clone(item),p=override?.prescription||override?.work||override||{};for(const field of ['reps','distance','stroke','restSeconds','cycleSeconds','raw'])if(p[field]!==undefined)x[field]=clone(p[field]);if(p.equipment!==undefined)x.equipment=clone(p.equipment);if(p.pattern!==undefined)x.pattern=clone(p.pattern);if(p.phases!==undefined)x.phases=clone(p.phases);return trimRepMetadata(x)}
     adaptPhase(session,parent,phase,ath,profile){const child={...clone(parent),...clone(phase),reps:num(phase?.reps)||num(phase?.count)||1,distance:num(phase?.distance)||num(parent?.distance),raw:phase?.raw||phase?.text||parent?.raw,phases:[],pattern:clone(phase?.pattern||[]),cues:clone(phase?.cues||[])};const result=this.adaptItem(session,child,ath.id,{profile,allowOverride:false});return{...clone(phase),reps:result.prescription.reps,distance:result.prescription.distance,stroke:result.prescription.stroke||phase.stroke,equipment:clone(result.prescription.equipment||phase.equipment||[]),pattern:clone(result.prescription.pattern||phase.pattern||[]),repInstructions:clone(result.prescription.repInstructions||phase.repInstructions||[]),adaptationReason:result.reason,sameAsGroup:result.sameAsGroup}}
     adaptItem(session,item,athleteRef,{profile:profileOverride=null,allowOverride=true}={}){
@@ -66,5 +70,5 @@
     forAthletes(session,item,athleteRefs=[]){return(athleteRefs||[]).map(ref=>{const ath=this.athlete(ref);return{athlete:ath,result:this.adaptItem(session,item,ref)}})}
   }
   const create=options=>new Adaptation(options);
-  return{VERSION,create,Adaptation,FALLBACKS,poolLength,patternSpan,coversPattern,isAerobic,isQuality,phaseQualityText,hasSharedQualityPhases,sameTeamExposure,sameWork,scaleReps,scaleContinuousDistance,trimRepMetadata,constraintFor};
+  return{VERSION,OVERRIDE_SCHEMA,create,Adaptation,MemoryStorage,normalizeOverrideState,FALLBACKS,poolLength,patternSpan,coversPattern,isAerobic,isQuality,phaseQualityText,hasSharedQualityPhases,sameTeamExposure,sameWork,scaleReps,scaleContinuousDistance,trimRepMetadata,constraintFor};
 });
