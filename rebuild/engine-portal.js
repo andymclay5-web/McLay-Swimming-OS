@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSEnginePortal=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='1.1.0';
   const SCHEMA='msos.engine-portal.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
@@ -45,7 +45,7 @@
 
   class EnginePortal{
     constructor({clock=nowDefault,maxDepth=24,auditLimit=1000}={}){
-      this.clock=clock;this.maxDepth=Math.max(4,Number(maxDepth)||24);this.auditLimit=Math.max(50,Number(auditLimit)||1000);this.services=new Map();this.audit=[];this.sealed=false;this.sequence=0;
+      this.clock=clock;this.maxDepth=Math.max(4,Number(maxDepth)||24);this.auditLimit=Math.max(50,Number(auditLimit)||1000);this.services=new Map();this.audit=[];this.sealed=false;this.sequence=0;this.activeStacks=new Map();
     }
     register(spec={}){
       if(this.sealed)fail('PORTAL_SEALED','Engine portal is sealed; registration is closed');
@@ -68,8 +68,8 @@
     client(callerId){
       const caller=text(callerId);if(!this.services.has(caller))fail('UNKNOWN_CALLER',`Portal client requires registered caller: ${caller}`);
       return Object.freeze({
-        query:(target,operation,input={},context={})=>this._invoke('query',caller,target,operation,input,context,[]),
-        command:(target,operation,input={},context={})=>this._invoke('command',caller,target,operation,input,context,[]),
+        query:(target,operation,input={},context={})=>this._invoke('query',caller,target,operation,input,context,this.activeStacks.get(caller)||[]),
+        command:(target,operation,input={},context={})=>this._invoke('command',caller,target,operation,input,context,this.activeStacks.get(caller)||[]),
         describe:target=>this.describe(target)
       });
     }
@@ -77,7 +77,7 @@
       const callerRow=this.services.get(caller);if(!callerRow)fail('UNKNOWN_CALLER',`Unknown caller: ${caller}`);const allowed=callerRow.calls?.[kind]?.[target];if(!opAllowed(allowed,operation))fail('CALL_NOT_ALLOWED',`${caller} may not ${kind} ${target}.${operation}`,{caller,target,kind,operation});
     }
     _requestMeta(kind,caller,target,operation,context,parentStack){
-      const parent=parentStack.at(-1)||null,seq=++this.sequence,at=this.clock(),requestId=text(context?.requestId)||stable('req',seq,at,caller,target,operation),causeId=text(context?.causeId)||parent?.requestId||requestId;
+      const parent=parentStack.at(-1)||null,seq=++this.sequence,at=this.clock(),requestId=text(context?.requestId)||stable('req',seq,at,caller,target,operation),causeId=text(context?.causeId)||parent?.causeId||parent?.requestId||requestId;
       return{schema:SCHEMA,portalVersion:VERSION,requestId,causeId,kind,caller,target,operation,at,depth:parentStack.length,context:clone(context||{})};
     }
     _record(meta,status,error=null){
@@ -90,14 +90,15 @@
         query:(nextTarget,nextOperation,nextInput={},nextContext={})=>this._invoke('query',target,nextTarget,nextOperation,nextInput,{...clone(meta.context),...clone(nextContext),causeId:meta.causeId},stack),
         command:(nextTarget,nextOperation,nextInput={},nextContext={})=>this._invoke('command',target,nextTarget,nextOperation,nextInput,{...clone(meta.context),...clone(nextContext),causeId:meta.causeId},stack),
         describe:id=>this.describe(id)
-      });
-      const safeInput=clone(input);
+      }),previousStack=this.activeStacks.get(target);
+      const safeInput=clone(input);this.activeStacks.set(target,stack);
       try{
         validateWith(op.validateInput,safeInput,`${target}.${operation} input`);
         const result=op.handler(safeInput,Object.freeze({request:Object.freeze(clone(meta)),client:serviceClient}));
         if(result&&typeof result.then==='function')fail('ASYNC_NOT_SUPPORTED','Engine Portal v1 handlers must be synchronous/local-first; wrap remote work behind a separate async adapter');
         validateWith(op.validateOutput,result,`${target}.${operation} output`);this._record(meta,'ok');return clone(result);
       }catch(error){const wrapped=error instanceof PortalError?error:new PortalError('ENGINE_OPERATION_FAILED',`${target}.${operation} failed: ${error.message}`,{target,operation});this._record(meta,'error',wrapped);throw wrapped}
+      finally{if(previousStack)this.activeStacks.set(target,previousStack);else this.activeStacks.delete(target)}
     }
     auditTrail({causeId='',caller='',target='',kind='',status=''}={}){return clone(this.audit.filter(x=>!causeId||x.causeId===causeId).filter(x=>!caller||x.caller===caller).filter(x=>!target||x.target===target).filter(x=>!kind||x.kind===kind).filter(x=>!status||x.status===status))}
     snapshot(){return{schema:SCHEMA,version:VERSION,sealed:this.sealed,services:this.catalog(),graph:this.graph(),audit:this.auditTrail()}}
