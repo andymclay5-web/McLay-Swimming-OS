@@ -174,8 +174,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Syntax check composition root
-        run: node --check rebuild/runtime.js
+      - name: Syntax check poolside integration chain
+        run: |
+          node --check rebuild/runtime.js
+          node --check tests/capture-evidence.test.js
+          node --check tests/poolside-flow.integration.test.js
+          node --check tests/runtime.integration.test.js
+          node --check tests/poolside-actions.integration.test.js
       - name: Capture Evidence regression
         run: node tests/capture-evidence.test.js
       - name: Poolside flow integration
