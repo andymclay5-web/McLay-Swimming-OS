@@ -7,7 +7,7 @@ function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;consol
 const root=path.join(__dirname,'..','engines');
 const read=f=>fs.readFileSync(path.join(root,f),'utf8');
 
-for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js','meet-lifecycle.js','meet-result-input.js','official-results-reconciliation.js','standards-records.js','race-model.js','evidence-publication.js']){
+for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js','meet-lifecycle.js','meet-result-input.js','official-results-reconciliation.js','standards-records.js','race-model.js','evidence-publication.js','results-pathway.js']){
  test(`${file} contains no browser/storage/network implementation`,()=>{
   const s=read(file);assert(!/\bdocument\s*\.|\bwindow\s*\.|querySelector\s*\(|innerHTML\s*=|\blocalStorage\b|\bindexedDB\b|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(s));
  });
@@ -55,6 +55,10 @@ test('Race Model owns loaded race split mathematics only and refuses hidden fall
 
 test('Evidence Publication owns verified publication boundary without interpreting standards or PB meaning',()=>{
  const s=read('evidence-publication.js');assert(/verifiedSource/.test(s));assert(/permanent_eligible/.test(s));assert(/operational_only/.test(s));assert(!/qualifying|personalBest|pointSteps|record benchmark|targetSeconds|AEROBIC_TABLES/i.test(s));
+});
+
+test('Results Pathway delegates standards, points and milestones instead of owning a second implementation',()=>{
+ const s=read('results-pathway.js');assert(/StandardsRecords/.test(s));assert(/this\.rules\.statusForResult/.test(s));assert(/this\.rules\.milestones/.test(s));assert(/this\.rules\.points/.test(s));assert(!/Math\.pow|Math\.cbrt|function ageBounds|function classMatches|this\.standards\s*=|this\.baseTimes\s*=/.test(s));
 });
 
 if(fails){console.error(`\n${fails} extended architecture regression(s) failed`);process.exit(1)}
