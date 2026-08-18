@@ -28,7 +28,7 @@ function system(src){
    {id:'molly100',athlete_id:'molly',distance:100,stroke:'Freestyle',pool_course:'SCM',result_seconds:60,result_date:'2026-07-01'},
    {id:'std100',athlete_id:'std',distance:100,stroke:'Freestyle',pool_course:'SCM',result_seconds:58,result_date:'2026-07-01'}
   ]
- }}}]});
+ }}]});
  const attendance=Attendance.create({storage:new Attendance.MemoryStorage(),evidence,clock:()=>new Date('2026-08-18T05:30:00+12:00').toISOString()});
  const targets=Targets.create({evidence}),adaptation=Adaptation.create({evidence}),board=Board.create({truth:Truth,attendance,adaptation,targets}),session=Truth.parse(src,identity);
  return{attendance,targets,adaptation,board,session};
@@ -49,14 +49,14 @@ test('modified continuous distance displays adapted metres, never stale original
  assert.equal(mod.work.distance,300);assert.equal((html.match(/400 Pull/g)||[]).length,1);assert(/300 Pull/.test(html));
 });
 
-test('modified phased swimmer is removed from shared phase targets and keeps own phase target',()=>{
+test('shared phased quality keeps McKenzie with team and keeps her race target in shared phase',()=>{
  const src=`Post Set\n16 x 50 @ 1:15\n8 x 50 Bands Only\n4 Build\n4 Descend 1-4\n8 x 50 Swim\nDescend 1-4 twice\n#4 + #8 @ 100 Pace`,{attendance,board,session}=system(src);
  attendance.mark(session,'mk','modified');attendance.mark(session,'molly','present');
- const set=board.project(session).blocks[0].items[0],mod=set.modifications.find(x=>x.athleteId==='mk');
- assert(mod);assert.equal(mod.work.phases.length,2);assert(mod.phaseTargets.length>=1);
- assert(!set.phases.some(p=>p.targets.some(t=>t.athleteId==='mk')));
- const race=mod.phaseTargets.find(x=>x.status==='rep_race');assert(race);assert.deepEqual(race.rows.map(x=>x.rep),[4,8]);
- const html=Render.renderBoard(board.project(session));assert(/msos-mod-phase-targets/.test(html));assert(/#4/.test(html)&&/#8/.test(html));
+ const set=board.project(session).blocks[0].items[0];
+ assert(!set.modifications.some(x=>x.athleteId==='mk'));
+ const racePhase=set.phases.find(p=>p.targets.some(t=>t.athleteId==='mk'&&t.status==='rep_race'));assert(racePhase);
+ const race=racePhase.targets.find(t=>t.athleteId==='mk'&&t.status==='rep_race');assert.deepEqual(race.rows.map(x=>x.rep),[4,8]);
+ const html=Render.renderBoard(board.project(session));assert(!/data-athlete-id="mk"[^>]*class="msos-mod-card/.test(html));assert(/#4/.test(html)&&/#8/.test(html));
 });
 
 test('unmodified swimmer remains only in shared target rows',()=>{
