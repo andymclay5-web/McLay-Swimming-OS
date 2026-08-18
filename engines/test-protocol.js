@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.TestProtocol=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.test-protocol.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -37,7 +37,11 @@
       let priorD=0,priorE=0;for(const s of splits){if(s.distance_m===null||s.distance_m<=priorD){reasons.push('Split distances must increase');break}if(s.elapsed_seconds===null||s.elapsed_seconds<=priorE){reasons.push('Split elapsed times must increase');break}if(distance!==null&&s.distance_m>distance){reasons.push('Split distance exceeds result distance');break}if(elapsed!==null&&s.elapsed_seconds>elapsed){reasons.push('Split elapsed time exceeds result time');break}priorD=s.distance_m;priorE=s.elapsed_seconds}
       return{ok:reasons.length===0,status:reasons.length?'invalid':'ok',protocol:p,reasons,normalized:{protocol_id:p.id,protocol_version:p.protocol_version,test_key:p.test_key,distance_m:distance,stroke:st,course,pool_length_m:poolLength,elapsed_seconds:elapsed,splits,notes:text(observation.notes||observation.note)}};
     }
-    upsert(row,{coachId='',note=''}={}){const id=text(row?.id);if(!id)throw new Error('Test protocol requires id');const i=this.state.protocols.findIndex(x=>x.id===id),before=i>=0?clone(this.state.protocols[i]):null,next=normalizeProtocol(row,before),at=this.clock();if(before&&JSON.stringify({...before,protocol_version:undefined})!==JSON.stringify({...next,protocol_version:undefined})&&row.protocol_version===undefined&&row.protocolVersion===undefined)next.protocol_version=(Number(before.protocol_version)||1)+1;if(i>=0)this.state.protocols[i]=next;else this.state.protocols.push(next);this.state.journal.push({id:stable('protocol-event',id,i>=0?'update':'create',at),protocol_id:id,action:i>=0?'update':'create',at,coach_id:text(coachId),note:text(note),before,after:clone(next)});this.persist();return clone(next)}
+    upsert(row,{coachId='',note=''}={}){
+      const id=text(row?.id);if(!id)throw new Error('Test protocol requires id');const i=this.state.protocols.findIndex(x=>x.id===id),before=i>=0?clone(this.state.protocols[i]):null,next=normalizeProtocol(row,before),at=this.clock();
+      if(before){const beforeComparable={...before,protocol_version:undefined},nextComparable={...next,protocol_version:undefined},changed=JSON.stringify(beforeComparable)!==JSON.stringify(nextComparable);if(changed){const previous=Number(before.protocol_version)||1,requested=Number(row.protocol_version??row.protocolVersion)||0;next.protocol_version=requested>previous?requested:previous+1}else next.protocol_version=Number(before.protocol_version)||1}
+      if(i>=0)this.state.protocols[i]=next;else this.state.protocols.push(next);this.state.journal.push({id:stable('protocol-event',id,i>=0?'update':'create',at),protocol_id:id,action:i>=0?'update':'create',at,coach_id:text(coachId),note:text(note),before,after:clone(next)});this.persist();return clone(next)
+    }
     retire(ref,{coachId='',note=''}={}){const p=this.resolve(ref);if(!p)throw new Error(`Test protocol not found: ${ref}`);return this.upsert({...p,active:false},{coachId,note:note||'Retired'})}
     history(ref){const p=this.resolve(ref),id=p?.id||text(ref);return clone(this.state.journal.filter(x=>x.protocol_id===id).sort((a,b)=>text(a.at).localeCompare(text(b.at))))}
   }
