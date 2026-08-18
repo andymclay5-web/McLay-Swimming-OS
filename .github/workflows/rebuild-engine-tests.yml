@@ -178,11 +178,17 @@ jobs:
         run: |
           node --check rebuild/runtime.js
           node --check tests/capture-evidence.test.js
+          node --check tests/delivered-session.test.js
+          node --check tests/session-dose.test.js
           node --check tests/poolside-flow.integration.test.js
           node --check tests/runtime.integration.test.js
           node --check tests/poolside-actions.integration.test.js
       - name: Capture Evidence regression
         run: node tests/capture-evidence.test.js
+      - name: Delivered Session regression
+        run: node tests/delivered-session.test.js
+      - name: Session Dose regression
+        run: node tests/session-dose.test.js
       - name: Poolside flow integration
         run: node tests/poolside-flow.integration.test.js
       - name: Runtime integration
