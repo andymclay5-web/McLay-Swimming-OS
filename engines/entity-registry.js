@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.EntityRegistry=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.entities.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -35,14 +35,12 @@
       for(const s of this.sources){for(const raw of sourceRows(s,'athletes','swimmers')){if(!raw)continue;const rid=text(raw.id),nk=canonicalName(key(raw.full_name||raw.name)),explicitId=aliases.idToCanonical.get(rid);let gid=explicitId||(rid&&idGroup.get(rid))||(nk&&nameGroup.get(nk));if(!gid)gid=rid||`athlete-${nk}`;const row=withMeta(raw,s,gid),existing=groups.get(gid),winner=stronger(existing,row),merged=mergeWinner(winner,winner===row?existing:row);merged.id=gid;groups.set(gid,merged);if(rid){idGroup.set(rid,gid);sourceIdGroup.set(`${s.id}|${rid}`,gid)}if(nk)nameGroup.set(nk,gid);for(const a of raw.aliases||[]){const ak=canonicalName(key(a));if(ak)nameGroup.set(ak,gid)}}}
       for(const a of this.aliases){const cid=text(a.canonicalId||a.canonical_id),nk=canonicalName(key(a.canonicalName||a.canonical_name));let gid=cid||nameGroup.get(nk);if(!gid)continue;if(cid&&groups.has(gid)){for(const id of a.ids||a.sourceIds||a.source_ids||[]){idGroup.set(text(id),gid)}}for(const name of a.aliases||[]){if(key(name))nameGroup.set(canonicalName(key(name)),gid)}}
       this.athletes=[...groups.values()].sort((a,b)=>text(a.full_name||a.name).localeCompare(text(b.full_name||b.name)));this._athleteById=new Map(this.athletes.map(x=>[x.id,x]));this._athleteIdGroup=idGroup;this._athleteNameGroup=nameGroup;this._sourceAthleteId=sourceIdGroup;this._canonicalName=canonicalName;
-
       const clubRows=[...this.explicit.clubs],coachRows=[...this.explicit.coaches],squadRows=[...this.explicit.squads];
       for(const s of this.sources){clubRows.push(...sourceRows(s,'clubs'));coachRows.push(...sourceRows(s,'coaches'));squadRows.push(...sourceRows(s,'squads'))}
       for(const ath of this.athletes){if(text(ath.squad)&&!squadRows.some(x=>key(x.name)===key(ath.squad)))squadRows.push({id:`squad-${key(ath.squad)}`,name:text(ath.squad),active:true,synthetic:true})}
       this._clubs=simpleIndex(clubRows,'club');this._coaches=simpleIndex(coachRows,'coach');this._squads=simpleIndex(squadRows,'squad');
-
       const memberships=[...this.explicit.memberships];for(const s of this.sources)memberships.push(...sourceRows(s,'squad_memberships','squadMemberships'));
-      for(const s of this.sources){for(const raw of sourceRows(s,'athletes','swimmers'))if(raw&&text(raw.squad)){const aid=this.sourceAthleteId(s.id,raw.id)||this.athleteId(raw.full_name||raw.name),sq=this.resolveSquad(raw.squad);if(aid&&sq)memberships.push({id:`membership-${aid}-${sq.id}-${date(raw.squad_start||raw.start_date)||'current'}`,athlete_id:aid,squad_id:sq.id,start_date:date(raw.squad_start||raw.start_date),end_date:date(raw.squad_end||raw.end_date),active:raw.active!==false,source:s.id})}}
+      for(const s of this.sources){for(const raw of sourceRows(s,'athletes','swimmers'))if(raw&&text(raw.squad)){const aid=this.sourceAthleteId(s.id,raw.id)||this.athleteId(raw.full_name||raw.name),sq=this.resolveSquad(raw.squad);if(aid&&sq)memberships.push({id:`membership-${aid}-${sq.id}-${date(raw.squad_start||raw.start_date)||'current'}`,athlete_id:aid,squad_id:sq.id,start_date:date(raw.squad_start||raw.start_date),end_date:date(raw.squad_end||raw.end_date),active:true,source:s.id})}}
       const seen=new Map();for(const raw of memberships){const athleteId=this.athleteId(raw.athlete_id||raw.athleteId||raw.athlete||raw.swimmer),sq=this.resolveSquad(raw.squad_id||raw.squadId||raw.squad);if(!athleteId||!sq)continue;const row={...clone(raw),id:text(raw.id)||`membership-${athleteId}-${sq.id}-${date(raw.start_date||raw.start)||'open'}`,athlete_id:athleteId,squad_id:sq.id,start_date:date(raw.start_date||raw.start),end_date:date(raw.end_date||raw.end)};const k=`${athleteId}|${sq.id}|${row.start_date}|${row.end_date}`;if(!seen.has(k)||active(row))seen.set(k,row)}this.memberships=[...seen.values()];
     }
     resolveAthlete(ref){if(ref&&typeof ref==='object'&&ref.id)return this.resolveAthlete(ref.id);const raw=text(ref);if(!raw)return null;if(this._athleteById.has(raw))return clone(this._athleteById.get(raw));const gid=this._athleteIdGroup.get(raw)||this._athleteNameGroup.get(this._canonicalName(key(raw)));return gid?clone(this._athleteById.get(gid)||null):null}
