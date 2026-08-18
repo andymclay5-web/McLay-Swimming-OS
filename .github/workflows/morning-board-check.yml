@@ -6,7 +6,12 @@ on:
     paths:
       - 'engines/session-truth.js'
       - 'engines/morning-coaching.js'
+      - 'app.js'
+      - 'v4-correct.js'
+      - 'v4-poolside-core.js'
+      - 'index.html'
       - 'tests/session-truth.test.js'
+      - 'tests/v4-guardian.test.js'
       - 'morning-board.html'
       - 'morning-board.js'
       - 'morning-board.css'
@@ -27,9 +32,14 @@ jobs:
           node --check engines/session-truth.js
           node --check engines/morning-coaching.js
           node --check morning-board.js
+          node --check app.js
+          node --check v4-correct.js
+          node --check v4-poolside-core.js
           node --check sw.js
       - name: Session + coaching regression
         run: node tests/session-truth.test.js
+      - name: Complete V4 Guardian
+        run: node tests/v4-guardian.test.js
       - name: Morning Board wiring
         run: |
           grep -q 'engines/session-truth.js' morning-board.html

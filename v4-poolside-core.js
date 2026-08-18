@@ -3,8 +3,8 @@
   const M=g.MSOS4;
   if(!M) throw new Error('MSOS4 missing');
   const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
-  const BUILD='v4-poolside-core-20260817e';
-  M.BUILD=BUILD; M.CORE='20260817-v4-poolside-core-e';
+  const BUILD='v4-poolside-core-20260819a-guardian72';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-guardian72';
   const BASE_PARSE=M.parser.parse.bind(M.parser);
   const DRAFT_KEY='mclay_swimming_os_v4_poolside_draft_e';
   const txt=v=>U.text(v), esc=v=>U.escape(v);

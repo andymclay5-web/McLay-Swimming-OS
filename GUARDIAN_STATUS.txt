@@ -1,39 +1,27 @@
-McLay Swimming OS v4.0.1 — SHADOW TV / INDIVIDUAL / ASSISTANT / MEET FOUNDATION
-Build: 4.0.1-shadow-tv-individual-foundation-20260816
-Core: 20260816-core401
-Status: SHADOW ONLY — NOT REPLACEMENT READY
+McLay Swimming OS Version 4
+Build: v4-poolside-core-20260819a-guardian72
+Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
-New first-class swimmer-facing surfaces
-- Whole-group / TV Board: same canonical session; common work grouped; differing work/target/send-off/cue splits into swimmer-specific cards.
-- Individual Device: one swimmer only; own derived work, targets, pathway, Meet and explicitly shared evidence.
+Complete V4 Guardian
+- 72 / 72 foundation and Version 4 regressions PASS on the shipping source stack:
+  app.js + v4-correct.js + v4-poolside-core.js.
+- The full Guardian is now executed by GitHub Actions on changes to the V4 runtime.
+- Morning Board session/coaching regressions remain PASS.
+- JavaScript syntax checks pass for the main app, V4 layers, Morning Board, engines and service worker.
 
-Assistant Coach
-- Deny by default when no squad is assigned.
-- Assigned session/athlete scope enforced in UI and direct Meet timing actions.
-- Default deck permissions: Board, Roll, Timing, Capture, Meet.
-- Owner authoring/release/admin actions remain unavailable unless explicitly granted.
+Resolved in this build
+- Manual T400 initializes and updates the settings object belonging to the state being saved, so a locally entered T400 immediately becomes the swimmer anchor and keeps that swimmer in the session timing roster.
+- 400 IM race intent remains separate from the working stroke. A Fly repeat at 400 IM pace does not invent a straight-line IM-leg target when no exact IM leg model is loaded.
+- Clearing an explicit athlete override resumes the current automatic athlete profile. Charlotte returns to the current 50% profile rather than the obsolete 60% expectation.
+- App, V4 layer and service-worker cache identifiers are advanced together so the corrected bytes replace the previous phone cache.
 
-Meet Deck foundation
-- Canonical meet / entry / race / split / evidence identities separate from training-session truth.
-- Per-entry warm-up plan, race plan, goal, result/evidence and explicit next-round lineage.
-- Swimmer Meet is own-athlete + shared-evidence only.
+Retained V4 scope
+- Full legacy app and data paths remain present; this is not a seven-file replacement shell.
+- Board, Coach Hub, Roll, Times, Note, Voice, Video, Edit and Finish remain loaded.
+- Voice transcription remains in the v4-correct transcript build and local-first capture path.
+- TV Board, Individual Device, Assistant Coach and Meet Deck remain first-class V4 surfaces.
+- Morning Board evidence retrieval, McKenzie adaptation rules and canonical session-truth engines remain included.
 
-Live display architecture
-- Canonical Store saves publish a v4 live-state event.
-- TV/Individual rederive from canonical session; no copied workout tree.
-- Same-origin BroadcastChannel transport implemented for shadow testing.
-- Production cross-device realtime transport / RLS remains a release blocker.
-
-Guardian
-- Foundation/domain Guardian: 60 / 60 PASS on source bytes.
-- Rendered Chromium: 390x844 TV, Individual, Assistant, Assistant Meet, Swimmer Meet PASS.
-- Rendered TV: 1366x768 PASS, no horizontal overflow.
-- Coach edit -> TV + Individual derivation refresh PASS.
-- Runtime page exceptions: 0.
-
-Replacement parity remains blocked by:
-- packaged physical Android/PWA acceptance;
-- whole-group TV production cross-device live transport;
-- individual-device production auth/RLS + complete workflow;
-- assistant production auth/RLS + complete workflow;
-- complete offline-first Meet programme/import/results workflow.
+Release boundary
+- Production cloud writes remain Guardian-locked.
+- Physical Android/PWA acceptance, microphone/camera permission behaviour, authenticated Supabase reads/writes, installed-service-worker transition and real poolside stability still require live-device proof before this build is described as fully cleared for a coaching session.

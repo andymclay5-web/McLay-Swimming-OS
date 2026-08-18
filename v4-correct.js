@@ -16,15 +16,15 @@
   if(!C.baseBuild.match)console.warn('[MSOS v4] Base build differs from validated baseline',C.baseBuild);
 
   M.VERSION='4';
-  M.BUILD='v4-correct-20260817-transcriptfinal';
-  M.CORE='20260817-v4-transcriptfinal';
+  M.BUILD='v4-correct-20260819-guardian72';
+  M.CORE='20260819-v4-guardian72';
 
   // Keep production cloud cutover locked until the corrected bytes pass the real-phone gate.
   M.RELEASE_ATTESTATION=Object.freeze({
     build:M.BUILD,
     softwareReady:C.baseBuild.match,
-    generatedAt:'2026-08-17T14:18:00+12:00',
-    suiteDigest:'v4-contract-20260817-transcriptfinal',
+    generatedAt:'2026-08-19T10:30:00+12:00',
+    suiteDigest:'v4-contract-20260819-guardian72',
     packageDigest:'see-SHA256SUMS',
     note:'Correct Version 4 software-attested; physical Android acceptance, production schema probe and remaining release gates are still required before production cutover.'
   });
@@ -99,9 +99,9 @@
     }
   };
 
-  C.ensureSettings=()=>{
-    if(!M.state?.settings) return;
-    const s=M.state.settings;
+  C.ensureSettings=(state=M.state)=>{
+    if(!state?.settings) return;
+    const s=state.settings;
     if(!s.boardBlockBySession||typeof s.boardBlockBySession!=='object') s.boardBlockBySession={};
     if(s.boardFocusMode===undefined) s.boardFocusMode=true;
     if(!s.t400Stroke) s.t400Stroke='Freestyle';
@@ -436,7 +436,7 @@
         .map(a=>a.id);
     }
     X.t400RosterIds=(state=M.state,session=M.currentSession?.())=>{
-      C.ensureSettings();
+      C.ensureSettings(state);
       const sid=session?.id||'';
       const stored=sid?state.settings?.t400RosterBySession?.[sid]:null;
       return (Array.isArray(stored)?stored:presentRosterIds(state,session))
@@ -444,7 +444,7 @@
     };
     X.add=(athleteId,state=M.state,session=M.currentSession?.())=>{
       if(!(state.athletes||[]).some(a=>a.id===athleteId&&a.active!==false&&!isSophie(a))) return false;
-      state.settings=state.settings||{};C.ensureSettings();
+      state.settings=state.settings||{};C.ensureSettings(state);
       const sid=session?.id||'';
       const base=X.t400RosterIds(state,session);
       const next=[...new Set([...base,athleteId])];
@@ -454,7 +454,7 @@
       return true;
     };
     X.remove=(athleteId,state=M.state,session=M.currentSession?.())=>{
-      state.settings=state.settings||{};C.ensureSettings();
+      state.settings=state.settings||{};C.ensureSettings(state);
       const sid=session?.id||'';
       const base=X.t400RosterIds(state,session),next=base.filter(id=>id!==athleteId);
       if(sid)state.settings.t400RosterBySession[sid]=next;
@@ -462,7 +462,7 @@
       return next;
     };
     X.useAttendance=(state=M.state,session=M.currentSession?.())=>{
-      state.settings=state.settings||{};C.ensureSettings();
+      state.settings=state.settings||{};C.ensureSettings(state);
       const sid=session?.id||'';
       if(sid)delete state.settings.t400RosterBySession[sid];
       const ids=presentRosterIds(state,session);
