@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyStorage=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='1.1.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
   class JsonStorageAdapter{
@@ -20,6 +20,6 @@
     put(name,value,{source='',savedAt=new Date().toISOString()}={}){const state=this.adapter.load()||{schema:'msos.resource-cache.v1',resources:{}};state.resources=state.resources||{};state.resources[text(name)]={value:clone(value),source:text(source),savedAt:text(savedAt)};this.adapter.save(state);return this.get(name)}
     status(){return this.adapter.status()}
   }
-  function keys(prefix='msos.assembly.v1'){const p=text(prefix)||'msos.assembly.v1';return Object.freeze({schedule:`${p}.schedule`,lifecycle:`${p}.lifecycle`,attendance:`${p}.attendance`,capture:`${p}.capture`,delivery:`${p}.delivery`,navigation:`${p}.navigation`,resources:`${p}.resources`})}
+  function keys(prefix='msos.assembly.v1'){const p=text(prefix)||'msos.assembly.v1';return Object.freeze({schedule:`${p}.schedule`,lifecycle:`${p}.lifecycle`,attendance:`${p}.attendance`,capture:`${p}.capture`,delivery:`${p}.delivery`,timing:`${p}.timing`,protocols:`${p}.protocols`,testResults:`${p}.test-results`,navigation:`${p}.navigation`,resources:`${p}.resources`})}
   return{VERSION,JsonStorageAdapter,ResourceCache,keys};
 });
