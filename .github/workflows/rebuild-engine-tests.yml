@@ -142,7 +142,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Syntax check Board composition
+      - name: Syntax check Board composition and Runtime dependencies
         run: |
           node --check engines/board-projection.js
           node --check ui/board-renderer.js
@@ -152,6 +152,13 @@ jobs:
           node --check rebuild/poolside-actions.js
           node --check rebuild/board-app.js
           node --check rebuild/runtime.js
+          node --check engines/session-edit.js
+          node --check engines/capture-evidence.js
+          node --check engines/delivered-session.js
+          node --check engines/plan-context.js
+          node --check engines/session-dose.js
+          node --check engines/reporting.js
+          node --check engines/learning.js
       - name: Board regression family
         run: |
           for f in tests/board*.test.js; do
