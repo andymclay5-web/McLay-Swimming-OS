@@ -1,0 +1,43 @@
+name: Interface shell tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'rebuild/navigation-state.js'
+      - 'tests/navigation-state.test.js'
+      - 'MSOS_INTERFACE_CONTRACT.md'
+      - '.github/workflows/interface-shell-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'rebuild/navigation-state.js'
+      - 'tests/navigation-state.test.js'
+      - 'MSOS_INTERFACE_CONTRACT.md'
+      - '.github/workflows/interface-shell-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  navigation-state:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Navigation State
+        run: node --check rebuild/navigation-state.js
+      - name: Calendar-first navigation regressions
+        run: node tests/navigation-state.test.js
+      - name: Shell architecture boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const s=fs.readFileSync('rebuild/navigation-state.js','utf8');
+          assert(!/\bdocument\s*\.|\bwindow\s*\.|localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(s),'Navigation state owns browser/network/storage behavior');
+          assert(!/require\(['\"]\.\.?\//.test(s),'Navigation state imports domain engine implementation');
+          assert(!/parse\s*\(|target|adaptation|personalBest|trainingTest|session_blocks/i.test(s),'Navigation state contains swimming-domain logic');
+          console.log('PASS Navigation State shell boundary');
+          NODE
