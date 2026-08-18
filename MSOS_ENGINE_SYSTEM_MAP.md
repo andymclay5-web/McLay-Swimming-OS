@@ -20,7 +20,7 @@ The shell does **not** own swimming calculations, pathway logic, result interpre
 
 Every coaching domain is an engine with one owner and an explicit portal contract.
 
-## Engine Communication Portal — Engine 0
+## Engine Communication Portal — Engine 0 — GREEN
 
 All engine-to-engine traffic crosses `rebuild/engine-portal.js`.
 
@@ -79,494 +79,149 @@ Alternative terminal/revision states:
 - `superseded`
 - `rejected`
 
-Original evidence is retained. Verification does not destroy what was observed poolside.
+Poolside evidence can be useful before official verification, but permanent PB/record/pathway truth must be able to distinguish provisional from verified evidence.
 
-Example:
-- Swimify copy: Coral 100 Fly 1:10.23 -> provisional;
-- MSOS immediately reports provisional NZSC qualification if applicable;
-- official TM import later confirms 1:10.23 -> verified;
-- if TM says DQ, official result becomes DQ and provisional qualification is withdrawn while the observed swim remains coaching evidence.
+## Implemented core engines
 
----
+### Entity Registry — GREEN
 
-# Layer A — Identity, context and methodology
+One canonical owner for club, coach, squad and swimmer identity.
 
-## A1 Entity Registry
+Owns:
+- canonical IDs;
+- explicit aliases and source-ID mapping;
+- squad memberships;
+- active/inactive state;
+- DOB/sex/classification/reporting dimensions;
+- date-aware roster lookup.
 
-Owns canonical identity for:
-- club;
-- coaches;
-- squads;
-- swimmers;
-- squad memberships over time;
-- swimmer active/inactive state;
-- DOB/sex/classification fields;
-- coach/squad relationships;
-- aliases needed to match imported evidence.
+Legacy/current evidence sources may contain different athlete IDs or approved aliases. Entity Registry resolves those references once. Evidence, Attendance, Adaptation, Capture, Methodology and Planning consume that identity contract rather than maintaining competing resolvers.
 
-Other engines request identity from Entity Registry. They do not maintain competing copies of a swimmer.
+### Methodology / Coaching Model — GREEN
 
-A swimmer profile screen is a projection over one canonical athlete ID, not a separate swimmer database.
+Stores coaching interpretation rather than objective measurements.
 
-## A2 Roles & Permissions
+Overlay order:
+`programme -> club -> squad -> coach -> athlete`
 
-Owns what a signed-in role may ask the portal to do.
-
-Examples:
-- owner coach: full assigned programme authority;
-- assistant coach: deny-by-default, assigned squads/sessions only;
-- swimmer: own privacy-filtered information only;
-- TV/group display: presentation only, no private notes or writes.
-
-Role checks occur before command execution.
-
-## A3 Methodology / Coaching Model
-
-Owns configurable coaching philosophy and definitions, including:
-- training-system/zone definitions;
-- Clive Rushton / Swimformation / Cone interpretation used by the programme;
-- dosage interpretation rules;
-- inclusion/adaptation principles;
+Owns configurable definitions for:
+- physiology/framework;
+- training zones;
+- dose interpretation;
+- adaptation principles;
 - race-model preferences;
-- recovery/support interpretation;
-- session-design principles;
-- squad-specific methodology overlays;
-- coach-specific philosophy overlays where deliberately different.
+- session-design principles.
 
-Objective evidence remains objective. Methodology controls how coaching engines interpret and prescribe from that evidence.
+A recorded swim time remains the same fact regardless of methodology. Methodology affects how eligible decision engines interpret or use that fact.
 
----
+### Programme Plan / Plan Context — GREEN
 
-# Layer B — Planning and session design
+Canonical planning hierarchy:
+`season -> phase -> cycle -> week -> explicit session intent`
 
-## B1 Season / Programme Plan
+Also owns target meets, squad objectives, athlete objectives and planned exposure.
 
-Owns:
-- season;
-- target meets;
-- phases/cycles;
-- week structure;
-- planned physiological emphasis;
-- technical priorities;
-- squad objectives;
-- individual programme objectives.
+Plan writes are explicit commands and journalled. Missing session intent is explicit; Plan does not reverse-engineer a plan from workout vocabulary.
 
-## B2 Weekly Plan
+### Session Truth — GREEN / LOCKED
 
-Owns the current week's intended exposure and session purposes, derived from the season plan but editable by the coach.
+Natural coaching language -> one canonical session. Owns workout semantics, distance, rounds, composition, patterns, phases, race intent and stable set IDs.
 
-## B3 Session Design
+### Session Lifecycle / Edit — GREEN
 
-Reads:
+Owns create/select/resume/edit/version history without background reparsing or session identity takeover.
+
+### Evidence Retrieval — GREEN ON ENTITY REGISTRY
+
+The read doorway over test/result/PB/conversion evidence. It no longer owns swimmer identity.
+
+### Results / Performance Pathway — GREEN
+
+Verified evidence -> PBs, pathway position, points/standards/gaps/trends.
+
+### Target Engine — GREEN
+
+Canonical set + athlete + evidence -> target prescription and provenance.
+
+### Adaptation Engine — GREEN
+
+Canonical set + athlete context -> same-team or modified prescription. Explicit coach overrides remain athlete/session/set scoped.
+
+### Attendance — GREEN
+
+Exact-session attendance only.
+
+### Coach Board — GREEN IN ISOLATED/INTEGRATION GATES
+
+Presentation/projection only. It asks engines for answers; it does not calculate swimming truth.
+
+### Capture / Delivered / Dose / Reporting / Learning
+
+Existing rebuild engines are retained behind their domain boundaries and continue passing the full poolside chain. They are scheduled for further untangling/expansion after measurement and meet-input engines are added.
+
+## Next engine layer
+
+The next independent input/measurement engines are:
+
+1. **Timing Engine** — clocks, laps, splits, multi-swimmer/lane timing and timing-session identity; it records measurements but does not decide their meaning.
+2. **Test Protocol Engine** — canonical definitions of T400 and future training/test protocols, including valid conditions, expected measurement fields and which downstream models may use the result.
+3. **Test Result Input Engine** — timing/manual/imported test evidence -> canonical provisional/verified test-result records with provenance.
+4. **Meet Lifecycle Engine** — meet/session/event/entry/heat/lane/race/round lineage, separate from training-session truth.
+5. **Meet Result Input Engine** — copied Meet Mobile/Swimify text, screenshots/photos, manual entry or supported live feeds -> provisional canonical result candidates.
+6. **Official Results Reconciliation Engine** — official TM file -> confirm/correct/DQ/add missed races while preserving provisional history.
+7. **Standards & Records Engine** — qualification standards, club/Canterbury/NZ records and category matching.
+8. **Race Model Engine** — PBs/splits/ideal or projected splits -> race-segment answers for Targets, Meet and swimmer pathway views.
+
+## How future surfaces consume the same engines
+
+### Group / TV Board
+Same canonical session as Coach Board. Common work remains grouped; athlete-specific boxes appear only where work or targets genuinely diverge.
+
+### Individual swimmer phone/tablet
+Privacy-filtered projection of that swimmer's canonical work, targets, modifications, shared evidence, pathway and meet information.
+
+### Assistant Coach
+Same underlying engines, permission-gated by assigned squad/session. Default poolside writes are limited to explicitly granted domains.
+
+### Meet Board
+Reads Meet Lifecycle, provisional/verified Meet Results, Standards/Records, Results/Pathway and Race Model. It does not calculate records or qualifying times itself.
+
+### Reports / profile projections
+A swimmer, squad, coach, age bracket, sex, classification or other reporting slice is a projection over canonical entity dimensions plus engine answers. There is no duplicate report database per view.
+
+## Integration rule
+
+An engine does not enter the production composition root until:
+
+1. isolated contract tests pass;
+2. recovered historical/proven behaviour passes;
+3. side-effect tests pass;
+4. all dependencies cross the Engine Portal;
+5. the previous competing owner is removed, not wrapped;
+6. failure behaviour is explicit and contained;
+7. existing Parser/Board/poolside regression gates remain green;
+8. phone acceptance is completed where the engine affects deck use.
+
+## Current milestone gate
+
+Workflow `32093574222` passed the complete chain on commit `a6d34b9afb12e9509f94bf4b665a617a3dd13456` before this system-map documentation update:
+- Engine Portal;
+- Entity Registry;
 - Methodology;
-- Season/Weekly Plan;
-- recent Exposure/Dose;
-- squad/athlete context;
-- upcoming meets;
-- current performance evidence.
-
-Outputs a proposed session/design rationale.
-
-It never rewrites an accepted session. Once the coach accepts/types/dictates the session, Session Truth becomes authoritative.
-
-## B4 Plan Measurement
-
-Compares intended season/week/session emphasis with actual delivered exposure.
-
-It reads facts from Plan, Delivered Session and Dose/Exposure. It never alters history to make plan and delivery agree.
-
----
-
-# Layer C — Training-session truth
-
-## C1 Session Truth — GREEN/LOCKED
-
-Natural coaching language -> deterministic canonical workout.
-
-One parser owner only.
-
-## C2 Session Lifecycle — GREEN
-
-Owns create/select/resume/edit/version/restore without background reparsing or session takeover.
-
-## C3 Attendance — GREEN
-
-Owns exact-session roll only.
-
-## C4 Capture Evidence — GREEN
-
-Owns note/voice/photo/video/observation evidence attached to stable session/block/set/athlete context.
-
-## C5 Delivered Session — GREEN
-
-Owns explicit delivered-through state and final delivered truth.
-
----
-
-# Layer D — Timing, tests and performance input
-
-## D1 Timing Engine
-
-A generic timing tool, independent of the meaning of the timed activity.
-
-Owns:
-- running clocks;
-- lane/swimmer timers;
-- laps/splits;
-- start/stop/reset;
-- timing-session identity;
-- raw measured times.
-
-Timing does not decide whether a time is a T400 anchor, PB, race result or qualifying time.
-
-## D2 Test Protocol Engine
-
-Owns definitions for tests such as:
-- T400 Freestyle;
-- future T200/threshold/aerobic tests;
-- kick tests;
-- race-pace test sets;
-- repeat-set protocols.
-
-A protocol defines required distance/reps/course, fields collected, validity rules and which downstream models may use the evidence.
-
-## D3 Test Result Input
-
-Receives Timing/manual/import data plus Test Protocol.
-
-Outputs a canonical test-result candidate with:
-- athlete;
-- protocol;
-- date/course;
-- total result;
-- splits/repeats where applicable;
-- provenance;
-- validity/status.
-
-T400 is therefore **a test protocol producing evidence**, not a Board feature.
-
-Flow:
-`Timing -> Test Result Input -> Evidence store -> Evidence Retrieval -> Targets/Pathway/Dose/Learning`
-
-## D4 Meet Lifecycle
-
-Owns meet-specific truth separately from training sessions:
-
-`meet -> session -> event -> entry -> heat/lane -> race -> result -> next round`
-
-Offline/local-first for deck use.
-
-## D5 Meet Result Input
-
-Accepts multiple adapters into one canonical result candidate:
-- manual quick entry;
-- pasted Meet Mobile text;
-- pasted Swimify text;
-- screenshot;
-- poolside results-board photo;
-- supported live feed/API;
-- official TM results file.
-
-Canonical candidate includes:
-- athlete ID/match confidence;
-- meet/event/race identity;
-- distance/stroke/course;
-- heat/lane/round;
-- result time;
-- splits;
-- place;
-- DQ/DNS status;
-- source/provenance;
-- verification status.
-
-## D6 Official Meet Reconciliation
-
-Consumes the official TM result file after/between sessions and compares it with provisional poolside evidence.
-
-Actions:
-- verify exact matches;
-- correct time/place/round;
-- apply DQ/DNS;
-- add swims missed poolside;
-- flag ambiguous swimmer/event matches;
-- preserve useful live splits even if the official file omits them;
-- supersede rather than delete provisional evidence.
-
-Suggested meet reconciliation summary:
-`42 official swims · 34 matched · 3 corrected · 2 DQ updates · 3 missing swims added · 0 unresolved`
-
----
-
-# Layer E — Evidence and performance knowledge
-
-## E1 Evidence Retrieval — GREEN
-
-The only read doorway over athlete test/race/performance evidence.
-
-No consumer searches local/cloud/legacy stores directly.
-
-## E2 Standards & Records
-
-Owns applicable benchmarks by date/course/age/sex/classification/programme:
-- NZSC/NZAG/etc qualifying standards;
-- Canterbury/regional records;
-- NZ records;
-- club records;
-- Para/classification records;
-- finalist/medal benchmarks;
-- programme/squad standards.
-
-Given an athlete + event + result, it returns applicable achievements/gaps. It does not store the athlete's result.
-
-## E3 Results / Performance Pathway — GREEN foundation
-
-Reads Evidence Retrieval + Standards & Records.
-
-Owns:
-- PB per event/course;
-- verified/provisional progression;
-- qualification achievements and gaps;
-- WA/Para points where a valid model exists;
-- 25-point pathway steps;
-- closest/furthest progression events;
-- trend/history;
-- profile performance summary.
-
-Meet Deck may display provisional interpretation. Formal PB/pathway history uses verified evidence unless a rule explicitly says otherwise.
-
-## E4 Race Model
-
-Owns:
-- actual splits;
-- ideal/projected splits;
-- event-specific race shapes;
-- segment targets;
-- actual-vs-model comparison;
-- coach/model provenance.
-
-A PB is evidence. Race Model determines how that PB should translate into meaningful pace/split information.
-
----
-
-# Layer F — Prescription engines
-
-## F1 Targets — GREEN foundation
-
-Reads canonical set + Evidence/Pathway/Race Model/Methodology.
-
-Returns target and provenance.
-
-Examples:
-- `6 x 100 Free Development 10s` -> T400-based aerobic target;
-- `4 x 25 @100 Pace` -> PB/Race Model segment target.
-
-Board never calculates these.
-
-## F2 Adaptation — GREEN foundation
-
-Reads canonical work + athlete profile/constraints + Methodology + historical accepted adaptation knowledge.
-
-Returns either:
-- same as group;
-- or explicit athlete prescription + reason/source.
-
-Adaptations evolve from coach-confirmed overrides/evidence without rewriting canonical squad work.
-
-Future adaptation memory should distinguish:
-- permanent athlete constraint;
-- temporary medical/return-to-swim constraint;
-- session-specific override;
-- coach-confirmed reusable preference;
-- inferred suggestion awaiting coach confirmation.
-
----
-
-# Layer G — Dose, exposure and learning
-
-## G1 Session Dose — GREEN foundation
-
-Reads planned/current/delivered canonical truth and Methodology.
-
-Owns objective dose classification, not report formatting.
-
-## G2 Exposure / Load
-
-Aggregates dose over swimmer/squad/time dimensions:
-- session;
-- day;
-- week;
-- cycle;
-- phase;
-- event preparation window.
-
-Supports queries such as:
-- 13–14 girls' aerobic-power exposure over six weeks;
-- Development swimmers short of planned threshold exposure;
-- individual modified dose versus squad dose.
-
-## G3 Learning
-
-Reads facts produced by other engines and emits evidence-linked observations/hypotheses.
-
-It may say:
-`Low recent aerobic-power exposure is a plausible contributing factor.`
-
-It may not say:
-`That definitely caused the performance.`
-
-Coach acceptance/rejection of suggestions becomes learning evidence, not silent self-modification.
-
----
-
-# Layer H — Reporting and profile projections
-
-## H1 Reporting
-
-Report assembler only. It does not create new coaching truth.
-
-A report is a query/projection over existing engine answers.
-
-Dimensions can include:
-- swimmer;
-- squad;
-- coach;
-- age bracket;
-- sex;
-- classification;
-- meet;
-- week/cycle/phase;
-- training system;
-- attendance status.
-
-This avoids separate databases for every report type.
-
-## H2 Swimmer Profile Projection
-
-One canonical swimmer ID; screen asks engines for:
-- Results/Pathway;
-- tests;
-- attendance;
-- recent dose/exposure;
-- adaptations;
-- observations/captures;
-- upcoming meets/entries;
-- plan/goals;
-- relevant learning prompts.
-
-The profile stores almost none of this itself.
-
-## H3 Squad Profile Projection
-
-Membership query + aggregate engine answers. Same for coach, age bracket, sex or any other allowed reporting dimension.
-
----
-
-# Layer I — Presentation surfaces
-
-Presentation surfaces own information density and interactions only.
-
-## I1 Coach Board — GREEN isolated chain
-
-Reads Board Projection. Sends explicit commands through portal owners.
-
-## I2 Whole-group / TV Board
-
-Same canonical session and engine outputs.
-
-Rules:
-- common work remains grouped;
-- individual boxes/cards appear only when work diverges;
-- target/modification information is readable at distance;
-- no duplicate session copy.
-
-## I3 Individual Swimmer Device
-
-Privacy-filtered projection for one athlete:
-- current work;
-- modification;
-- target;
-- relevant coach-shared cue/evidence;
-- pathway/meet context.
-
-## I4 Assistant Coach
-
-Same engines, restricted portal permissions and assigned session/squad context.
-
-Default poolside capability target:
-- Board;
-- Roll;
-- Timing;
-- Capture;
-- Meet.
-
-No owner-only authoring/admin/cloud-repair/private-note access unless granted.
-
-## I5 Meet Deck
-
-Reads Meet Lifecycle + Results/Pathway + Standards + Race Model.
-
-Immediate useful result interpretation examples:
-- `Coral Sturls · 100 Fly · 1:10.23 · NZSC QT ✓ · PROVISIONAL`
-- `Luke Thompson · 100 Free · 50.98 · Canterbury Record · PROVISIONAL`
-
-Priority is **what the swim means now**, not every statistic available.
-
-## I6 Swimmer Meet
-
-Privacy-filtered own entries/results/next-round information and explicitly shared evidence.
-
-## I7 Times / Testing
-
-Timing UI + Test Protocol selection + Test Result Input. It does not own the resulting pathway or target calculations.
-
----
-
-# Remote input and sync rule
-
-The portal core is synchronous/local-first so coaching remains usable without network response.
-
-Remote sources use adapters:
-- Swimify/HY-TEK/live-result adapter;
-- Meet Mobile copy/share adapter;
-- official TM file import;
-- cloud sync;
-- standards update package.
-
-Remote adapters validate and write into the owning input/storage engine. Normal engines then retrieve local canonical evidence through the portal.
-
-No core engine waits on an arbitrary webpage/API during a deck action.
-
----
-
-# Engine build/recovery rule
-
-For every current MSOS feature:
-
-1. identify the useful behaviour;
-2. identify its one owning engine;
-3. identify canonical inputs and outputs;
-4. recover proven logic/fixtures from current versions;
-5. move the logic behind that engine's portal contract;
-6. test it independently;
-7. test its declared portal dependencies;
-8. remove the old competing owner;
-9. only then expose it to presentation surfaces.
-
-Do not rebuild a feature inside a screen merely because the old screen already contains the code.
-
-# Definition of “Andy standard” for an engine
-
-An engine is not marked finished until:
-- one clear owner exists;
-- input/output schemas are deterministic;
-- reads/writes are explicit;
-- all cross-engine access is portal-declared;
-- query/command boundaries are correct;
-- missing evidence is explicit;
-- no hidden fallback/duplicate owner exists;
-- local/offline behaviour is defined where relevant;
-- historical/proven fixtures pass;
-- failures are contained;
-- reopening state does not mutate truth;
-- downstream consumers can use the result without reparsing/recalculating it;
-- the engine's real integration gate passes on the same commit.
+- Programme Plan;
+- Session Truth;
+- Session Lifecycle;
+- Evidence Retrieval;
+- Results / Pathway;
+- Targets;
+- Adaptation;
+- Attendance;
+- architecture boundaries;
+- portal-routed integration;
+- full Board regressions;
+- Capture / Delivered / Dose;
+- 5,400m poolside flow;
+- Runtime integration;
+- engine-backed Board actions.
+
+`main` remains untouched until the rebuilt owner map and production integration gates are complete.
