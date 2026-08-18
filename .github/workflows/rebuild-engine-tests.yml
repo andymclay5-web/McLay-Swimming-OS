@@ -12,6 +12,17 @@ on:
       - 'REBUILD_ENGINE_CONTRACTS.md'
       - 'REBUILD_STATUS.md'
       - '.github/workflows/rebuild-engine-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/**'
+      - 'rebuild/**'
+      - 'ui/**'
+      - 'tests/**'
+      - 'REBUILD_ENGINE_CONTRACTS.md'
+      - 'REBUILD_STATUS.md'
+      - '.github/workflows/rebuild-engine-tests.yml'
   workflow_dispatch:
 
 jobs:
@@ -93,7 +104,11 @@ jobs:
       - name: Syntax check Adaptation Engine
         run: node --check engines/adaptation.js
       - name: Adaptation Engine isolated regressions
-        run: node tests/adaptation.test.js
+        run: |
+          for f in tests/adaptation*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
 
   attendance:
     runs-on: ubuntu-latest
@@ -127,10 +142,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Syntax check Board Projection
-        run: node --check engines/board-projection.js
-      - name: Syntax check Board Renderer
-        run: node --check ui/board-renderer.js
+      - name: Syntax check Board composition
+        run: |
+          node --check engines/board-projection.js
+          node --check ui/board-renderer.js
+          node --check ui/board-controller.js
+          node --check ui/board-screen.js
+          node --check rebuild/board-command-owners.js
+          node --check rebuild/poolside-actions.js
+          node --check rebuild/board-app.js
       - name: Board regression family
         run: |
           for f in tests/board*.test.js; do
@@ -154,3 +174,5 @@ jobs:
         run: node tests/poolside-flow.integration.test.js
       - name: Runtime integration
         run: node tests/runtime.integration.test.js
+      - name: Engine-backed Board action integration
+        run: node tests/poolside-actions.integration.test.js
