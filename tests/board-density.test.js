@@ -1,5 +1,6 @@
 'use strict';
 const assert=require('assert');
+const fs=require('fs');
 const Truth=require('../engines/session-truth.js');
 const Evidence=require('../engines/evidence-retrieval.js');
 const Attendance=require('../engines/attendance.js');
@@ -64,8 +65,17 @@ test('explicit rep references remain visible because they add information',()=>{
  const {html}=renderer('Post Set\n8 x 50 Swim\n#4 + #8 @ 100 Pace');assert(/msos-detail-label">REPS/.test(html));assert(/#4/.test(html)&&/#8/.test(html));
 });
 
-test('sticky bar labels live attendance count and includes T400 Times',()=>{
- const {html}=renderer('Main Set\n4 x 25 Max @1:00');assert(/Roll · 0/.test(html));assert(/T400 \/ Times/.test(html));
+test('sticky bar labels live attendance count includes T400 Times and block jumps',()=>{
+ const {html}=renderer(tuesday);assert(/Roll · 0/.test(html));assert(/T400 \/ Times/.test(html));assert(/msos-board-block-nav/.test(html));assert.equal((html.match(/href="#msos-board-block-/g)||[]).length,5);
+});
+
+test('target chip shows compact source while retaining full evidence detail',()=>{
+ const model={schema:'msos.board.v2',sessionId:'s',identity:{title:'Targets',squads:[]},totalDistance:600,validation:{totalMatches:true,warnings:[]},attendance:{here:2,athletes:[{id:'a',name:'Alex Hanson',label:'AH',status:'present'},{id:'b',name:'Alex Gibson',label:'AG',status:'present'}]},blocks:[{id:'b1',title:'Main set',context:{sessionId:'s',blockId:'b1'},distance:600,captures:{count:0,byType:{},items:[]},items:[{id:'set',kind:'set',context:{sessionId:'s',blockId:'b1',setId:'set',itemId:'set'},groupWork:{reps:6,distance:100,raw:'6 x 100 Free Development 10s rest',composition:[],pattern:[],repInstructions:[],cues:[]},phases:[],modifications:[],captures:{count:0,byType:{},items:[]},targets:[{athleteId:'a',athleteName:'Alex Hanson',label:'AH',status:'ok',seconds:87.642,sendOff:100,source:'Latest valid Freestyle T400 · 5:24.6'},{athleteId:'b',athleteName:'Alex Gibson',label:'AG',status:'ok',seconds:80,sendOff:95,source:'SCM 100 Freestyle PB'}]}]}]},html=Render.renderBoard(model);
+ assert(/>T400</.test(html));assert(/>PB</.test(html));assert(/Latest valid Freestyle T400 · 5:24.6/.test(html));assert(/SCM 100 Freestyle PB/.test(html));assert(/Alex H/.test(html)&&/Alex G/.test(html));
+});
+
+test('target CSS wraps compact chips instead of forcing a vertical swimmer list',()=>{
+ const css=fs.readFileSync(require.resolve('../ui/board.css'),'utf8');assert(/\.msos-targets\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s.test(css));assert(/\.msos-target-row\s*\{[^}]*display:\s*inline-flex/s.test(css));
 });
 
 if(fails){console.error(`\n${fails} Board density regression(s) failed`);process.exit(1)}console.log('\nALL BOARD DENSITY REGRESSIONS PASS');
