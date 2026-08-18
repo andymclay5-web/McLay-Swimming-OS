@@ -11,6 +11,7 @@ const Render=require('../ui/board-renderer.js');
 let fails=0;function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;console.error('FAIL',name,'\n ',e.stack||e.message)}}
 const id={id:'density',date:'2026-08-18',dayPart:'AM',course:'SCM',squads:['National','Development'],venue:'AquaGym'};
 function renderer(src){const evidence=Evidence.create({sources:[{id:'empty',priority:1,trust:'verified',data:{athletes:[]}}]}),attendance=Attendance.create({storage:new Attendance.MemoryStorage(),evidence}),targets=Targets.create({evidence}),adaptation=Adaptation.create({evidence}),board=Board.create({truth:Truth,attendance,adaptation,targets}),session=Truth.parse(src,id);return{session,model:board.project(session),html:Render.renderBoard(board.project(session))}}
+function visibleSetCount(nodes=[]){return(nodes||[]).reduce((n,x)=>n+(x.kind==='set'?1:x.kind==='group'?visibleSetCount(x.items):0),0)}
 const tuesday=`WARM UP
 4 x 300
 200 Free
@@ -53,8 +54,8 @@ WARM DOWN
 200 Easy Choice
 TOTAL 5400m`;
 
-test('full 5400 session is nine visible set rows, not exploded child lines',()=>{
- const {model,html}=renderer(tuesday);assert.equal(model.totalDistance,5400);assert.equal((html.match(/class="msos-set-row"/g)||[]).length,9);assert.equal((html.match(/class="msos-phase"/g)||[]).length,2);assert(/4 ROUNDS/.test(html));
+test('full 5400 session is ten parent set rows with no exploded child work',()=>{
+ const {model,html}=renderer(tuesday);assert.equal(model.totalDistance,5400);assert.deepEqual(model.blocks.map(b=>visibleSetCount(b.items)),[1,1,6,1,1]);assert.equal((html.match(/class="msos-set-row"/g)||[]).length,10);assert.equal((html.match(/class="msos-phase"/g)||[]).length,2);assert(/4 ROUNDS/.test(html));
 });
 
 test('generated pattern reps are not duplicated as Board REPS detail',()=>{
