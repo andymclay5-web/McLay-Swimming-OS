@@ -1,0 +1,59 @@
+name: App assembly tests
+
+on:
+  push:
+    branches:
+      - rebuild/app-assembly-v1
+  pull_request:
+    branches:
+      - rebuild/engine-contracts-v1
+  workflow_dispatch:
+
+jobs:
+  assembly-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check assembly flow
+        run: |
+          node --check rebuild/session-flow-portal.js
+          node --check assembly/shell-model.js
+          node --check assembly/programme-config.js
+      - name: Calendar session intake integration
+        run: node tests/session-flow-portal.integration.test.js
+      - name: Schedule and navigation protected regressions
+        run: |
+          node tests/session-schedule.test.js
+          node tests/session-schedule-portal.integration.test.js
+          node tests/navigation-state.test.js
+      - name: Assembly ownership boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const shell=fs.readFileSync('assembly/shell-model.js','utf8');
+          assert(!/require\(['\"]\.\.\/engines\//.test(shell),'Assembly shell directly imports domain engine implementation');
+          assert(!/SessionTruth|ResultsPathway|TargetEngine|AdaptationEngine|StandardsRecords|nodeDistance|trainingTests|personalBest/.test(shell),'Assembly shell contains swimming-domain owner logic');
+          const flow=fs.readFileSync('rebuild/session-flow-portal.js','utf8');
+          assert(/session-intake-flow/.test(flow)&&/session-schedule/.test(flow)&&/session-lifecycle/.test(flow)&&/session-truth/.test(flow),'Session flow does not declare all owners');
+          assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(flow),'Session flow owns browser/network/storage infrastructure');
+          console.log('PASS App assembly ownership boundary');
+          NODE
+
+  inherited-full-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run every Node regression test in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in tests/*.test.js; do
+            echo "===== $f ====="
+            node "$f"
+          done
