@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.StandardsRecords=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();
@@ -23,6 +23,8 @@
   const eventOf=row=>({course:course(row?.course||row?.pool_course),distance:num(row?.distance??row?.event_distance??row?.distance_m),stroke:stroke(row?.stroke||row?.event_stroke)});
   const label=row=>text(row?.programme||row?.standard_name||row?.record_scope||row?.name||'Loaded standard');
   const gap=(result,target)=>({seconds:Math.max(0,result-target),percentage:target>0?Math.max(0,(result-target)/target*100):0,achieved:result<=target});
+  function defaultStandard(row){const k=kind(row),l=norm(label(row));return k==='qualifying'&&!/final|medal|winner|record|1st|3rd|8th/.test(l)}
+  function nationalLabel(row){return/nzsc|new zealand|nz champs|national|nags/i.test(label(row))}
 
   class StandardsRecords{
     constructor({standards=[],baseTimes=[],today=()=>new Date().toISOString().slice(0,10)}={}){this.standards=clone(standards||[]);this.baseTimes=clone(baseTimes||[]);this.today=today}
@@ -43,10 +45,15 @@
     }
     points(athlete,event,result={}){return this.pointsForTime(athlete,event,result.result_seconds??result.pb_seconds??result.time_seconds,{explicitPoints:result.wa_points??result.world_aquatics_points??result.fina_points,explicitParaPoints:result.world_para_points??result.para_points})}
     pointSteps(athlete,event,result={},count=2){const pt=this.points(athlete,event,result);if(pt.label!=='WA'||!pt.value)return[];const base=pt.baseSeconds||num(this.baseTime(athlete,event)?.base_seconds);if(base===null)return[];const first=Math.ceil((pt.value+1)/25)*25,steps=[];for(let i=0;i<count;i++){const points=first+i*25,sec=base/Math.cbrt(points/1000);steps.push({points,seconds:sec,label:`${points} WA`})}return steps}
-    statusForResult(athlete,event,resultSeconds,opts={}){const t=num(resultSeconds);if(t===null||t<=0)return{status:'missing_time',matched:[],achieved:[],next:null,records:[],qualifying:[],benchmarks:[]};const matched=this.forEvent(athlete,event,opts).map(r=>({...r,gap:gap(t,r.standard_seconds),points:this.pointsForTime(athlete,event,r.standard_seconds,{explicitPoints:r.wa_points??r.world_aquatics_points??r.fina_points,explicitParaPoints:r.world_para_points??r.para_points})}));const achieved=matched.filter(x=>x.gap.achieved),unachieved=matched.filter(x=>!x.gap.achieved).sort((a,b)=>a.gap.percentage-b.gap.percentage||b.standard_seconds-a.standard_seconds);return{status:'ok',matched,achieved,next:unachieved[0]||null,records:matched.filter(x=>x.standard_kind==='record'),qualifying:matched.filter(x=>x.standard_kind==='qualifying'),benchmarks:matched.filter(x=>x.standard_kind==='benchmark'),pathway:matched.filter(x=>x.standard_kind==='pathway')};}
+    statusForResult(athlete,event,resultSeconds,opts={}){
+      const t=num(resultSeconds);if(t===null||t<=0)return{status:'missing_time',matched:[],achieved:[],next:null,records:[],qualifying:[],benchmarks:[],nationalQualifying:[],nextNational:null,achievedNational:[]};
+      const matched=this.forEvent(athlete,event,opts).map(r=>({...r,gap:gap(t,r.standard_seconds),points:this.pointsForTime(athlete,event,r.standard_seconds,{explicitPoints:r.wa_points??r.world_aquatics_points??r.fina_points,explicitParaPoints:r.world_para_points??r.para_points})}));
+      const achieved=matched.filter(x=>x.gap.achieved),unachieved=matched.filter(x=>!x.gap.achieved).sort((a,b)=>a.gap.percentage-b.gap.percentage||b.standard_seconds-a.standard_seconds),qualifying=matched.filter(defaultStandard).sort((a,b)=>(Number(a.progression_order)||999)-(Number(b.progression_order)||999)||b.standard_seconds-a.standard_seconds),nationalQualifying=matched.filter(x=>defaultStandard(x)&&nationalLabel(x)),nextNational=nationalQualifying.filter(x=>!x.gap.achieved).sort((a,b)=>a.gap.percentage-b.gap.percentage)[0]||null;
+      return{status:'ok',matched,achieved,next:unachieved[0]||null,records:matched.filter(x=>x.standard_kind==='record'),qualifying,benchmarks:matched.filter(x=>x.standard_kind==='benchmark'),pathway:matched.filter(x=>x.standard_kind==='pathway'),nationalQualifying,nextNational,achievedNational:nationalQualifying.filter(x=>x.gap.achieved)};
+    }
     milestones(athlete,event,result={},opts={}){const t=num(result.result_seconds??result.pb_seconds??result.time_seconds),current=this.points(athlete,event,result),status=this.statusForResult(athlete,event,t,opts);if(status.status!=='ok')return{status:status.status,current,steps:[]};const real=status.matched.map(r=>({type:r.standard_kind,id:r.id,label:r.label,seconds:r.standard_seconds,points:r.points.value,points_label:r.points.label,achieved:r.gap.achieved,gap:r.gap,source:'loaded standard'}));const synthetic=this.pointSteps(athlete,event,result,Number(opts.pointStepCount)||3).map(s=>({type:'points_step',id:`points-${s.points}`,label:s.label,seconds:s.seconds,points:s.points,points_label:'WA',achieved:false,source:'25-point progression'}));const all=[...real,...synthetic];all.sort((a,b)=>{const ap=num(a.points),bp=num(b.points);if(ap!==null&&bp!==null)return ap-bp;if(ap!==null)return-1;if(bp!==null)return 1;return b.seconds-a.seconds});return{status:'ok',current,steps:all};}
     snapshot(){return{version:VERSION,standards:clone(this.standards),baseTimes:clone(this.baseTimes)}}
   }
   const create=options=>new StandardsRecords(options);
-  return{VERSION,create,StandardsRecords,course,stroke,sex,kind,active,age,ageBounds,paraClass,isPara,classMatches,eventOf,seconds,label,gap};
+  return{VERSION,create,StandardsRecords,course,stroke,sex,kind,active,age,ageBounds,paraClass,isPara,classMatches,eventOf,seconds,label,gap,defaultStandard,nationalLabel};
 });
