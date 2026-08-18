@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyPoolsideRuntime=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='1.0.2';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
   class PoolsideRuntimeAdapter{
@@ -19,7 +19,7 @@
     t400Evidence(athleteRef,opts={}){return this.app.t400Evidence(this.requireSelected(),athleteRef,opts)}
     pathwayProfile(athleteRef,opts={}){return this.app.pathway(athleteRef,opts)}
     targetFor(itemId,athleteRef){return this.app.targetFor(this.requireSelected(),itemId,athleteRef)}
-    adaptationFor(itemId,athleteRef){return this.app.adaptationFor(this.requireSelected(),itemId,athleteRef)}
+    adaptationFor(itemId,athleteRef){const answer=this.app.adaptationFor(this.requireSelected(),itemId,athleteRef);return answer?{...clone(answer),work:clone(answer.prescription||answer.work||null)}:answer}
     setAdaptationOverride(itemId,athleteRef,prescription,opts={}){return this.app.setAdaptationForItem(this.requireSelected(),itemId,athleteRef,prescription,opts)}
     clearAdaptationOverride(itemId,athleteRef){return this.app.clearAdaptationForItem(this.requireSelected(),itemId,athleteRef)}
     editSession(itemId,patch,opts={}){return this.app.editSet(this.requireSelected(),itemId,patch,opts)}
