@@ -6,7 +6,9 @@
     SessionSchedule:require('../engines/session-schedule.js'),
     SessionTruth:require('../engines/session-truth.js'),
     SessionLifecycle:require('../engines/session-lifecycle.js'),
+    SessionEdit:require('../engines/session-edit.js'),
     SessionFlow:require('./session-flow-portal.js'),
+    DeliveredSession:require('../engines/delivered-session.js'),
     EvidenceRetrieval:require('../engines/evidence-retrieval.js'),
     StandardsRecords:require('../engines/standards-records.js'),
     ResultsPathway:require('../engines/results-pathway.js'),
@@ -17,22 +19,45 @@
     BoardProjection:require('../engines/board-projection.js')
   });}else root.MSOSAppComposition=factory({Portal:root.MSOSEnginePortal,SessionFlow:root.MSOSSessionFlowPortal,...(root.MSOSEngines||{})});
 })(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='1.0.0';
-  const required=['Portal','EntityRegistry','SessionSchedule','SessionTruth','SessionLifecycle','SessionFlow','EvidenceRetrieval','StandardsRecords','ResultsPathway','Targets','Adaptation','Attendance','CaptureEvidence','BoardProjection'];
+  const VERSION='1.1.0';
+  const required=['Portal','EntityRegistry','SessionSchedule','SessionTruth','SessionLifecycle','SessionEdit','SessionFlow','DeliveredSession','EvidenceRetrieval','StandardsRecords','ResultsPathway','Targets','Adaptation','Attendance','CaptureEvidence','BoardProjection'];
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   function assertModules(){const missing=required.filter(k=>!E[k]);if(missing.length)throw new Error(`App Composition missing modules: ${missing.join(', ')}`)}
   function call(instance,method,input){if(!instance||typeof instance[method]!=='function')throw new Error(`${method} is unavailable`);return instance[method](...(input?.args||[]))}
   function proxy(client,target,methods){const out={};for(const name of methods)out[name]=(...args)=>client.query(target,name,{args});return Object.freeze(out)}
-  function create({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,calendarSources=[],evidenceSources=[],evidenceAliases=[],clubs=[],coaches=[],squads=[],memberships=[],profiles=[],overrides=[],standards=[],baseTimes=[],clock=()=>new Date().toISOString()}={}){
-    assertModules();for(const [name,value] of Object.entries({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage}))if(!value)throw new Error(`App Composition requires ${name}`);
+  function findBlock(session,id){return(session?.blocks||[]).find(b=>b.id===id)||null}
+  function findNode(session,id){for(const block of session?.blocks||[]){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[]))}}return null}
+
+  class PoolsideSessionFlow{
+    constructor({portal}={}){if(!portal)throw new Error('Poolside Session Flow requires Engine Portal');this.client=portal.client('poolside-session-flow')}
+    record(sessionId){const id=text(sessionId);if(!id)throw new Error('Poolside action requires sessionId');const rec=this.client.query('session-lifecycle','getSession',{args:[id]},{sessionId:id});if(!rec)throw new Error(`Accepted session not found: ${id}`);return rec}
+    editSet(sessionId,nodeId,patch={},opts={}){
+      const rec=this.record(sessionId),changed=this.client.command('session-edit','update',{args:[rec.current,nodeId,patch,{note:text(opts.note)}]},{sessionId:rec.id});
+      return this.client.command('session-lifecycle','applyEdit',{args:[rec.id,changed.session,{action:'edit',note:text(changed.change?.note)}]},{sessionId:rec.id});
+    }
+    editBlock(sessionId,blockId,patch={},opts={}){
+      const rec=this.record(sessionId),changed=this.client.command('session-edit','updateBlock',{args:[rec.current,blockId,patch,{note:text(opts.note)}]},{sessionId:rec.id});
+      return this.client.command('session-lifecycle','applyEdit',{args:[rec.id,changed.session,{action:'edit_block',note:text(changed.change?.note)}]},{sessionId:rec.id});
+    }
+    finish(sessionId,opts={}){
+      const rec=this.record(sessionId);
+      return this.client.command('delivered-session','finish',{args:[rec,opts]},{sessionId:rec.id});
+    }
+  }
+
+  function create({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,deliveryStorage,calendarSources=[],evidenceSources=[],evidenceAliases=[],clubs=[],coaches=[],squads=[],memberships=[],profiles=[],overrides=[],standards=[],baseTimes=[],clock=()=>new Date().toISOString()}={}){
+    assertModules();for(const [name,value] of Object.entries({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,deliveryStorage}))if(!value)throw new Error(`App Composition requires ${name}`);
     const portal=E.Portal.create({clock}),I={};
 
     portal.register({id:'entity-registry',version:E.EntityRegistry.VERSION,purpose:'Canonical programme identity',owner:'programme identity',queries:{resolveAthlete:input=>call(I.entities,'resolveAthlete',input),athleteId:input=>call(I.entities,'athleteId',input),sourceAthleteId:input=>call(I.entities,'sourceAthleteId',input),listAthletes:input=>call(I.entities,'listAthletes',input),resolveSquad:input=>call(I.entities,'resolveSquad',input),roster:input=>call(I.entities,'roster',input),dimensions:input=>call(I.entities,'dimensions',input)}});
     portal.register({id:'session-schedule',version:E.SessionSchedule.VERSION,purpose:'Calendar slots, shared occurrences and squad timing',owner:'session schedule',calls:{query:{'entity-registry':['resolveSquad']}},queries:{dateInfo:input=>call(I.schedule,'dateInfo',input),slotsForDate:input=>call(I.schedule,'slotsForDate',input),getSlot:input=>call(I.schedule,'getSlot',input),occurrence:input=>call(I.schedule,'occurrence',input),occurrenceForSession:input=>call(I.schedule,'occurrenceForSession',input),identityForOccurrence:input=>call(I.schedule,'identityForOccurrence',input),day:input=>call(I.schedule,'day',input),listOccurrences:input=>call(I.schedule,'listOccurrences',input)},commands:{createCustomSlot:input=>call(I.schedule,'createCustomSlot',input),retireCustomSlot:input=>call(I.schedule,'retireCustomSlot',input),linkSlots:input=>call(I.schedule,'linkSlots',input),bindSession:input=>call(I.schedule,'bindSession',input),unbindSession:input=>call(I.schedule,'unbindSession',input),retireOccurrence:input=>call(I.schedule,'retireOccurrence',input)}});
     portal.register({id:'session-truth',version:E.SessionTruth.VERSION,purpose:'Canonical workout semantics only',owner:'session semantics',queries:{parse:{handler:input=>E.SessionTruth.parse(input.source,input.identity||{}),validateInput:x=>typeof x?.source==='string'?'':'source required'},validate:input=>E.SessionTruth.validate(input.session),nodeDistance:input=>E.SessionTruth.nodeDistance(input.node),blockDistance:input=>E.SessionTruth.blockDistance(input.block),totalDistance:input=>E.SessionTruth.totalDistance(input.session)}});
     portal.register({id:'session-lifecycle',version:E.SessionLifecycle.VERSION,purpose:'Draft, accepted session, selection and revision persistence',owner:'session lifecycle',queries:{getDraft:input=>call(I.lifecycle,'getDraft',input),getSession:input=>call(I.lifecycle,'getSession',input),selected:input=>call(I.lifecycle,'selected',input),listSessions:input=>call(I.lifecycle,'listSessions',input),listDrafts:input=>call(I.lifecycle,'listDrafts',input),snapshot:input=>call(I.lifecycle,'snapshot',input)},commands:{createDraft:input=>call(I.lifecycle,'createDraft',input),updateDraft:input=>call(I.lifecycle,'updateDraft',input),discardDraft:input=>call(I.lifecycle,'discardDraft',input),createFromDraft:input=>call(I.lifecycle,'createFromDraft',input),selectSession:input=>call(I.lifecycle,'selectSession',input),applyEdit:input=>call(I.lifecycle,'applyEdit',input),markSuperseded:input=>call(I.lifecycle,'markSuperseded',input)}});
+    portal.register({id:'session-edit',version:E.SessionEdit.VERSION,purpose:'Explicit canonical session edit transformations only',owner:'session editing',commands:{update:input=>call(I.edit,'update',input),updateBlock:input=>call(I.edit,'updateBlock',input)}});
+    portal.register({id:'delivered-session',version:E.DeliveredSession.VERSION,purpose:'Finished delivered-session truth',owner:'delivered session records',queries:{get:input=>call(I.delivery,'get',input),snapshot:input=>call(I.delivery,'snapshot',input)},commands:{finish:input=>call(I.delivery,'finish',input)}});
     portal.register({id:'session-intake-flow',version:E.SessionFlow.VERSION,kind:'application',purpose:'Schedule occurrence -> draft -> canonical accepted session -> binding transaction',owner:'session intake workflow',calls:{query:{'session-schedule':['occurrence','identityForOccurrence'],'session-lifecycle':['getDraft'],'session-truth':['parse','validate']},command:{'session-schedule':['linkSlots','bindSession','retireOccurrence'],'session-lifecycle':['createDraft','updateDraft','discardDraft','createFromDraft','markSuperseded']}},commands:{beginFromSlots:input=>call(I.intake,'beginFromSlots',input),beginFromOccurrence:input=>call(I.intake,'beginFromOccurrence',input),updateDraft:input=>call(I.intake,'updateDraft',input),discardDraft:input=>call(I.intake,'discardDraft',input),acceptDraft:input=>call(I.intake,'acceptDraft',input)}});
+    portal.register({id:'poolside-session-flow',version:'1.0.0',kind:'application',purpose:'Exact-session edit and finish transaction coordinator',owner:'poolside session workflow',calls:{query:{'session-lifecycle':['getSession']},command:{'session-edit':['update','updateBlock'],'session-lifecycle':['applyEdit'],'delivered-session':['finish']}},commands:{editSet:input=>call(I.poolside,'editSet',input),editBlock:input=>call(I.poolside,'editBlock',input),finish:input=>call(I.poolside,'finish',input)}});
 
     portal.register({id:'evidence-retrieval',version:E.EvidenceRetrieval.VERSION,purpose:'Verified performance evidence read doorway',owner:'evidence retrieval',calls:{query:{'entity-registry':['resolveAthlete','athleteId','sourceAthleteId','listAthletes']}},queries:{resolveAthlete:input=>call(I.evidence,'resolveAthlete',input),athleteId:input=>call(I.evidence,'athleteId',input),listAthletes:input=>call(I.evidence,'listAthletes',input),provenance:input=>call(I.evidence,'provenance',input),trainingTests:input=>call(I.evidence,'trainingTests',input),latestTrainingTestEvidence:input=>call(I.evidence,'latestTrainingTestEvidence',input),results:input=>call(I.evidence,'results',input),personalBestEvidence:input=>call(I.evidence,'personalBestEvidence',input),conversion:input=>call(I.evidence,'conversion',input)}});
     portal.register({id:'standards-records',version:E.StandardsRecords.VERSION,purpose:'Standards records and points mathematics',owner:'performance standards and records',queries:{normalizeCourse:input=>call(I.standards,'normalizeCourse',input),normalizeStroke:input=>call(I.standards,'normalizeStroke',input),normalizeEvent:input=>call(I.standards,'normalizeEvent',input),isParaAthlete:input=>call(I.standards,'isParaAthlete',input),paraClassification:input=>call(I.standards,'paraClassification',input),matches:input=>call(I.standards,'matches',input),forEvent:input=>call(I.standards,'forEvent',input),baseTime:input=>call(I.standards,'baseTime',input),points:input=>call(I.standards,'points',input),pointSteps:input=>call(I.standards,'pointSteps',input),statusForResult:input=>call(I.standards,'statusForResult',input),milestones:input=>call(I.standards,'milestones',input)}});
@@ -44,14 +69,36 @@
     portal.register({id:'board-projection',version:E.BoardProjection.VERSION,purpose:'Compact Coach Board projection only',owner:'coach board projection',calls:{query:{'session-truth':['nodeDistance','blockDistance','totalDistance'],'attendance':['here','hereAthletes','summary'],'adaptation':['forItem'],'targets':['forItem','forPhase'],'capture-evidence':['atBoardPoint']}},queries:{project:input=>call(I.board,'project',input)}});
 
     portal.register({id:'calendar-surface',version:'1.0.0',kind:'surface',purpose:'Calendar/day/session intake presentation',owner:'presentation',calls:{query:{'session-schedule':['dateInfo','slotsForDate','occurrence','occurrenceForSession','day','listOccurrences'],'session-lifecycle':['getDraft','getSession','selected','listSessions','listDrafts']},command:{'session-intake-flow':['beginFromSlots','beginFromOccurrence','updateDraft','discardDraft','acceptDraft']}}});
-    portal.register({id:'coach-board-surface',version:'3.0.0',kind:'surface',purpose:'Exact accepted session -> Board plus explicit poolside actions',owner:'presentation',calls:{query:{'session-lifecycle':['getSession','selected'],'board-projection':['project'],'attendance':['eligibleRoster','summary'],'results-pathway':['profile'],'evidence-retrieval':['trainingTests','latestTrainingTestEvidence'],'adaptation':['listOverrides'],'capture-evidence':['atBoardPoint','query']},command:{'session-lifecycle':['selectSession'],'attendance':['mark','clearMark'],'adaptation':['setOverride','clearOverride'],'capture-evidence':['create','amend','retire']}}});
-    portal.register({id:'app-shell',version:'2.0.0',kind:'shell',purpose:'Navigation, mounting and adapters only; no swimming truth authority',owner:'application shell'});
+    portal.register({id:'coach-board-surface',version:'4.0.0',kind:'surface',purpose:'Exact accepted session -> Board plus explicit poolside actions',owner:'presentation',calls:{
+      query:{
+        'session-lifecycle':['getSession','selected'],
+        'board-projection':['project'],
+        'attendance':['eligibleRoster','hereAthletes','summary'],
+        'results-pathway':['profile'],
+        'evidence-retrieval':['trainingTests','latestTrainingTestEvidence'],
+        'targets':['forItem'],
+        'adaptation':['forItem','listOverrides'],
+        'capture-evidence':['atBoardPoint','query'],
+        'delivered-session':['get']
+      },
+      command:{
+        'session-lifecycle':['selectSession'],
+        'attendance':['mark','clearMark'],
+        'adaptation':['setOverride','clearOverride'],
+        'capture-evidence':['create','amend','retire'],
+        'poolside-session-flow':['editSet','editBlock','finish']
+      }
+    }});
+    portal.register({id:'app-shell',version:'3.0.0',kind:'shell',purpose:'Navigation, mounting and adapters only; no swimming truth authority',owner:'application shell'});
 
     I.entities=E.EntityRegistry.create({sources:evidenceSources,aliases:evidenceAliases,clubs,coaches,squads,memberships});
     const identityFor=caller=>proxy(portal.client(caller),'entity-registry',['resolveAthlete','athleteId','sourceAthleteId','listAthletes','resolveSquad','roster','dimensions']);
     I.schedule=E.SessionSchedule.create({storage:scheduleStorage,entities:proxy(portal.client('session-schedule'),'entity-registry',['resolveSquad']),calendarSources,clock});
     I.lifecycle=E.SessionLifecycle.create({storage:lifecycleStorage,clock});
+    I.edit=E.SessionEdit.create({clock});
+    I.delivery=E.DeliveredSession.create({storage:deliveryStorage,clock});
     I.intake=new E.SessionFlow.IntakeFlow({portal});
+    I.poolside=new PoolsideSessionFlow({portal});
     I.evidence=E.EvidenceRetrieval.create({sources:evidenceSources,entities:identityFor('evidence-retrieval')});
     const evidenceFor=caller=>proxy(portal.client(caller),'evidence-retrieval',['resolveAthlete','athleteId','listAthletes','provenance','trainingTests','latestTrainingTestEvidence','results','personalBestEvidence','conversion']);
     I.standards=E.StandardsRecords.create({standards,baseTimes});
@@ -66,17 +113,46 @@
     const graph=portal.seal(),calendar=portal.client('calendar-surface'),board=portal.client('coach-board-surface'),shell=portal.client('app-shell');
     function sessionRecord(id){const rec=board.query('session-lifecycle','getSession',{args:[id]},{sessionId:id});if(!rec)throw new Error(`Accepted session not found: ${id}`);return rec}
     function boardForSession(id){const rec=sessionRecord(id);return board.query('board-projection','project',{args:[rec.current]},{sessionId:id})}
+    function itemForSession(id,itemId){const rec=sessionRecord(id),item=findNode(rec.current,itemId);if(!item)throw new Error(`Session item not found: ${itemId}`);return{rec,item}}
+    function blockForSession(id,blockId){const rec=sessionRecord(id),block=findBlock(rec.current,blockId);if(!block)throw new Error(`Session block not found: ${blockId}`);return{rec,block}}
     return Object.freeze({version:VERSION,portal,graph,shell,
-      day:d=>calendar.query('session-schedule','day',{args:[d]}),slotsForDate:d=>calendar.query('session-schedule','slotsForDate',{args:[d]}),occurrence:id=>calendar.query('session-schedule','occurrence',{args:[id]}),occurrenceForSession:id=>calendar.query('session-schedule','occurrenceForSession',{args:[id]},{sessionId:id}),
-      beginFromSlots:(ids,opts={})=>calendar.command('session-intake-flow','beginFromSlots',{args:[ids,opts]}),beginFromOccurrence:(id,opts={})=>calendar.command('session-intake-flow','beginFromOccurrence',{args:[id,opts]}),updateDraft:(id,patch={})=>calendar.command('session-intake-flow','updateDraft',{args:[id,patch]}),discardDraft:(id,opts={})=>calendar.command('session-intake-flow','discardDraft',{args:[id,opts]}),acceptDraft:(id,opts={})=>calendar.command('session-intake-flow','acceptDraft',{args:[id,opts]}),
-      session:sessionRecord,selectedSession:()=>board.query('session-lifecycle','selected',{args:[]}),selectSession:id=>board.command('session-lifecycle','selectSession',{args:[id]},{sessionId:id}),boardForSession,
-      rollForSession:id=>{const rec=sessionRecord(id);return{eligible:board.query('attendance','eligibleRoster',{args:[rec.current]},{sessionId:id}),summary:board.query('attendance','summary',{args:[rec.current]},{sessionId:id})}},
+      day:d=>calendar.query('session-schedule','day',{args:[d]}),
+      slotsForDate:d=>calendar.query('session-schedule','slotsForDate',{args:[d]}),
+      occurrence:id=>calendar.query('session-schedule','occurrence',{args:[id]}),
+      occurrenceForSession:id=>calendar.query('session-schedule','occurrenceForSession',{args:[id]},{sessionId:id}),
+      beginFromSlots:(ids,opts={})=>calendar.command('session-intake-flow','beginFromSlots',{args:[ids,opts]}),
+      beginFromOccurrence:(id,opts={})=>calendar.command('session-intake-flow','beginFromOccurrence',{args:[id,opts]}),
+      updateDraft:(id,patch={})=>calendar.command('session-intake-flow','updateDraft',{args:[id,patch]}),
+      discardDraft:(id,opts={})=>calendar.command('session-intake-flow','discardDraft',{args:[id,opts]}),
+      acceptDraft:(id,opts={})=>calendar.command('session-intake-flow','acceptDraft',{args:[id,opts]}),
+      session:sessionRecord,
+      selectedSession:()=>board.query('session-lifecycle','selected',{args:[]}),
+      selectSession:id=>board.command('session-lifecycle','selectSession',{args:[id]},{sessionId:id}),
+      boardForSession,
+      rollForSession:id=>{const rec=sessionRecord(id);return{
+        eligible:board.query('attendance','eligibleRoster',{args:[rec.current]},{sessionId:id}),
+        here:board.query('attendance','hereAthletes',{args:[rec.current]},{sessionId:id}),
+        summary:board.query('attendance','summary',{args:[rec.current]},{sessionId:id})
+      }},
       markAttendance:(id,athleteRef,status,opts={})=>{const rec=sessionRecord(id);return board.command('attendance','mark',{args:[rec.current,athleteRef,status,opts]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      clearAttendance:(id,athleteRef)=>{const rec=sessionRecord(id);return board.command('attendance','clearMark',{args:[rec.current,athleteRef]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      t400Evidence:(id,athleteRef,opts={})=>{const rec=sessionRecord(id),course=opts.course||rec.current.identity?.course||'';return board.query('evidence-retrieval','latestTrainingTestEvidence',{args:[athleteRef,{testKey:'t400_freestyle',course,stroke:'Freestyle',validOnly:true,...opts}]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      trainingTests:(id,athleteRef,opts={})=>{sessionRecord(id);return board.query('evidence-retrieval','trainingTests',{args:[athleteRef,opts]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      targetFor:(id,itemId,athleteRef)=>{const {rec,item}=itemForSession(id,itemId);if(item.kind!=='set')throw new Error(`Target item is not a set: ${itemId}`);return board.query('targets','forItem',{args:[rec.current,item,athleteRef]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      adaptationFor:(id,itemId,athleteRef)=>{const {rec,item}=itemForSession(id,itemId);if(item.kind!=='set')throw new Error(`Adaptation item is not a set: ${itemId}`);return board.query('adaptation','forItem',{args:[rec.current,item,athleteRef]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
       setAdaptation:(id,item,athleteRef,prescription,opts={})=>{const rec=sessionRecord(id);return board.command('adaptation','setOverride',{args:[rec.current,item,athleteRef,prescription,opts]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      setAdaptationForItem:(id,itemId,athleteRef,prescription,opts={})=>{const {rec,item}=itemForSession(id,itemId);return board.command('adaptation','setOverride',{args:[rec.current,item,athleteRef,prescription,opts]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
+      clearAdaptationForItem:(id,itemId,athleteRef)=>{const {rec,item}=itemForSession(id,itemId);return board.command('adaptation','clearOverride',{args:[rec.current,item,athleteRef]},{sessionId:id,athleteId:typeof athleteRef==='string'?athleteRef:''})},
       capture:(id,spec={})=>{const rec=sessionRecord(id);return board.command('capture-evidence','create',{args:[rec.current,spec]},{sessionId:id,athleteId:spec.athleteIds?.[0]||''})},
+      evidenceAt:(id,context={})=>{const rec=sessionRecord(id);return board.query('capture-evidence','atBoardPoint',{args:[rec.current,{blockId:context.blockId||null,itemId:context.itemId||null,athleteId:context.athleteId||''}]},{sessionId:id,athleteId:context.athleteId||''})},
+      editSet:(id,itemId,patch={},opts={})=>{itemForSession(id,itemId);return board.command('poolside-session-flow','editSet',{args:[id,itemId,patch,opts]},{sessionId:id})},
+      editBlock:(id,blockId,patch={},opts={})=>{blockForSession(id,blockId);return board.command('poolside-session-flow','editBlock',{args:[id,blockId,patch,opts]},{sessionId:id})},
+      finishSession:(id,opts={})=>{sessionRecord(id);return board.command('poolside-session-flow','finish',{args:[id,opts]},{sessionId:id})},
+      deliveryForSession:id=>{sessionRecord(id);return board.query('delivered-session','get',{args:[id]},{sessionId:id})},
       pathway:(athleteRef,opts={})=>board.query('results-pathway','profile',{args:[athleteRef,opts]},{athleteId:typeof athleteRef==='string'?athleteRef:''}),
+      entity:ref=>board.query('evidence-retrieval','resolveAthlete',{args:[ref]},{athleteId:typeof ref==='string'?ref:''}),
       diagnostics:()=>portal.snapshot()
     });
   }
-  return{VERSION,create,proxy};
+  return{VERSION,create,proxy,PoolsideSessionFlow,findBlock,findNode};
 });
