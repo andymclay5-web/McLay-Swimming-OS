@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.DeliveredSession=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.delivery.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -19,11 +19,16 @@
   function normalizeState(raw){const s=raw&&typeof raw==='object'?clone(raw):blankState();s.schema=SCHEMA;if(!Array.isArray(s.deliveries))s.deliveries=[];return s}
   class MemoryStorage{constructor(initial=null){this.value=initial==null?null:clone(initial);this.reads=0;this.writes=0}load(){this.reads++;return clone(this.value)}save(value){this.writes++;this.value=clone(value);return true}}
 
+  function deliveredWork(node){return{
+    reps:Math.max(1,num(node?.reps)||1),distance:num(node?.distance)||0,stroke:text(node?.stroke),zone:text(node?.zone),restSeconds:num(node?.restSeconds),cycleSeconds:num(node?.cycleSeconds),cycleOptions:clone(node?.cycleOptions||[]),equipment:clone(node?.equipment||[]),
+    composition:clone(node?.composition||[]),compositionRepeats:Math.max(1,num(node?.compositionRepeats)||1),pattern:clone(node?.pattern||[]),patternRounds:num(node?.patternRounds),phases:clone(node?.phases||[]),repPattern:clone(node?.repPattern||[]),repInstructions:clone(node?.repInstructions||[]),cues:clone(node?.cues||[]),
+    raceIntent:clone(node?.raceIntent||null),targetSeconds:num(node?.targetSeconds),raw:text(node?.raw||node?.text)
+  }}
   function expandNode(node,ctx,out){
     if(!node)return;
     if(node.kind==='set'){
       const rounds=clone(ctx.rounds||[]),occurrenceIndex=out.filter(x=>x.item_id===node.id).length+1;
-      out.push({occurrence_id:stable('occurrence',ctx.sessionId,ctx.blockId,node.id,rounds.map(x=>`${x.groupId}:${x.round}`).join('/'),occurrenceIndex),session_id:ctx.sessionId,block_id:ctx.blockId,item_id:node.id,group_rounds:rounds,occurrence:occurrenceIndex,distance:setDistance(node),work:{reps:Math.max(1,num(node.reps)||1),distance:num(node.distance)||0,stroke:text(node.stroke),zone:text(node.zone),restSeconds:num(node.restSeconds),cycleSeconds:num(node.cycleSeconds),equipment:clone(node.equipment||[]),composition:clone(node.composition||[]),pattern:clone(node.pattern||[]),phases:clone(node.phases||[]),repPattern:clone(node.repPattern||[]),repInstructions:clone(node.repInstructions||[]),cues:clone(node.cues||[]),raw:text(node.raw||node.text)}});return;
+      out.push({occurrence_id:stable('occurrence',ctx.sessionId,ctx.blockId,node.id,rounds.map(x=>`${x.groupId}:${x.round}`).join('/'),occurrenceIndex),session_id:ctx.sessionId,block_id:ctx.blockId,item_id:node.id,group_rounds:rounds,occurrence:occurrenceIndex,distance:setDistance(node),work:deliveredWork(node)});return;
     }
     if(node.kind==='group'){
       const rounds=Math.max(1,num(node.rounds)||1);for(let round=1;round<=rounds;round++){const next={...ctx,rounds:[...(ctx.rounds||[]),{groupId:node.id,round}]};for(const child of node.items||[])expandNode(child,next,out)}
@@ -54,5 +59,5 @@
     }
   }
   const create=options=>new DeliveredSession(options);
-  return{VERSION,SCHEMA,create,DeliveredSession,MemoryStorage,blankState,normalizeState,setDistance,nodeDistance,sessionDistance,expand,resolveFinish};
+  return{VERSION,SCHEMA,create,DeliveredSession,MemoryStorage,blankState,normalizeState,setDistance,nodeDistance,sessionDistance,deliveredWork,expand,resolveFinish};
 });
