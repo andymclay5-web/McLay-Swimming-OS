@@ -12,6 +12,7 @@ on:
       - 'tests/race-model.test.js'
       - 'tests/evidence-publication.test.js'
       - 'tests/performance-pipeline.integration.test.js'
+      - 'tests/architecture-boundaries-extended.test.js'
       - '.github/workflows/performance-engine-tests.yml'
   pull_request:
     branches:
@@ -24,6 +25,7 @@ on:
       - 'tests/race-model.test.js'
       - 'tests/evidence-publication.test.js'
       - 'tests/performance-pipeline.integration.test.js'
+      - 'tests/architecture-boundaries-extended.test.js'
       - '.github/workflows/performance-engine-tests.yml'
   workflow_dispatch:
 
@@ -64,9 +66,19 @@ jobs:
       - name: Evidence Publication regressions
         run: node tests/evidence-publication.test.js
 
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Extended architecture boundaries
+        run: node tests/architecture-boundaries-extended.test.js
+
   performance-pipeline:
     runs-on: ubuntu-latest
-    needs: [standards-records, race-model, evidence-publication]
+    needs: [standards-records, race-model, evidence-publication, architecture]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
