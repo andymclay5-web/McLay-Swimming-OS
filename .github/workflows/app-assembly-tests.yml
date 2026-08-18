@@ -32,10 +32,11 @@ jobs:
           node --check assembly/programme-config.js
       - name: Calendar session intake integration
         run: node tests/session-flow-portal.integration.test.js
-      - name: Unified Calendar Board and poolside composition
+      - name: Unified Calendar Board poolside and current-data composition
         run: |
           node tests/app-composition.integration.test.js
           node tests/assembly-board-actions.integration.test.js
+          node tests/assembly-live-data-flow.integration.test.js
       - name: Browser data infrastructure renderer and poolside presenter
         run: |
           node tests/assembly-browser-infrastructure.test.js
@@ -68,10 +69,10 @@ jobs:
           const programmeData=fs.readFileSync('assembly/programme-data-adapter.js','utf8');
           assert(/method:'GET'/.test(programmeData),'Programme data adapter is not explicitly read-only');
           assert(!/method:\s*['\"](?:POST|PUT|PATCH|DELETE)['\"]/i.test(programmeData),'Programme data adapter contains a write method');
-          assert(!/\/rest\/v1\/(?:sessions|attendance|captures).*method:\s*['\"]POST/i.test(programmeData),'Programme data adapter contains production writes');
           const browser=fs.readFileSync('assembly/browser-app.js','utf8');
           assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
           assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser)&&/MSOSAssemblyProgrammeData/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside/data boundaries');
+          for(const pattern of [/evidenceSources:programmeData\.evidenceSources/,/profiles:programmeData\.profiles/,/standards:programmeData\.standards/,/baseTimes:programmeData\.baseTimes/])assert(pattern.test(browser),'Browser boot does not inject programme data into App Composition');
           const html=fs.readFileSync('assembly/index.html','utf8');
           const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
           assert(!scripts.some(src=>src==='../app.js'||src==='app.js'||/\/(?:v4-correct|v4-poolside-core)\.js$/i.test(src)),'Assembly page loads a legacy competing app implementation');
