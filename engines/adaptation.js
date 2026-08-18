@@ -4,11 +4,12 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Adaptation=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.1';
+  const VERSION='1.1.2';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
+  const QUALITY_RE=/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i;
   const FALLBACKS={
     charlottemurphy:{ratio:.50,label:'~½ volume when condensation is needed · preserve theme/quality · return to starting end',returnToStart:true},
     conorfischer:{ratio:.50,label:'~½ volume when condensation is needed · preserve theme/quality',returnToStart:false},
@@ -22,8 +23,10 @@
   function coversPattern(item){const span=patternSpan(item),reps=Math.max(1,num(item?.reps)||1);return span>0&&reps%span===0}
   function rawText(item){return[item?.raw,item?.text,item?.zone,...(item?.cues||[]),...(item?.pattern||[]).map(x=>x.text),...(item?.phases||[]).map(x=>x.text||x.raw)].filter(Boolean).join(' ')}
   function isAerobic(item){return!!item?.zone||/\b(?:regeneration|regen|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(rawText(item))}
-  function isQuality(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isAerobic(item))return false;return d>0&&d<=100&&r<=4&&/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i.test(raw)}
-  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isQuality(item))return true;if(isAerobic(item)||d<=0||d>50||r>8)return false;return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)}
+  function isQuality(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isAerobic(item))return false;return d>0&&d<=100&&r<=4&&QUALITY_RE.test(raw)}
+  function phaseQualityText(item){return(item?.phases||[]).map(p=>[p?.raw,p?.text,p?.stroke,p?.zone,...(p?.cues||[]),...(p?.pattern||[]).map(x=>x?.text),...(p?.repInstructions||[]).map(x=>x?.label||x?.text),p?.raceIntent?JSON.stringify(p.raceIntent):''].filter(Boolean).join(' ')).join(' ')}
+  function hasSharedQualityPhases(item){const d=num(item?.distance)||0,phases=item?.phases||[];if(!phases.length||d<=0||d>100)return false;const parent={...item,phases:[]};if(isAerobic(parent))return false;return QUALITY_RE.test(phaseQualityText(item))}
+  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isQuality(item)||hasSharedQualityPhases(item))return true;if(isAerobic(item)||d<=0||d>50||r>8)return false;return QUALITY_RE.test(raw)}
   function sameWork(a,b){const arr=v=>(v||[]).map(text).sort().join('|').toLowerCase();return(num(a?.reps)||1)===(num(b?.reps)||1)&&(num(a?.distance)||0)===(num(b?.distance)||0)&&text(a?.stroke).toLowerCase()===text(b?.stroke).toLowerCase()&&(num(a?.restSeconds)||0)===(num(b?.restSeconds)||0)&&(num(a?.cycleSeconds)||0)===(num(b?.cycleSeconds)||0)&&arr(a?.equipment)===arr(b?.equipment)&&JSON.stringify(a?.pattern||[])===JSON.stringify(b?.pattern||[])&&JSON.stringify(a?.phases||[])===JSON.stringify(b?.phases||[])}
   function nearestWholePattern(reps,ratio,span){const target=reps*ratio,c=[];for(let r=span;r<=reps;r+=span)c.push({reps:r,delta:Math.abs(r-target)});if(!c.length)return reps;c.sort((a,b)=>a.delta-b.delta||b.reps-a.reps);return c[0].reps}
   function scaleReps(item,ratio){const reps=Math.max(1,num(item?.reps)||1);if(ratio>=.98)return reps;const span=patternSpan(item);if(span>0&&coversPattern(item))return nearestWholePattern(reps,ratio,span);return Math.max(1,Math.round(reps*ratio))}
@@ -63,5 +66,5 @@
     forAthletes(session,item,athleteRefs=[]){return(athleteRefs||[]).map(ref=>{const ath=this.athlete(ref);return{athlete:ath,result:this.adaptItem(session,item,ref)}})}
   }
   const create=options=>new Adaptation(options);
-  return{VERSION,create,Adaptation,FALLBACKS,poolLength,patternSpan,coversPattern,isAerobic,isQuality,sameTeamExposure,sameWork,scaleReps,scaleContinuousDistance,trimRepMetadata,constraintFor};
+  return{VERSION,create,Adaptation,FALLBACKS,poolLength,patternSpan,coversPattern,isAerobic,isQuality,phaseQualityText,hasSharedQualityPhases,sameTeamExposure,sameWork,scaleReps,scaleContinuousDistance,trimRepMetadata,constraintFor};
 });
