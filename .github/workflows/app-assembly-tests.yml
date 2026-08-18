@@ -32,6 +32,7 @@ jobs:
           node --check assembly/poolside-presenter.js
           node --check assembly/browser-app.js
           node --check assembly/programme-config.js
+          node --check tests/assembly-browser-rendered.acceptance.mjs
       - name: Calendar session intake and custom authoring integration
         run: |
           node tests/session-flow-portal.integration.test.js
@@ -108,3 +109,39 @@ jobs:
             echo "===== $f ====="
             node "$f"
           done
+
+  rendered-mobile-browser:
+    needs:
+      - assembly-flow
+      - inherited-full-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pinned Chromium harness
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start static assembly server
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/msos-assembly-http.log 2>&1 &
+          echo $! > /tmp/msos-assembly-http.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/assembly/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/msos-assembly-http.log
+          exit 1
+      - name: Render and drive phone-size coach workflow
+        run: node tests/assembly-browser-rendered.acceptance.mjs
+      - name: Upload rendered phone screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msos-assembly-rendered-mobile
+          path: artifacts/msos-assembly-mobile-board.png
+          if-no-files-found: warn
+          retention-days: 14
