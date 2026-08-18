@@ -57,8 +57,8 @@ test('Evidence Publication owns verified publication boundary without interpreti
  const s=read('evidence-publication.js');assert(/verifiedSource/.test(s));assert(/permanent_eligible/.test(s));assert(/operational_only/.test(s));assert(!/qualifying|personalBest|pointSteps|record benchmark|targetSeconds|AEROBIC_TABLES/i.test(s));
 });
 
-test('Results Pathway delegates standards, points and milestones instead of owning a second implementation',()=>{
- const s=read('results-pathway.js');assert(/StandardsRecords/.test(s));assert(/this\.rules\.statusForResult/.test(s));assert(/this\.rules\.milestones/.test(s));assert(/this\.rules\.points/.test(s));assert(!/Math\.pow|Math\.cbrt|function ageBounds|function classMatches|this\.standards\s*=|this\.baseTimes\s*=/.test(s));
+test('Results Pathway is injection-only and delegates standards, normalization, points and milestones',()=>{
+ const s=read('results-pathway.js');assert(/complete Standards Records contract/.test(s));assert(/this\.rules\.normalizeEvent/.test(s));assert(/this\.rules\.statusForResult/.test(s));assert(/this\.rules\.milestones/.test(s));assert(/this\.rules\.points/.test(s));assert(!/require\(['\"]\.\/standards-records|Math\.pow|Math\.cbrt|function ageBounds|function classMatches|this\.standards\s*=|this\.baseTimes\s*=/.test(s));
 });
 
 if(fails){console.error(`\n${fails} extended architecture regression(s) failed`);process.exit(1)}
