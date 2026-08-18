@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyShellModel=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
   const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(text(v))?text(v):'';
@@ -18,7 +18,6 @@
     return cells;
   }
   function addMonths(monthValue,delta){const [y,m]=month(monthValue).split('-').map(Number),d=new Date(Date.UTC(y,m-1+Number(delta||0),1));return`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}`}
-  function overlap(a,b){const mins=t=>{const [h,m]=String(t||'').split(':').map(Number);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:null},as=mins(a.start),ae=mins(a.end),bs=mins(b.start),be=mins(b.end);return as!=null&&ae!=null&&bs!=null&&be!=null&&Math.max(as,bs)<Math.min(ae,be)}
   function itemLabel(item){const squads=(item.squadEntries||[]).map(x=>x.squadLabel).filter(Boolean).join(' + '),clock=[item.start,item.end].filter(Boolean).join('–');return{text:squads||item.eventName||'Session',clock,venue:item.venue||'',course:item.course||'',state:item.sessionId?'ready':'scheduled'}}
   class ShellModel{
     constructor({schedule,navigation,today=()=>new Date().toISOString().slice(0,10)}={}){if(!schedule||typeof schedule.day!=='function')throw new Error('ShellModel requires Session Schedule surface');if(!navigation||typeof navigation.route!=='function')throw new Error('ShellModel requires Navigation State');this.schedule=schedule;this.navigation=navigation;this.today=today}
@@ -34,15 +33,12 @@
     openItem(id){
       const route=this.route();if(route.type!=='day')throw new Error('Session occurrence can only open from a selected Day view');const day=this.day(route.date),item=day.items.find(x=>x.id===text(id));if(!item)throw new Error(`Day item not found: ${id}`);
       if(item.type==='occurrence'&&item.sessionId){this.navigation.openBoard({date:route.date,occurrenceId:item.id,sessionId:item.sessionId});this.navigation.markInteractive();return{action:'board',route:this.route(),item:clone(item)}}
-      return{action:'intake',route:this.route(),item:clone(item),candidateSlots:clone(item.slotIds||[item.id])}
-    }
-    suggestedCompanions(slotId){
-      const route=this.route();if(route.type!=='day')return[];const day=this.day(route.date),item=day.items.find(x=>x.id===text(slotId));if(!item||item.type!=='slot')return[];return day.items.filter(x=>x.type==='slot'&&x.id!==item.id&&x.dayPart===item.dayPart&&x.venue===item.venue&&x.course===item.course&&x.kind===item.kind&&overlap(x,item)).map(clone)
+      return{action:'intake',route:this.route(),item:clone(item),candidateSlots:clone(item.slotIds||[item.id]),availableDaySlots:day.items.filter(x=>x.type==='slot').map(x=>({id:x.id,squadEntries:clone(x.squadEntries||[]),start:x.start,end:x.end,venue:x.venue,course:x.course,dayPart:x.dayPart,kind:x.kind}))}
     }
     back(){return this.navigation.back()}
     resume(){return this.navigation.resume()}
     view(){const route=this.route();if(route.type==='calendar')return this.calendar(route.month);if(route.type==='day')return this.day(route.date);return{type:route.type,route:clone(route)}}
   }
   const create=options=>new ShellModel(options);
-  return{VERSION,create,ShellModel,monthDays,addMonths,overlap,itemLabel};
+  return{VERSION,create,ShellModel,monthDays,addMonths,itemLabel};
 });
