@@ -9,6 +9,12 @@ test('set Edit resolves exact stable session/block/item context',()=>{
  assert.deepEqual(cmd,{type:'editSet',context:{sessionId:'s1',blockId:'b1',itemId:'set1'}});
 });
 
+test('athlete Edit carries exact athlete identity without contaminating group commands',()=>{
+ const cmd=C.commandFor('edit-athlete',{sessionId:'s1',blockId:'b1',itemId:'set1',athleteId:'a1'});
+ assert.deepEqual(cmd,{type:'editAthleteSet',context:{sessionId:'s1',blockId:'b1',itemId:'set1',athleteId:'a1'}});
+ assert.deepEqual(C.commandFor('roll',{sessionId:'s1'}),{type:'roll',context:{sessionId:'s1',blockId:null,itemId:null}});
+});
+
 test('block Edit never invents an item id',()=>{
  const cmd=C.commandFor('edit-block',{sessionId:'s1',blockId:'b1',itemId:''});
  assert.deepEqual(cmd,{type:'editBlock',context:{sessionId:'s1',blockId:'b1',itemId:null}});
@@ -19,8 +25,9 @@ test('capture modes all route through capture owner with explicit mode',()=>{
  for(const [action,mode] of Object.entries(expected))assert.deepEqual(C.commandFor(action,{sessionId:'s1',blockId:'b1',itemId:'set1'}),{type:'capture',mode,context:{sessionId:'s1',blockId:'b1',itemId:'set1'}});
 });
 
-test('Roll and Finish are session commands and preserve supplied context',()=>{
+test('Roll Times and Finish are explicit session commands',()=>{
  assert.equal(C.commandFor('roll',{sessionId:'s1'}).type,'roll');
+ assert.equal(C.commandFor('times',{sessionId:'s1'}).type,'openTimes');
  assert.equal(C.commandFor('finish',{sessionId:'s1',blockId:'b1',itemId:'set1'}).type,'finish');
 });
 
@@ -30,6 +37,7 @@ test('evidence marker routes to retrieval owner only',()=>{
 
 test('missing mandatory ids fail instead of guessing current UI state',()=>{
  assert.throws(()=>C.commandFor('edit',{sessionId:'s1'}),/blockId \+ itemId/);
+ assert.throws(()=>C.commandFor('edit-athlete',{sessionId:'s1',blockId:'b1',itemId:'set1'}),/athleteId/);
  assert.throws(()=>C.commandFor('edit-block',{sessionId:'s1'}),/blockId/);
  assert.throws(()=>C.commandFor('finish',{}),/sessionId/);
 });
