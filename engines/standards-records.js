@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.StandardsRecords=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='1.1.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();
@@ -28,6 +28,11 @@
 
   class StandardsRecords{
     constructor({standards=[],baseTimes=[],today=()=>new Date().toISOString().slice(0,10)}={}){this.standards=clone(standards||[]);this.baseTimes=clone(baseTimes||[]);this.today=today}
+    normalizeCourse(value){return course(value)}
+    normalizeStroke(value){return stroke(value)}
+    normalizeEvent(row={}){return eventOf(row)}
+    isParaAthlete(athlete){return isPara(athlete)}
+    paraClassification(athlete,eventStroke){return paraClass(athlete,eventStroke)}
     list({kind:kindWanted='',activeOnly=true}={}){return clone(this.standards.filter(x=>!activeOnly||active(x)).filter(x=>!kindWanted||kind(x)===kindWanted))}
     classificationStatus(athlete,event={}){if(!isPara(athlete))return{status:'not_para',classification:null};const c=paraClass(athlete,event.stroke);return c?{status:'ok',classification:c}:{status:'classification_needed',classification:null}}
     matches(row,athlete,event,{asOfDate=''}={}){
