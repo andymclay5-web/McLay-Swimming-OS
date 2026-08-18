@@ -26,6 +26,10 @@ test('service may call a declared dependency through its injected portal client'
  const p=base();p.register({id:'evidence',queries:{t400:input=>({athleteId:input.athleteId,seconds:324.6})}});p.register({id:'targets',calls:{query:{evidence:['t400']}},queries:{development:{handler:(input,{client})=>{const ev=client.query('evidence','t400',{athleteId:input.athleteId});return{target:ev.seconds/4*1.024}}}}});p.register({id:'board',calls:{query:{targets:['development']}}});p.seal();const r=p.client('board').query('targets','development',{athleteId:'molly'});assert(Math.abs(r.target-83.0976)<1e-9);const trail=p.auditTrail();assert.equal(trail.length,2);assert.equal(new Set(trail.map(x=>x.causeId)).size,1);assert.equal(trail.find(x=>x.target==='evidence').caller,'targets');
 });
 
+test('prebuilt injected engine proxy inherits the active request lineage',()=>{
+ const p=base();let evidenceClient;p.register({id:'evidence',queries:{pb:()=>({seconds:58.72})}});p.register({id:'pathway',calls:{query:{evidence:['pb']}},queries:{profile:()=>evidenceClient.query('evidence','pb',{})}});p.register({id:'surface',calls:{query:{pathway:['profile']}}});evidenceClient=p.client('pathway');p.seal();p.client('surface').query('pathway','profile',{});const trail=p.auditTrail();assert.equal(trail.length,2);assert.equal(new Set(trail.map(x=>x.causeId)).size,1);assert.equal(trail.find(x=>x.target==='evidence').depth,1);
+});
+
 test('service cannot secretly reach a dependency it did not declare',()=>{
  const p=base();p.register({id:'evidence',queries:{pb:()=>({seconds:60})}});p.register({id:'targets',queries:{race:{handler:(_,{client})=>client.query('evidence','pb',{})}}});p.register({id:'board',calls:{query:{targets:['race']}}});p.seal();assert.throws(()=>p.client('board').query('targets','race',{}),e=>e.code==='CALL_NOT_ALLOWED');
 });
