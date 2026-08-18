@@ -4,10 +4,9 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.EvidenceRetrieval=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='2.0.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
-  const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
   const TRUST={unknown:0,fallback:1,legacy:2,verified:3,current:3,official:4};
   const trustRank=v=>TRUST[text(v).toLowerCase()]??0;
@@ -28,24 +27,22 @@
   function conversionKey(row){return`${text(row.from).toUpperCase()}|${text(row.to).toUpperCase()}|${distance(row)??''}|${stroke(row.stroke)}|${num(row.seconds)??''}`}
 
   class EvidenceIndex{
-    constructor({sources=[],aliases=[]}={}){this.sources=[];this.aliases=clone(aliases||[]);this.rebuild(sources)}
+    constructor({sources=[],entities}={}){
+      if(!entities||typeof entities.resolveAthlete!=='function'||typeof entities.sourceAthleteId!=='function'||typeof entities.listAthletes!=='function')throw new Error('Evidence Retrieval requires Entity Registry');
+      this.entities=entities;this.sources=[];this.rebuild(sources);
+    }
     rebuild(sources=[]){this.sources=(sources||[]).map((s,i)=>({...clone(s),id:text(s.id)||`source-${i+1}`,priority:Number(s.priority)||0,trust:text(s.trust)||'unknown'})).sort((a,b)=>b.priority-a.priority||trustRank(b.trust)-trustRank(a.trust));this._build();return this}
     _build(){
-      const aliasToCanonical=new Map();for(const a of this.aliases||[]){const canonical=key(a.canonicalName||a.canonical||'');if(!canonical)continue;aliasToCanonical.set(canonical,canonical);for(const x of a.aliases||[])if(key(x))aliasToCanonical.set(key(x),canonical)}
-      const canonicalName=k=>aliasToCanonical.get(k)||k;
-      const groups=new Map(),idGroup=new Map(),nameGroup=new Map(),sourceAthleteMap=new Map();
-      for(const s of this.sources){for(const raw of sourceRows(s,'athletes')){if(!raw)continue;const rid=text(raw.id),nk=canonicalName(key(raw.full_name||raw.name));let gid=(rid&&idGroup.get(rid))||(nk&&nameGroup.get(nk));if(!gid)gid=rid||`athlete-${nk||key(`${s.id}-${JSON.stringify(raw)}`)}`;const row=withEvidence(raw,s,gid),existing=groups.get(gid),winner=stronger(existing,row),merged=mergeProvenance(winner,winner===row?existing:row);if(existing&&winner){for(const [k2,v] of Object.entries(winner===row?existing:row))if((merged[k2]===undefined||merged[k2]===null||merged[k2]==='')&&v!==undefined)merged[k2]=clone(v)}merged.id=gid;groups.set(gid,merged);if(rid){idGroup.set(rid,gid);sourceAthleteMap.set(`${s.id}|${rid}`,gid)}if(nk)nameGroup.set(nk,gid);for(const alias of raw.aliases||[]){const ak=canonicalName(key(alias));if(ak)nameGroup.set(ak,gid)}}}
-      this.athletes=[...groups.values()];this._idGroup=idGroup;this._nameGroup=nameGroup;this._sourceAthleteMap=sourceAthleteMap;this._canonicalName=canonicalName;
-      const resolveRowAthlete=(s,row)=>{const rid=text(row?.athlete_id);if(rid&&sourceAthleteMap.has(`${s.id}|${rid}`))return sourceAthleteMap.get(`${s.id}|${rid}`);if(rid&&idGroup.has(rid))return idGroup.get(rid);const nk=canonicalName(key(row?.athlete_name||row?.full_name||row?.name));if(nk&&nameGroup.has(nk))return nameGroup.get(nk);return rid||null};
+      const resolveRowAthlete=(s,row)=>{const rid=text(row?.athlete_id);if(rid){const bySource=this.entities.sourceAthleteId(s.id,rid);if(bySource)return bySource;const byId=this.entities.athleteId(rid);if(byId)return byId}const name=text(row?.athlete_name||row?.full_name||row?.name);return name?this.entities.athleteId(name):null};
       const typeMap=new Map(),typeRows=new Map();for(const s of this.sources){for(const raw of sourceRows(s,'trainingTestTypes','training_test_types')){if(!raw)continue;const tk=text(raw.test_key||raw.key||raw.name),rid=text(raw.id);if(rid)typeMap.set(`${s.id}|${rid}`,tk);const k=tk||rid;if(!k)continue;const row=withEvidence(raw,s),existing=typeRows.get(k),winner=stronger(existing,row);typeRows.set(k,mergeProvenance(winner,winner===row?existing:row))}}
       this.trainingTestTypes=[...typeRows.values()];this._typeMap=typeMap;
       const testRows=new Map();for(const s of this.sources){for(const raw of sourceRows(s,'trainingTestResults','training_test_results')){if(!raw)continue;const aid=resolveRowAthlete(s,raw);if(!aid)continue;const row=withEvidence(raw,s,aid);row._testKey=testKeyFor(typeMap,s.id,raw);const k=testFactKey(row),existing=testRows.get(k),winner=stronger(existing,row);testRows.set(k,mergeProvenance(winner,winner===row?existing:row))}}this.trainingTestResults=[...testRows.values()];
       const raceRows=new Map();for(const s of this.sources){for(const [kind,names] of [['coach_result',['coachResults','coach_results']],['event_history',['resultsEventHistory','results_event_history']],['pb_board',['resultsPbBoard','results_pb_board']],['timed_result',['timedResults','timed_results']]]){for(const raw of sourceRows(s,...names)){if(!raw)continue;const aid=resolveRowAthlete(s,raw);if(!aid)continue;const row=withEvidence(raw,s,aid);row._resultKind=kind;const k=eventKey(row),existing=raceRows.get(k),winner=stronger(existing,row);raceRows.set(k,mergeProvenance(winner,winner===row?existing:row))}}}this.raceResults=[...raceRows.values()];
       const conv=new Map();for(const s of this.sources){for(const raw of sourceRows(s,'courseConversions','course_conversions')){const row=withEvidence(raw,s),k=conversionKey(row),existing=conv.get(k),winner=stronger(existing,row);conv.set(k,mergeProvenance(winner,winner===row?existing:row))}}this.courseConversions=[...conv.values()];
     }
-    resolveAthlete(ref){if(ref&&typeof ref==='object'&&ref.id)return this.resolveAthlete(ref.id);const raw=text(ref);if(!raw)return null;const byCanonical=this.athletes.find(a=>a.id===raw);if(byCanonical)return clone(byCanonical);const gid=this._idGroup.get(raw)||this._nameGroup.get(this._canonicalName(key(raw)));return gid?clone(this.athletes.find(a=>a.id===gid)||null):null}
-    athleteId(ref){const a=this.resolveAthlete(ref);return a?.id||null}
-    listAthletes(){return clone(this.athletes)}
+    resolveAthlete(ref){return this.entities.resolveAthlete(ref)}
+    athleteId(ref){return this.entities.athleteId(ref)}
+    listAthletes(opts={}){return this.entities.listAthletes(opts)}
     provenance(row){return clone(row?._evidence||null)}
     trainingTests(athleteRef,{testKey='',course:poolCourse='',stroke:strokeWanted='',validOnly=false}={}){const aid=this.athleteId(athleteRef)||text(athleteRef);if(!aid)return[];const tk=text(testKey).toLowerCase(),pc=text(poolCourse).toUpperCase(),st=stroke(strokeWanted);return clone(this.trainingTestResults.filter(r=>r.athlete_id===aid).filter(r=>!tk||text(r._testKey).toLowerCase()===tk).filter(r=>!pc||!course(r)||course(r)===pc).filter(r=>!st||!rowStroke(r)||rowStroke(r)===st).filter(r=>!validOnly||r.valid_for_anchor!==false))}
     latestTrainingTest(athleteRef,opts={}){const rows=this.trainingTests(athleteRef,{...opts,validOnly:opts.validOnly!==false}).filter(r=>resultSeconds(r)!==null);rows.sort((a,b)=>resultDate(b).localeCompare(resultDate(a))||(Number(b._evidence?.priority)||0)-(Number(a._evidence?.priority)||0)||trustRank(b._evidence?.trust)-trustRank(a._evidence?.trust));return rows[0]||null}
@@ -55,8 +52,8 @@
     personalBest(athleteRef,opts={}){const rows=this.results(athleteRef,opts).filter(r=>resultSeconds(r)!==null);rows.sort((a,b)=>resultSeconds(a)-resultSeconds(b)||resultDate(b).localeCompare(resultDate(a))||(Number(b._evidence?.priority)||0)-(Number(a._evidence?.priority)||0));return rows[0]||null}
     personalBestEvidence(athleteRef,opts={}){const row=this.personalBest(athleteRef,opts);return row?{status:'ok',row,seconds:resultSeconds(row),date:resultDate(row),source:clone(row._evidence)}:{status:'missing',row:null,message:'No matching PB evidence'}}
     conversion({from,to,distance:eventDistance,stroke:strokeWanted}={}){const f=text(from).toUpperCase(),t=text(to).toUpperCase(),d=num(eventDistance),st=stroke(strokeWanted);return clone(this.courseConversions.filter(r=>text(r.from).toUpperCase()===f&&text(r.to).toUpperCase()===t&&distance(r)===d&&stroke(r.stroke)===st).sort((a,b)=>(Number(b._evidence?.priority)||0)-(Number(a._evidence?.priority)||0))[0]||null)}
-    stats(){return{sources:this.sources.length,athletes:this.athletes.length,trainingTests:this.trainingTestResults.length,raceResults:this.raceResults.length,courseConversions:this.courseConversions.length}}
+    stats(){return{sources:this.sources.length,athletes:this.entities.listAthletes().length,trainingTests:this.trainingTestResults.length,raceResults:this.raceResults.length,courseConversions:this.courseConversions.length}}
   }
   function create(options){return new EvidenceIndex(options)}
-  return{VERSION,create,EvidenceIndex,resultSeconds,resultDate,course,distance,stroke,rowStroke,key};
+  return{VERSION,create,EvidenceIndex,resultSeconds,resultDate,course,distance,stroke,rowStroke};
 });
