@@ -182,6 +182,45 @@ jobs:
       - name: Attendance Engine isolated regressions
         run: node tests/attendance.test.js
 
+  timing:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Timing Engine
+        run: node --check engines/timing.js
+      - name: Timing Engine isolated regressions
+        run: node tests/timing.test.js
+
+  test-protocol:
+    runs-on: ubuntu-latest
+    needs: [engine-portal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Test Protocol Engine
+        run: node --check engines/test-protocol.js
+      - name: Test Protocol isolated regressions
+        run: node tests/test-protocol.test.js
+
+  test-result-input:
+    runs-on: ubuntu-latest
+    needs: [entity-registry, timing, test-protocol]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Test Result Input Engine
+        run: node --check engines/test-result-input.js
+      - name: Test Result Input isolated regressions
+        run: node tests/test-result-input.test.js
+
   architecture:
     runs-on: ubuntu-latest
     steps:
@@ -196,7 +235,7 @@ jobs:
 
   portal-core:
     runs-on: ubuntu-latest
-    needs: [engine-portal, entity-registry, methodology, programme-plan, session-truth, evidence-retrieval, results-pathway, targets, adaptation, attendance, architecture]
+    needs: [engine-portal, entity-registry, methodology, programme-plan, session-truth, evidence-retrieval, results-pathway, targets, adaptation, attendance, timing, test-protocol, test-result-input, architecture]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -209,12 +248,32 @@ jobs:
           node --check engines/entity-registry.js
           node --check engines/methodology.js
           node --check engines/plan-context.js
+          node --check engines/timing.js
+          node --check engines/test-protocol.js
+          node --check engines/test-result-input.js
           node --check tests/portal-core.integration.test.js
           node --check tests/portal-next-three.integration.test.js
       - name: Portal-routed real engine integration
         run: |
           node tests/portal-core.integration.test.js
           node tests/portal-next-three.integration.test.js
+
+  measurement-pipeline:
+    runs-on: ubuntu-latest
+    needs: [portal-core, test-result-input]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check measurement pipeline
+        run: |
+          node --check engines/timing.js
+          node --check engines/test-protocol.js
+          node --check engines/test-result-input.js
+          node --check tests/measurement-pipeline.integration.test.js
+      - name: Portal-routed measurement pipeline integration
+        run: node tests/measurement-pipeline.integration.test.js
 
   board-projection:
     runs-on: ubuntu-latest
@@ -252,7 +311,7 @@ jobs:
 
   poolside-integration:
     runs-on: ubuntu-latest
-    needs: [portal-core, session-lifecycle, board-projection]
+    needs: [portal-core, session-lifecycle, board-projection, measurement-pipeline]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -266,6 +325,7 @@ jobs:
           node --check tests/engine-portal.test.js
           node --check tests/portal-core.integration.test.js
           node --check tests/portal-next-three.integration.test.js
+          node --check tests/measurement-pipeline.integration.test.js
           node --check tests/capture-evidence.test.js
           node --check tests/delivered-session.test.js
           node --check tests/session-dose.test.js
