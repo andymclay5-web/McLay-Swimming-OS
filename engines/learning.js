@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Learning=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
@@ -32,14 +32,14 @@
       const attendanceRate=num(periodReport?.attendance?.rate);if(attendanceRate!==null&&attendanceRate<.7)out.push(finding({id:'period-attendance-exposure',level:'context',message:`Recorded attendance across the period is ${Math.round(attendanceRate*100)}%.`,evidence:[evidenceRef('attendance',ids,`${periodReport.attendance.here}/${periodReport.attendance.eligible}`)],question:'When reviewing squad response, separate programme effect from uneven exposure.'}));
       return out;
     }
-    athlete(athleteReport,{recentSessionReports=[]}={}){
+    athlete(athleteReport){
       if(!athleteReport?.athlete?.id)throw new Error('Athlete learning requires an athlete report');const id=athleteReport.athlete.id,out=[];
       const rate=num(athleteReport?.attendance?.rate);if(rate!==null&&rate<.7)out.push(finding({id:`athlete-exposure-${id}`,level:'context',message:`Recorded session exposure is ${Math.round(rate*100)}% across the supplied attendance window.`,evidence:[evidenceRef('attendance',[id],`${athleteReport.attendance.here}/${athleteReport.attendance.marked}`)],question:'Could limited exposure be contributing to the performance pattern?',inference:true}));
       const pathway=athleteReport.pathway;if(pathway?.status==='classification_needed')out.push(finding({id:`athlete-classification-${id}`,level:'attention',message:'Pathway comparison is blocked because the swimmer classification evidence is incomplete.',evidence:[evidenceRef('pathway',[id],'classification_needed')],question:'Load the correct S/SB/SM classification before comparing standards.'}));
       if(pathway?.status==='ok'&&pathway?.closest?.nextNational){const ev=pathway.closest,gap=ev.nextNational.gap;out.push(finding({id:`athlete-closest-${id}`,level:'opportunity',message:`Closest loaded national pathway gap is ${gap.seconds.toFixed(2)}s (${gap.percentage.toFixed(2)}%) in ${ev.pb.distance} ${ev.pb.stroke}.`,evidence:[evidenceRef('pathway',[id],`${ev.pb.course} ${ev.pb.distance} ${ev.pb.stroke}`)],question:'Does current training emphasis support this opportunity?'}))}
-      // Exposure-to-dose is contextual, never causal: only surface what sessions containing
-      // the athlete were supplied, and word any performance link as a question/inference.
-      const supplied=(recentSessionReports||[]).filter(Boolean);if(supplied.length){const dose={};for(const r of supplied)for(const [k,v] of Object.entries(r?.dose?.dose||{}))dose[k]=(dose[k]||0)+(num(v)||0);const ranked=Object.entries(dose).sort((a,b)=>b[1]-a[1]);if(ranked.length)out.push(finding({id:`athlete-dose-context-${id}`,level:'context',message:`Across the supplied recent sessions, the largest recorded classified dose is ${ranked[0][0]} (${Math.round(ranked[0][1])}m).`,evidence:[evidenceRef('sessions',supplied.map(x=>x.sessionId),`${ranked[0][0]}=${ranked[0][1]}m`)],question:'Use this as exposure context only; it does not prove why the swimmer is improving or struggling.',inference:true}))}
+      const exposure=athleteReport?.exposure?.exposure||athleteReport?.exposure||null,comparison=athleteReport?.exposure?.comparison||athleteReport?.exposureComparison||null;
+      if(exposure?.rankedDose?.length){const top=exposure.rankedDose[0],ids=exposure.session_ids||[];out.push(finding({id:`athlete-dose-context-${id}`,level:'context',message:`Across the supplied exposure window, the largest recorded classified dose is ${top.key} (${Math.round(top.metres)}m).`,evidence:[evidenceRef('exposure',ids,`${top.key}=${top.metres}m`)],question:'Use this as exposure context only; it does not prove why the swimmer is improving or struggling.',inference:true}))}
+      if(comparison?.below?.length){const facts=comparison.below.map(x=>`${x.key}:${Math.round(x.actual_metres)}m`).join(', ');out.push(finding({id:`athlete-plan-exposure-gap-${id}`,level:'context',message:`The supplied plan comparison has ${comparison.below.length} dose target(s) below the explicit planned minimum/target.`,evidence:[evidenceRef('exposure-plan',exposure?.session_ids||[],facts)],question:'Is this exposure gap relevant to the performance issue being reviewed, or was it an intentional programme choice?',inference:true}))}
       return out;
     }
     coach(coachReport,sessionReports=[]){
