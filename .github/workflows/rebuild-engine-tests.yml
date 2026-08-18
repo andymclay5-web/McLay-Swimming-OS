@@ -221,6 +221,45 @@ jobs:
       - name: Test Result Input isolated regressions
         run: node tests/test-result-input.test.js
 
+  meet-lifecycle:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Meet Lifecycle Engine
+        run: node --check engines/meet-lifecycle.js
+      - name: Meet Lifecycle isolated regressions
+        run: node tests/meet-lifecycle.test.js
+
+  meet-result-input:
+    runs-on: ubuntu-latest
+    needs: [meet-lifecycle]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Meet Result Input Engine
+        run: node --check engines/meet-result-input.js
+      - name: Meet Result Input isolated regressions
+        run: node tests/meet-result-input.test.js
+
+  official-results-reconciliation:
+    runs-on: ubuntu-latest
+    needs: [meet-result-input]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Official Results Reconciliation Engine
+        run: node --check engines/official-results-reconciliation.js
+      - name: Official Results Reconciliation isolated regressions
+        run: node tests/official-results-reconciliation.test.js
+
   architecture:
     runs-on: ubuntu-latest
     steps:
@@ -275,6 +314,24 @@ jobs:
       - name: Portal-routed measurement pipeline integration
         run: node tests/measurement-pipeline.integration.test.js
 
+  meet-pipeline:
+    runs-on: ubuntu-latest
+    needs: [engine-portal, entity-registry, meet-lifecycle, meet-result-input, official-results-reconciliation, architecture]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check meet pipeline
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check engines/meet-lifecycle.js
+          node --check engines/meet-result-input.js
+          node --check engines/official-results-reconciliation.js
+          node --check tests/meet-pipeline.integration.test.js
+      - name: Portal-routed meet pipeline integration
+        run: node tests/meet-pipeline.integration.test.js
+
   board-projection:
     runs-on: ubuntu-latest
     needs: [portal-core]
@@ -311,7 +368,7 @@ jobs:
 
   poolside-integration:
     runs-on: ubuntu-latest
-    needs: [portal-core, session-lifecycle, board-projection, measurement-pipeline]
+    needs: [portal-core, session-lifecycle, board-projection, measurement-pipeline, meet-pipeline]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -326,6 +383,7 @@ jobs:
           node --check tests/portal-core.integration.test.js
           node --check tests/portal-next-three.integration.test.js
           node --check tests/measurement-pipeline.integration.test.js
+          node --check tests/meet-pipeline.integration.test.js
           node --check tests/capture-evidence.test.js
           node --check tests/delivered-session.test.js
           node --check tests/session-dose.test.js
