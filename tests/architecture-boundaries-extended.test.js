@@ -7,7 +7,7 @@ function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;consol
 const root=path.join(__dirname,'..','engines');
 const read=f=>fs.readFileSync(path.join(root,f),'utf8');
 
-for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js']){
+for(const file of ['delivered-session.js','plan-context.js','timing.js','test-protocol.js','test-result-input.js','meet-lifecycle.js','meet-result-input.js','official-results-reconciliation.js']){
  test(`${file} contains no browser/storage/network implementation`,()=>{
   const s=read(file);assert(!/\bdocument\s*\.|\bwindow\s*\.|querySelector\s*\(|innerHTML\s*=|\blocalStorage\b|\bindexedDB\b|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(s));
  });
@@ -31,6 +31,18 @@ test('Test Protocol owns protocol validity but contains no stopwatch, target or 
 
 test('Test Result Input owns provenance and verification, not timing, target or Evidence Retrieval storage',()=>{
  const s=read('test-result-input.js');assert(/evidence_status/.test(s));assert(/captureFromTiming/.test(s));assert(/source_metadata/.test(s));assert(!/latestTrainingTestEvidence|sendOff|default_volume_ratio|AEROBIC_TABLES|require\(['\"]\.\/evidence-retrieval/.test(s));
+});
+
+test('Meet Lifecycle owns meet/session/event/entry/race lineage and never owns result interpretation',()=>{
+ const s=read('meet-lifecycle.js');assert(/upsertMeet/.test(s));assert(/upsertEvent/.test(s));assert(/upsertEntry/.test(s));assert(/upsertRace/.test(s));assert(/lineage/.test(s));assert(!/result_seconds|personalBest|qualifying|record|WA points|targetSeconds|t400_/i.test(s));
+});
+
+test('Meet Result Input owns provisional/official race-result evidence without PB, record or qualification logic',()=>{
+ const s=read('meet-result-input.js');assert(/evidence_status/.test(s));assert(/capturePaste/.test(s));assert(/captureImage/.test(s));assert(/applyOfficial/.test(s));assert(/captured_observation/.test(s));assert(!/personalBest|qualifying|canterbury record|WA points|targetSeconds|AEROBIC_TABLES/i.test(s));
+});
+
+test('Official Results Reconciliation compares official truth and delegates writes rather than becoming Results/Pathway',()=>{
+ const s=read('official-results-reconciliation.js');assert(/preview/.test(s));assert(/applyOfficial/.test(s));assert(/captureOfficial/.test(s));assert(/provisional_not_confirmed/.test(s));assert(!/personalBest|qualifying|record benchmark|WA points|targetSeconds|AEROBIC_TABLES/i.test(s));
 });
 
 if(fails){console.error(`\n${fails} extended architecture regression(s) failed`);process.exit(1)}
