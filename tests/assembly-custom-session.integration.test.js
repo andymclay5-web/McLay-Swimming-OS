@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('assert');
+const App=require('../rebuild/app-composition.js');
+const Portal=require('../rebuild/engine-portal.js');
+const Schedule=require('../engines/session-schedule.js');
+const Lifecycle=require('../engines/session-lifecycle.js');
+const Attendance=require('../engines/attendance.js');
+const Capture=require('../engines/capture-evidence.js');
+const Delivered=require('../engines/delivered-session.js');
+const Timing=require('../engines/timing.js');
+const Protocol=require('../engines/test-protocol.js');
+const TestResults=require('../engines/test-result-input.js');
+let failures=0,tick=0;
+function test(name,fn){try{fn();console.log(`PASS ${name}`)}catch(e){failures++;console.error(`FAIL ${name}\n  ${e.stack||e.message}`)}}
+const clock=()=>`2026-08-19T07:${String(tick++%60).padStart(2,'0')}:00+12:00`;
+const calendar={calendar_id:'aug26',title:'AquaGym August',coverage_start:'2026-08-01',coverage_end:'2026-08-31',published_at:'2026-08-01T00:00:00+12:00',rules:{empty_date_means_no_training:true},dates:[{date:'2026-08-19',status:'training',sessions:[{day_part:'AM',start_time:'05:20',end_time:'07:20',squads:['National'],venue:'AquaGym',pool_course:'SCM'}],events:[]}]};
+const source='WARM UP\n300 Choice\nMAIN SET\n4 x 100 Freestyle @ 1:30\nWARM DOWN\n200 Easy\nTOTAL: 900m';
+function stores(){return{schedule:new Schedule.MemoryStorage(),lifecycle:new Lifecycle.MemoryStorage(),attendance:new Attendance.MemoryStorage(),capture:new Capture.MemoryStorage(),delivery:new Delivered.MemoryStorage(),timing:new Timing.MemoryStorage(),protocols:new Protocol.MemoryStorage(),testResults:new TestResults.MemoryStorage()}}
+function fixture(s=stores()){return{app:App.create({scheduleStorage:s.schedule,lifecycleStorage:s.lifecycle,attendanceStorage:s.attendance,captureStorage:s.capture,deliveryStorage:s.delivery,timingStorage:s.timing,protocolStorage:s.protocols,testResultStorage:s.testResults,clock,calendarSources:[calendar],squads:[{id:'squad-national',name:'National',active:true},{id:'squad-development',name:'Development',active:true}]}),stores:s}}
+console.log('Assembly custom-session authoring');
+test('Calendar Surface creates a custom slot through Session Schedule and published calendar remains unchanged',()=>{const {app}=fixture(),published=app.slotsForDate('2026-08-19')[0],slot=app.createCustomSlot({date:'2026-08-19',start:'07:30',end:'08:30',squadId:'squad-development',venue:'AquaGym',course:'SCM'},{note:'Extra development session'}),rows=app.slotsForDate('2026-08-19');assert(slot.id.startsWith('custom-schedule-slot-'));assert.strictEqual(slot.source.type,'coach_custom');assert(rows.some(x=>x.id===published.id&&x.source.type==='published_calendar'));assert(rows.some(x=>x.id===slot.id));assert.strictEqual(rows.length,2);const audit=app.portal.auditTrail();assert(audit.some(x=>x.caller==='calendar-surface'&&x.target==='session-schedule'&&x.operation==='createCustomSlot'&&x.status==='ok'))});
+test('custom slot enters the exact same intake Truth Lifecycle binding path as a published slot',()=>{const {app}=fixture(),slot=app.createCustomSlot({date:'2026-08-19',start:'07:30',end:'08:30',squadId:'squad-development',venue:'AquaGym',course:'SCM'}),begun=app.beginFromSlots([slot.id],{title:'Extra Development'});app.updateDraft(begun.draft.id,{source});const accepted=app.acceptDraft(begun.draft.id),occ=app.occurrenceForSession(accepted.record.id),board=app.boardForSession(accepted.record.id);assert.strictEqual(occ.slotIds[0],slot.id);assert.strictEqual(occ.sessionId,accepted.record.id);assert.strictEqual(board.sessionId,accepted.record.id);assert.strictEqual(board.totalDistance,900);assert.strictEqual(app.session(accepted.record.id).originalPlan.sourceOriginal,source)});
+test('custom slot persists across composition reload without altering source calendar',()=>{const first=fixture(),slot=first.app.createCustomSlot({date:'2026-08-19',start:'07:30',end:'08:30',squadId:'squad-development',venue:'AquaGym',course:'SCM'}),second=fixture(first.stores);assert(second.app.slotsForDate('2026-08-19').some(x=>x.id===slot.id&&x.source.type==='coach_custom'));assert(second.app.slotsForDate('2026-08-19').some(x=>x.source.type==='published_calendar'))});
+test('retiring custom slot is explicit and cannot remove published calendar slot',()=>{const {app}=fixture(),published=app.slotsForDate('2026-08-19')[0],custom=app.createCustomSlot({date:'2026-08-19',start:'07:30',end:'08:30',squadId:'squad-development',venue:'AquaGym',course:'SCM'});app.retireCustomSlot(custom.id,{note:'Cancelled'});const rows=app.slotsForDate('2026-08-19');assert(!rows.some(x=>x.id===custom.id));assert(rows.some(x=>x.id===published.id));assert.throws(()=>app.retireCustomSlot(published.id),/Custom schedule slot not found/)});
+test('app shell cannot impersonate Calendar Surface to author schedule truth',()=>{const {app}=fixture();assert.throws(()=>app.shell.command('session-schedule','createCustomSlot',{args:[{}]}),e=>e instanceof Portal.PortalError&&e.code==='CALL_NOT_ALLOWED')});
+if(failures){console.error(`\n${failures} custom-session regression(s) failed`);process.exit(1)}console.log('\nALL CUSTOM SESSION AUTHORING REGRESSIONS PASS');
