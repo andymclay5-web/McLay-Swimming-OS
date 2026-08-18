@@ -1,43 +1,24 @@
 'use strict';
 (function(root,factory){
-  if(typeof module==='object'&&module.exports){
-    module.exports=factory({
-      SessionTruth:require('../engines/session-truth.js'),
-      SessionLifecycle:require('../engines/session-lifecycle.js'),
-      SessionEdit:require('../engines/session-edit.js'),
-      EvidenceRetrieval:require('../engines/evidence-retrieval.js'),
-      ResultsPathway:require('../engines/results-pathway.js'),
-      Targets:require('../engines/targets.js'),
-      Adaptation:require('../engines/adaptation.js'),
-      Attendance:require('../engines/attendance.js'),
-      BoardProjection:require('../engines/board-projection.js'),
-      CaptureEvidence:require('../engines/capture-evidence.js'),
-      DeliveredSession:require('../engines/delivered-session.js'),
-      PlanContext:require('../engines/plan-context.js'),
-      SessionDose:require('../engines/session-dose.js'),
-      Reporting:require('../engines/reporting.js'),
-      Learning:require('../engines/learning.js')
-    });
-  }else root.MSOSRebuildRuntime=factory(root.MSOSEngines||{});
+  if(typeof module==='object'&&module.exports){module.exports=factory({
+    EntityRegistry:require('../engines/entity-registry.js'),SessionTruth:require('../engines/session-truth.js'),SessionLifecycle:require('../engines/session-lifecycle.js'),SessionEdit:require('../engines/session-edit.js'),EvidenceRetrieval:require('../engines/evidence-retrieval.js'),ResultsPathway:require('../engines/results-pathway.js'),Targets:require('../engines/targets.js'),Adaptation:require('../engines/adaptation.js'),Attendance:require('../engines/attendance.js'),BoardProjection:require('../engines/board-projection.js'),CaptureEvidence:require('../engines/capture-evidence.js'),DeliveredSession:require('../engines/delivered-session.js'),PlanContext:require('../engines/plan-context.js'),SessionDose:require('../engines/session-dose.js'),Reporting:require('../engines/reporting.js'),Learning:require('../engines/learning.js')
+  });}else root.MSOSRebuildRuntime=factory(root.MSOSEngines||{});
 })(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='1.2.2';
+  const VERSION='1.3.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
-  const required=['SessionTruth','SessionLifecycle','SessionEdit','EvidenceRetrieval','ResultsPathway','Targets','Adaptation','Attendance','BoardProjection','CaptureEvidence','DeliveredSession','PlanContext','SessionDose','Reporting','Learning'];
+  const required=['EntityRegistry','SessionTruth','SessionLifecycle','SessionEdit','EvidenceRetrieval','ResultsPathway','Targets','Adaptation','Attendance','BoardProjection','CaptureEvidence','DeliveredSession','PlanContext','SessionDose','Reporting','Learning'];
   function assertEngines(){const missing=required.filter(k=>!E[k]);if(missing.length)throw new Error(`Missing rebuild engines: ${missing.join(', ')}`)}
-
   class Runtime{
-    constructor({stores={},evidenceSources=[],evidenceAliases=[],profiles=[],overrides=[],standards=[],baseTimes=[],plan={},clock=()=>new Date().toISOString()}={}){
+    constructor({stores={},evidenceSources=[],evidenceAliases=[],clubs=[],coaches=[],squads=[],memberships=[],profiles=[],overrides=[],standards=[],baseTimes=[],plan={},clock=()=>new Date().toISOString()}={}){
       assertEngines();for(const k of ['lifecycle','attendance','capture','delivery'])if(!stores[k])throw new Error(`Runtime requires ${k} storage adapter`);
-      this.clock=clock;this.truth=E.SessionTruth;this.lifecycle=E.SessionLifecycle.create({storage:stores.lifecycle,clock});this.evidence=E.EvidenceRetrieval.create({sources:evidenceSources,aliases:evidenceAliases});this.pathway=E.ResultsPathway.create({evidence:this.evidence,standards,baseTimes});this.targets=E.Targets.create({evidence:this.evidence,pathway:this.pathway});this.adaptation=E.Adaptation.create({evidence:this.evidence,profiles,overrides,clock});this.attendance=E.Attendance.create({storage:stores.attendance,evidence:this.evidence,clock});this.capture=E.CaptureEvidence.create({storage:stores.capture,evidence:this.evidence,clock});this.board=E.BoardProjection.create({truth:this.truth,attendance:this.attendance,adaptation:this.adaptation,targets:this.targets,captures:this.capture});this.delivered=E.DeliveredSession.create({storage:stores.delivery,clock});this.plan=E.PlanContext.create({seasons:plan.seasons||[],phases:plan.phases||[],weeks:plan.weeks||[],sessionIntents:plan.sessionIntents||[],meets:plan.meets||[]});this.dose=E.SessionDose.create();this.reporting=E.Reporting.create();this.learning=E.Learning.create();this.edit=E.SessionEdit.create({clock});
+      this.clock=clock;this.truth=E.SessionTruth;this.entities=E.EntityRegistry.create({sources:evidenceSources,aliases:evidenceAliases,clubs,coaches,squads,memberships});this.lifecycle=E.SessionLifecycle.create({storage:stores.lifecycle,clock});this.evidence=E.EvidenceRetrieval.create({sources:evidenceSources,entities:this.entities});this.pathway=E.ResultsPathway.create({evidence:this.evidence,standards,baseTimes});this.targets=E.Targets.create({evidence:this.evidence,pathway:this.pathway});this.adaptation=E.Adaptation.create({evidence:this.entities,profiles,overrides,clock});this.attendance=E.Attendance.create({storage:stores.attendance,evidence:this.entities,clock});this.capture=E.CaptureEvidence.create({storage:stores.capture,evidence:this.entities,clock});this.board=E.BoardProjection.create({truth:this.truth,attendance:this.attendance,adaptation:this.adaptation,targets:this.targets,captures:this.capture});this.delivered=E.DeliveredSession.create({storage:stores.delivery,clock});this.plan=E.PlanContext.create({entities:this.entities,seasons:plan.seasons||[],phases:plan.phases||[],cycles:plan.cycles||[],weeks:plan.weeks||[],sessionIntents:plan.sessionIntents||[],meets:plan.meets||[],squadObjectives:plan.squadObjectives||[],athleteObjectives:plan.athleteObjectives||[]});this.dose=E.SessionDose.create();this.reporting=E.Reporting.create();this.learning=E.Learning.create();this.edit=E.SessionEdit.create({clock});
     }
     selectedRecord(){return this.lifecycle.selected()}
     selectedSession(){return clone(this.selectedRecord()?.current||null)}
     parse(source,identity={}){return this.truth.parse(source,identity)}
     validate(source,identity={}){const session=this.parse(source,identity);return{session,validation:this.truth.validate(session)}}
-    createDraft(spec={}){return this.lifecycle.createDraft(spec)}
-    updateDraft(id,patch={}){return this.lifecycle.updateDraft(id,patch)}
-    discardDraft(id){return this.lifecycle.discardDraft(id)}
+    createDraft(spec={}){return this.lifecycle.createDraft(spec)}updateDraft(id,patch={}){return this.lifecycle.updateDraft(id,patch)}discardDraft(id){return this.lifecycle.discardDraft(id)}
     createSession({source,identity,draftId=null,select=true}={}){const canonical=this.parse(source,identity),validation=this.truth.validate(canonical);if(!validation.ok)throw new Error(`Session Truth rejected intake: ${validation.errors.join('; ')}`);const record=draftId?this.lifecycle.createFromDraft(draftId,canonical,{select}):this.lifecycle.createSession(canonical,{select,sourceType:'text'});return{canonical:clone(canonical),record}}
     selectSession(id){return this.lifecycle.selectSession(id)}
     editSession(nodeId,patch,{note=''}={}){const rec=this.selectedRecord();if(!rec)throw new Error('No selected session');const changed=this.edit.update(rec.current,nodeId,patch,{note});return this.lifecycle.applyEdit(rec.id,changed.session,{action:'edit',note:changed.change.note})}
@@ -48,8 +29,7 @@
     markAttendance(athleteRef,status,opts={}){const s=this.selectedSession();if(!s)throw new Error('No selected session');return this.attendance.mark(s,athleteRef,status,opts)}
     roll(){const s=this.selectedSession();if(!s)return{session:null,eligible:[],here:[],summary:null};return{session:s,eligible:this.attendance.eligibleRoster(s),here:this.attendance.hereAthletes(s),summary:this.attendance.summary(s)}}
     boardModel(){const s=this.selectedSession();if(!s)return null;return this.board.project(s)}
-    pathwayProfile(athleteRef,opts={}){return this.pathway.profile(athleteRef,opts)}
-    trainingTests(athleteRef,opts={}){return this.evidence.trainingTests(athleteRef,opts)}
+    pathwayProfile(athleteRef,opts={}){return this.pathway.profile(athleteRef,opts)}trainingTests(athleteRef,opts={}){return this.evidence.trainingTests(athleteRef,opts)}
     t400Evidence(athleteRef,{course='',mode='fastest'}={}){const opts={testKey:'t400_freestyle',course,stroke:'Freestyle',validOnly:true};const row=mode==='latest'?this.evidence.latestTrainingTest(athleteRef,opts):this.evidence.fastestTrainingTest(athleteRef,opts);return row?{status:'ok',row,seconds:E.EvidenceRetrieval.resultSeconds(row),date:E.EvidenceRetrieval.resultDate(row),source:this.evidence.provenance(row)}:{status:'missing',message:'No valid Freestyle T400 evidence'}}
     targetFor(itemId,athleteRef){const s=this.selectedSession();if(!s)throw new Error('No selected session');const node=findNode(s,itemId);if(!node||node.kind!=='set')throw new Error(`Set not found: ${itemId}`);return this.targets.forItem(s,node,athleteRef)}
     adaptationFor(itemId,athleteRef){const s=this.selectedSession();if(!s)throw new Error('No selected session');const node=findNode(s,itemId);if(!node||node.kind!=='set')throw new Error(`Set not found: ${itemId}`);return this.adaptation.forItem(s,node,athleteRef)}
@@ -62,10 +42,9 @@
     doseAnalysis({delivered=false}={}){const s=this.selectedSession();if(!s)return null;const delivery=delivered?this.delivered.get(s.id):null;return this.dose.analyze(s,{planContext:this.plan.resolve(s),delivered:delivery})}
     sessionReport(){const rec=this.selectedRecord();if(!rec)return null;const s=rec.current,delivery=this.delivered.get(s.id),plan=this.plan.resolve(s),dose=this.dose.analyze(s,{planContext:plan,delivered:delivery}),attendance=this.attendance.summary(s),captures=this.capture.query({sessionId:s.id,status:''});return this.reporting.session({session:s,lifecycleRecord:rec,delivery,dose,planContext:plan,attendanceSummary:attendance,captures})}
     sessionLearning(){const r=this.sessionReport();return r?this.learning.session(r):[]}
-    athleteReport(athleteRef,{course='',sessionReports=[]}={}){const athlete=this.evidence.resolveAthlete(athleteRef);if(!athlete)throw new Error(`Athlete not found: ${athleteRef}`);const pathway=this.pathway.profile(athlete.id,{course}),attendanceRows=this.attendance.snapshot().records||[],captures=this.capture.query({athleteId:athlete.id,status:''});return this.reporting.athlete({athlete,pathway,attendanceRows,captures,sessionReports})}
-    state(){return{lifecycle:this.lifecycle.snapshot(),attendance:this.attendance.snapshot(),capture:this.capture.snapshot(),delivery:this.delivered.snapshot(),adaptationOverrides:this.adaptation.listOverrides()}}
+    athleteReport(athleteRef,{course='',sessionReports=[]}={}){const athlete=this.entities.resolveAthlete(athleteRef);if(!athlete)throw new Error(`Athlete not found: ${athleteRef}`);const pathway=this.pathway.profile(athlete.id,{course}),attendanceRows=this.attendance.snapshot().records||[],captures=this.capture.query({athleteId:athlete.id,status:''});return this.reporting.athlete({athlete,pathway,attendanceRows,captures,sessionReports})}
+    state(){return{entities:this.entities.snapshot(),lifecycle:this.lifecycle.snapshot(),attendance:this.attendance.snapshot(),capture:this.capture.snapshot(),delivery:this.delivered.snapshot(),adaptationOverrides:this.adaptation.listOverrides()}}
   }
   function findNode(session,id){for(const block of (session?.blocks||[])){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[]))}}return null}
-  const create=options=>new Runtime(options);
-  return{VERSION,create,Runtime,findNode};
+  const create=options=>new Runtime(options);return{VERSION,create,Runtime,findNode};
 });
