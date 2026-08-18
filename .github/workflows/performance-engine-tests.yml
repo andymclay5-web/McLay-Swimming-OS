@@ -1,0 +1,85 @@
+name: Performance engine tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/standards-records.js'
+      - 'engines/race-model.js'
+      - 'engines/evidence-publication.js'
+      - 'tests/standards-records.test.js'
+      - 'tests/race-model.test.js'
+      - 'tests/evidence-publication.test.js'
+      - 'tests/performance-pipeline.integration.test.js'
+      - '.github/workflows/performance-engine-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/standards-records.js'
+      - 'engines/race-model.js'
+      - 'engines/evidence-publication.js'
+      - 'tests/standards-records.test.js'
+      - 'tests/race-model.test.js'
+      - 'tests/evidence-publication.test.js'
+      - 'tests/performance-pipeline.integration.test.js'
+      - '.github/workflows/performance-engine-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  standards-records:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Standards and Records
+        run: node --check engines/standards-records.js
+      - name: Standards and Records regressions
+        run: node tests/standards-records.test.js
+
+  race-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Race Model
+        run: node --check engines/race-model.js
+      - name: Race Model regressions
+        run: node tests/race-model.test.js
+
+  evidence-publication:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Evidence Publication
+        run: node --check engines/evidence-publication.js
+      - name: Evidence Publication regressions
+        run: node tests/evidence-publication.test.js
+
+  performance-pipeline:
+    runs-on: ubuntu-latest
+    needs: [standards-records, race-model, evidence-publication]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check performance pipeline
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check engines/entity-registry.js
+          node --check engines/evidence-retrieval.js
+          node --check engines/standards-records.js
+          node --check engines/race-model.js
+          node --check engines/evidence-publication.js
+          node --check tests/performance-pipeline.integration.test.js
+      - name: Portal-routed performance pipeline integration
+        run: node tests/performance-pipeline.integration.test.js
