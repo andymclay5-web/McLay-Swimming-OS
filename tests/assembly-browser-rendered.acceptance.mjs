@@ -25,6 +25,7 @@ const workout=`WARM UP\n300 Choice\nMAIN SET\n4 x 100 Freestyle @ 1:30\nWARM DOW
 function tableFrom(url){const parts=new URL(url).pathname.split('/').filter(Boolean);return decodeURIComponent(parts.at(-1)||'')}
 async function waitText(locator,pattern){await locator.waitFor({state:'visible'});const value=(await locator.textContent())||'';assert.match(value,pattern);return value}
 async function click(locator){await locator.waitFor({state:'visible'});await locator.click()}
+async function tapCheckbox(input){assert.equal(await input.count(),1,'expected one swimmer-tag checkbox');const label=input.locator('xpath=ancestor::label[1]');await label.waitFor({state:'visible'});await label.click();assert.equal(await input.isChecked(),true,'tapping swimmer label must select the swimmer')}
 
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
@@ -90,16 +91,14 @@ try{
   const firstSet=page.locator('.msos-set-row').first();
   await click(firstSet.locator('[data-board-action="note"]'));
   await page.fill('#poolside-note-text','Rendered deck note');
-  const noteAthlete=page.locator('input[name="capture-athlete"][value="molly"]');
-  if(await noteAthlete.count())await noteAthlete.check();
+  await tapCheckbox(page.locator('input[name="capture-athlete"][value="molly"]'));
   await click(page.locator('[data-panel-action="capture-save"]'));
   await page.locator('.poolside-sheet').waitFor({state:'detached'}).catch(()=>{});
   await waitText(firstSet.locator('.msos-capture-marker'),/1 note/i);
 
   await click(page.locator('.msos-board-sticky-actions [data-board-action="photo"]'));
   await waitText(page.locator('.poolside-sheet'),/Photo capture/i);
-  const photoAthlete=page.locator('input[name="capture-athlete"][value="molly"]');
-  if(await photoAthlete.count())await photoAthlete.check();
+  await tapCheckbox(page.locator('input[name="capture-athlete"][value="molly"]'));
   await page.locator('#poolside-media-file').setInputFiles({name:'lane-four.jpg',mimeType:'image/jpeg',buffer:Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0xff,0xd9])});
   await page.fill('#poolside-media-text','Lane four technique');
   await click(page.locator('[data-panel-action="capture-media-save"]'));
