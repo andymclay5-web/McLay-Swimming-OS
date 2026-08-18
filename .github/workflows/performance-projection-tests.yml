@@ -1,0 +1,50 @@
+name: Performance projection tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/performance-projection.js'
+      - 'tests/performance-projection.test.js'
+      - 'tests/performance-projection.portal.integration.test.js'
+      - '.github/workflows/performance-projection-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/performance-projection.js'
+      - 'tests/performance-projection.test.js'
+      - 'tests/performance-projection.portal.integration.test.js'
+      - '.github/workflows/performance-projection-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  performance-projection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Performance Projection
+        run: |
+          node --check engines/performance-projection.js
+          node --check tests/performance-projection.test.js
+          node --check tests/performance-projection.portal.integration.test.js
+      - name: Performance Projection regressions
+        run: node tests/performance-projection.test.js
+      - name: Portal-routed Performance Projection integration
+        run: node tests/performance-projection.portal.integration.test.js
+      - name: Projection architecture boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const s=fs.readFileSync('engines/performance-projection.js','utf8');
+          assert(!/require\(['\"]\.\//.test(s));
+          assert(!/Math\.pow|Math\.cbrt|qualifying_seconds\s*[<>]=?|record_seconds\s*[<>]=?/.test(s));
+          assert(/this\.standards\.statusForResult/.test(s));
+          assert(/this\.pathway\.profile/.test(s));
+          assert(/this\.raceModel\.target/.test(s));
+          console.log('PASS Performance Projection composes owners only');
+          NODE

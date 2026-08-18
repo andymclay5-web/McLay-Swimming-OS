@@ -1,0 +1,404 @@
+name: Rebuild engine tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/**'
+      - 'rebuild/**'
+      - 'ui/**'
+      - 'tests/**'
+      - 'REBUILD_ENGINE_CONTRACTS.md'
+      - 'REBUILD_STATUS.md'
+      - 'MSOS_ENGINE_SYSTEM_MAP.md'
+      - '.github/workflows/rebuild-engine-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/**'
+      - 'rebuild/**'
+      - 'ui/**'
+      - 'tests/**'
+      - 'REBUILD_ENGINE_CONTRACTS.md'
+      - 'REBUILD_STATUS.md'
+      - 'MSOS_ENGINE_SYSTEM_MAP.md'
+      - '.github/workflows/rebuild-engine-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  engine-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Engine Portal
+        run: node --check rebuild/engine-portal.js
+      - name: Engine Portal communication regressions
+        run: node tests/engine-portal.test.js
+
+  entity-registry:
+    runs-on: ubuntu-latest
+    needs: [engine-portal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Entity Registry
+        run: node --check engines/entity-registry.js
+      - name: Entity Registry regressions
+        run: node tests/entity-registry.test.js
+
+  methodology:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Methodology
+        run: node --check engines/methodology.js
+      - name: Methodology regressions
+        run: node tests/methodology.test.js
+
+  session-truth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Session Truth
+        run: node --check engines/session-truth.js
+      - name: Session Truth isolated regressions
+        run: |
+          for f in tests/session-truth*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
+
+  programme-plan:
+    runs-on: ubuntu-latest
+    needs: [entity-registry, session-truth]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Programme Plan
+        run: node --check engines/plan-context.js
+      - name: Programme Plan regressions
+        run: |
+          node tests/plan-context.test.js
+          node tests/programme-plan.test.js
+
+  session-lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Session Lifecycle
+        run: node --check engines/session-lifecycle.js
+      - name: Session Lifecycle isolated regressions
+        run: node tests/session-lifecycle.test.js
+
+  evidence-retrieval:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Evidence Retrieval
+        run: node --check engines/evidence-retrieval.js
+      - name: Evidence Retrieval isolated regressions
+        run: |
+          for f in tests/evidence*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
+
+  results-pathway:
+    runs-on: ubuntu-latest
+    needs: [evidence-retrieval]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Results Pathway
+        run: node --check engines/results-pathway.js
+      - name: Results Pathway isolated regressions
+        run: node tests/results-pathway.test.js
+
+  targets:
+    runs-on: ubuntu-latest
+    needs: [evidence-retrieval]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Target Engine
+        run: node --check engines/targets.js
+      - name: Target Engine isolated regressions
+        run: node tests/targets.test.js
+
+  adaptation:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Adaptation Engine
+        run: node --check engines/adaptation.js
+      - name: Adaptation Engine isolated regressions
+        run: |
+          for f in tests/adaptation*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
+
+  attendance:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Attendance Engine
+        run: node --check engines/attendance.js
+      - name: Attendance Engine isolated regressions
+        run: node tests/attendance.test.js
+
+  timing:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Timing Engine
+        run: node --check engines/timing.js
+      - name: Timing Engine isolated regressions
+        run: node tests/timing.test.js
+
+  test-protocol:
+    runs-on: ubuntu-latest
+    needs: [engine-portal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Test Protocol Engine
+        run: node --check engines/test-protocol.js
+      - name: Test Protocol isolated regressions
+        run: node tests/test-protocol.test.js
+
+  test-result-input:
+    runs-on: ubuntu-latest
+    needs: [entity-registry, timing, test-protocol]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Test Result Input Engine
+        run: node --check engines/test-result-input.js
+      - name: Test Result Input isolated regressions
+        run: node tests/test-result-input.test.js
+
+  meet-lifecycle:
+    runs-on: ubuntu-latest
+    needs: [entity-registry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Meet Lifecycle Engine
+        run: node --check engines/meet-lifecycle.js
+      - name: Meet Lifecycle isolated regressions
+        run: node tests/meet-lifecycle.test.js
+
+  meet-result-input:
+    runs-on: ubuntu-latest
+    needs: [meet-lifecycle]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Meet Result Input Engine
+        run: node --check engines/meet-result-input.js
+      - name: Meet Result Input isolated regressions
+        run: node tests/meet-result-input.test.js
+
+  official-results-reconciliation:
+    runs-on: ubuntu-latest
+    needs: [meet-result-input]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Official Results Reconciliation Engine
+        run: node --check engines/official-results-reconciliation.js
+      - name: Official Results Reconciliation isolated regressions
+        run: node tests/official-results-reconciliation.test.js
+
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Core architecture boundaries
+        run: node tests/architecture-boundaries.test.js
+      - name: Extended architecture boundaries
+        run: node tests/architecture-boundaries-extended.test.js
+
+  portal-core:
+    runs-on: ubuntu-latest
+    needs: [engine-portal, entity-registry, methodology, programme-plan, session-truth, evidence-retrieval, results-pathway, targets, adaptation, attendance, timing, test-protocol, test-result-input, architecture]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check portal-routed core
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check rebuild/portal-core.js
+          node --check engines/entity-registry.js
+          node --check engines/methodology.js
+          node --check engines/plan-context.js
+          node --check engines/timing.js
+          node --check engines/test-protocol.js
+          node --check engines/test-result-input.js
+          node --check tests/portal-core.integration.test.js
+          node --check tests/portal-next-three.integration.test.js
+      - name: Portal-routed real engine integration
+        run: |
+          node tests/portal-core.integration.test.js
+          node tests/portal-next-three.integration.test.js
+
+  measurement-pipeline:
+    runs-on: ubuntu-latest
+    needs: [portal-core, test-result-input]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check measurement pipeline
+        run: |
+          node --check engines/timing.js
+          node --check engines/test-protocol.js
+          node --check engines/test-result-input.js
+          node --check tests/measurement-pipeline.integration.test.js
+      - name: Portal-routed measurement pipeline integration
+        run: node tests/measurement-pipeline.integration.test.js
+
+  meet-pipeline:
+    runs-on: ubuntu-latest
+    needs: [engine-portal, entity-registry, meet-lifecycle, meet-result-input, official-results-reconciliation, architecture]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check meet pipeline
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check engines/meet-lifecycle.js
+          node --check engines/meet-result-input.js
+          node --check engines/official-results-reconciliation.js
+          node --check tests/meet-pipeline.integration.test.js
+      - name: Portal-routed meet pipeline integration
+        run: node tests/meet-pipeline.integration.test.js
+
+  board-projection:
+    runs-on: ubuntu-latest
+    needs: [portal-core]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Board composition and Runtime dependencies
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check rebuild/portal-core.js
+          node --check engines/board-projection.js
+          node --check ui/board-renderer.js
+          node --check ui/board-controller.js
+          node --check ui/board-screen.js
+          node --check rebuild/board-command-owners.js
+          node --check rebuild/poolside-actions.js
+          node --check rebuild/board-app.js
+          node --check rebuild/runtime.js
+          node --check engines/session-edit.js
+          node --check engines/capture-evidence.js
+          node --check engines/delivered-session.js
+          node --check engines/plan-context.js
+          node --check engines/session-dose.js
+          node --check engines/reporting.js
+          node --check engines/learning.js
+      - name: Board regression family
+        run: |
+          for f in tests/board*.test.js; do
+            echo "Running $f"
+            node "$f"
+          done
+
+  poolside-integration:
+    runs-on: ubuntu-latest
+    needs: [portal-core, session-lifecycle, board-projection, measurement-pipeline, meet-pipeline]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check poolside integration chain
+        run: |
+          node --check rebuild/engine-portal.js
+          node --check rebuild/portal-core.js
+          node --check rebuild/runtime.js
+          node --check tests/engine-portal.test.js
+          node --check tests/portal-core.integration.test.js
+          node --check tests/portal-next-three.integration.test.js
+          node --check tests/measurement-pipeline.integration.test.js
+          node --check tests/meet-pipeline.integration.test.js
+          node --check tests/capture-evidence.test.js
+          node --check tests/delivered-session.test.js
+          node --check tests/session-dose.test.js
+          node --check tests/poolside-flow.integration.test.js
+          node --check tests/runtime.integration.test.js
+          node --check tests/poolside-actions.integration.test.js
+      - name: Capture Evidence regression
+        run: node tests/capture-evidence.test.js
+      - name: Delivered Session regression
+        run: node tests/delivered-session.test.js
+      - name: Session Dose regression
+        run: node tests/session-dose.test.js
+      - name: Poolside flow integration
+        run: node tests/poolside-flow.integration.test.js
+      - name: Runtime integration
+        run: node tests/runtime.integration.test.js
+      - name: Engine-backed Board action integration
+        run: node tests/poolside-actions.integration.test.js

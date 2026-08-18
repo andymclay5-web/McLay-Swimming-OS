@@ -1,0 +1,52 @@
+name: Session schedule tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/session-schedule.js'
+      - 'rebuild/schedule-portal.js'
+      - 'tests/session-schedule.test.js'
+      - 'tests/session-schedule-portal.integration.test.js'
+      - 'MSOS_INTERFACE_CONTRACT.md'
+      - '.github/workflows/schedule-engine-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/session-schedule.js'
+      - 'rebuild/schedule-portal.js'
+      - 'tests/session-schedule.test.js'
+      - 'tests/session-schedule-portal.integration.test.js'
+      - 'MSOS_INTERFACE_CONTRACT.md'
+      - '.github/workflows/schedule-engine-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  session-schedule:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Session Schedule
+        run: |
+          node --check engines/session-schedule.js
+          node --check rebuild/schedule-portal.js
+      - name: Session Schedule regressions
+        run: node tests/session-schedule.test.js
+      - name: Portal-routed schedule integration
+        run: node tests/session-schedule-portal.integration.test.js
+      - name: Schedule architecture boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const engine=fs.readFileSync('engines/session-schedule.js','utf8');
+          assert(!/\bdocument\s*\.|\bwindow\s*\.|localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(engine),'Schedule engine owns browser/network behavior');
+          assert(!/require\(['\"]\.\.?\//.test(engine),'Schedule engine directly imports another implementation');
+          const portal=fs.readFileSync('rebuild/schedule-portal.js','utf8');
+          assert(/session-schedule/.test(portal)&&/calendar-surface/.test(portal)&&/entity-registry/.test(portal),'Portal composition missing explicit owners');
+          console.log('PASS Session Schedule architecture boundary');
+          NODE

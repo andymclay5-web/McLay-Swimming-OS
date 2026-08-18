@@ -1,0 +1,40 @@
+name: Access engine tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/roles-permissions.js'
+      - 'tests/roles-permissions.test.js'
+      - '.github/workflows/access-engine-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/roles-permissions.js'
+      - 'tests/roles-permissions.test.js'
+      - '.github/workflows/access-engine-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  roles-permissions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Roles and Permissions
+        run: node --check engines/roles-permissions.js
+      - name: Roles and Permissions regressions
+        run: node tests/roles-permissions.test.js
+      - name: No browser storage network or sibling-engine ownership
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const s=fs.readFileSync('engines/roles-permissions.js','utf8');
+          assert(!/\bdocument\s*\.|\bwindow\s*\.|localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(s));
+          assert(!/require\(['\"]\.\//.test(s));
+          console.log('PASS Roles/Permissions architecture boundary');
+          NODE

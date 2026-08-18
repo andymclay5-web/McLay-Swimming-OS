@@ -1,0 +1,45 @@
+name: Rebuild coaching analysis tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/delivered-session.js'
+      - 'engines/plan-context.js'
+      - 'tests/delivered-session.test.js'
+      - 'tests/plan-context.test.js'
+      - 'tests/architecture-boundaries*.test.js'
+      - '.github/workflows/rebuild-coaching-analysis-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  extended-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Extended engine boundaries
+        run: node tests/architecture-boundaries-extended.test.js
+
+  delivered-session:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/delivered-session.js
+      - run: node tests/delivered-session.test.js
+
+  plan-context:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check engines/plan-context.js
+      - run: node tests/plan-context.test.js

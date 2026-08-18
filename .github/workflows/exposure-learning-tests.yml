@@ -1,0 +1,67 @@
+name: Exposure and learning tests
+
+on:
+  push:
+    branches:
+      - rebuild/engine-contracts-v1
+    paths:
+      - 'engines/exposure-load.js'
+      - 'engines/learning.js'
+      - 'tests/exposure-load.test.js'
+      - 'tests/learning.test.js'
+      - '.github/workflows/exposure-learning-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engines/exposure-load.js'
+      - 'engines/learning.js'
+      - 'tests/exposure-load.test.js'
+      - 'tests/learning.test.js'
+      - '.github/workflows/exposure-learning-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  exposure-load:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Exposure Load
+        run: node --check engines/exposure-load.js
+      - name: Exposure Load regressions
+        run: node tests/exposure-load.test.js
+      - name: Exposure architecture boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const s=fs.readFileSync('engines/exposure-load.js','utf8');
+          assert(!/parseBlock|session-truth|SessionTruth|AEROBIC_TABLES|latestTrainingTestEvidence|personalBest/.test(s));
+          assert(!/require\(['\"]\.\//.test(s));
+          console.log('PASS Exposure owns aggregation only');
+          NODE
+
+  learning:
+    runs-on: ubuntu-latest
+    needs: [exposure-load]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Learning
+        run: node --check engines/learning.js
+      - name: Learning regressions
+        run: node tests/learning.test.js
+      - name: Learning does not recalculate exposure dose
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const s=fs.readFileSync('engines/learning.js','utf8');
+          assert(!/recentSessionReports/.test(s));
+          assert(!/for\s*\(const \[k,v\] of Object\.entries\(r\?\.dose/.test(s));
+          assert(/rankedDose/.test(s));
+          console.log('PASS Learning consumes exposure facts');
+          NODE

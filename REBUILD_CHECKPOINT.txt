@@ -1,0 +1,3 @@
+MSOS engine-first rebuild checkpoint
+Branch: rebuild/engine-contracts-v1
+Live main untouched by this rebuild.
