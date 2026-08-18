@@ -23,7 +23,7 @@ const tables={
 const workout=`WARM UP\n300 Choice\nMAIN SET\n4 x 100 Freestyle @ 1:30\nWARM DOWN\n200 Easy\nTOTAL: 900m`;
 
 function tableFrom(url){const parts=new URL(url).pathname.split('/').filter(Boolean);return decodeURIComponent(parts.at(-1)||'')}
-async function waitText(locator,pattern){await locator.waitFor({state:'visible'});const value=(await locator.textContent())||'';assert.match(value,pattern);return value}
+async function waitText(locator,pattern,{timeout=5000}={}){await locator.waitFor({state:'visible',timeout});const until=Date.now()+timeout;let value='';while(Date.now()<until){value=(await locator.textContent())||'';pattern.lastIndex=0;if(pattern.test(value))return value;await new Promise(resolve=>setTimeout(resolve,40))}assert.match(value,pattern);return value}
 async function click(locator){await locator.waitFor({state:'visible'});await locator.click()}
 async function tapAthleteTag(page,id){const tag=page.locator(`[data-panel-action="capture-athlete-toggle"][data-athlete-id="${id}"]`);assert.equal(await tag.count(),1,'expected one swimmer-tag touch target');await tag.waitFor({state:'visible'});const box=await tag.boundingBox();assert(box&&box.height>=44,`swimmer tag touch target too short: ${box?.height}`);await tag.click();assert.equal(await tag.getAttribute('aria-pressed'),'true','tapping swimmer tag must select the swimmer');assert((await tag.getAttribute('class')||'').includes('is-selected'),'selected swimmer tag must be visibly selected')}
 
