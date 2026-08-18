@@ -1,9 +1,9 @@
 McLay Swimming OS Version 4
-Build: v4-poolside-core-20260819c-reloadgate
+Build: v4-poolside-core-20260819d-sessiontruthgate
 Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
 Complete V4 Guardian
-- 73 / 73 foundation and Version 4 regressions PASS on the shipping source stack:
+- 75 / 75 foundation and Version 4 regressions PASS on the shipping source stack:
   app.js + v4-correct.js + v4-poolside-core.js.
 - The full Guardian is now executed by GitHub Actions on changes to the V4 runtime.
 - Morning Board session/coaching regressions remain PASS.
@@ -16,6 +16,8 @@ Resolved in this build
 - App, V4 layer and service-worker cache identifiers are advanced together so the corrected bytes replace the previous phone cache.
 - The final poolside build now owns the software attestation used by the release gate; an earlier layer can no longer leave the shipping build marked DEV / NOT ATTESTED.
 - Startup now activates the saved view before rendering, so reloading or reopening on Times, Roll, Coach Hub, Guardian or another non-Board screen cannot leave the main area blank.
+- Standalone `10s rest` / `30s rest` lines can no longer be parsed as 10m / 30m swimming items.
+- The exact saved Saturday corruption seen on the phone — 6,090m with 1,700 / 850 / 2,940 / 600 sections — is repaired locally and non-destructively to 5,450m with 1,100 / 850 / 2,900 / 600. The duplicate 4-round breakdown is folded into the parent 12 × 50 and attendance, captures, source evidence, user edits and finish notes remain intact.
 
 Retained V4 scope
 - Full legacy app and data paths remain present; this is not a seven-file replacement shell.

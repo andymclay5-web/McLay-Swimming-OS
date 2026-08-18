@@ -3,14 +3,14 @@
   const M=g.MSOS4;
   if(!M) throw new Error('MSOS4 missing');
   const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
-  const BUILD='v4-poolside-core-20260819c-reloadgate';
-  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-reloadgate';
+  const BUILD='v4-poolside-core-20260819d-sessiontruthgate';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-sessiontruthgate';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),
     build:BUILD,
     softwareReady:M.RELEASE_ATTESTATION?.softwareReady===true&&M.correct?.baseBuild?.match===true,
-    generatedAt:'2026-08-19T11:30:00+12:00',
-    suiteDigest:'v4-contract-20260819-reloadgate',
+    generatedAt:'2026-08-19T12:15:00+12:00',
+    suiteDigest:'v4-contract-20260819-sessiontruthgate',
     packageDigest:'SHA256SUMS.txt'
   });
   const BASE_PARSE=M.parser.parse.bind(M.parser);
@@ -90,8 +90,82 @@
   }
   function compactSession(s){for(const b of s?.blocks||[])b.items=compactItems(b.items||[]);s.metadata=s.metadata||{};s.metadata.parsedTotal=S.total(s);return s}
 
+  const KNOWN_SATURDAY_BEFORE='1700,850,2940,600';
+  const KNOWN_SATURDAY_AFTER='1100,850,2900,600';
+  function restArtifact(item){
+    if(item?.kind!=='set'||Math.max(1,Number(item.reps)||1)!==1)return false;
+    const raw=txt(item.raw||item.text);
+    const m=raw.match(/^(\d{1,3})\s*(?:s|sec|seconds?)\s*(?:r|rest)$/i);
+    return !!(m&&Number(m[1])===Number(item.distance));
+  }
+  function foldDuplicateBreakdown(items,audit){
+    for(let i=0;i<(items||[]).length;i++){
+      const parent=items[i],group=items[i+1];
+      if(parent?.kind!=='set'||group?.kind!=='group'||Number(group.rounds)<2)continue;
+      const children=group.items||[];
+      if(!children.length||children.some(x=>x.kind!=='set'||Number(x.distance)!==Number(parent.distance)))continue;
+      const oneRoundReps=children.reduce((n,x)=>n+Math.max(1,Number(x.reps)||1),0);
+      if(Number(group.rounds)*oneRoundReps!==Math.max(1,Number(parent.reps)||1))continue;
+      if(S.itemDistance(group)!==S.itemDistance(parent))continue;
+      parent.pattern=parent.pattern||[];
+      for(const child of children){
+        const work=strippedWork(child)||txt(child.raw||child.text)||'Choice';
+        if(!parent.pattern.some(x=>Number(x.count)===Math.max(1,Number(child.reps)||1)&&txt(x.text)===work))parent.pattern.push({count:Math.max(1,Number(child.reps)||1),text:work});
+        for(const cue of child.cues||[])if(!parent.cues?.includes(cue))(parent.cues=parent.cues||[]).push(cue);
+      }
+      audit.folded.push(group.id||`group-${i+1}`);
+      items.splice(i+1,1);
+    }
+  }
+  function removeRestArtifacts(items,audit){
+    for(let i=(items||[]).length-1;i>=0;i--){
+      const item=items[i];
+      if(item?.kind==='group')removeRestArtifacts(item.items||[],audit);
+      if(!restArtifact(item))continue;
+      audit.removed.push({id:item.id||'',raw:txt(item.raw||item.text),distance:Number(item.distance)||0});
+      items.splice(i,1);
+    }
+  }
+  function recalcFinish(session){
+    const f=session?.finish;if(!f)return;
+    try{
+      let calc=null;
+      if(f.throughItemId)calc=S.distanceThroughItem(session,f.throughItemId,{roundByGroup:f.roundByGroup||{}});
+      else if(f.throughBlockId)calc=S.finishThroughBlock(session,f.throughBlockId);
+      if(calc?.found){f.actualDistance=calc.total;if(f.review){if(Number(f.review.plannedDistance)===6090)f.review.plannedDistance=5450;f.review.actualDistance=calc.total}}
+    }catch{}
+  }
+  function repairKnownSessionTruth(session){
+    const squads=(session?.identity?.squads||[]).map(x=>txt(x).toLowerCase());
+    const before=(session?.blocks||[]).map(S.blockDistance).join(',');
+    if(session?.identity?.date!=='2026-08-15'||txt(session.identity.dayPart).toUpperCase()!=='AM'||!squads.includes('national')||S.total(session)!==6090||before!==KNOWN_SATURDAY_BEFORE)return null;
+    const next=U.clone(session),audit={folded:[],removed:[]},finishBefore=U.clone(next.finish||null);
+    for(const block of next.blocks||[]){foldDuplicateBreakdown(block.items||[],audit);removeRestArtifacts(block.items||[],audit)}
+    const after=(next.blocks||[]).map(S.blockDistance).join(',');
+    if(S.total(next)!==5450||after!==KNOWN_SATURDAY_AFTER||audit.folded.length!==1||audit.removed.reduce((n,x)=>n+x.distance,0)!==40)return null;
+    recalcFinish(next);
+    next.metadata=next.metadata||{};
+    next.metadata.parsedTotal=5450;
+    next.metadata.totalMatches=Number(next.metadata.explicitTotal)?Number(next.metadata.explicitTotal)===5450:true;
+    next.metadata.canonicalRepairs=[...(next.metadata.canonicalRepairs||[]),{build:BUILD,reason:'known_2026-08-15_duplicate_breakdown_and_rest_distance',beforeTotal:6090,afterTotal:5450,beforeBlocks:KNOWN_SATURDAY_BEFORE,afterBlocks:KNOWN_SATURDAY_AFTER,foldedGroupIds:audit.folded,removedRestArtifacts:audit.removed,finishBefore,finishAfter:U.clone(next.finish||null),at:U.now()}];
+    next.updatedAt=U.now();
+    return next;
+  }
+
+  function repairKnownSavedSessions(){
+    if(!M.state?.canonicalSessions)return 0;
+    const selected=M.state.settings?.selectedSessionId||'';let repaired=0;
+    for(const [id,session] of Object.entries(M.state.canonicalSessions)){
+      const next=repairKnownSessionTruth(session);if(!next)continue;
+      M.state.canonicalSessions[id]=next;repaired++;
+      M.cloud?.stageSession?.(next);
+    }
+    if(repaired){M.state.settings.selectedSessionId=selected;M.store.save(M.state)}
+    return repaired;
+  }
+
   M.parser.parse=(source,identity={})=>compactSession(BASE_PARSE(normaliseText(source),identity));
-  M.poolsideCore={BUILD,normaliseText,compactSession};
+  M.poolsideCore={BUILD,normaliseText,compactSession,repairKnownSessionTruth,repairKnownSavedSessions};
 
   function attendanceTime(row){return Date.parse(row?.updated_at||row?.updatedAt||row?.created_at||row?.createdAt||0)||0}
   UI.currentAthletes=()=>{const s=M.currentSession();if(!s)return[];const squads=new Set((s.identity?.squads||[]).map(x=>txt(x).toLowerCase()));return (M.state.athletes||[]).filter(a=>a.active!==false&&(!squads.size||squads.has(txt(a.squad).toLowerCase())))};
@@ -194,5 +268,26 @@
     return{ok:S.total(a)===600&&S.total(b)===4650&&Number(b.metadata.explicitTotal)===4650,pattern:S.total(a),live:S.total(b),liveWritten:b.metadata.explicitTotal};
   };
   const test=M.poolsideCore.selfTest();if(!test.ok)console.error('[MSOS poolside core] FAIL',test);else console.info('[MSOS poolside core] PASS',test);
-  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const repaired=repairSelected();if(repaired||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
+  const priorGuardianRun=M.guardian?.run?.bind(M.guardian);
+  if(priorGuardianRun){
+    M.guardian.run=()=>{
+      const result=priorGuardianRun(),tests=[...(result.tests||[])];
+      const check=(name,fn)=>{try{const detail=fn();tests.push({name,ok:true,detail:detail==null?'':String(detail)})}catch(e){tests.push({name,ok:false,detail:e.message||String(e)})}};
+      check('Standalone rest lines never add phantom metres',()=>{const s=M.parser.parse('MAIN SET\n10s rest\n8 x 100 Freestyle\n30s rest\n4 x 50 Choice',{id:'rest-gate'});if(S.total(s)!==1000)throw new Error(`got ${S.total(s)}`);return '800 + 200 · rest 0m'});
+      check('Saved Saturday 6,090m corruption repairs non-destructively to 5,450m',()=>{
+        const s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-sat',date:'2026-08-15',dayPart:'AM',squads:['National','Development','Fitness']});
+        const warm=s.blocks[0],parent=warm.items.find(x=>x.kind==='set'&&Number(x.reps)===12&&Number(x.distance)===50);
+        warm.items.splice(warm.items.indexOf(parent)+1,0,{id:'phantom-breakdown',kind:'group',rounds:4,text:'4 ROUNDS',items:[{id:'p1',kind:'set',reps:1,distance:50,raw:'1 x 50 Scull'},{id:'p2',kind:'set',reps:1,distance:50,raw:'1 x 50 Drill'},{id:'p3',kind:'set',reps:1,distance:50,raw:'1 x 50 Swim Perfect Technique'}]});
+        const main=s.blocks[2];main.items.splice(1,0,{id:'phantom-rest-10',kind:'set',reps:1,distance:10,raw:'10s rest',text:'10s rest'});main.items.push({id:'phantom-rest-30',kind:'set',reps:1,distance:30,raw:'30s rest',text:'30s rest'});
+        if(S.total(s)!==6090||s.blocks.map(S.blockDistance).join(',')!==KNOWN_SATURDAY_BEFORE)throw new Error('fixture did not reproduce phone state');
+        s.capturesSentinel='preserve';const repaired=repairKnownSessionTruth(s);
+        if(!repaired||S.total(repaired)!==5450||repaired.blocks.map(S.blockDistance).join(',')!==KNOWN_SATURDAY_AFTER)throw new Error('known corruption was not repaired');
+        if(repaired.capturesSentinel!=='preserve'||S.total(s)!==6090)throw new Error('repair mutated original/evidence');
+        return KNOWN_SATURDAY_AFTER;
+      });
+      const passed=tests.filter(x=>x.ok===true).length;
+      return {...result,build:M.BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
+    };
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const known=repairKnownSavedSessions(),repaired=repairSelected();if(known||repaired||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
 })(globalThis);

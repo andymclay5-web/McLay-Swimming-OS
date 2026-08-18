@@ -30,8 +30,8 @@ if(failures.length){
   process.exit(1);
 }
 
-if(result.passed!==73||result.total!==73){
-  console.error(`Expected the complete 73-test Guardian; received ${result.passed}/${result.total}`);
+if(result.passed!==75||result.total!==75){
+  console.error(`Expected the complete 75-test Guardian; received ${result.passed}/${result.total}`);
   process.exit(1);
 }
 

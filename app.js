@@ -277,6 +277,7 @@
      if(currentGroup){if(indent>groupIndent)groupIndented=true;else if((groupIndented&&indent<=groupIndent)||(!groupIndented&&currentGroup.items.length&&strongLocalBoundary(line))){currentGroup=null;current=null;groupIndented=false}}
      let gm=line.match(/^(\d{1,2})\s+Rounds?\s*:?(.*)$/i);if(gm){const group={id:U.stableId('group',sessionId,type,li,line),kind:'group',rounds:Number(gm[1]),text:line,items:[],order:++order};items.push(group);currentGroup=group;groupIndent=indent;groupIndented=false;current=null;continue}
      const rep=explicitRepeat(line);if(rep){const set=makeSet(sessionId,type,++order,line,rep.reps,rep.distance,rep.tail);push(set);continue}
+     const rs=restSeconds(line);if(rs&&/^(?:\d+\s*SR|\d+\s*(?:s|sec|seconds?)\s*(?:R|rest))$/i.test(line)){if(current)current.restSeconds=rs;else push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});continue}
      const single=singleDistance(line);
      if(single){
        // inline composition under existing parent, e.g. 50 Perfect / 25 Fast after 8 x 75.
@@ -288,7 +289,6 @@
        continue
      }
      const pc=patternCue(line);if(pc&&current){if(pc.kind==='zone'){for(let k=0;k<pc.count;k++)current.repPattern.push({rep:current.repPattern.length+1,zone:pc.zone,text:pc.text})}else current.pattern.push(pc);continue}
-     const rs=restSeconds(line);if(rs&&current&&/^(?:\d+\s*SR|\d+\s*(?:s|sec|seconds?)\s*(?:R|rest))$/i.test(line)){current.restSeconds=rs;continue}
      const cs=cycleSeconds(line);if(cs&&current&&/^(?:@|on)\s*\d+:\d{1,2}(?:\.\d+)?$/i.test(line)){current.cycleSeconds=cs;continue}
      if(current){const inline=inlineComposition(line,current.distance);if(inline){current.composition.push(...inline);continue}}
      if(current&&!strongLocalBoundary(line)){current.cues=current.cues||[];current.cues.push(line);continue}push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});current=null;

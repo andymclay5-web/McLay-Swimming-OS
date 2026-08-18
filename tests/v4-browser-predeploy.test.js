@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-poolside-core-20260819c-reloadgate';
+const BUILD='v4-poolside-core-20260819d-sessiontruthgate';
 const ATHLETE_ID='predeploy-browser-athlete';
 const NOTE='Predeploy poolside note';
 
@@ -17,6 +17,8 @@ async function appSnapshot(page){
       guardian:{ok:result.ok,passed:result.passed,total:result.total,build:result.build},
       sessionId:s?.id||'',
       sessionTotal:s?M.session.total(s):0,
+      blockTotals:s?(s.blocks||[]).map(M.session.blockDistance):[],
+      repairs:s?.metadata?.canonicalRepairs||[],
       sessions:Object.keys(M.state.canonicalSessions||{}).length,
       captures:(M.state.captures||[]).map(x=>({sessionId:x.session_id,type:x.capture_type,text:x.text_content,athleteIds:x.athlete_ids||[]})),
       t400:(M.state.trainingTestResults||[]).map(x=>({athleteId:x.athlete_id,seconds:x.result_seconds,sessionId:x.session_id})),
@@ -69,7 +71,7 @@ async function appSnapshot(page){
     let snapshot=await appSnapshot(page);
     assert.equal(snapshot.build,BUILD,'unexpected shipping build');
     assert.equal(snapshot.releaseReady,true,'final shipping build is not software-attested');
-    assert.deepEqual(snapshot.guardian,{ok:true,passed:73,total:73,build:BUILD},'browser Guardian is not current and complete');
+    assert.deepEqual(snapshot.guardian,{ok:true,passed:75,total:75,build:BUILD},'browser Guardian is not current and complete');
     assert.ok(snapshot.width.scroll<=snapshot.width.inner+1,`fresh phone page overflows: ${snapshot.width.scroll}px > ${snapshot.width.inner}px`);
 
     await page.click('#newSessionBtn');
@@ -121,6 +123,23 @@ async function appSnapshot(page){
     assert.equal(snapshot.sessionTotal,600,'session did not persist through reload');
     assert.ok(snapshot.captures.some(x=>x.type==='note'&&x.text===NOTE&&x.sessionId===snapshot.sessionId&&x.athleteIds.includes(ATHLETE_ID)),'athlete-linked note did not persist');
     assert.ok(snapshot.t400.some(x=>x.athleteId===ATHLETE_ID&&x.seconds===269&&x.sessionId===snapshot.sessionId),'manual T400 did not persist against the canonical session');
+
+    const acceptedSessionId=snapshot.sessionId;
+    await page.evaluate(()=>{
+      const M=window.MSOS4,s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-saturday-phone-shape',date:'2026-08-15',dayPart:'AM',title:'Sat AM',squads:['National','Development','Fitness']});
+      const warm=s.blocks[0],parent=warm.items.find(x=>x.kind==='set'&&Number(x.reps)===12&&Number(x.distance)===50);
+      warm.items.splice(warm.items.indexOf(parent)+1,0,{id:'phantom-breakdown',kind:'group',rounds:4,text:'4 ROUNDS',items:[{id:'p1',kind:'set',reps:1,distance:50,raw:'1 x 50 Scull'},{id:'p2',kind:'set',reps:1,distance:50,raw:'1 x 50 Drill'},{id:'p3',kind:'set',reps:1,distance:50,raw:'1 x 50 Swim Perfect Technique'}]});
+      s.blocks[2].items.splice(1,0,{id:'phantom-rest-10',kind:'set',reps:1,distance:10,raw:'10s rest',text:'10s rest'});
+      s.blocks[2].items.push({id:'phantom-rest-30',kind:'set',reps:1,distance:30,raw:'30s rest',text:'30s rest'});
+      M.state.canonicalSessions[s.id]=s;M.state.settings.selectedSessionId=s.id;M.store.save(M.state);
+    });
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>window.MSOS4?.currentSession?.()?.id==='saved-saturday-phone-shape'&&window.MSOS4.session.total(window.MSOS4.currentSession())===5450);
+    snapshot=await appSnapshot(page);
+    assert.equal(snapshot.sessionTotal,5450,'saved 6,090m Saturday corruption was not repaired on reload');
+    assert.deepEqual(snapshot.blockTotals,[1100,850,2900,600],'saved Saturday section truth was not restored');
+    assert.ok(snapshot.repairs.some(x=>x.beforeTotal===6090&&x.afterTotal===5450),'saved-session repair audit is missing');
+    await page.evaluate(id=>{window.MSOS4.state.settings.selectedSessionId=id;window.MSOS4.store.save(window.MSOS4.state);window.MSOS4.ui.renderCurrent()},acceptedSessionId);
 
     await context.setOffline(true);
     await page.reload({waitUntil:'domcontentloaded'});
