@@ -4,23 +4,27 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSUI=root.MSOSUI||{};root.MSOSUI.BoardController=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.2.0';
   const text=v=>String(v??'').trim();
   const CAPTURE_ACTIONS=new Set(['capture','note','voice','photo','video']);
-  const KNOWN_ACTIONS=new Set(['roll','times','capture','note','voice','photo','video','finish','edit','edit-block','evidence']);
+  const KNOWN_ACTIONS=new Set(['roll','times','capture','note','voice','photo','video','finish','edit','edit-athlete','edit-block','evidence']);
 
   function contextFromDataset(dataset={}){
-    const sessionId=text(dataset.sessionId),blockId=text(dataset.blockId),itemId=text(dataset.itemId);
-    return{sessionId,blockId:blockId||null,itemId:itemId||null};
+    const sessionId=text(dataset.sessionId),blockId=text(dataset.blockId),itemId=text(dataset.itemId),athleteId=text(dataset.athleteId);
+    const context={sessionId,blockId:blockId||null,itemId:itemId||null};
+    if(athleteId)context.athleteId=athleteId;
+    return context;
   }
   function commandFor(action,context={}){
     const a=text(action);if(!KNOWN_ACTIONS.has(a))return null;
     const ctx={sessionId:text(context.sessionId),blockId:text(context.blockId)||null,itemId:text(context.itemId)||null};
+    const athleteId=text(context.athleteId);if(athleteId)ctx.athleteId=athleteId;
     if(!ctx.sessionId)throw new Error(`Board action ${a} requires sessionId`);
     if(a==='roll')return{type:'roll',context:ctx};
     if(a==='times')return{type:'openTimes',context:ctx};
     if(a==='finish')return{type:'finish',context:ctx};
     if(a==='edit'){if(!ctx.blockId||!ctx.itemId)throw new Error('Board edit requires blockId + itemId');return{type:'editSet',context:ctx}}
+    if(a==='edit-athlete'){if(!ctx.blockId||!ctx.itemId||!ctx.athleteId)throw new Error('Board athlete edit requires blockId + itemId + athleteId');return{type:'editAthleteSet',context:ctx}}
     if(a==='edit-block'){if(!ctx.blockId)throw new Error('Board block edit requires blockId');return{type:'editBlock',context:ctx}}
     if(a==='evidence')return{type:'openEvidence',context:ctx};
     if(CAPTURE_ACTIONS.has(a))return{type:'capture',mode:a==='capture'?'choose':a,context:ctx};
