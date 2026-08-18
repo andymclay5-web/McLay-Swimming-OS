@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.MeetLifecycle=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.meet.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -42,19 +42,21 @@
       const event=this.getEvent(row?.event_id||row?.eventId);if(!event)throw new Error('Race requires valid event_id');const athlete=this.athlete(row?.athlete_id||row?.athleteId||row?.athlete),meetId=text(row.meet_id||row.meetId||event.meet_id);if(meetId!==event.meet_id)throw new Error('Race event does not belong to meet');let entry=null;const entryId=text(row.entry_id||row.entryId);if(entryId)entry=this.getEntry(entryId);else entry=this.entryFor({meetId,athleteRef:athlete.id,eventId:event.id});if(!entry||entry.meet_id!==meetId||entry.event_id!==event.id||entry.athlete_id!==athlete.id)throw new Error('Race requires matching meet entry');const id=text(row?.id)||stable('race',meetId,event.id,athlete.id,text(row.round)||'heat',text(row.heat)||'',text(row.lane)||'');return this._upsert('race',{meet_id:meetId,event_id:event.id,entry_id:entry.id,athlete_id:athlete.id,meet_session_id:text(row.meet_session_id||row.meetSessionId||event.meet_session_id)||null,round:text(row.round)||'heat',heat:text(row.heat),lane:text(row.lane),status:text(row.status)||'scheduled',...clone(row),id,meet_id:meetId,event_id:event.id,entry_id:entry.id,athlete_id:athlete.id},opts)
     }
     retire(kind,id,{coachId='',note=''}={}){const row=this._get(kind,id);if(!row)throw new Error(`${kind} not found: ${id}`);return this._upsert(kind,{...row,active:false,status:'retired'},{coachId,note:note||'Retired'})}
-    listMeets({activeOnly=true}={}){return clone(this.state.meets.filter(x=>!activeOnly||x.active!==false&&x.status!=='retired'))}
+    listMeets({activeOnly=true}={}){return clone(this.state.meets.filter(x=>!activeOnly||(x.active!==false&&x.status!=='retired')))}
     meetSessions(meetId){return clone(this.state.sessions.filter(x=>x.meet_id===text(meetId)&&x.status!=='retired'))}
     meetEvents(meetId){return clone(this.state.events.filter(x=>x.meet_id===text(meetId)&&x.status!=='retired'))}
     athleteEntries(athleteRef,{meetId=''}={}){const aid=this.athlete(athleteRef).id;return clone(this.state.entries.filter(x=>x.athlete_id===aid).filter(x=>!meetId||x.meet_id===text(meetId)).filter(x=>x.status!=='retired'))}
     athleteRaces(athleteRef,{meetId=''}={}){const aid=this.athlete(athleteRef).id;return clone(this.state.races.filter(x=>x.athlete_id===aid).filter(x=>!meetId||x.meet_id===text(meetId)).filter(x=>x.status!=='retired'))}
     entryFor({meetId,athleteRef,eventId}={}){const aid=this.athlete(athleteRef).id,rows=this.state.entries.filter(x=>x.meet_id===text(meetId)&&x.athlete_id===aid&&x.event_id===text(eventId)&&x.status!=='retired');if(rows.length>1)throw new Error('Ambiguous meet entry');return clone(rows[0]||null)}
     matchEvent({meetId,eventId='',eventNo='',distance=null,stroke:strokeWanted='',sex='',ageGroup='',classification=''}={}){
-      const mid=text(meetId);if(!this.getMeet(mid))return{status:'missing_meet',event:null,candidates:[]};if(eventId){const e=this.getEvent(eventId);return e&&e.meet_id===mid?{status:'ok',event:e,candidates:[e]}:{status:'missing',event:null,candidates:[]}}
+      const mid=text(meetId);if(!this.getMeet(mid))return{status:'missing_meet',event:null,candidates:[]};if(eventId){const e=this.getEvent(eventId);return e&&e.meet_id===mid&&e.status!=='retired'?{status:'ok',event:e,candidates:[e]}:{status:'missing',event:null,candidates:[]}}
       const d=num(distance),st=stroke(strokeWanted),eno=text(eventNo),sx=lower(sex),ag=lower(ageGroup),cl=lower(classification);const rows=this.state.events.filter(x=>x.meet_id===mid&&x.status!=='retired').filter(x=>!eno||text(x.event_no)===eno).filter(x=>d===null||num(x.distance_m)===d).filter(x=>!st||stroke(x.stroke)===st).filter(x=>!sx||!x.sex||lower(x.sex)===sx).filter(x=>!ag||!x.age_group||lower(x.age_group)===ag).filter(x=>!cl||!x.classification||lower(x.classification)===cl);return{status:rows.length===1?'ok':rows.length?'ambiguous':'missing',event:rows.length===1?clone(rows[0]):null,candidates:clone(rows)}
+    }
     matchRace({meetId,raceId='',athleteRef='',eventId='',eventNo='',distance=null,stroke:strokeWanted='',round=''}={}){
-      const mid=text(meetId);if(!this.getMeet(mid))return{status:'missing_meet',race:null,candidates:[]};let aid='';if(athleteRef){try{aid=this.athlete(athleteRef).id}catch(_){return{status:'missing_athlete',race:null,candidates:[]}}}if(raceId){const r=this.getRace(raceId);if(!r||r.meet_id!==mid||aid&&r.athlete_id!==aid)return{status:'missing',race:null,candidates:[]};return{status:'ok',race:r,candidates:[r]}}
+      const mid=text(meetId);if(!this.getMeet(mid))return{status:'missing_meet',race:null,candidates:[]};let aid='';if(athleteRef){try{aid=this.athlete(athleteRef).id}catch(_){return{status:'missing_athlete',race:null,candidates:[]}}}if(raceId){const r=this.getRace(raceId);if(!r||r.meet_id!==mid||r.status==='retired'||(aid&&r.athlete_id!==aid))return{status:'missing',race:null,candidates:[]};return{status:'ok',race:r,candidates:[r]}}
       let eventIds=null;if(eventId)eventIds=new Set([text(eventId)]);else if(eventNo||num(distance)!==null||strokeWanted){const em=this.matchEvent({meetId:mid,eventNo,distance,stroke:strokeWanted});if(em.status!=='ok')return{status:em.status,race:null,candidates:[],eventMatch:em};eventIds=new Set([em.event.id])}
       const rd=lower(round);const rows=this.state.races.filter(x=>x.meet_id===mid&&x.status!=='retired').filter(x=>!aid||x.athlete_id===aid).filter(x=>!eventIds||eventIds.has(x.event_id)).filter(x=>!rd||lower(x.round)===rd);return{status:rows.length===1?'ok':rows.length?'ambiguous':'missing',race:rows.length===1?clone(rows[0]):null,candidates:clone(rows)}
+    }
     lineage(raceId){const race=this.getRace(raceId);if(!race)return null;return{schema:SCHEMA,version:VERSION,meet:this.getMeet(race.meet_id),session:race.meet_session_id?this.getSession(race.meet_session_id):null,event:this.getEvent(race.event_id),entry:this.getEntry(race.entry_id),race}}
     history(kind,id){return clone(this.state.journal.filter(x=>x.kind===kind&&x.row_id===text(id)).sort((a,b)=>text(a.at).localeCompare(text(b.at))))}
   }
