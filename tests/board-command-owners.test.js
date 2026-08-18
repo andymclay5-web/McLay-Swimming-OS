@@ -5,16 +5,19 @@ let fails=0;
 function test(name,fn){try{fn();console.log('PASS',name)}catch(e){fails++;console.error('FAIL',name,'\n ',e.stack||e.message)}}
 
 function fixture(){
- const session={id:'s1',blocks:[{id:'b1',type:'main_set',items:[{id:'set1',kind:'set',reps:4,distance:100},{id:'g1',kind:'group',rounds:2,items:[{id:'set2',kind:'set',reps:2,distance:50}]}]}]};
+ const session={id:'s1',blocks:[
+  {id:'b1',type:'main_set',items:[{id:'set1',kind:'set',reps:4,distance:100},{id:'g1',kind:'group',rounds:2,items:[{id:'set2',kind:'set',reps:2,distance:50}]}]},
+  {id:'b2',type:'post_set',items:[{id:'set3',kind:'set',reps:8,distance:25}]}
+ ]};
  let selected=session;
  const calls=[];
  const runtime={
   selectedSession(){return selected},
-  roll(){return{session:selected,eligible:[{id:'a1'}],here:[{id:'a1'}],summary:{present:1}}},
+  roll(){return{session:selected,eligible:[{id:'a1'}],here:[{id:'a1',full_name:'Athlete One'}],summary:{present:1}}},
   evidenceAt(context){calls.push(['evidenceAt',context]);return[{id:'cap1'}]}
  };
  const openers={};
- for(const name of ['roll','times','capture','editSet','editBlock','evidence','finish'])openers[name]=payload=>{calls.push([name,payload]);return payload};
+ for(const name of ['roll','times','capture','editSet','editAthleteSet','editBlock','evidence','finish'])openers[name]=payload=>{calls.push([name,payload]);return payload};
  const owners=Owners.create({runtime,openers});
  return{session,runtime,owners,calls,setSelected:v=>{selected=v}};
 }
@@ -23,7 +26,7 @@ test('displayed session must still be selected before any Board command runs',()
  const x=fixture();x.setSelected({id:'s2',blocks:[]});
  for(const [name,args] of [
   ['roll',{context:{sessionId:'s1'}}],['openTimes',{context:{sessionId:'s1'}}],['capture',{context:{sessionId:'s1'},mode:'note'}],
-  ['editSet',{context:{sessionId:'s1',blockId:'b1',itemId:'set1'}}],['editBlock',{context:{sessionId:'s1',blockId:'b1'}}],
+  ['editSet',{context:{sessionId:'s1',blockId:'b1',itemId:'set1'}}],['editAthleteSet',{context:{sessionId:'s1',blockId:'b1',itemId:'set1',athleteId:'a1'}}],['editBlock',{context:{sessionId:'s1',blockId:'b1'}}],
   ['openEvidence',{context:{sessionId:'s1',blockId:'b1',itemId:'set1'}}],['finish',{context:{sessionId:'s1'}}]
  ])assert.throws(()=>x.owners[name](args),/session mismatch/,name);
  assert.equal(x.calls.length,0);
@@ -45,15 +48,28 @@ test('Capture passes exact mode and exact set context to capture UI owner',()=>{
  assert.equal(x.calls[0][0],'capture');assert.equal(result.mode,'video');assert.deepEqual(result.context,ctx);assert.equal(result.session.id,'s1');assert.equal(result.roll.summary.present,1);
 });
 
-test('Edit set resolves exact canonical nested item rather than current UI state',()=>{
+test('Edit set resolves exact canonical nested item inside rendered block',()=>{
  const x=fixture(),result=x.owners.editSet({context:{sessionId:'s1',blockId:'b1',itemId:'set2'}});
  assert.equal(x.calls[0][0],'editSet');assert.equal(result.block.id,'b1');assert.equal(result.item.id,'set2');
 });
 
+test('Edit set rejects mixed block and item ids even when both exist elsewhere',()=>{
+ const x=fixture();assert.throws(()=>x.owners.editSet({context:{sessionId:'s1',blockId:'b1',itemId:'set3'}}),/canonical block/);assert.equal(x.calls.length,0);
+});
+
+test('Athlete Edit resolves exact present athlete and exact canonical set',()=>{
+ const x=fixture(),result=x.owners.editAthleteSet({context:{sessionId:'s1',blockId:'b1',itemId:'set1',athleteId:'a1'}});
+ assert.equal(x.calls[0][0],'editAthleteSet');assert.equal(result.block.id,'b1');assert.equal(result.item.id,'set1');assert.equal(result.athlete.id,'a1');
+});
+
+test('Athlete Edit fails closed if athlete is no longer in this session',()=>{
+ const x=fixture();assert.throws(()=>x.owners.editAthleteSet({context:{sessionId:'s1',blockId:'b1',itemId:'set1',athleteId:'gone'}}),/no longer here/);assert.equal(x.calls.length,0);
+});
+
 test('Edit set fails closed if rendered block or item no longer exists',()=>{
  const x=fixture();
- assert.throws(()=>x.owners.editSet({context:{sessionId:'s1',blockId:'missing',itemId:'set1'}}),/no longer exists/);
- assert.throws(()=>x.owners.editSet({context:{sessionId:'s1',blockId:'b1',itemId:'missing'}}),/no longer exists/);
+ assert.throws(()=>x.owners.editSet({context:{sessionId:'s1',blockId:'missing',itemId:'set1'}}),/canonical block/);
+ assert.throws(()=>x.owners.editSet({context:{sessionId:'s1',blockId:'b1',itemId:'missing'}}),/canonical block/);
  assert.equal(x.calls.length,0);
 });
 
@@ -74,13 +90,13 @@ test('Finish tap opens Finish owner but does not finish the session itself',()=>
 });
 
 test('missing UI owner is an error, never a silent no-op',()=>{
- const session={id:'s1',blocks:[]},owners=Owners.create({runtime:{selectedSession(){return session},roll(){return{}}},openers:{}});
+ const session={id:'s1',blocks:[]},owners=Owners.create({runtime:{selectedSession(){return session},roll(){return{here:[]}}},openers:{}});
  assert.throws(()=>owners.roll({context:{sessionId:'s1'}}),/UI owner missing: roll/);
 });
 
 test('commands exposes only the explicit Board application command surface',()=>{
  const x=fixture(),commands=x.owners.commands();
- assert.deepEqual(Object.keys(commands).sort(),['capture','editBlock','editSet','finish','openEvidence','openTimes','roll'].sort());
+ assert.deepEqual(Object.keys(commands).sort(),['capture','editAthleteSet','editBlock','editSet','finish','openEvidence','openTimes','roll'].sort());
  assert(!('sync' in commands));assert(!('parse' in commands));assert(!('selectSession' in commands));
 });
 
