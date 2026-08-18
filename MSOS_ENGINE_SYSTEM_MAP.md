@@ -6,19 +6,9 @@ Branch: `rebuild/engine-contracts-v1`
 
 MSOS is a thin application shell around independent coaching engines.
 
-The shell owns:
-- navigation;
-- screen mounting;
-- device/offline state;
-- local persistence adapters;
-- cloud replication adapters;
-- authentication/role context;
-- installation/update state;
-- the composition root.
+The shell owns navigation, screen mounting, device/offline state, persistence/sync adapters, authentication/role context, installation/update state and the composition root. It does **not** own swimming calculations, pathway logic, result interpretation, session parsing, target calculation, adaptation rules, dose classification or report meaning.
 
-The shell does **not** own swimming calculations, pathway logic, result interpretation, session parsing, target calculation, adaptation rules, dose classification or report meaning.
-
-Every coaching domain is an engine with one owner and an explicit portal contract.
+Every coaching domain is one engine with one owner and an explicit portal contract.
 
 ## Engine Communication Portal — Engine 0 — GREEN
 
@@ -26,102 +16,56 @@ All engine-to-engine traffic crosses `rebuild/engine-portal.js`.
 
 Portal rules:
 1. every engine/surface registers one manifest;
-2. every outgoing dependency is declared before the portal is sealed;
-3. reads are `query` operations;
-4. writes are `command` operations;
-5. query permission never grants command permission;
-6. an engine cannot call another engine's undeclared operation;
-7. payloads and responses are cloned at the boundary;
-8. the routing audit records caller/target/operation/context only, never swimmer/result payload values;
-9. the portal owns no coaching truth and no engine storage;
-10. no pub/sub or hidden broadcast may mutate other engines;
-11. the local coaching path is synchronous/local-first; remote/network activity sits behind separate sync/input adapters;
-12. once composition is sealed, late wrappers/replacement owners cannot be attached;
-13. nested calls preserve one cause lineage for diagnostics without sharing domain state;
-14. failure is contained and explicit; there is no silent fallback to another implementation.
+2. every outgoing dependency is declared before seal;
+3. reads are queries and writes are commands;
+4. query permission never grants command permission;
+5. undeclared cross-engine calls fail closed;
+6. payloads/responses are cloned at boundaries;
+7. routing audit records routing metadata, not swimmer/result payload values;
+8. portal owns no coaching truth or engine storage;
+9. no pub/sub or hidden broadcast mutates another engine;
+10. local coaching paths are synchronous/local-first, with remote/network work behind separate adapters;
+11. late wrappers/replacement owners cannot attach after seal;
+12. nested calls retain cause lineage;
+13. failure is contained and explicit, never silently redirected to a competing implementation.
 
-The portal is a contract router, **not** a god object and not a database.
+The portal is a contract router, not a god object or database.
 
 ## Canonical context keys
 
-Inputs and engine answers should carry only the identifiers needed for their scope:
-
-- `clubId`
-- `coachId`
-- `squadId`
-- `athleteId`
-- `sessionId`
-- `blockId`
-- `itemId`
-- `meetId`
-- `meetSessionId`
-- `eventId`
-- `raceId`
-- `testProtocolId`
-- `testResultId`
-- `course`
-- `asOfDate`
-
-These IDs are stable addresses. Screens do not infer identity from names or current UI state.
+Stable IDs, not UI labels, address engine truth:
+`clubId`, `coachId`, `squadId`, `athleteId`, `sessionId`, `blockId`, `itemId`, `meetId`, `meetSessionId`, `eventId`, `raceId`, `testProtocolId`, `testResultId`, `course`, `asOfDate`.
 
 ## Evidence status model
 
-Any measured/imported result carries provenance and status.
+Measured/imported evidence carries provenance and status.
 
-Recommended lifecycle:
-
+Normal lifecycle:
 `captured -> provisional/unverified -> reconciled -> verified`
 
-Alternative terminal/revision states:
-- `corrected`
-- `dq`
-- `dns`
-- `superseded`
-- `rejected`
+Other states may include `corrected`, `dq`, `dns`, `superseded`, `rejected`.
 
-Poolside evidence can be useful before official verification, but permanent PB/record/pathway truth must be able to distinguish provisional from verified evidence.
+Poolside evidence can be useful before verification, but permanent PB/record/pathway truth must distinguish provisional from verified evidence.
 
 ## Implemented core engines
 
 ### Entity Registry — GREEN
 
-One canonical owner for club, coach, squad and swimmer identity.
-
-Owns:
-- canonical IDs;
-- explicit aliases and source-ID mapping;
-- squad memberships;
-- active/inactive state;
-- DOB/sex/classification/reporting dimensions;
-- date-aware roster lookup.
-
-Legacy/current evidence sources may contain different athlete IDs or approved aliases. Entity Registry resolves those references once. Evidence, Attendance, Adaptation, Capture, Methodology and Planning consume that identity contract rather than maintaining competing resolvers.
+Canonical owner for club, coach, squad and swimmer identity, aliases/source IDs, memberships, active/inactive state, DOB/sex/classification/reporting dimensions and date-aware roster lookup.
 
 ### Methodology / Coaching Model — GREEN
 
-Stores coaching interpretation rather than objective measurements.
+Configurable coaching interpretation layered:
+`programme -> club -> squad -> coach -> athlete`.
 
-Overlay order:
-`programme -> club -> squad -> coach -> athlete`
-
-Owns configurable definitions for:
-- physiology/framework;
-- training zones;
-- dose interpretation;
-- adaptation principles;
-- race-model preferences;
-- session-design principles.
-
-A recorded swim time remains the same fact regardless of methodology. Methodology affects how eligible decision engines interpret or use that fact.
+Owns physiology/framework, training-zone definitions, dose interpretation, adaptation principles, race-model preferences and session-design principles. Objective facts remain unchanged by methodology.
 
 ### Programme Plan / Plan Context — GREEN
 
-Canonical planning hierarchy:
-`season -> phase -> cycle -> week -> explicit session intent`
+Canonical hierarchy:
+`season -> phase -> cycle -> week -> explicit session intent`.
 
-Also owns target meets, squad objectives, athlete objectives and planned exposure.
-
-Plan writes are explicit commands and journalled. Missing session intent is explicit; Plan does not reverse-engineer a plan from workout vocabulary.
+Also owns target meets, squad objectives, athlete objectives and planned exposure. Missing intent is explicit; Plan never reverse-engineers purpose from workout vocabulary.
 
 ### Session Truth — GREEN / LOCKED
 
@@ -133,7 +77,7 @@ Owns create/select/resume/edit/version history without background reparsing or s
 
 ### Evidence Retrieval — GREEN ON ENTITY REGISTRY
 
-The read doorway over test/result/PB/conversion evidence. It no longer owns swimmer identity.
+Verified/read-only evidence doorway for tests, results, PBs and conversions. It no longer owns swimmer identity.
 
 ### Results / Performance Pathway — GREEN
 
@@ -151,60 +95,102 @@ Canonical set + athlete context -> same-team or modified prescription. Explicit 
 
 Exact-session attendance only.
 
+### Timing Engine — GREEN
+
+Version `2.0.0`, schema `msos.timing.v2`.
+
+Owns raw measurement only:
+- timing-session identity/context;
+- multi-swimmer assignments, including shared lanes/positions;
+- explicit start/close/abandon;
+- split and finish measurements;
+- per-swimmer elapsed-time/distance ordering;
+- correction and retirement history;
+- reopen of in-progress timing without invented progress.
+
+Timing does **not** decide whether a swim is a valid T400, a PB, a training anchor, a zone result or a target. It records what happened.
+
+### Test Protocol Engine — GREEN
+
+Version `1.0.1`, schema `msos.test-protocol.v1`.
+
+Owns canonical test definitions and observation-validity requirements. The built-in T400 definition is `protocol-t400-freestyle / t400_freestyle`: 400m Freestyle, SCM or LCM, with course/pool-length rules and optional split evidence.
+
+A T400 is a **test protocol / evidence vehicle, not a training zone**. Protocol changes are explicit, versioned and journalled. The engine validates measurement structure but performs no stopwatch, target or adaptation logic.
+
+### Test Result Input Engine — GREEN
+
+Version `1.0.0`, schema `msos.test-result.v1`.
+
+Owns conversion of manual/imported/timing observations into provenance-bearing canonical test-result records:
+- timing/manual/import input;
+- exact source lineage;
+- protocol validation through Test Protocol;
+- provisional capture by default;
+- explicit verify/correct/reject lifecycle;
+- idempotent timing-source ingestion;
+- verified evidence-shaped export.
+
+It does not silently mutate Evidence Retrieval. A later explicit evidence-ingestion/sync boundary must publish verified result rows into the evidence read model.
+
 ### Coach Board — GREEN IN ISOLATED/INTEGRATION GATES
 
-Presentation/projection only. It asks engines for answers; it does not calculate swimming truth.
+Presentation/projection only. It asks domain engines for answers and performs no swimming interpretation.
 
 ### Capture / Delivered / Dose / Reporting / Learning
 
-Existing rebuild engines are retained behind their domain boundaries and continue passing the full poolside chain. They are scheduled for further untangling/expansion after measurement and meet-input engines are added.
+Existing rebuild engines remain behind their domain boundaries and continue passing the poolside chain. Further untangling/expansion remains on the rebuild roadmap.
+
+## Measurement pipeline contract — GREEN
+
+`Timing -> Test Protocol validation -> Test Result Input -> explicit verification -> evidence-shaped export`
+
+Key boundary: Timing preserves the measurement even if protocol conversion fails. Protocol validity and result verification are independent operations; no engine rewrites raw timing to make a test pass.
 
 ## Next engine layer
 
-The next independent input/measurement engines are:
+The next independent meet/result engines are:
 
-1. **Timing Engine** — clocks, laps, splits, multi-swimmer/lane timing and timing-session identity; it records measurements but does not decide their meaning.
-2. **Test Protocol Engine** — canonical definitions of T400 and future training/test protocols, including valid conditions, expected measurement fields and which downstream models may use the result.
-3. **Test Result Input Engine** — timing/manual/imported test evidence -> canonical provisional/verified test-result records with provenance.
-4. **Meet Lifecycle Engine** — meet/session/event/entry/heat/lane/race/round lineage, separate from training-session truth.
-5. **Meet Result Input Engine** — copied Meet Mobile/Swimify text, screenshots/photos, manual entry or supported live feeds -> provisional canonical result candidates.
-6. **Official Results Reconciliation Engine** — official TM file -> confirm/correct/DQ/add missed races while preserving provisional history.
-7. **Standards & Records Engine** — qualification standards, club/Canterbury/NZ records and category matching.
-8. **Race Model Engine** — PBs/splits/ideal or projected splits -> race-segment answers for Targets, Meet and swimmer pathway views.
+1. **Meet Lifecycle Engine** — meet/session/event/entry/heat/lane/race/round lineage, separate from training-session truth.
+2. **Meet Result Input Engine** — copied Meet Mobile/Swimify text, screenshots/photos, manual entry or supported feeds -> provisional canonical result candidates.
+3. **Official Results Reconciliation Engine** — official TM/file evidence -> confirm/correct/DQ/add missed races while preserving provisional history.
+4. **Standards & Records Engine** — qualification standards plus club/Canterbury/NZ record/category matching.
+5. **Race Model Engine** — PBs/splits/ideal/projected splits -> race-segment answers for Targets, Meet and swimmer pathway views.
+6. **Evidence ingestion / read-model refresh** — explicit publication of verified test/meet results into Evidence Retrieval; no hidden cross-engine mutation.
+7. **Exposure / Load** and remaining reporting/learning expansion after the input/result chain is stable.
 
-## How future surfaces consume the same engines
+## How surfaces consume the same engines
 
 ### Group / TV Board
-Same canonical session as Coach Board. Common work remains grouped; athlete-specific boxes appear only where work or targets genuinely diverge.
+Same canonical session as Coach Board. Common work stays grouped; athlete-specific boxes appear only where work/targets genuinely diverge.
 
 ### Individual swimmer phone/tablet
 Privacy-filtered projection of that swimmer's canonical work, targets, modifications, shared evidence, pathway and meet information.
 
 ### Assistant Coach
-Same underlying engines, permission-gated by assigned squad/session. Default poolside writes are limited to explicitly granted domains.
+Same engines, permission-gated by assigned squad/session. Poolside writes are limited to explicitly granted domains.
 
 ### Meet Board
-Reads Meet Lifecycle, provisional/verified Meet Results, Standards/Records, Results/Pathway and Race Model. It does not calculate records or qualifying times itself.
+Reads Meet Lifecycle, provisional/verified Meet Results, Standards/Records, Results/Pathway and Race Model. It does not calculate record or qualifying truth itself.
 
 ### Reports / profile projections
-A swimmer, squad, coach, age bracket, sex, classification or other reporting slice is a projection over canonical entity dimensions plus engine answers. There is no duplicate report database per view.
+Swimmer/squad/coach/age/sex/classification views are projections over canonical entity dimensions plus engine answers, not duplicate databases.
 
 ## Integration rule
 
-An engine does not enter the production composition root until:
-
+An engine does not enter production composition until:
 1. isolated contract tests pass;
 2. recovered historical/proven behaviour passes;
 3. side-effect tests pass;
-4. all dependencies cross the Engine Portal;
-5. the previous competing owner is removed, not wrapped;
-6. failure behaviour is explicit and contained;
-7. existing Parser/Board/poolside regression gates remain green;
-8. phone acceptance is completed where the engine affects deck use.
+4. dependencies cross the Portal;
+5. previous competing owner is removed, not wrapped;
+6. failure is explicit and contained;
+7. Parser/Board/poolside gates remain green;
+8. phone acceptance is completed where deck use is affected.
 
-## Current milestone gate
+## Current engineering milestone gate
 
-Workflow `32093704529` passed the complete chain on commit `d3897ccfec936a2fb09a10d4ecf6f1724ea52840`:
+Workflow `32094977212` passed the complete chain on exact tested commit `315cc24e0c48dadab82a07d077c65893480c6ca0`:
 - Engine Portal;
 - Entity Registry;
 - Methodology;
@@ -216,12 +202,16 @@ Workflow `32093704529` passed the complete chain on commit `d3897ccfec936a2fb09a
 - Targets;
 - Adaptation;
 - Attendance;
+- Timing;
+- Test Protocol;
+- Test Result Input;
 - architecture boundaries;
-- portal-routed integration;
+- portal-routed core integration;
+- portal-routed measurement-pipeline integration;
 - full Board regressions;
 - Capture / Delivered / Dose;
-- 5,400m poolside flow;
-- Runtime integration;
+- protected 5,400m poolside flow;
+- Runtime reload/edit/finish integration;
 - engine-backed Board actions.
 
 `main` remains untouched until the rebuilt owner map and production integration gates are complete.
