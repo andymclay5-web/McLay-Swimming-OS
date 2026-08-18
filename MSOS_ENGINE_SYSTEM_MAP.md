@@ -204,7 +204,7 @@ An engine does not enter the production composition root until:
 
 ## Current milestone gate
 
-Workflow `32093574222` passed the complete chain on commit `a6d34b9afb12e9509f94bf4b665a617a3dd13456` before this system-map documentation update:
+Workflow `32093704529` passed the complete chain on commit `d3897ccfec936a2fb09a10d4ecf6f1724ea52840`:
 - Engine Portal;
 - Entity Registry;
 - Methodology;
