@@ -1,9 +1,9 @@
 McLay Swimming OS Version 4
-Build: v4-poolside-core-20260819a-guardian72
+Build: v4-poolside-core-20260819b-releasegate
 Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
 Complete V4 Guardian
-- 72 / 72 foundation and Version 4 regressions PASS on the shipping source stack:
+- 73 / 73 foundation and Version 4 regressions PASS on the shipping source stack:
   app.js + v4-correct.js + v4-poolside-core.js.
 - The full Guardian is now executed by GitHub Actions on changes to the V4 runtime.
 - Morning Board session/coaching regressions remain PASS.
@@ -14,6 +14,7 @@ Resolved in this build
 - 400 IM race intent remains separate from the working stroke. A Fly repeat at 400 IM pace does not invent a straight-line IM-leg target when no exact IM leg model is loaded.
 - Clearing an explicit athlete override resumes the current automatic athlete profile. Charlotte returns to the current 50% profile rather than the obsolete 60% expectation.
 - App, V4 layer and service-worker cache identifiers are advanced together so the corrected bytes replace the previous phone cache.
+- The final poolside build now owns the software attestation used by the release gate; an earlier layer can no longer leave the shipping build marked DEV / NOT ATTESTED.
 
 Retained V4 scope
 - Full legacy app and data paths remain present; this is not a seven-file replacement shell.

@@ -1,6 +1,7 @@
 name: Morning Board check
 
 on:
+  pull_request:
   push:
     branches: [main]
     paths:
@@ -12,6 +13,9 @@ on:
       - 'index.html'
       - 'tests/session-truth.test.js'
       - 'tests/v4-guardian.test.js'
+      - 'tests/release-package.test.js'
+      - 'SHA256SUMS.txt'
+      - 'manifest.webmanifest'
       - 'morning-board.html'
       - 'morning-board.js'
       - 'morning-board.css'
@@ -40,6 +44,8 @@ jobs:
         run: node tests/session-truth.test.js
       - name: Complete V4 Guardian
         run: node tests/v4-guardian.test.js
+      - name: Release package integrity
+        run: node tests/release-package.test.js
       - name: Morning Board wiring
         run: |
           grep -q 'engines/session-truth.js' morning-board.html

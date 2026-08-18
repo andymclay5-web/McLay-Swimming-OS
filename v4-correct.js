@@ -1267,6 +1267,10 @@
       const tests=[];
       tests.push(gtest('Correct v4 is running on the validated base build',C.baseBuild.match,`loaded ${C.baseBuild.loaded} · expected ${C.baseBuild.expected}`));
       try{
+        const att=M.release?.attestation?.()||M.RELEASE_ATTESTATION||{};
+        tests.push(gtest('Final shipping build owns the software attestation',att.softwareReady===true&&att.build===M.BUILD,`shipping ${M.BUILD} · attested ${att.build||'none'}`));
+      }catch(e){tests.push(gtest('Final shipping build owns the software attestation',false,e.message));}
+      try{
         const blank={adaptationProfiles:[]};
         const expected={
           'Charlotte Murphy':.50,'Conor Fischer':.50,'McKenzie Drage':2/3,
