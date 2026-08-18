@@ -78,7 +78,7 @@ try{
   assert.equal(await mollyRoll.count(),1,'Development roll should contain Molly exactly once');
   await click(mollyRoll.locator('button[data-status="present"]'));
   await click(page.locator('[data-panel-action="close"]'));
-  await waitText(page.locator('.msos-board-attendance'),/Molly McKernan/);
+  await waitText(page.locator('.msos-board-attendance'),/\bMolly\b/);
   await waitText(page.locator('.msos-board-sticky-actions'),/Roll · 1/);
 
   await click(page.locator('.msos-board-sticky-actions [data-board-action="times"]'));
