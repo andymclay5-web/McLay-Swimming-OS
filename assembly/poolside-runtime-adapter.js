@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyPoolsideRuntime=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.1.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
   class PoolsideRuntimeAdapter{
@@ -27,20 +27,17 @@
     editBlock(blockId,patch,opts={}){return this.app.editBlock(this.requireSelected(),blockId,patch,opts)}
     captureEvidence(spec={}){return this.app.capture(this.requireSelected(),spec)}
     evidenceAt(context={}){const id=this.requireSelected();if(context.sessionId&&text(context.sessionId)!==id)throw new Error('Evidence context session mismatch');return this.app.evidenceAt(id,context)}
-    timingSessions(query={}){return clone(this.app.timingSessions(query))}
-    timingSession(id){return clone(this.app.timingSession(id))}
-    createT400Timing(athleteRefs=[],opts={}){
-      const selected=this.selectedSession(),sid=this.requireSelected(),requirements=this.app.testProtocolRequirements('t400_freestyle');if(requirements.status!=='ok')throw new Error(requirements.message||'T400 protocol unavailable');
-      const course=text(opts.course||selected?.identity?.course).toUpperCase(),poolLength=Number(opts.poolLength||requirements.poolLengthsByCourse?.[course]||0)||null,refs=[...new Set((athleteRefs||[]).map(text).filter(Boolean))];if(!refs.length)throw new Error('Choose at least one swimmer for T400');
-      const timing=this.app.createTimingSession({context:{training_session_id:sid,test_protocol_id:requirements.protocol.id},course,poolLength,label:'T400 Freestyle',coachId:text(opts.coachId),source:'deck_timer'});refs.forEach((ref,index)=>this.app.assignTimingAthlete(timing.id,ref,{lane:opts.lanes?.[ref]??null,position:index+1}));return this.app.timingSession(timing.id)
-    }
-    assignTimingAthlete(timingId,athleteRef,opts={}){return this.app.assignTimingAthlete(timingId,athleteRef,opts)}
-    unassignTimingAthlete(timingId,athleteRef,opts={}){return this.app.unassignTimingAthlete(timingId,athleteRef,opts)}
-    startTiming(timingId,opts={}){return this.app.startTiming(timingId,opts)}
-    recordTimingSplit(timingId,athleteRef,distance,elapsedSeconds,opts={}){return this.app.recordTimingSplit(timingId,athleteRef,{distance,elapsedSeconds,...opts})}
-    finishTimingAthlete(timingId,athleteRef,elapsedSeconds,opts={}){return this.app.finishTimingAthlete(timingId,athleteRef,{distance:400,elapsedSeconds,...opts})}
-    saveT400FromTiming(timingId,athleteRef,opts={}){return this.app.captureAndPublishTimingTest(timingId,athleteRef,'t400_freestyle',opts)}
-    closeTiming(timingId,opts={}){return this.app.closeTiming(timingId,opts)}
+    timingSessions(query={}){const sid=this.requireSelected();return clone(this.app.timingSessions(query).filter(x=>text(x?.context?.training_session_id)===sid))}
+    timingSession(id){const row=this.app.timingSession(id);if(row&&text(row?.context?.training_session_id)!==this.requireSelected())throw new Error('Timing session belongs to a different training session');return clone(row)}
+    testResults(query={}){return clone(this.app.testResults(query))}
+    createT400Timing(athleteRefs=[],opts={}){const selected=this.selectedSession(),sid=this.requireSelected(),requirements=this.app.testProtocolRequirements('t400_freestyle');if(requirements.status!=='ok')throw new Error(requirements.message||'T400 protocol unavailable');const course=text(opts.course||selected?.identity?.course).toUpperCase(),poolLength=Number(opts.poolLength||requirements.poolLengthsByCourse?.[course]||0)||null,refs=[...new Set((athleteRefs||[]).map(text).filter(Boolean))];if(!refs.length)throw new Error('Choose at least one swimmer for T400');const timing=this.app.createTimingSession({context:{training_session_id:sid,test_protocol_id:requirements.protocol.id},course,poolLength,label:'T400 Freestyle',coachId:text(opts.coachId),source:'deck_timer'});refs.forEach((ref,index)=>this.app.assignTimingAthlete(timing.id,ref,{lane:opts.lanes?.[ref]??null,position:index+1}));return this.app.timingSession(timing.id)}
+    assignTimingAthlete(timingId,athleteRef,opts={}){this.timingSession(timingId);return this.app.assignTimingAthlete(timingId,athleteRef,opts)}
+    unassignTimingAthlete(timingId,athleteRef,opts={}){this.timingSession(timingId);return this.app.unassignTimingAthlete(timingId,athleteRef,opts)}
+    startTiming(timingId,opts={}){this.timingSession(timingId);return this.app.startTiming(timingId,opts)}
+    recordTimingSplit(timingId,athleteRef,distance,elapsedSeconds,opts={}){this.timingSession(timingId);return this.app.recordTimingSplit(timingId,athleteRef,{distance,elapsedSeconds,...opts})}
+    finishTimingAthlete(timingId,athleteRef,elapsedSeconds,opts={}){this.timingSession(timingId);return this.app.finishTimingAthlete(timingId,athleteRef,{distance:400,elapsedSeconds,...opts})}
+    saveT400FromTiming(timingId,athleteRef,opts={}){this.timingSession(timingId);return this.app.captureAndPublishTimingTest(timingId,athleteRef,'t400_freestyle',opts)}
+    closeTiming(timingId,opts={}){this.timingSession(timingId);return this.app.closeTiming(timingId,opts)}
     finish(opts={}){return this.app.finishSession(this.requireSelected(),opts)}
     delivery(){const id=this.selectedId();return id?this.app.deliveryForSession(id):null}
     boardModel(){const id=this.selectedId();return id?this.app.boardForSession(id):null}
