@@ -32,8 +32,10 @@ jobs:
           node --check assembly/poolside-presenter.js
           node --check assembly/browser-app.js
           node --check assembly/programme-config.js
-      - name: Calendar session intake integration
-        run: node tests/session-flow-portal.integration.test.js
+      - name: Calendar session intake and custom authoring integration
+        run: |
+          node tests/session-flow-portal.integration.test.js
+          node tests/assembly-custom-session.integration.test.js
       - name: Unified Calendar Board poolside Timing and current-data composition
         run: |
           node tests/app-composition.integration.test.js
@@ -65,6 +67,7 @@ jobs:
           for(const owner of ['calendar-surface','coach-board-surface','measurement-surface','session-intake-flow','poolside-session-flow','measurement-publication-flow','timing','test-protocol','test-result-input','evidence-publication','board-projection'])assert(app.includes(owner),`Unified app composition missing ${owner}`);
           assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
+          assert(/calendar-surface[\s\S]*session-schedule[\s\S]*createCustomSlot/.test(app),'Custom schedule authoring is not routed through Calendar Surface -> Session Schedule');
           assert(/evidence-publication[\s\S]*verifiedSource/.test(app)&&/evidence-retrieval[\s\S]*rebuildSources/.test(app),'Verified local test evidence is not explicitly republished into Evidence Retrieval');
           for(const path of ['assembly/poolside-runtime-adapter.js','assembly/poolside-presenter.js','assembly/programme-data-adapter.js','assembly/media-capture-adapter.js']){
             const src=fs.readFileSync(path,'utf8');
@@ -81,6 +84,7 @@ jobs:
           const browser=fs.readFileSync('assembly/browser-app.js','utf8');
           assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
           assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser)&&/MSOSAssemblyProgrammeData/.test(browser)&&/MSOSAssemblyMediaCapture/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside/data/media boundaries');
+          assert(/state\.app\.createCustomSlot\(/.test(browser)&&!/SessionSchedule\.create|new M\.SessionSchedule/.test(browser),'Browser custom authoring bypasses App Composition or recreates Schedule owner');
           for(const pattern of [/evidenceSources:programmeData\.evidenceSources/,/profiles:programmeData\.profiles/,/standards:programmeData\.standards/,/baseTimes:programmeData\.baseTimes/,/timingStorage/,/protocolStorage/,/testResultStorage/])assert(pattern.test(browser),'Browser boot does not inject required programme or measurement storage into App Composition');
           const html=fs.readFileSync('assembly/index.html','utf8');
           const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
