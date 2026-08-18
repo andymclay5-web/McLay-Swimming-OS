@@ -26,6 +26,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  engine-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Engine Portal
+        run: node --check rebuild/engine-portal.js
+      - name: Engine Portal communication regressions
+        run: node tests/engine-portal.test.js
+
   session-truth:
     runs-on: ubuntu-latest
     steps:
@@ -136,7 +148,7 @@ jobs:
 
   board-projection:
     runs-on: ubuntu-latest
-    needs: [session-truth, targets, adaptation, attendance, architecture]
+    needs: [engine-portal, session-truth, targets, adaptation, attendance, architecture]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -144,6 +156,7 @@ jobs:
           node-version: '20'
       - name: Syntax check Board composition and Runtime dependencies
         run: |
+          node --check rebuild/engine-portal.js
           node --check engines/board-projection.js
           node --check ui/board-renderer.js
           node --check ui/board-controller.js
@@ -168,7 +181,7 @@ jobs:
 
   poolside-integration:
     runs-on: ubuntu-latest
-    needs: [session-truth, session-lifecycle, evidence-retrieval, results-pathway, targets, adaptation, attendance, architecture, board-projection]
+    needs: [engine-portal, session-truth, session-lifecycle, evidence-retrieval, results-pathway, targets, adaptation, attendance, architecture, board-projection]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -176,7 +189,9 @@ jobs:
           node-version: '20'
       - name: Syntax check poolside integration chain
         run: |
+          node --check rebuild/engine-portal.js
           node --check rebuild/runtime.js
+          node --check tests/engine-portal.test.js
           node --check tests/capture-evidence.test.js
           node --check tests/delivered-session.test.js
           node --check tests/session-dose.test.js
