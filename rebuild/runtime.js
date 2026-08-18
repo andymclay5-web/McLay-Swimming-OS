@@ -20,7 +20,7 @@
     });
   }else root.MSOSRebuildRuntime=factory(root.MSOSEngines||{});
 })(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='1.2.0';
+  const VERSION='1.2.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const required=['SessionTruth','SessionLifecycle','SessionEdit','EvidenceRetrieval','ResultsPathway','Targets','Adaptation','Attendance','BoardProjection','CaptureEvidence','DeliveredSession','PlanContext','SessionDose','Reporting','Learning'];
@@ -41,6 +41,7 @@
     createSession({source,identity,draftId=null,select=true}={}){const canonical=this.parse(source,identity),validation=this.truth.validate(canonical);if(!validation.ok)throw new Error(`Session Truth rejected intake: ${validation.errors.join('; ')}`);const record=draftId?this.lifecycle.createFromDraft(draftId,canonical,{select}):this.lifecycle.createSession(canonical,{select,sourceType:'text'});return{canonical:clone(canonical),record}}
     selectSession(id){return this.lifecycle.selectSession(id)}
     editSession(nodeId,patch,{note=''}={}){const rec=this.selectedRecord();if(!rec)throw new Error('No selected session');const changed=this.edit.update(rec.current,nodeId,patch,{note});return this.lifecycle.applyEdit(rec.id,changed.session,{action:'edit',note:changed.change.note})}
+    editBlock(blockId,patch,{note=''}={}){const rec=this.selectedRecord();if(!rec)throw new Error('No selected session');const changed=this.edit.updateBlock(rec.current,blockId,patch,{note});return this.lifecycle.applyEdit(rec.id,changed.session,{action:'edit_block',note:changed.change.note})}
     removeSessionNode(nodeId,{note=''}={}){const rec=this.selectedRecord();if(!rec)throw new Error('No selected session');const changed=this.edit.remove(rec.current,nodeId,{note});return this.lifecycle.applyEdit(rec.id,changed.session,{action:'remove',note:changed.change.note})}
     addAfter(anchorId,newNode,{note=''}={}){const rec=this.selectedRecord();if(!rec)throw new Error('No selected session');const changed=this.edit.addAfter(rec.current,anchorId,newNode,{note});return this.lifecycle.applyEdit(rec.id,changed.session,{action:'add_after',note:changed.change.note})}
     parseFragment(source,{blockType='main_set'}={}){const heading={warm_up:'Warm up',pre_set:'Pre set',main_set:'Main set',post_set:'Post set',warm_down:'Warm down',test:'Test'}[blockType]||'Main set';const fragment=this.parse(`${heading}\n${source}`,{id:`fragment-${Date.now()}`,date:'',dayPart:'',course:this.selectedSession()?.identity?.course||''}),block=fragment.blocks[0];if(!block||block.items.length!==1)throw new Error('Fragment must resolve to exactly one canonical node');return clone(block.items[0])}
@@ -64,7 +65,7 @@
     athleteReport(athleteRef,{course='',sessionReports=[]}={}){const athlete=this.evidence.resolveAthlete(athleteRef);if(!athlete)throw new Error(`Athlete not found: ${athleteRef}`);const pathway=this.pathway.profile(athlete.id,{course}),attendanceRows=this.attendance.snapshot().records||[],captures=this.capture.query({athleteId:athlete.id,status:''});return this.reporting.athlete({athlete,pathway,attendanceRows,captures,sessionReports})}
     state(){return{lifecycle:this.lifecycle.snapshot(),attendance:this.attendance.snapshot(),capture:this.capture.snapshot(),delivery:this.delivered.snapshot(),adaptationOverrides:this.adaptation.listOverrides()}}
   }
-  function findNode(session,id){for(const block of session?.blocks||[]){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[]))}}return null}
+  function findNode(session,id){for(const block of session?.blocks||[]){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[])}}return null}
   const create=options=>new Runtime(options);
   return{VERSION,create,Runtime,findNode};
 });
