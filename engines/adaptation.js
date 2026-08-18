@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Adaptation=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1';
+  const VERSION='1.1.0';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
@@ -23,18 +23,8 @@
   function rawText(item){return[item?.raw,item?.text,item?.zone,...(item?.cues||[]),...(item?.pattern||[]).map(x=>x.text),...(item?.phases||[]).map(x=>x.text||x.raw)].filter(Boolean).join(' ')}
   function isAerobic(item){return!!item?.zone||/\b(?:regeneration|regen|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(rawText(item))}
   function isQuality(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isAerobic(item))return false;return d>0&&d<=100&&r<=4&&/\b(?:descend|build|fast|max|sprint|race|pace|quality|underwater|drill|scull|skill|turn|start)\b/i.test(raw)}
-  function sameTeamExposure(item){
-    const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);
-    if(isQuality(item))return true;
-    // Inclusion is for genuinely short shared quality/skill work. Longer technique
-    // patterns can still be condensed, but only in whole canonical pattern cycles.
-    if(isAerobic(item)||d<=0||d>50||r>8)return false;
-    return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw);
-  }
-  function sameWork(a,b){
-    const arr=v=>(v||[]).map(text).sort().join('|').toLowerCase();
-    return (num(a?.reps)||1)===(num(b?.reps)||1)&&(num(a?.distance)||0)===(num(b?.distance)||0)&&text(a?.stroke).toLowerCase()===text(b?.stroke).toLowerCase()&&(num(a?.restSeconds)||0)===(num(b?.restSeconds)||0)&&(num(a?.cycleSeconds)||0)===(num(b?.cycleSeconds)||0)&&arr(a?.equipment)===arr(b?.equipment)&&JSON.stringify(a?.pattern||[])===JSON.stringify(b?.pattern||[])&&JSON.stringify(a?.phases||[])===JSON.stringify(b?.phases||[]);
-  }
+  function sameTeamExposure(item){const raw=rawText(item),d=num(item?.distance)||0,r=Math.max(1,num(item?.reps)||1);if(isQuality(item))return true;if(isAerobic(item)||d<=0||d>50||r>8)return false;return/\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)}
+  function sameWork(a,b){const arr=v=>(v||[]).map(text).sort().join('|').toLowerCase();return(num(a?.reps)||1)===(num(b?.reps)||1)&&(num(a?.distance)||0)===(num(b?.distance)||0)&&text(a?.stroke).toLowerCase()===text(b?.stroke).toLowerCase()&&(num(a?.restSeconds)||0)===(num(b?.restSeconds)||0)&&(num(a?.cycleSeconds)||0)===(num(b?.cycleSeconds)||0)&&arr(a?.equipment)===arr(b?.equipment)&&JSON.stringify(a?.pattern||[])===JSON.stringify(b?.pattern||[])&&JSON.stringify(a?.phases||[])===JSON.stringify(b?.phases||[])}
   function nearestWholePattern(reps,ratio,span){const target=reps*ratio,c=[];for(let r=span;r<=reps;r+=span)c.push({reps:r,delta:Math.abs(r-target)});if(!c.length)return reps;c.sort((a,b)=>a.delta-b.delta||b.reps-a.reps);return c[0].reps}
   function scaleReps(item,ratio){const reps=Math.max(1,num(item?.reps)||1);if(ratio>=.98)return reps;const span=patternSpan(item);if(span>0&&coversPattern(item))return nearestWholePattern(reps,ratio,span);return Math.max(1,Math.round(reps*ratio))}
   function scaleContinuousDistance(distance,ratio,session,{returnToStart=false,roundUpReturn=false}={}){const d=num(distance)||0;if(ratio>=.98||d<=0)return d;const pool=poolLength(session),unit=returnToStart?pool*2:pool,target=Math.max(unit,d*ratio),steps=roundUpReturn?Math.ceil(target/unit):Math.round(target/unit);return Math.min(d,Math.max(unit,steps*unit))}
@@ -46,27 +36,24 @@
   }
 
   class Adaptation{
-    constructor({evidence,profiles=[],overrides=[]}={}){if(!evidence||typeof evidence.resolveAthlete!=='function')throw new Error('Adaptation Engine requires Evidence Retrieval for athlete identity');this.evidence=evidence;this.profiles=clone(profiles||[]);this.overrides=clone(overrides||[])}
+    constructor({evidence,profiles=[],overrides=[],clock=()=>new Date().toISOString()}={}){if(!evidence||typeof evidence.resolveAthlete!=='function')throw new Error('Adaptation Engine requires Evidence Retrieval for athlete identity');this.evidence=evidence;this.profiles=clone(profiles||[]);this.overrides=clone(overrides||[]);this.clock=clock}
     athlete(ref){return this.evidence.resolveAthlete(ref)}
-    profile(athleteRef){
-      const ath=this.athlete(athleteRef);if(!ath)return null;const stored=this.profiles.find(x=>x.athlete_id===ath.id&&x.active!==false),fallback=FALLBACKS[key(ath.full_name)]||{},raw=num(stored?.default_volume_ratio),ratio=raw!==null&&raw>0?Math.max(.25,Math.min(1,raw)):(fallback.ratio||1);
-      return{athleteId:ath.id,key:key(ath.full_name),ratio,label:text(stored?.profile_label||fallback.label||ath.modifications),returnToStart:stored?.return_to_starting_end===true||fallback.returnToStart===true,roundUpReturn:stored?.round_up_return===true||fallback.roundUpReturn===true,source:stored?'stored':'fallback'};
-    }
+    profile(athleteRef){const ath=this.athlete(athleteRef);if(!ath)return null;const stored=this.profiles.find(x=>x.athlete_id===ath.id&&x.active!==false),fallback=FALLBACKS[key(ath.full_name)]||{},raw=num(stored?.default_volume_ratio),ratio=raw!==null&&raw>0?Math.max(.25,Math.min(1,raw)):(fallback.ratio||1);return{athleteId:ath.id,key:key(ath.full_name),ratio,label:text(stored?.profile_label||fallback.label||ath.modifications),returnToStart:stored?.return_to_starting_end===true||fallback.returnToStart===true,roundUpReturn:stored?.round_up_return===true||fallback.roundUpReturn===true,source:stored?'stored':'fallback'}}
+    listOverrides({sessionId='',itemId='',athleteId=''}={}){return clone(this.overrides.filter(x=>x.active!==false).filter(x=>!sessionId||x.sessionId===sessionId).filter(x=>!itemId||x.itemId===itemId).filter(x=>!athleteId||x.athleteId===athleteId))}
     override(session,item,ath){return this.overrides.filter(x=>x.active!==false&&x.athleteId===ath.id&&x.sessionId===session?.id&&x.itemId===item?.id).sort((a,b)=>text(b.updatedAt||b.updated_at).localeCompare(text(a.updatedAt||a.updated_at)))[0]||null}
-    applyOverride(item,override){const x=clone(item),p=override?.prescription||override?.work||override||{};for(const field of ['reps','distance','stroke','restSeconds','cycleSeconds','raw'])if(p[field]!==undefined)x[field]=clone(p[field]);if(p.equipment!==undefined)x.equipment=clone(p.equipment);if(p.pattern!==undefined)x.pattern=clone(p.pattern);if(p.phases!==undefined)x.phases=clone(p.phases);return x}
-    adaptPhase(session,parent,phase,ath,profile){
-      const child={...clone(parent),...clone(phase),reps:num(phase?.reps)||num(phase?.count)||1,distance:num(phase?.distance)||num(parent?.distance),raw:phase?.raw||phase?.text||parent?.raw,phases:[],pattern:clone(phase?.pattern||[]),cues:clone(phase?.cues||[])};
-      const result=this.adaptItem(session,child,ath.id,{profile,allowOverride:false});
-      return{...clone(phase),reps:result.prescription.reps,distance:result.prescription.distance,stroke:result.prescription.stroke||phase.stroke,equipment:clone(result.prescription.equipment||phase.equipment||[]),pattern:clone(result.prescription.pattern||phase.pattern||[]),adaptationReason:result.reason,sameAsGroup:result.sameAsGroup};
+    setOverride(session,item,athleteRef,prescription,{reason='Coach override'}={}){
+      const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid)throw new Error('Adaptation override requires exact session id');if(!iid)throw new Error('Adaptation override requires exact item id');if(!ath)throw new Error(`Athlete not found: ${athleteRef}`);
+      const at=this.clock(),row={id:`adapt-${sid}-${iid}-${ath.id}`,sessionId:sid,itemId:iid,athleteId:ath.id,prescription:clone(prescription||{}),reason:text(reason)||'Coach override',active:true,updatedAt:at};
+      const i=this.overrides.findIndex(x=>x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id);if(i>=0)this.overrides[i]=row;else this.overrides.push(row);return clone(row);
     }
+    clearOverride(session,item,athleteRef){const sid=text(session?.id),iid=text(item?.id),ath=this.athlete(athleteRef);if(!sid||!iid||!ath)return false;const before=this.overrides.length;this.overrides=this.overrides.filter(x=>!(x.sessionId===sid&&x.itemId===iid&&x.athleteId===ath.id));return this.overrides.length!==before}
+    applyOverride(item,override){const x=clone(item),p=override?.prescription||override?.work||override||{};for(const field of ['reps','distance','stroke','restSeconds','cycleSeconds','raw'])if(p[field]!==undefined)x[field]=clone(p[field]);if(p.equipment!==undefined)x.equipment=clone(p.equipment);if(p.pattern!==undefined)x.pattern=clone(p.pattern);if(p.phases!==undefined)x.phases=clone(p.phases);return x}
+    adaptPhase(session,parent,phase,ath,profile){const child={...clone(parent),...clone(phase),reps:num(phase?.reps)||num(phase?.count)||1,distance:num(phase?.distance)||num(parent?.distance),raw:phase?.raw||phase?.text||parent?.raw,phases:[],pattern:clone(phase?.pattern||[]),cues:clone(phase?.cues||[])};const result=this.adaptItem(session,child,ath.id,{profile,allowOverride:false});return{...clone(phase),reps:result.prescription.reps,distance:result.prescription.distance,stroke:result.prescription.stroke||phase.stroke,equipment:clone(result.prescription.equipment||phase.equipment||[]),pattern:clone(result.prescription.pattern||phase.pattern||[]),adaptationReason:result.reason,sameAsGroup:result.sameAsGroup}}
     adaptItem(session,item,athleteRef,{profile:profileOverride=null,allowOverride=true}={}){
       const ath=this.athlete(athleteRef);if(!ath)return{status:'missing_athlete',sameAsGroup:true,prescription:clone(item),reason:'Athlete not found',profile:null};
       const profile=profileOverride||this.profile(ath.id)||{ratio:1,returnToStart:false,roundUpReturn:false},explicit=allowOverride?this.override(session,item,ath):null;
       if(explicit){const prescription=this.applyOverride(item,explicit);return{status:'ok',sameAsGroup:sameWork(item,prescription),prescription,reason:text(explicit.reason||'Explicit coach override'),profile,source:'override'}}
-      // Decide whether team inclusion is part of the original set purpose before a
-      // capability substitution changes stroke/equipment wording.
-      const preserveTeam=isQuality(item)||sameTeamExposure(item);
-      let x=clone(item),reasons=[];const constraint=constraintFor(ath,item);if(constraint){x=constraint.apply(x);reasons.push(constraint.reason)}
+      const preserveTeam=isQuality(item)||sameTeamExposure(item);let x=clone(item),reasons=[];const constraint=constraintFor(ath,item);if(constraint){x=constraint.apply(x);reasons.push(constraint.reason)}
       if(profile.ratio<.98){
         if((x.phases||[]).length){x.phases=x.phases.map(p=>this.adaptPhase(session,x,p,ath,profile));x.reps=x.phases.reduce((n,p)=>n+(num(p.reps)||0),0);reasons.push('Phase structure preserved')}
         else if(preserveTeam){reasons.push('Same-team quality exposure preserved')}
