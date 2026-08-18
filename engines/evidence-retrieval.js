@@ -1,10 +1,9 @@
 'use strict';
 (function(root,factory){
-  const api=factory();
-  if(typeof module==='object'&&module.exports)module.exports=api;
-  else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.EvidenceRetrieval=api;}
-})(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='2.0.0';
+  if(typeof module==='object'&&module.exports)module.exports=factory(require('./entity-registry.js'));
+  else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.EvidenceRetrieval=factory(root.MSOSEngines.EntityRegistry);}
+})(typeof globalThis!=='undefined'?globalThis:this,function(EntityRegistry){
+  const VERSION='2.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
@@ -27,8 +26,9 @@
   function conversionKey(row){return`${text(row.from).toUpperCase()}|${text(row.to).toUpperCase()}|${distance(row)??''}|${stroke(row.stroke)}|${num(row.seconds)??''}`}
 
   class EvidenceIndex{
-    constructor({sources=[],entities}={}){
-      if(!entities||typeof entities.resolveAthlete!=='function'||typeof entities.sourceAthleteId!=='function'||typeof entities.listAthletes!=='function')throw new Error('Evidence Retrieval requires Entity Registry');
+    constructor({sources=[],entities=null,aliases=[]}={}){
+      if(!entities){if(!EntityRegistry||typeof EntityRegistry.create!=='function')throw new Error('Evidence Retrieval requires Entity Registry');entities=EntityRegistry.create({sources,aliases})}
+      if(typeof entities.resolveAthlete!=='function'||typeof entities.sourceAthleteId!=='function'||typeof entities.listAthletes!=='function')throw new Error('Evidence Retrieval requires Entity Registry');
       this.entities=entities;this.sources=[];this.rebuild(sources);
     }
     rebuild(sources=[]){this.sources=(sources||[]).map((s,i)=>({...clone(s),id:text(s.id)||`source-${i+1}`,priority:Number(s.priority)||0,trust:text(s.trust)||'unknown'})).sort((a,b)=>b.priority-a.priority||trustRank(b.trust)-trustRank(a.trust));this._build();return this}
