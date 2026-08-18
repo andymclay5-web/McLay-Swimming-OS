@@ -27,6 +27,7 @@ jobs:
           node --check assembly/browser-storage.js
           node --check assembly/data-loader.js
           node --check assembly/programme-data-adapter.js
+          node --check assembly/media-capture-adapter.js
           node --check assembly/poolside-runtime-adapter.js
           node --check assembly/poolside-presenter.js
           node --check assembly/browser-app.js
@@ -38,10 +39,11 @@ jobs:
           node tests/app-composition.integration.test.js
           node tests/assembly-board-actions.integration.test.js
           node tests/assembly-live-data-flow.integration.test.js
-      - name: Browser data infrastructure renderer and poolside presenter
+      - name: Browser data media renderer and poolside presenter
         run: |
           node tests/assembly-browser-infrastructure.test.js
           node tests/assembly-programme-data.test.js
+          node tests/assembly-media-capture.test.js
           node tests/assembly-shell-renderer.test.js
           node tests/assembly-poolside-presenter.test.js
       - name: Schedule and navigation protected regressions
@@ -64,7 +66,7 @@ jobs:
           assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
           assert(/evidence-publication[\s\S]*verifiedSource/.test(app)&&/evidence-retrieval[\s\S]*rebuildSources/.test(app),'Verified local test evidence is not explicitly republished into Evidence Retrieval');
-          for(const path of ['assembly/poolside-runtime-adapter.js','assembly/poolside-presenter.js','assembly/programme-data-adapter.js']){
+          for(const path of ['assembly/poolside-runtime-adapter.js','assembly/poolside-presenter.js','assembly/programme-data-adapter.js','assembly/media-capture-adapter.js']){
             const src=fs.readFileSync(path,'utf8');
             assert(!/require\(['\"]\.\.\/engines\//.test(src),`${path} imports a domain engine implementation`);
           }
@@ -73,14 +75,17 @@ jobs:
           const programmeData=fs.readFileSync('assembly/programme-data-adapter.js','utf8');
           assert(/method:'GET'/.test(programmeData),'Programme data adapter is not explicitly read-only');
           assert(!/method:\s*['\"](?:POST|PUT|PATCH|DELETE)['\"]/i.test(programmeData),'Programme data adapter contains a write method');
+          const media=fs.readFileSync('assembly/media-capture-adapter.js','utf8');
+          assert(/IndexedDbMediaStore/.test(media)&&/MediaCaptureAdapter/.test(media),'Media capture is not an explicit browser infrastructure adapter');
+          assert(/await this\.store\.put\(row\)/.test(media),'Media capture does not save locally before returning mediaRef');
           const browser=fs.readFileSync('assembly/browser-app.js','utf8');
           assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
-          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser)&&/MSOSAssemblyProgrammeData/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside/data boundaries');
+          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser)&&/MSOSAssemblyProgrammeData/.test(browser)&&/MSOSAssemblyMediaCapture/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside/data/media boundaries');
           for(const pattern of [/evidenceSources:programmeData\.evidenceSources/,/profiles:programmeData\.profiles/,/standards:programmeData\.standards/,/baseTimes:programmeData\.baseTimes/,/timingStorage/,/protocolStorage/,/testResultStorage/])assert(pattern.test(browser),'Browser boot does not inject required programme or measurement storage into App Composition');
           const html=fs.readFileSync('assembly/index.html','utf8');
           const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
           assert(!scripts.some(src=>src==='../app.js'||src==='app.js'||/\/(?:v4-correct|v4-poolside-core)\.js$/i.test(src)),'Assembly page loads a legacy competing app implementation');
-          for(const src of ['../config.js','../rebuild/app-composition.js','../rebuild/navigation-state.js','../ui/board-controller.js','../rebuild/board-command-owners.js','../rebuild/poolside-actions.js','../engines/session-edit.js','../engines/delivered-session.js','../engines/timing.js','../engines/test-protocol.js','../engines/test-result-input.js','../engines/evidence-publication.js','./programme-data-adapter.js','./poolside-runtime-adapter.js','./poolside-presenter.js'])assert(scripts.includes(src),`Assembly page missing ${src}`);
+          for(const src of ['../config.js','../rebuild/app-composition.js','../rebuild/navigation-state.js','../ui/board-controller.js','../rebuild/board-command-owners.js','../rebuild/poolside-actions.js','../engines/session-edit.js','../engines/delivered-session.js','../engines/timing.js','../engines/test-protocol.js','../engines/test-result-input.js','../engines/evidence-publication.js','./programme-data-adapter.js','./media-capture-adapter.js','./poolside-runtime-adapter.js','./poolside-presenter.js'])assert(scripts.includes(src),`Assembly page missing ${src}`);
           console.log('PASS App assembly ownership boundary');
           NODE
 
