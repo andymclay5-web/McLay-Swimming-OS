@@ -8,118 +8,105 @@ This branch is isolated from the live GitHub Pages app. A green rebuild engine h
 
 Status: **GREEN / ARCHITECTURAL GATE**
 
-All engine-to-engine traffic is being moved behind the portal contract. Reads are explicit queries, writes are explicit commands, outgoing dependencies are declared, the graph is validated before seal, undeclared access fails closed, query permission never grants command permission, payloads are cloned at boundaries, routing audit does not store swimmer/result payload values, and the sealed graph does not accept late replacement owners.
-
-The application shell has no direct swimming-engine authority.
+All engine-to-engine traffic crosses explicit portal query/command contracts. Outgoing dependencies are declared before seal; undeclared access fails closed; query permission never grants command permission; boundary payloads are cloned; routing audit stores no swimmer/result payload values; late replacement owners cannot attach after seal. The application shell has no direct swimming-engine authority.
 
 ## Engine 1 — Session Truth
 
 Status: **LOCKED BEHIND REGRESSION GATES**
-
 Version: `4.0.4`
 
-Session Truth is the only owner of workout semantics and distance. Board, Targets, Adaptation, Attendance and UI code are forbidden from reparsing the workout or inventing competing distance rules.
+Session Truth remains the only owner of workout semantics and distance. Its protected live/historical parser corpus remains green. Parser changes require a failing regression fixture first.
 
-Protected corpus includes the live/protected 4,650m, 5,400m, 3,700m, 5,700m, 4,740m, 4,220m, 4,700m and 3,660m fixtures plus spoken-cardinal distances, rounds, nested rounds, parent composition, one-pass phases, race-pace rep instructions, summary-line suppression, 12.5m/15m runnable work, stable IDs, written-total mismatch rejection and immutable original source.
-
-Parser changes require a failing regression fixture first.
-
-Still on recovery ledger: exact raw source wording for protected Saturday 15 Aug 5,450m session. Its validated block invariant is 1,100 / 850 / 2,900 / 600 = 5,450m; do not invent a fake raw transcript.
+Recovery ledger remains: exact raw source wording for protected Saturday 15 Aug 5,450m session; validated block invariant 1,100 / 850 / 2,900 / 600 = 5,450m.
 
 ## Engine 2 — Session Lifecycle
 
 Status: **GREEN**
-
 Version: `1.0.0`
 
-Boot/load is read-only; stored canonical truth is not reparsed on resume; session identity changes are explicit; original plan is immutable; edits are revisioned/journalled; stale drafts cannot hijack selection; attendance is not cleared by lifecycle activity.
+Stored canonical truth is not reparsed on resume; original plan is immutable; edits/identity changes are explicit and journalled; stale drafts cannot hijack selection or clear attendance.
 
 ## Engine 3 — Entity Registry
 
 Status: **GREEN — CANONICAL IDENTITY OWNER**
-
 Version: `1.0.1`
 Schema: `msos.entities.v1`
 
-Owns one canonical identity for clubs, coaches, squads and swimmers plus source-ID mappings, explicit aliases, squad memberships, active/inactive status and profile dimensions such as DOB, sex and classification.
-
-Protected behaviours:
-- exact IDs and explicit aliases unify legacy/current references; there is no fuzzy identity guessing;
-- stronger/current source fields win while provenance is retained;
-- historical/inactive swimmers remain resolvable as history but do not enter active rosters by default;
-- memberships are date-aware;
-- roster and reporting dimensions are derived from canonical IDs;
-- returned data is cloned so consumers cannot mutate registry truth;
-- Evidence Retrieval no longer owns its own competing swimmer resolver.
-
-Identity consumers now receive Entity Registry through declared portal contracts rather than searching athlete data independently.
+Canonical clubs/coaches/squads/swimmers, exact aliases/source IDs, date-aware memberships, active/inactive state and reporting/profile dimensions. Evidence, Attendance, Adaptation, Capture, Methodology, Planning and Timing consume this identity contract rather than maintaining competing resolvers.
 
 ## Engine 4 — Methodology / Coaching Model
 
 Status: **GREEN**
-
 Version: `1.0.0`
 Schema: `msos.methodology.v1`
 
-Owns configurable coaching interpretation, not objective facts.
-
-Effective methodology is assembled deterministically through:
-`programme -> club -> squad -> coach -> athlete`
-with date-scoped overlays.
-
-Current sections include physiology/framework, zones, dose interpretation, adaptation principles, race-model preferences and session-design principles. A coach/club can therefore have a different philosophy without changing the measured result or canonical workout.
-
-Protected behaviours:
-- overlays augment rather than erase unrelated base definitions;
-- coach-specific rules apply only to the selected coach;
-- future-dated methodology cannot leak into present decisions;
-- athlete identity can supply canonical club/squad context through Entity Registry;
-- missing methodology is explicit and never invented;
-- methodology cannot mutate objective evidence.
+Owns coaching interpretation layered `programme -> club -> squad -> coach -> athlete`, including physiology/framework, zones, dose interpretation, adaptation principles, race-model preferences and session-design principles. Objective measurements remain objective facts.
 
 ## Engine 5 — Programme Plan / Plan Context
 
 Status: **GREEN**
-
 Version: `2.0.0`
 Schema: `msos.plan.v2`
 
-Owns:
-`season -> phase -> cycle -> week -> explicit session intent`
-plus meets, squad objectives, athlete objectives and planned exposure.
+Owns `season -> phase -> cycle -> week -> explicit session intent`, target meets, squad/athlete objectives and planned exposure. Missing intent is explicit; the engine never infers purpose from workout vocabulary.
 
-Protected behaviours:
-- exact session intent resolves into season/phase/cycle/week context;
-- target meets can be inherited across planning levels without invention;
-- squad and athlete objectives use canonical Entity Registry IDs;
-- weekly planned exposure is available without pretending it is delivered exposure;
-- plan changes are explicit local-first commands and are journalled;
-- retiring a plan row preserves history rather than deleting it;
-- if no explicit session intent exists, status is `missing_session_intent` — the engine does **not** infer purpose from workout vocabulary;
-- returned plan context cannot mutate stored plan truth.
+## Engine 6 — Timing
 
-The planning surface may write plan truth through portal commands. The app shell may not.
+Status: **GREEN — RAW MEASUREMENT OWNER**
+Version: `2.0.0`
+Schema: `msos.timing.v2`
+
+Owns timing-session identity/context, multi-swimmer assignments, split/finish measurements, explicit start/close/abandon, correction/retirement history and reload-safe in-progress timing.
+
+Protected boundary: **Timing records what happened; it does not decide what the measurement means.** It contains no T400-validity rule, zone logic, target calculation, PB decision or `valid_for_anchor` flag.
+
+## Engine 7 — Test Protocol
+
+Status: **GREEN — TEST DEFINITION OWNER**
+Version: `1.0.1`
+Schema: `msos.test-protocol.v1`
+
+Owns canonical test definitions and validity requirements. Built-in `protocol-t400-freestyle / t400_freestyle` defines a 400m Freestyle observation in SCM/LCM with course/pool-length and split-structure requirements.
+
+Protected boundary: **T400 is a test protocol/evidence vehicle, not a training zone.** Protocol writes are explicit, versioned and journalled. Test Protocol performs no stopwatch, target or adaptation logic.
+
+## Engine 8 — Test Result Input
+
+Status: **GREEN — PROVENANCE / VERIFICATION OWNER**
+Version: `1.0.0`
+Schema: `msos.test-result.v1`
+
+Owns manual/import/timing observation intake into canonical test-result records. It preserves source lineage, validates against Test Protocol, captures results as provisional by default, and supports explicit verify/correct/reject transitions.
+
+Timing-source ingestion is idempotent. A correction invalidates prior verification until reverified. Rejected evidence remains historical but is excluded from usable evidence.
+
+Verified rows can be exported in Evidence Retrieval shape, but Test Result Input **does not silently mutate Evidence Retrieval**. Publication into the evidence read model remains an explicit future ingestion/sync boundary.
 
 ## Evidence / Results / Targets / Adaptation / Attendance
 
-Status: **GREEN ON THE NEW IDENTITY BOUNDARY**
+Status: **GREEN ON THE NEW IDENTITY AND MEASUREMENT BOUNDARIES**
 
-Evidence Retrieval now requires an injected Entity Registry contract. Results/Pathway and Targets read performance evidence through Evidence Retrieval. Adaptation, Attendance and Capture resolve swimmer identity through Entity Registry. No fallback identity owner was added to make legacy tests pass; old tests/composition roots were migrated to the one-owner model.
+Evidence Retrieval remains the performance read doorway. Results/Pathway and Targets consume Evidence Retrieval; Adaptation/Attendance/Capture use canonical Entity Registry identity. New verified test results cannot jump directly into those owners through hidden mutation.
 
 ## Board v2
 
 Status: **GREEN IN ISOLATED/INTEGRATION GATES — NOT LIVE**
 
-Projection version: `2.1.0`
-Renderer version: `1.2.0`
-Controller version: `1.1.0`
-Schema: `msos.board.v2`
+Projection `2.1.0`; Renderer `1.2.0`; Controller `1.1.0`; schema `msos.board.v2`.
 
-Board remains a projection only: canonical work once, grouped rounds/phases, genuine modifications alongside team work, target answers under the exact set, compact swimmer names (`Kaleb`, `Alex H`, `Luke Thw` style), evidence context, block jumps and exact command context. It owns no parser, target maths, adaptation maths or storage/network logic.
+Board remains projection only: canonical team work once, genuine modifications beside it, exact target/evidence context, compact human-readable swimmer names and exact command routing. It owns no parser, target maths, adaptation maths, timing interpretation or persistence/network logic.
+
+## Measurement pipeline — GREEN
+
+The now-protected chain is:
+
+`Timing raw measurements -> Test Protocol validation -> Test Result Input provisional record -> explicit verification -> evidence-shaped export`
+
+Failure is contained. A 300m finish recorded by Timing remains valid raw timing evidence even if conversion to the 400m T400 protocol correctly fails. No engine edits the source measurement to force a pass.
 
 ## Current full release gate
 
-The current CI chain requires all of these to pass together:
+The CI chain now requires all of these to pass together:
 1. Engine Communication Portal;
 2. Entity Registry;
 3. Methodology;
@@ -131,16 +118,29 @@ The current CI chain requires all of these to pass together:
 9. Targets;
 10. Adaptation;
 11. Attendance;
-12. architecture boundaries;
-13. portal-routed real-engine integration;
-14. complete Board regression family;
-15. Capture Evidence;
-16. Delivered Session;
-17. Session Dose;
-18. protected 5,400m poolside flow;
-19. Runtime reload/edit/finish integration;
-20. engine-backed Board action integration.
+12. Timing;
+13. Test Protocol;
+14. Test Result Input;
+15. architecture boundaries;
+16. portal-routed real-engine integration;
+17. portal-routed measurement-pipeline integration;
+18. complete Board regression family;
+19. Capture Evidence;
+20. Delivered Session;
+21. Session Dose;
+22. protected 5,400m poolside flow;
+23. Runtime reload/edit/finish integration;
+24. engine-backed Board action integration.
 
-Last code gate before this status update: workflow `32093390683` passed every job on commit `45b6a21ed179aba6e4d17cf67d47144f093ddecc`.
+Exact tested engineering milestone: commit `315cc24e0c48dadab82a07d077c65893480c6ca0`, workflow `32094977212`. **Every job passed on that same head**, including the new Timing, Test Protocol, Test Result Input and measurement-pipeline jobs plus the existing Board/poolside/runtime chain.
+
+## Next build block
+
+Next independent engines:
+1. Meet Lifecycle;
+2. Meet Result Input;
+3. Official Results Reconciliation.
+
+Then Standards & Records, Race Model, and the explicit verified-evidence publication/read-model boundary.
 
 `main` and the live GitHub Pages app remain untouched.
