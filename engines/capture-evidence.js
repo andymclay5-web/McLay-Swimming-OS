@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.CaptureEvidence=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.capture.v1';
   const TYPES=new Set(['note','voice','photo','video','timing','observation']);
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
@@ -14,7 +14,7 @@
   const stable=(prefix,...parts)=>`${prefix}-${hash(parts.map(x=>text(x).toLowerCase()).join('|'))}`;
   function blankState(){return{schema:SCHEMA,captures:[],journal:[],updatedAt:null}}
   function normalizeState(raw){const s=raw&&typeof raw==='object'?clone(raw):blankState();s.schema=SCHEMA;if(!Array.isArray(s.captures))s.captures=[];if(!Array.isArray(s.journal))s.journal=[];return s}
-  function findNode(session,id){for(const block of session?.blocks||[]){if(block.id===id)return{kind:'block',node:block,block};const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return{kind:n.kind||'item',node:n,block};if(n?.kind==='group')stack.unshift(...(n.items||[])}}}return null}
+  function findNode(session,id){for(const block of (session?.blocks||[])){if(block.id===id)return{kind:'block',node:block,block};const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return{kind:n.kind||'item',node:n,block};if(n?.kind==='group')stack.unshift(...(n.items||[]))}}return null}
   function context(session,{blockId=null,itemId=null}={}){
     if(!session?.id)throw new Error('Capture requires exact canonical session');
     let block=null,item=null;
@@ -28,7 +28,6 @@
   class CaptureEvidence{
     constructor({storage,evidence=null,clock=nowDefault}={}){
       if(!storage||typeof storage.load!=='function'||typeof storage.save!=='function')throw new Error('Capture Evidence requires a storage adapter');this.storage=storage;this.evidence=evidence;this.clock=clock;
-      // Boot is read-only; evidence never moves merely because a screen opens.
       this.state=normalizeState(storage.load());
     }
     snapshot(){return clone(this.state)}
