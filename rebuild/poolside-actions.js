@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSPoolsideActions=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
 
@@ -45,11 +45,7 @@
     })
     editBlock=({context,session,block}={})=>this.emit('editBlock',{
       context:clone(context),session:clone(session),block:clone(block),
-      save:(patch={},opts={})=>{
-        const rec=this.runtime.selectedRecord();if(!rec)throw new Error('No selected session');
-        const changed=this.runtime.edit.updateBlock(rec.current,block.id,patch,{note:text(opts.note)});
-        return this.changed(this.runtime.lifecycle.applyEdit(rec.id,changed.session,{action:'edit_block',note:changed.change.note}));
-      }
+      save:(patch={},opts={})=>this.changed(this.runtime.editBlock(block.id,patch,{note:text(opts.note)}))
     })
     evidence=({context,session,items}={})=>this.emit('evidence',{context:clone(context),session:clone(session),items:clone(items||[])})
     finish=({context,session}={})=>this.emit('finish',{
