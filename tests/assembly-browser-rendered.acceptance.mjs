@@ -88,6 +88,7 @@ try{
   await waitText(mollyTimes,/5:24\.6/);
   await click(page.locator('[data-panel-action="close"]'));
 
+  const firstBlock=page.locator('.msos-board-block').first();
   const firstSet=page.locator('.msos-set-row').first();
   await click(firstSet.locator('[data-board-action="note"]'));
   await tapAthleteTag(page,'molly');
@@ -95,6 +96,7 @@ try{
   await click(page.locator('[data-panel-action="capture-save"]'));
   await page.locator('.poolside-sheet').waitFor({state:'detached'}).catch(()=>{});
   await waitText(firstSet.locator('.msos-capture-marker'),/1 note/i);
+  assert.equal(await firstBlock.locator(':scope > .msos-capture-marker').count(),0,'set note must not bleed into parent block marker');
 
   await click(page.locator('.msos-board-sticky-actions [data-board-action="photo"]'));
   await waitText(page.locator('.poolside-sheet'),/Photo capture/i);
@@ -103,6 +105,15 @@ try{
   await page.fill('#poolside-media-text','Lane four technique');
   await click(page.locator('[data-panel-action="capture-media-save"]'));
   await waitText(page.locator('.assembly-notice'),/Photo saved · Molly McKernan · linked to current session/i);
+  await waitText(page.locator('.board-session-evidence'),/1 photo/i);
+  assert.equal(await firstBlock.locator(':scope > .msos-capture-marker').count(),0,'session photo must not bleed into first block marker');
+  await waitText(firstSet.locator('.msos-capture-marker'),/1 note/i);
+
+  await click(page.locator('.board-session-evidence [data-board-action="evidence"]'));
+  await waitText(page.locator('.poolside-sheet'),/Linked evidence/i);
+  await waitText(page.locator('.poolside-sheet'),/photo/i);
+  assert.doesNotMatch((await page.locator('.poolside-sheet').textContent())||'',/Rendered deck note/,'session evidence view must not include set note');
+  await click(page.locator('[data-panel-action="close"]'));
 
   const width=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth}));
   assert(width.scrollWidth<=width.clientWidth+2,`phone layout overflows horizontally: ${width.scrollWidth} > ${width.clientWidth}`);
@@ -115,7 +126,7 @@ try{
   await waitText(page.locator('.day-view'),/Wednesday, 19 August 2026/i);
 
   assert.deepEqual(pageErrors,[],`browser emitted errors:\n${pageErrors.join('\n')}`);
-  console.log('PASS rendered 390x844 Calendar -> custom session -> Truth -> Board -> Roll -> T400 -> Note -> Photo -> browser Back');
+  console.log('PASS rendered 390x844 Calendar -> custom session -> Truth -> Board -> Roll -> T400 -> exact-scope Note -> exact-scope Photo -> browser Back');
 } finally {
   await browser.close();
 }
