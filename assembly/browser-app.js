@@ -1,10 +1,10 @@
 'use strict';
 (function(root){
-  const M=root.MSOSEngines||{},App=root.MSOSAppComposition,Nav=root.MSOSNavigationState,Storage=root.MSOSAssemblyStorage,Loader=root.MSOSAssemblyDataLoader,Shell=root.MSOSAssemblyShellModel,Renderer=root.MSOSAssemblyRenderer,BoardRenderer=root.MSOSUI?.BoardRenderer,BoardController=root.MSOSUI?.BoardController,CommandOwners=root.MSOSBoardCommandOwners,PoolsideActions=root.MSOSPoolsideActions,PoolsideRuntime=root.MSOSAssemblyPoolsideRuntime,PoolsidePresenter=root.MSOSAssemblyPoolsidePresenter,Programme=root.MSOS_ASSEMBLY_PROGRAMME;
-  const VERSION='1.2.0';
-  const state={app:null,nav:null,shell:null,navStore:null,root:null,panelRoot:null,poolRuntime:null,poolActions:null,commandOwners:null,boardController:null,presenter:null,notice:'',booted:false,backGuard:false};
+  const M=root.MSOSEngines||{},App=root.MSOSAppComposition,Nav=root.MSOSNavigationState,Storage=root.MSOSAssemblyStorage,Loader=root.MSOSAssemblyDataLoader,ProgrammeData=root.MSOSAssemblyProgrammeData,Shell=root.MSOSAssemblyShellModel,Renderer=root.MSOSAssemblyRenderer,BoardRenderer=root.MSOSUI?.BoardRenderer,BoardController=root.MSOSUI?.BoardController,CommandOwners=root.MSOSBoardCommandOwners,PoolsideActions=root.MSOSPoolsideActions,PoolsideRuntime=root.MSOSAssemblyPoolsideRuntime,PoolsidePresenter=root.MSOSAssemblyPoolsidePresenter,Programme=root.MSOS_ASSEMBLY_PROGRAMME;
+  const VERSION='1.3.0';
+  const state={app:null,nav:null,shell:null,navStore:null,root:null,panelRoot:null,poolRuntime:null,poolActions:null,commandOwners:null,boardController:null,presenter:null,programmeData:null,notice:'',booted:false,backGuard:false};
   const localDate=()=>{const d=new Date(),parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Auckland',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d),get=t=>parts.find(x=>x.type===t)?.value||'';return`${get('year')}-${get('month')}-${get('day')}`};
-  function requireDeps(){const missing=[];for(const [k,v] of Object.entries({App,Nav,Storage,Loader,Shell,Renderer,BoardRenderer,BoardController,CommandOwners,PoolsideActions,PoolsideRuntime,PoolsidePresenter,Programme,EntityRegistry:M.EntityRegistry,SessionSchedule:M.SessionSchedule,SessionTruth:M.SessionTruth,SessionLifecycle:M.SessionLifecycle,SessionEdit:M.SessionEdit,DeliveredSession:M.DeliveredSession,EvidenceRetrieval:M.EvidenceRetrieval,StandardsRecords:M.StandardsRecords,ResultsPathway:M.ResultsPathway,Targets:M.Targets,Adaptation:M.Adaptation,Attendance:M.Attendance,CaptureEvidence:M.CaptureEvidence,BoardProjection:M.BoardProjection}))if(!v)missing.push(k);if(missing.length)throw new Error(`Assembly browser missing modules: ${missing.join(', ')}`)}
+  function requireDeps(){const missing=[];for(const [k,v] of Object.entries({App,Nav,Storage,Loader,ProgrammeData,Shell,Renderer,BoardRenderer,BoardController,CommandOwners,PoolsideActions,PoolsideRuntime,PoolsidePresenter,Programme,EntityRegistry:M.EntityRegistry,SessionSchedule:M.SessionSchedule,SessionTruth:M.SessionTruth,SessionLifecycle:M.SessionLifecycle,SessionEdit:M.SessionEdit,DeliveredSession:M.DeliveredSession,EvidenceRetrieval:M.EvidenceRetrieval,StandardsRecords:M.StandardsRecords,ResultsPathway:M.ResultsPathway,Targets:M.Targets,Adaptation:M.Adaptation,Attendance:M.Attendance,CaptureEvidence:M.CaptureEvidence,BoardProjection:M.BoardProjection}))if(!v)missing.push(k);if(missing.length)throw new Error(`Assembly browser missing modules: ${missing.join(', ')}`)}
   function persistNavigation(){if(state.navStore&&state.nav)state.navStore.save(state.nav.snapshot())}
   function setNotice(message=''){state.notice=String(message||'');render()}
   function scheduleApi(){return{day:d=>state.app.day(d)}}
@@ -19,11 +19,16 @@
   }
   async function boot(){
     requireDeps();state.root=document.getElementById('assembly-root');state.panelRoot=document.getElementById('assembly-panel-root');if(!state.root||!state.panelRoot)throw new Error('Assembly root element missing');
-    const keys=Storage.keys('msos.assembly.v1'),resourceCache=new Storage.ResourceCache({storage:localStorage,key:keys.resources}),calendar=await Loader.loadCalendar({fetchImpl:fetch.bind(root),cache:resourceCache,url:'../monthly_calendar.json'});state.notice=calendar.warning||'';
+    const keys=Storage.keys('msos.assembly.v1'),resourceCache=new Storage.ResourceCache({storage:localStorage,key:keys.resources});
+    const [calendar,programmeData]=await Promise.all([
+      Loader.loadCalendar({fetchImpl:fetch.bind(root),cache:resourceCache,url:'../monthly_calendar.json'}),
+      ProgrammeData.loadProgrammeData({fetchImpl:fetch.bind(root),cache:resourceCache,storage:localStorage,config:root.MCLAY_CONFIG||{}})
+    ]);
+    state.programmeData=programmeData;state.notice=[calendar.warning,programmeData.warning].filter(Boolean).join(' ');
     const scheduleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.schedule}),lifecycleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.lifecycle}),attendanceStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.attendance}),captureStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.capture}),deliveryStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.delivery});state.navStore=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.navigation});
     let navState=null;try{navState=state.navStore.load()}catch(error){throw new Error(`Navigation state could not be restored safely: ${error.message}`)}
     state.nav=Nav.create({state:navState,month:localDate().slice(0,7)});
-    state.app=App.create({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,deliveryStorage,calendarSources:[calendar.value],clubs:[Programme.club],squads:Programme.squads,clock:()=>new Date().toISOString()});
+    state.app=App.create({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,deliveryStorage,calendarSources:[calendar.value],evidenceSources:programmeData.evidenceSources,profiles:programmeData.profiles,standards:programmeData.standards,baseTimes:programmeData.baseTimes,clubs:[Programme.club],squads:Programme.squads,clock:()=>new Date().toISOString()});
     state.shell=Shell.create({schedule:scheduleApi(),navigation:state.nav,today:localDate});setupPoolside();state.root.addEventListener('click',onClick);root.addEventListener('popstate',onBrowserBack);document.addEventListener('visibilitychange',onVisibility);armBrowserBack();state.nav.markInteractive();persistNavigation();state.booted=true;render();
   }
   function wrap(body,subtitle){const route=state.nav.route();state.root.innerHTML=Renderer.shell({subtitle,body,route,notice:state.notice})}
