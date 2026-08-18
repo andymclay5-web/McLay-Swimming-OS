@@ -151,6 +151,7 @@ jobs:
           node --check rebuild/board-command-owners.js
           node --check rebuild/poolside-actions.js
           node --check rebuild/board-app.js
+          node --check rebuild/runtime.js
       - name: Board regression family
         run: |
           for f in tests/board*.test.js; do
