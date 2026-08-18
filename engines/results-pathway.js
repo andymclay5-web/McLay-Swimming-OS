@@ -30,7 +30,7 @@
     pointSteps(ath,pb,count=2){return this.rules.pointSteps(ath,pb,pb,count).map(x=>({points:x.points,seconds:x.seconds}))}
     trend(ath,pb){
       const rows=this.evidence.results(ath.id,{distance:pb.distance,stroke:pb.stroke,course:pb.course}).filter(r=>seconds(r)!==null).sort((a,b)=>text(a.result_date||a.date).localeCompare(text(b.result_date||b.date)));
-      if(!rows.length)return{count:0,first:null,latest:null,pb:pb.result_seconds,improvementToPb:null,latestVsPb:null};const first=seconds(rows[0]),latest=seconds(rows.at(-1));return{count:rows.length,first,latest,pb:pb.result_seconds,improvementToPb:first-pb.result_seconds,latestVsPb:latest-pb.result_seconds,firstDate:text(rows[0].result_date||rows[0].date),latestDate:text(rows.at(-1).result_date||rows.at(-1].date)};
+      if(!rows.length)return{count:0,first:null,latest:null,pb:pb.result_seconds,improvementToPb:null,latestVsPb:null};const first=seconds(rows[0]),latest=seconds(rows.at(-1));return{count:rows.length,first,latest,pb:pb.result_seconds,improvementToPb:first-pb.result_seconds,latestVsPb:latest-pb.result_seconds,firstDate:text(rows[0].result_date||rows[0].date),latestDate:text(rows.at(-1).result_date||rows.at(-1).date)};
     }
     event(ath,pb,opts={}){
       const status=this.rules.statusForResult(ath,pb,pb.result_seconds,opts),standards=this.standardsFor(ath,pb,opts),byId=new Map(standards.map(x=>[text(x.id),x]));
