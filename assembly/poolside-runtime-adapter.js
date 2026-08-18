@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyPoolsideRuntime=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
   class PoolsideRuntimeAdapter{
@@ -14,7 +14,7 @@
     selectedId(){return text(this.selectedRecord()?.id)}
     requireSelected(){const id=this.selectedId();if(!id)throw new Error('No selected session');return id}
     roll(){const id=this.selectedId();if(!id)return{session:null,eligible:[],here:[],summary:null};const data=this.app.rollForSession(id);return{session:this.selectedSession(),eligible:clone(data.eligible||[]),here:clone(data.here||[]),summary:clone(data.summary||null)}}
-    markAttendance(athleteRef,status,opts={}){return this.app.markAttendance(this.requireSelected(),athleteRef,status,opts)}
+    markAttendance(athleteRef,status,opts={}){const id=this.requireSelected();return text(status)==='not_marked'?this.app.clearAttendance(id,athleteRef):this.app.markAttendance(id,athleteRef,status,opts)}
     clearAttendance(athleteRef){return this.app.clearAttendance(this.requireSelected(),athleteRef)}
     t400Evidence(athleteRef,opts={}){return this.app.t400Evidence(this.requireSelected(),athleteRef,opts)}
     pathwayProfile(athleteRef,opts={}){return this.app.pathway(athleteRef,opts)}
