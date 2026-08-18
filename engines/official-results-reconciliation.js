@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.OfficialResultsReconciliation=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.official-results-reconciliation.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -33,7 +33,7 @@
       const spec=officialSpec(row),base={index,official:spec,source_row:clone(row)};let match=this.meets.matchRace({meetId,raceId:spec.raceId,athleteRef:spec.athleteRef,eventId:spec.eventId,eventNo:spec.eventNo,distance:spec.distance_m,stroke:spec.stroke,round:spec.round});
       if(match?.status==='ok'){const existing=this.results.byRace(match.race.id);return{...base,status:'matched',action:compare(existing,spec),race:match.race,existing}}
       if(match?.status==='missing_athlete')return{...base,status:'unresolved',reason:'missing_athlete'};
-      if(match?.status==='ambiguous')return{...base,status:'unresolved',reason:'ambiguous_race'};
+      if(match?.status==='ambiguous')return{...base,status:'unresolved',reason:match?.eventMatch?.status==='ambiguous'?'ambiguous_event':'ambiguous_race'};
       const eventMatch=this.meets.matchEvent({meetId,eventId:spec.eventId,eventNo:spec.eventNo,distance:spec.distance_m,stroke:spec.stroke});if(eventMatch?.status!=='ok')return{...base,status:'unresolved',reason:eventMatch?.status==='ambiguous'?'ambiguous_event':'missing_event'};
       let entry=null;try{entry=this.meets.entryFor({meetId,athleteRef:spec.athleteRef,eventId:eventMatch.event.id})}catch(_){return{...base,status:'unresolved',reason:'ambiguous_entry'}}
       return{...base,status:'matched',action:entry?'create_race_and_result':'create_entry_race_and_result',event:eventMatch.event,entry};
