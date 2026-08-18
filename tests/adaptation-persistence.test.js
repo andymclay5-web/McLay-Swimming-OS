@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('assert');
+const Adaptation=require('../engines/adaptation.js');
+let failures=0;
+function test(name,fn){try{fn();console.log(`PASS ${name}`)}catch(e){failures++;console.error(`FAIL ${name}\n  ${e.stack||e.message}`)}}
+const athletes={molly:{id:'molly',full_name:'Molly McKernan'}},evidence={resolveAthlete:ref=>athletes[typeof ref==='string'?ref:ref?.id]||null};
+const session={id:'s1',identity:{course:'SCM'}},item={id:'set1',kind:'set',reps:1,distance:300,stroke:'Choice',raw:'300 Choice'};
+console.log(`Adaptation persistence ${Adaptation.VERSION}`);
+test('explicit poolside override survives a fresh Adaptation owner on the same storage',()=>{const storage=new Adaptation.MemoryStorage(),one=Adaptation.create({evidence,storage,clock:()=> '2026-08-19T08:00:00+12:00'});one.setOverride(session,item,'molly',{distance:250},{reason:'Deck adjustment'});const two=Adaptation.create({evidence,storage});const result=two.forItem(session,item,'molly');assert.strictEqual(result.source,'override');assert.strictEqual(result.prescription.distance,250);assert.strictEqual(result.reason,'Deck adjustment');assert.strictEqual(two.listOverrides({sessionId:'s1',itemId:'set1',athleteId:'molly'}).length,1)});
+test('override storage contains only override truth rather than athlete profiles or workout copies',()=>{const storage=new Adaptation.MemoryStorage(),engine=Adaptation.create({evidence,storage,profiles:[{athlete_id:'molly',default_volume_ratio:.75,profile_label:'Modified'}]});engine.setOverride(session,item,'molly',{distance:250});const saved=storage.load();assert.strictEqual(saved.schema,Adaptation.OVERRIDE_SCHEMA);assert.strictEqual(saved.overrides.length,1);const json=JSON.stringify(saved);assert(!json.includes('default_volume_ratio'));assert(!json.includes('300 Choice'));assert(!json.includes('profile_label'))});
+test('clearing explicit override persists so it cannot reappear after reload',()=>{const storage=new Adaptation.MemoryStorage(),one=Adaptation.create({evidence,storage});one.setOverride(session,item,'molly',{distance:250});assert.strictEqual(one.clearOverride(session,item,'molly'),true);const two=Adaptation.create({evidence,storage});assert.strictEqual(two.listOverrides().length,0);assert.notStrictEqual(two.forItem(session,item,'molly').source,'override')});
+test('legacy seed overrides still work when no storage adapter is supplied',()=>{const engine=Adaptation.create({evidence,overrides:[{sessionId:'s1',itemId:'set1',athleteId:'molly',prescription:{distance:225},reason:'Seed',active:true}]});assert.strictEqual(engine.forItem(session,item,'molly').prescription.distance,225)});
+if(failures){console.error(`\n${failures} adaptation persistence regression(s) failed`);process.exit(1)}
+console.log('\nALL ADAPTATION PERSISTENCE REGRESSIONS PASS');
