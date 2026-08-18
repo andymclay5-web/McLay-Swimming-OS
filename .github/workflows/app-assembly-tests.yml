@@ -22,11 +22,19 @@ jobs:
           node --check rebuild/session-flow-portal.js
           node --check rebuild/app-composition.js
           node --check assembly/shell-model.js
+          node --check assembly/shell-renderer.js
+          node --check assembly/browser-storage.js
+          node --check assembly/data-loader.js
+          node --check assembly/browser-app.js
           node --check assembly/programme-config.js
       - name: Calendar session intake integration
         run: node tests/session-flow-portal.integration.test.js
       - name: Unified Calendar and Board composition
         run: node tests/app-composition.integration.test.js
+      - name: Browser infrastructure and renderer
+        run: |
+          node tests/assembly-browser-infrastructure.test.js
+          node tests/assembly-shell-renderer.test.js
       - name: Schedule and navigation protected regressions
         run: |
           node tests/session-schedule.test.js
@@ -46,6 +54,12 @@ jobs:
           assert(/calendar-surface/.test(app)&&/coach-board-surface/.test(app)&&/session-intake-flow/.test(app)&&/board-projection/.test(app),'Unified app composition is missing Calendar/Board owner chain');
           assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
+          const browser=fs.readFileSync('assembly/browser-app.js','utf8');
+          assert(!/\bapp\.js\b|v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
+          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation');
+          const html=fs.readFileSync('assembly/index.html','utf8');
+          assert(!/<script[^>]+(?:app\.js|v4-correct|v4-poolside-core)/i.test(html),'Assembly page loads a legacy competing app implementation');
+          assert(/rebuild\/app-composition\.js/.test(html)&&/rebuild\/navigation-state\.js/.test(html),'Assembly page is missing rebuilt composition or navigation');
           console.log('PASS App assembly ownership boundary');
           NODE
 
