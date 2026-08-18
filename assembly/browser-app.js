@@ -1,21 +1,23 @@
 'use strict';
 (function(root){
   const M=root.MSOSEngines||{},App=root.MSOSAppComposition,Nav=root.MSOSNavigationState,Storage=root.MSOSAssemblyStorage,Loader=root.MSOSAssemblyDataLoader,Shell=root.MSOSAssemblyShellModel,Renderer=root.MSOSAssemblyRenderer,BoardRenderer=root.MSOSUI?.BoardRenderer,Programme=root.MSOS_ASSEMBLY_PROGRAMME;
-  const VERSION='1.0.0';
-  const state={app:null,nav:null,shell:null,navStore:null,root:null,notice:'',booted:false};
+  const VERSION='1.1.0';
+  const state={app:null,nav:null,shell:null,navStore:null,root:null,notice:'',booted:false,backGuard:false};
   const localDate=()=>{const d=new Date(),parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Auckland',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d),get=t=>parts.find(x=>x.type===t)?.value||'';return`${get('year')}-${get('month')}-${get('day')}`};
   function requireDeps(){const missing=[];for(const [k,v] of Object.entries({App,Nav,Storage,Loader,Shell,Renderer,BoardRenderer,Programme,EntityRegistry:M.EntityRegistry,SessionSchedule:M.SessionSchedule,SessionTruth:M.SessionTruth,SessionLifecycle:M.SessionLifecycle,EvidenceRetrieval:M.EvidenceRetrieval,StandardsRecords:M.StandardsRecords,ResultsPathway:M.ResultsPathway,Targets:M.Targets,Adaptation:M.Adaptation,Attendance:M.Attendance,CaptureEvidence:M.CaptureEvidence,BoardProjection:M.BoardProjection}))if(!v)missing.push(k);if(missing.length)throw new Error(`Assembly browser missing modules: ${missing.join(', ')}`)}
-  function persistNavigation(){if(!state.navStore||!state.nav)return;state.navStore.save(state.nav.snapshot())}
+  function persistNavigation(){if(state.navStore&&state.nav)state.navStore.save(state.nav.snapshot())}
   function setNotice(message=''){state.notice=String(message||'');render()}
   function scheduleApi(){return{day:d=>state.app.day(d)}}
+  function armBrowserBack(){if(state.backGuard)return;history.replaceState({msosAssemblyRoot:true},'');history.pushState({msosAssemblyGuard:true},'');state.backGuard=true}
+  function rearmBrowserBack(){history.pushState({msosAssemblyGuard:true},'');state.backGuard=true}
   async function boot(){
     requireDeps();state.root=document.getElementById('assembly-root');if(!state.root)throw new Error('Assembly root element missing');
     const keys=Storage.keys('msos.assembly.v1'),resourceCache=new Storage.ResourceCache({storage:localStorage,key:keys.resources}),calendar=await Loader.loadCalendar({fetchImpl:fetch.bind(root),cache:resourceCache,url:'../monthly_calendar.json'});state.notice=calendar.warning||'';
-    const scheduleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.schedule}),lifecycleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.lifecycle}),attendanceStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.attendance}),captureStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.capture});state.navStore=new Storage.JsonStorageAdapter({storage:sessionStorage,key:keys.navigation});
+    const scheduleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.schedule}),lifecycleStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.lifecycle}),attendanceStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.attendance}),captureStorage=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.capture});state.navStore=new Storage.JsonStorageAdapter({storage:localStorage,key:keys.navigation});
     let navState=null;try{navState=state.navStore.load()}catch(error){throw new Error(`Navigation state could not be restored safely: ${error.message}`)}
     state.nav=Nav.create({state:navState,month:localDate().slice(0,7)});
     state.app=App.create({scheduleStorage,lifecycleStorage,attendanceStorage,captureStorage,calendarSources:[calendar.value],clubs:[Programme.club],squads:Programme.squads,clock:()=>new Date().toISOString()});
-    state.shell=Shell.create({schedule:scheduleApi(),navigation:state.nav,today:localDate});state.root.addEventListener('click',onClick);root.addEventListener('popstate',onBrowserBack);document.addEventListener('visibilitychange',onVisibility);state.nav.markInteractive();persistNavigation();state.booted=true;render();
+    state.shell=Shell.create({schedule:scheduleApi(),navigation:state.nav,today:localDate});state.root.addEventListener('click',onClick);root.addEventListener('popstate',onBrowserBack);document.addEventListener('visibilitychange',onVisibility);armBrowserBack();state.nav.markInteractive();persistNavigation();state.booted=true;render();
   }
   function wrap(body,subtitle){const route=state.nav.route();state.root.innerHTML=Renderer.shell({subtitle,body,route,notice:state.notice})}
   function render(){if(!state.root||!state.nav||!state.shell)return;try{
@@ -28,11 +30,12 @@
     wrap(Renderer.renderError(`Unsupported assembly route: ${route.type}`),'Coach');
   }catch(error){wrap(Renderer.renderError(error.message),'Coach · Error')}}
   function selectedSlotIds(){return [...state.root.querySelectorAll('input[name="slot"]:checked')].map(x=>x.value)}
-  function selectedDaySlots(item){const day=state.shell.day(state.nav.route().date);return day.items.filter(x=>x.type==='slot').map(x=>({id:x.id,squadEntries:x.squadEntries,start:x.start,end:x.end,venue:x.venue,course:x.course,dayPart:x.dayPart,kind:x.kind}))}
-  function openUnboundItem(result){const route=state.nav.route(),available=result.availableDaySlots||selectedDaySlots(result.item),ids=result.candidateSlots||[result.item.id];state.nav.openDetail({detailType:'session-intake',detailId:result.item.id,date:route.date,meta:{availableDaySlots:available,selectedSlotIds:ids}});persistNavigation();render()}
+  function selectedDaySlots(){const day=state.shell.day(state.nav.route().date);return day.items.filter(x=>x.type==='slot').map(x=>({id:x.id,squadEntries:x.squadEntries,start:x.start,end:x.end,venue:x.venue,course:x.course,dayPart:x.dayPart,kind:x.kind}))}
+  function openUnboundItem(result){const route=state.nav.route(),available=result.availableDaySlots||selectedDaySlots(),ids=result.candidateSlots||[result.item.id];state.nav.openDetail({detailType:'session-intake',detailId:result.item.id,date:route.date,meta:{availableDaySlots:available,selectedSlotIds:ids}});persistNavigation();render()}
   function backToDay(){while(state.nav.route().type!=='day'&&state.nav.canBack())state.nav.back()}
+  function internalBack(){const result=state.nav.back();if(result.handled){persistNavigation();render()}return result}
   function onClick(event){const button=event.target.closest('[data-app-action]');if(!button)return;const action=button.dataset.appAction;try{
-    if(action==='back'){state.nav.back();persistNavigation();return render()}
+    if(action==='back')return internalBack()
     if(action==='calendar'){state.nav.openCalendar({month:state.nav.route().month||localDate().slice(0,7)});persistNavigation();return render()}
     if(action==='current-board'){const rec=state.app.selectedSession(),sessionId=rec?.id,occ=sessionId?state.app.occurrenceForSession(sessionId):null;if(!sessionId||!occ)return setNotice('No accepted session is selected yet.');state.nav.openCalendar({month:occ.date.slice(0,7)});state.nav.openDate(occ.date);state.nav.openBoard({date:occ.date,occurrenceId:occ.id,sessionId});persistNavigation();return render()}
     if(action==='month'){state.shell.changeMonth(button.dataset.month);persistNavigation();return render()}
@@ -45,8 +48,8 @@
       const draftId=button.dataset.draftId,source=state.root.querySelector('#assembly-session-source')?.value||'';state.app.updateDraft(draftId,{source});const accepted=state.app.acceptDraft(draftId);backToDay();state.nav.openBoard({date:state.nav.route().date,occurrenceId:accepted.bound.id,sessionId:accepted.record.id});persistNavigation();state.notice='';return render()}
     if(action==='add-custom')return setNotice('Custom calendar slot authoring is not connected in this assembly yet. Published schedule truth has not been changed.');
   }catch(error){setNotice(error.message)}}
-  function onBrowserBack(event){if(!state.nav)return;const result=state.nav.back();if(result.handled){event.preventDefault?.();persistNavigation();render()}}
+  function onBrowserBack(){if(!state.nav)return;state.backGuard=false;if(state.nav.canBack()){state.nav.back();persistNavigation();render();rearmBrowserBack();return}history.back()}
   function onVisibility(){if(document.visibilityState==='visible'&&state.nav){state.nav.resume();render()}}
   function fatal(error){const rootEl=document.getElementById('assembly-root');if(rootEl)rootEl.innerHTML=Renderer?.shell?Renderer.shell({subtitle:'Assembly stopped',body:Renderer.renderError(error.message),route:{type:'calendar'}}):`<pre>${String(error.stack||error)}</pre>`;console.error(error)}
-  root.addEventListener('DOMContentLoaded',()=>boot().catch(fatal),{once:true});root.MSOSAssemblyBrowser={VERSION,state,boot,render};
+  root.addEventListener('DOMContentLoaded',()=>boot().catch(fatal),{once:true});root.MSOSAssemblyBrowser={VERSION,state,boot,render,internalBack,onBrowserBack};
 })(typeof globalThis!=='undefined'?globalThis:this);
