@@ -20,10 +20,13 @@ jobs:
       - name: Syntax check assembly flow
         run: |
           node --check rebuild/session-flow-portal.js
+          node --check rebuild/app-composition.js
           node --check assembly/shell-model.js
           node --check assembly/programme-config.js
       - name: Calendar session intake integration
         run: node tests/session-flow-portal.integration.test.js
+      - name: Unified Calendar and Board composition
+        run: node tests/app-composition.integration.test.js
       - name: Schedule and navigation protected regressions
         run: |
           node tests/session-schedule.test.js
@@ -39,6 +42,10 @@ jobs:
           const flow=fs.readFileSync('rebuild/session-flow-portal.js','utf8');
           assert(/session-intake-flow/.test(flow)&&/session-schedule/.test(flow)&&/session-lifecycle/.test(flow)&&/session-truth/.test(flow),'Session flow does not declare all owners');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(flow),'Session flow owns browser/network/storage infrastructure');
+          const app=fs.readFileSync('rebuild/app-composition.js','utf8');
+          assert(/calendar-surface/.test(app)&&/coach-board-surface/.test(app)&&/session-intake-flow/.test(app)&&/board-projection/.test(app),'Unified app composition is missing Calendar/Board owner chain');
+          assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
+          assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
           console.log('PASS App assembly ownership boundary');
           NODE
 
