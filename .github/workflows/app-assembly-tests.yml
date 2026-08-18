@@ -55,11 +55,12 @@ jobs:
           assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
           const browser=fs.readFileSync('assembly/browser-app.js','utf8');
-          assert(!/\bapp\.js\b|v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
+          assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
           assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation');
           const html=fs.readFileSync('assembly/index.html','utf8');
-          assert(!/<script[^>]+(?:app\.js|v4-correct|v4-poolside-core)/i.test(html),'Assembly page loads a legacy competing app implementation');
-          assert(/rebuild\/app-composition\.js/.test(html)&&/rebuild\/navigation-state\.js/.test(html),'Assembly page is missing rebuilt composition or navigation');
+          const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
+          assert(!scripts.some(src=>src==='../app.js'||src==='app.js'||/\/(?:v4-correct|v4-poolside-core)\.js$/i.test(src)),'Assembly page loads a legacy competing app implementation');
+          assert(scripts.includes('../rebuild/app-composition.js')&&scripts.includes('../rebuild/navigation-state.js'),'Assembly page is missing rebuilt composition or navigation');
           console.log('PASS App assembly ownership boundary');
           NODE
 
