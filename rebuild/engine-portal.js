@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSEnginePortal=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0';
+  const VERSION='1.0.1';
   const SCHEMA='msos.engine-portal.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
@@ -33,7 +33,7 @@
     if(!rule)return;
     let result;
     try{result=rule(value)}catch(error){fail('CONTRACT_VALIDATION',`${label} validator threw: ${error.message}`)}
-    if(result===true||result===undefined)return;
+    if(result===true||result===undefined||result==='')return;
     if(result===false)fail('CONTRACT_VALIDATION',`${label} failed contract validation`);
     if(typeof result==='string')fail('CONTRACT_VALIDATION',`${label} failed contract validation: ${result}`);
     if(result&&typeof result==='object'&&result.ok===false)fail('CONTRACT_VALIDATION',`${label} failed contract validation: ${text(result.message)||'invalid value'}`,result);
