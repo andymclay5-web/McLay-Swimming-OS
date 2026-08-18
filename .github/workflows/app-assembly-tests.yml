@@ -25,16 +25,21 @@ jobs:
           node --check assembly/shell-renderer.js
           node --check assembly/browser-storage.js
           node --check assembly/data-loader.js
+          node --check assembly/poolside-runtime-adapter.js
+          node --check assembly/poolside-presenter.js
           node --check assembly/browser-app.js
           node --check assembly/programme-config.js
       - name: Calendar session intake integration
         run: node tests/session-flow-portal.integration.test.js
-      - name: Unified Calendar and Board composition
-        run: node tests/app-composition.integration.test.js
-      - name: Browser infrastructure and renderer
+      - name: Unified Calendar Board and poolside composition
+        run: |
+          node tests/app-composition.integration.test.js
+          node tests/assembly-board-actions.integration.test.js
+      - name: Browser infrastructure renderer and poolside presenter
         run: |
           node tests/assembly-browser-infrastructure.test.js
           node tests/assembly-shell-renderer.test.js
+          node tests/assembly-poolside-presenter.test.js
       - name: Schedule and navigation protected regressions
         run: |
           node tests/session-schedule.test.js
@@ -51,16 +56,20 @@ jobs:
           assert(/session-intake-flow/.test(flow)&&/session-schedule/.test(flow)&&/session-lifecycle/.test(flow)&&/session-truth/.test(flow),'Session flow does not declare all owners');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(flow),'Session flow owns browser/network/storage infrastructure');
           const app=fs.readFileSync('rebuild/app-composition.js','utf8');
-          assert(/calendar-surface/.test(app)&&/coach-board-surface/.test(app)&&/session-intake-flow/.test(app)&&/board-projection/.test(app),'Unified app composition is missing Calendar/Board owner chain');
+          assert(/calendar-surface/.test(app)&&/coach-board-surface/.test(app)&&/session-intake-flow/.test(app)&&/poolside-session-flow/.test(app)&&/board-projection/.test(app),'Unified app composition is missing Calendar/Board/poolside owner chain');
           assert((app.match(/E\.Portal\.create\(/g)||[]).length===1,'Unified app composition must create exactly one Engine Portal');
           assert(!/localStorage|indexedDB|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bdocument\s*\.|\bwindow\s*\./.test(app),'Unified app composition owns browser/network/storage infrastructure');
+          for(const path of ['assembly/poolside-runtime-adapter.js','assembly/poolside-presenter.js']){
+            const src=fs.readFileSync(path,'utf8');
+            assert(!/require\(['\"]\.\.\/engines\//.test(src),`${path} imports a domain engine implementation`);
+          }
           const browser=fs.readFileSync('assembly/browser-app.js','utf8');
           assert(!/v4-correct|v4-poolside-core|v3\.\d+/i.test(browser),'Assembly browser reconnects a legacy app owner');
-          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation');
+          assert(/MSOSAppComposition/.test(browser)&&/MSOSNavigationState/.test(browser)&&/MSOSBoardCommandOwners/.test(browser)&&/MSOSPoolsideActions/.test(browser),'Assembly browser is not mounted through rebuilt composition/navigation/poolside owners');
           const html=fs.readFileSync('assembly/index.html','utf8');
           const scripts=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);
           assert(!scripts.some(src=>src==='../app.js'||src==='app.js'||/\/(?:v4-correct|v4-poolside-core)\.js$/i.test(src)),'Assembly page loads a legacy competing app implementation');
-          assert(scripts.includes('../rebuild/app-composition.js')&&scripts.includes('../rebuild/navigation-state.js'),'Assembly page is missing rebuilt composition or navigation');
+          for(const src of ['../rebuild/app-composition.js','../rebuild/navigation-state.js','../ui/board-controller.js','../rebuild/board-command-owners.js','../rebuild/poolside-actions.js','../engines/session-edit.js','../engines/delivered-session.js','./poolside-runtime-adapter.js','./poolside-presenter.js'])assert(scripts.includes(src),`Assembly page missing ${src}`);
           console.log('PASS App assembly ownership boundary');
           NODE
 
