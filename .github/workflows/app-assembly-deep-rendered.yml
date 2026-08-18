@@ -1,0 +1,51 @@
+name: App assembly deep rendered acceptance
+
+on:
+  push:
+    branches:
+      - rebuild/app-assembly-v1
+  pull_request:
+    branches:
+      - rebuild/engine-contracts-v1
+  workflow_dispatch:
+
+jobs:
+  rendered-edit-finish-reload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check deep rendered acceptance
+        run: |
+          node --check tests/assembly-browser-deep.acceptance.mjs
+          node --check engines/adaptation.js
+          node --check assembly/browser-app.js
+          node --check assembly/shell-model.js
+          node --check assembly/shell-renderer.js
+      - name: Install pinned Chromium harness
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start static assembly server
+        run: |
+          python3 -m http.server 4174 --bind 127.0.0.1 > /tmp/msos-deep-http.log 2>&1 &
+          echo $! > /tmp/msos-deep-http.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4174/assembly/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/msos-deep-http.log
+          exit 1
+      - name: Drive edit finish and reload workflow at phone size
+        run: node tests/assembly-browser-deep.acceptance.mjs
+      - name: Upload deep rendered phone screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msos-assembly-deep-rendered-mobile
+          path: artifacts/msos-assembly-deep-mobile.png
+          if-no-files-found: warn
+          retention-days: 14
