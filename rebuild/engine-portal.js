@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSEnginePortal=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.1.1';
   const SCHEMA='msos.engine-portal.v1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').trim();
@@ -60,7 +60,7 @@
       const errors=[];
       for(const caller of this.services.values())for(const kind of ['query','command'])for(const [targetId,ops] of Object.entries(caller.calls[kind])){
         const target=this.services.get(targetId);if(!target){errors.push(`${caller.id} ${kind} dependency missing: ${targetId}`);continue}
-        if(ops.includes('*'))continue;for(const op of ops)if(!target[`${kind}s`]?.[op])errors.push(`${caller.id} may ${kind} ${targetId}.${op}, but operation is not registered`);
+        if(ops.includes('*'))continue;const table=kind==='query'?target.queries:target.commands;for(const op of ops)if(!table?.[op])errors.push(`${caller.id} may ${kind} ${targetId}.${op}, but operation is not registered`);
       }
       return{ok:errors.length===0,errors};
     }
@@ -85,7 +85,7 @@
     }
     _invoke(kind,caller,targetId,operationName,input={},context={},parentStack=[]){
       const target=text(targetId),operation=text(operationName);if(parentStack.length>=this.maxDepth)fail('MAX_DEPTH','Engine portal maximum call depth exceeded',{caller,target,operation});this._permission(caller,target,kind,operation);
-      const service=this.services.get(target);if(!service)fail('UNKNOWN_TARGET',`Unknown target engine: ${target}`);const op=service[`${kind}s`]?.[operation];if(!op)fail('UNKNOWN_OPERATION',`${target} does not expose ${kind} ${operation}`);
+      const service=this.services.get(target);if(!service)fail('UNKNOWN_TARGET',`Unknown target engine: ${target}`);const op=service[`${kind}s`]?.[operation]||(kind==='query'?service.queries?.[operation]:service.commands?.[operation]);if(!op)fail('UNKNOWN_OPERATION',`${target} does not expose ${kind} ${operation}`);
       const meta=this._requestMeta(kind,caller,target,operation,context,parentStack),stack=[...parentStack,meta],serviceClient=Object.freeze({
         query:(nextTarget,nextOperation,nextInput={},nextContext={})=>this._invoke('query',target,nextTarget,nextOperation,nextInput,{...clone(meta.context),...clone(nextContext),causeId:meta.causeId},stack),
         command:(nextTarget,nextOperation,nextInput={},nextContext={})=>this._invoke('command',target,nextTarget,nextOperation,nextInput,{...clone(meta.context),...clone(nextContext),causeId:meta.causeId},stack),
