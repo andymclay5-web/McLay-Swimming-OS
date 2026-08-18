@@ -8,9 +8,12 @@ on:
       - 'engines/standards-records.js'
       - 'engines/race-model.js'
       - 'engines/evidence-publication.js'
+      - 'engines/results-pathway.js'
       - 'tests/standards-records.test.js'
       - 'tests/race-model.test.js'
       - 'tests/evidence-publication.test.js'
+      - 'tests/results-pathway.test.js'
+      - 'tests/results-pathway-delegation.test.js'
       - 'tests/performance-pipeline.integration.test.js'
       - 'tests/architecture-boundaries-extended.test.js'
       - '.github/workflows/performance-engine-tests.yml'
@@ -21,9 +24,12 @@ on:
       - 'engines/standards-records.js'
       - 'engines/race-model.js'
       - 'engines/evidence-publication.js'
+      - 'engines/results-pathway.js'
       - 'tests/standards-records.test.js'
       - 'tests/race-model.test.js'
       - 'tests/evidence-publication.test.js'
+      - 'tests/results-pathway.test.js'
+      - 'tests/results-pathway-delegation.test.js'
       - 'tests/performance-pipeline.integration.test.js'
       - 'tests/architecture-boundaries-extended.test.js'
       - '.github/workflows/performance-engine-tests.yml'
@@ -66,6 +72,23 @@ jobs:
       - name: Evidence Publication regressions
         run: node tests/evidence-publication.test.js
 
+  results-pathway-delegation:
+    runs-on: ubuntu-latest
+    needs: [standards-records]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check Results Pathway delegation
+        run: |
+          node --check engines/results-pathway.js
+          node --check tests/results-pathway-delegation.test.js
+      - name: Existing Results Pathway regressions
+        run: node tests/results-pathway.test.js
+      - name: Standards ownership delegation regressions
+        run: node tests/results-pathway-delegation.test.js
+
   architecture:
     runs-on: ubuntu-latest
     steps:
@@ -78,7 +101,7 @@ jobs:
 
   performance-pipeline:
     runs-on: ubuntu-latest
-    needs: [standards-records, race-model, evidence-publication, architecture]
+    needs: [standards-records, race-model, evidence-publication, results-pathway-delegation, architecture]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -92,6 +115,7 @@ jobs:
           node --check engines/standards-records.js
           node --check engines/race-model.js
           node --check engines/evidence-publication.js
+          node --check engines/results-pathway.js
           node --check tests/performance-pipeline.integration.test.js
       - name: Portal-routed performance pipeline integration
         run: node tests/performance-pipeline.integration.test.js
