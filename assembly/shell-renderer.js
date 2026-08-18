@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSAssemblyRenderer=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.2.0';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=v=>esc(text(v));
@@ -20,7 +20,8 @@
   function renderIntake({item={},availableDaySlots=[],selectedSlotIds=[]}={}){const selected=new Set(selectedSlotIds||[]),choices=(availableDaySlots||[]).map(x=>slotChoice(x,selected.has(x.id))).join('');return`<section class="intake-view"><header><span>Session intake</span><h1>Set up this session</h1><p>${esc([item.date,item.dayPart,item.venue,item.course].filter(Boolean).join(' · '))}</p></header><div class="intake-panel"><h2>Who is sharing this workout?</h2><p>Select only the squads that are genuinely doing the same canonical session. Their different start times stay separate.</p><div class="intake-slots">${choices}</div></div><div class="intake-panel"><h2>How do you want to enter this session?</h2><div class="intake-methods"><button type="button" data-app-action="intake-text" class="is-primary"><strong>Paste / Type</strong><span>Enter the session now</span></button><button type="button" disabled title="Voice adapter not connected yet"><strong>Voice / Transcribe</strong><span>Not connected yet</span></button><button type="button" disabled title="Photo intake adapter not connected yet"><strong>Photo</strong><span>Not connected yet</span></button></div></div></section>`}
   function renderTextEntry({draftId='',title='',source=''}={}){return`<section class="text-entry"><header><span>Paste / Type</span><h1>${esc(title||'Enter session')}</h1></header><textarea id="assembly-session-source" data-draft-id="${attr(draftId)}" spellcheck="false" placeholder="Paste or type the session here">${esc(source)}</textarea><div class="entry-actions"><button type="button" data-app-action="cancel-draft">Cancel</button><button type="button" class="is-primary" data-app-action="accept-draft" data-draft-id="${attr(draftId)}">Parse & save session</button></div></section>`}
   function scheduleContext(occ={}){if(!occ?.squadEntries?.length)return'';return`<aside class="board-schedule-context"><span>Scheduled group</span><ul>${occ.squadEntries.map(squadLine).join('')}</ul></aside>`}
-  function renderBoard({boardHtml='',occurrence=null}={}){return`<section class="assembly-board-view">${scheduleContext(occurrence)}${boardHtml}</section>`}
+  function renderSessionEvidence(captures={},sessionId=''){if(!Number(captures?.count))return'';const bits=Object.entries(captures.byType||{}).map(([type,count])=>`${count} ${type}`).join(' · ')||`${captures.count} capture${captures.count===1?'':'s'}`;return`<aside class="board-session-evidence"><span>Session evidence</span><button type="button" class="msos-capture-marker" data-board-action="evidence" data-session-id="${attr(sessionId)}" data-block-id="" data-item-id="">${esc(bits)}</button></aside>`}
+  function renderBoard({boardHtml='',occurrence=null,sessionCaptures=null,sessionId=''}={}){return`<section class="assembly-board-view">${scheduleContext(occurrence)}${renderSessionEvidence(sessionCaptures||{},sessionId||occurrence?.sessionId||'')}${boardHtml}</section>`}
   function renderError(message){return`<section class="assembly-error"><strong>MSOS could not open this view</strong><p>${esc(message)}</p></section>`}
-  return{VERSION,shell,renderCalendar,renderDay,renderCustomSession,renderIntake,renderTextEntry,renderBoard,renderError,sessionCard,squadLine,slotChoice,fmtDate,fmtMonth,esc};
+  return{VERSION,shell,renderCalendar,renderDay,renderCustomSession,renderIntake,renderTextEntry,renderBoard,renderSessionEvidence,renderError,sessionCard,squadLine,slotChoice,fmtDate,fmtMonth,esc};
 });
