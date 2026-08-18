@@ -20,7 +20,7 @@
     });
   }else root.MSOSRebuildRuntime=factory(root.MSOSEngines||{});
 })(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='1.2.1';
+  const VERSION='1.2.2';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const required=['SessionTruth','SessionLifecycle','SessionEdit','EvidenceRetrieval','ResultsPathway','Targets','Adaptation','Attendance','BoardProjection','CaptureEvidence','DeliveredSession','PlanContext','SessionDose','Reporting','Learning'];
@@ -65,7 +65,7 @@
     athleteReport(athleteRef,{course='',sessionReports=[]}={}){const athlete=this.evidence.resolveAthlete(athleteRef);if(!athlete)throw new Error(`Athlete not found: ${athleteRef}`);const pathway=this.pathway.profile(athlete.id,{course}),attendanceRows=this.attendance.snapshot().records||[],captures=this.capture.query({athleteId:athlete.id,status:''});return this.reporting.athlete({athlete,pathway,attendanceRows,captures,sessionReports})}
     state(){return{lifecycle:this.lifecycle.snapshot(),attendance:this.attendance.snapshot(),capture:this.capture.snapshot(),delivery:this.delivered.snapshot(),adaptationOverrides:this.adaptation.listOverrides()}}
   }
-  function findNode(session,id){for(const block of session?.blocks||[]){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[])}}return null}
+  function findNode(session,id){for(const block of (session?.blocks||[])){const stack=[...(block.items||[])];while(stack.length){const n=stack.shift();if(n?.id===id)return n;if(n?.kind==='group')stack.unshift(...(n.items||[]))}}return null}
   const create=options=>new Runtime(options);
   return{VERSION,create,Runtime,findNode};
 });
