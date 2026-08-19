@@ -22,6 +22,11 @@ Outputs: target time/send-off or HR/SR fallback.
 
 Default stroke interpretation remains upstream/session semantics: aerobic unspecified stroke = Freestyle.
 
+## T400 capture — `engines/t400-capture.js`
+Owns the live result-comparison behaviour when a coach records a T400. It compares the new result with the fastest valid prior T400 of the same stroke before the new row is saved, annotates the row, and reports first baseline / PB improvement / equals PB / seconds off PB. It does not calculate aerobic training targets.
+
+The fastest valid historical result remains the anchor selected by the Aerobic engine; a slower new test never replaces the best anchor just because it is newer.
+
 ## Race-pace engine — `engines/race-pace.js`
 Owns PB lookup, course conversion, #1/#1F resolution from performance evidence, race-pace arithmetic and any validated race-segment models.
 
@@ -82,9 +87,9 @@ Board principles from the physical whiteboards:
 - phone and TV use the same whiteboard information hierarchy.
 
 ## Active boundary — 20 Aug 2026
-The Thursday emergency recovery/pass2/deckfit layers are no longer loaded by `index.html`. Session repair, evidence, aerobic targets, race pace, modifications, coordination, compatibility bridging and Board presentation now have separate active owners under `engines/`.
+The Thursday emergency recovery/pass2/deckfit layers are no longer loaded by `index.html`. Session repair, evidence, aerobic targets, T400 capture, race pace, modifications, coordination, compatibility bridging and Board presentation now have separate active owners under `engines/`.
 
 The old Thursday files remain in the repository only as historical/reference code. They are not part of the active runtime path.
 
 ## Starting-point acceptance
-`engines/acceptance.js` runs non-mutating fixture checks at startup for the highest-risk coaching rules: phase-preserving aerobic modification, 8x100 pattern scaling, stroke-override preservation, complete-IM handling and work-window timing, 75m pool-end alignment, #1 evidence resolution, compact repeated-target summaries and HR/SR fallback. A red fixture is an engine failure, not a Board styling problem.
+`engines/acceptance.js` runs non-mutating browser-side fixture checks at startup for the highest-risk coaching rules. `tests/engine-acceptance.cjs` runs the same core ideas as an executable Node regression suite. GitHub Actions syntax-checks every active engine file and runs the Node suite on pushes and pull requests. A red fixture is an engine failure, not a Board styling problem.
