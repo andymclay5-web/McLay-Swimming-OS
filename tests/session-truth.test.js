@@ -217,9 +217,14 @@ test('legacy training-test evidence merges into Morning Coaching state',()=>{
  const a=C.t400(st.athletes[0],st,'SCM','Freestyle');assert(a);assert.equal(a.result_seconds,450.1);
 });
 
-test('T400 anchor uses latest valid result, not fastest historical result',()=>{
+test('T400 anchor uses fastest valid like-for-like result',()=>{
  const ath={id:'a',full_name:'A'},st={trainingTestTypes:[{id:'tt',test_key:'t400_freestyle'}],trainingTestResults:[{id:'old',athlete_id:'a',test_type_id:'tt',result_seconds:300,result_date:'2026-01-01',pool_course:'SCM',valid_for_anchor:true},{id:'new',athlete_id:'a',test_type_id:'tt',result_seconds:320,result_date:'2026-08-01',pool_course:'SCM',valid_for_anchor:true}]};
- assert.equal(C.t400(ath,st,'SCM','Freestyle').id,'new');
+ assert.equal(C.t400(ath,st,'SCM','Freestyle').id,'old');
+});
+
+test('name-labelled historical T400 defaults to SCM when course is absent',()=>{
+ const ath={id:'a',full_name:'A'},st={trainingTestTypes:[{id:'tt',name:'T400 Freestyle'}],trainingTestResults:[{id:'legacy',athlete_id:'a',test_type_id:'tt',result_seconds:305,result_date:'2026-01-01',valid_for_anchor:true}]};
+ assert.equal(C.t400(ath,st,'SCM','Freestyle').id,'legacy');
 });
 
 test('McKenzie continuous volume returns to start end in SCM',()=>{

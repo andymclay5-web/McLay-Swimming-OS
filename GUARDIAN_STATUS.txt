@@ -1,9 +1,9 @@
 McLay Swimming OS Version 4
-Build: v4-poolside-core-20260819d-sessiontruthgate
+Build: v4-poolside-core-20260819e-poolsideanswers
 Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
 Complete V4 Guardian
-- 75 / 75 foundation and Version 4 regressions PASS on the shipping source stack:
+- 79 / 79 foundation and Version 4 regressions PASS on the shipping source stack:
   app.js + v4-correct.js + v4-poolside-core.js.
 - The full Guardian is now executed by GitHub Actions on changes to the V4 runtime.
 - Morning Board session/coaching regressions remain PASS.
@@ -18,6 +18,9 @@ Resolved in this build
 - Startup now activates the saved view before rendering, so reloading or reopening on Times, Roll, Coach Hub, Guardian or another non-Board screen cannot leave the main area blank.
 - Standalone `10s rest` / `30s rest` lines can no longer be parsed as 10m / 30m swimming items.
 - The exact saved Saturday corruption seen on the phone — 6,090m with 1,700 / 850 / 2,940 / 600 sections — is repaired locally and non-destructively to 5,450m with 1,100 / 850 / 2,900 / 600. The duplicate 4-round breakdown is folded into the parent 12 × 50 and attendance, captures, source evidence, user edits and finish notes remain intact.
+- Existing T400 evidence is merged even when Version 4 sessions already exist. Historical generic/name-labelled T400 records resolve immediately, and T400 course defaults to SCM only when the source has no explicit course.
+- Board target detail is collapsed into a right-aligned parent-set dropdown. Opening it keeps the complete set visible and shows swimmer-grouped targets/send-offs without inline desktop clutter.
+- Board now has direct Swimmers / Pathway access. The swimmer hub answers PB → next manageable step → national gap in seconds and percentage, then opens the attendance-linked recent training exposure for that event/stroke.
 
 Retained V4 scope
 - Full legacy app and data paths remain present; this is not a seven-file replacement shell.

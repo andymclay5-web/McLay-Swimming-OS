@@ -3,14 +3,14 @@
   const M=g.MSOS4;
   if(!M) throw new Error('MSOS4 missing');
   const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
-  const BUILD='v4-poolside-core-20260819d-sessiontruthgate';
-  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-sessiontruthgate';
+  const BUILD='v4-poolside-core-20260819e-poolsideanswers';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-poolsideanswers';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),
     build:BUILD,
     softwareReady:M.RELEASE_ATTESTATION?.softwareReady===true&&M.correct?.baseBuild?.match===true,
-    generatedAt:'2026-08-19T12:15:00+12:00',
-    suiteDigest:'v4-contract-20260819-sessiontruthgate',
+    generatedAt:'2026-08-19T12:30:00+12:00',
+    suiteDigest:'v4-contract-20260819-poolsideanswers',
     packageDigest:'SHA256SUMS.txt'
   });
   const BASE_PARSE=M.parser.parse.bind(M.parser);
@@ -165,7 +165,7 @@
   }
 
   M.parser.parse=(source,identity={})=>compactSession(BASE_PARSE(normaliseText(source),identity));
-  M.poolsideCore={BUILD,normaliseText,compactSession,repairKnownSessionTruth,repairKnownSavedSessions};
+  M.poolsideCore={BUILD,normaliseText,compactSession,repairKnownSessionTruth,repairKnownSavedSessions,renderNode,targetDetails,quickActions};
 
   function attendanceTime(row){return Date.parse(row?.updated_at||row?.updatedAt||row?.created_at||row?.createdAt||0)||0}
   UI.currentAthletes=()=>{const s=M.currentSession();if(!s)return[];const squads=new Set((s.identity?.squads||[]).map(x=>txt(x).toLowerCase()));return (M.state.athletes||[]).filter(a=>a.active!==false&&(!squads.size||squads.has(txt(a.squad).toLowerCase())))};
@@ -195,20 +195,37 @@
     }
     rows.sort((a,b)=>a.sort-b.sort);return rows.map(x=>x.html).join('')||'<div class="pool-target-empty">No target needed for this set.</div>';
   }
-  function renderNode(s,b,item){
+  function targetLeaves(item){
+    if(item?.kind==='set')return targetDriven(item)?[item]:[];
+    if(item?.kind==='group')return (item.items||[]).flatMap(targetLeaves);
+    return [];
+  }
+  function targetDetails(s,items,label=''){
+    const sets=(items||[]).filter(targetDriven);if(!sets.length)return'';
+    return `<details class="pool-targets"><summary>Targets${sets.length>1?` · ${sets.length} sets`:''}</summary><div class="pool-target-body">${label?`<div class="pool-target-parent">${esc(label)}</div>`:''}${sets.map(item=>{const m=meta(item);return `<section class="pool-target-set"><header><strong>${esc(workHead(item))}</strong>${m?`<small>${esc(m)}</small>`:''}</header>${targetRows(s,item)}</section>`}).join('')}</div></details>`;
+  }
+  function renderNode(s,b,item,suppressTargets=false){
     if(item.kind==='cue')return `<div class="cue-line">${esc(item.text)}</div>`;
-    if(item.kind==='group')return `<section class="pool-group"><header><b>${Number(item.rounds)||1} ROUNDS</b><strong>${S.itemDistance(item).toLocaleString()}m</strong></header>${(item.items||[]).map(x=>renderNode(s,b,x)).join('')}</section>`;
+    if(item.kind==='group'){
+      const leaves=targetLeaves(item),label=`${Number(item.rounds)||1} rounds · ${S.itemDistance(item).toLocaleString()}m`;
+      return `<section class="pool-group"><header><b>${Number(item.rounds)||1} ROUNDS</b><strong>${S.itemDistance(item).toLocaleString()}m</strong></header>${(item.items||[]).map(x=>renderNode(s,b,x,true)).join('')}${!suppressTargets?targetDetails(s,leaves,label):''}</section>`;
+    }
     const m=meta(item),mods=modifiedFor(item,s),targets=targetDriven(item);
-    return `<article class="pool-line" data-item-id="${esc(item.id)}"><div class="pool-work"><div class="pool-work-head"><strong>${esc(workHead(item))}</strong>${M.access?.can?.('session.edit')?`<button data-pool-edit="${esc(item.id)}">Edit</button>`:''}</div>${m?`<div class="pool-meta">${esc(m)}</div>`:''}</div>${mods.length?`<div class="pool-mods">${mods.map(x=>`<div class="pool-mod"><b>${esc(UI.initials(x.ath))}</b><span>${esc(workHead(x.actual))}${meta(x.actual)?` · ${esc(meta(x.actual))}`:''}</span></div>`).join('')}</div>`:''}${targets?`<div class="pool-targets"><div class="pool-target-title">TARGETS</div>${targetRows(s,item)}</div>`:''}</article>`;
+    return `<article class="pool-line" data-item-id="${esc(item.id)}"><div class="pool-work"><div class="pool-work-head"><strong>${esc(workHead(item))}</strong>${M.access?.can?.('session.edit')?`<button data-pool-edit="${esc(item.id)}">Edit</button>`:''}</div>${m?`<div class="pool-meta">${esc(m)}</div>`:''}</div>${mods.length?`<div class="pool-mods">${mods.map(x=>`<div class="pool-mod"><b>${esc(UI.initials(x.ath))}</b><span>${esc(workHead(x.actual))}${meta(x.actual)?` · ${esc(meta(x.actual))}`:''}</span></div>`).join('')}</div>`:''}${targets&&!suppressTargets?targetDetails(s,[item]):''}</article>`;
+  }
+  function quickActions(here){
+    const swimmers=M.access?.can?.('pathway.read_all')?'<button data-pool-swimmers>Swimmers / Pathway</button>':'';
+    return `<button data-pool-roll>Roll · ${here} here</button><button data-pool-times>T400 / Times</button>${swimmers}`;
   }
 
   UI.renderBoard=()=>{
     const h=document.querySelector('#boardView'),s=M.currentSession();if(!h)return;
     if(!s){h.innerHTML='<section class="empty-card"><h2>No session selected</h2></section>';return}
     const here=UI.presentAthletes().length,total=S.total(s);
-    h.innerHTML=`<section class="session-summary pool-summary"><div><span>WHOLE SESSION · ${esc(s.identity.date)} ${esc(s.identity.dayPart)}</span><h1>${esc(s.identity.title||'Session')}</h1><div class="pool-quick"><button data-pool-roll>Roll · ${here} here</button><button data-pool-times>T400 / Times</button></div></div><strong>${total.toLocaleString()}m</strong></section>${(s.blocks||[]).map((b,i)=>`<section class="block-card pool-block" data-block-id="${esc(b.id)}"><header><div><small>${i+1}. ${esc(b.title.toUpperCase())}</small><h2>${esc(b.title)}</h2></div><strong>${S.blockDistance(b).toLocaleString()}m</strong></header><div class="block-items">${(b.items||[]).map(x=>renderNode(s,b,x)).join('')}</div>${M.access?.can?.('session.finish')?`<footer><button class="finish-here" data-pool-finish="${esc(b.id)}">Finish here — after ${esc(b.title)}</button></footer>`:''}</section>`).join('')}`;
+    h.innerHTML=`<section class="session-summary pool-summary"><div><span>WHOLE SESSION · ${esc(s.identity.date)} ${esc(s.identity.dayPart)}</span><h1>${esc(s.identity.title||'Session')}</h1><div class="pool-quick">${quickActions(here)}</div></div><strong>${total.toLocaleString()}m</strong></section>${(s.blocks||[]).map((b,i)=>`<section class="block-card pool-block" data-block-id="${esc(b.id)}"><header><div><small>${i+1}. ${esc(b.title.toUpperCase())}</small><h2>${esc(b.title)}</h2></div><strong>${S.blockDistance(b).toLocaleString()}m</strong></header><div class="block-items">${(b.items||[]).map(x=>renderNode(s,b,x)).join('')}</div>${M.access?.can?.('session.finish')?`<footer><button class="finish-here" data-pool-finish="${esc(b.id)}">Finish here — after ${esc(b.title)}</button></footer>`:''}</section>`).join('')}`;
     h.querySelector('[data-pool-roll]')?.addEventListener('click',()=>M.nav.show('roll',{restoreScroll:false}));
     h.querySelector('[data-pool-times]')?.addEventListener('click',()=>M.nav.show('times',{restoreScroll:false}));
+    h.querySelector('[data-pool-swimmers]')?.addEventListener('click',()=>M.nav.show('athletes',{restoreScroll:false}));
     h.querySelectorAll('[data-pool-edit]').forEach(x=>x.onclick=()=>M.actions.openEdit(x.dataset.poolEdit));
     h.querySelectorAll('[data-pool-finish]').forEach(x=>x.onclick=()=>M.actions.finishBlock(x.dataset.poolFinish));
   };
@@ -274,6 +291,8 @@
       const result=priorGuardianRun(),tests=[...(result.tests||[])];
       const check=(name,fn)=>{try{const detail=fn();tests.push({name,ok:true,detail:detail==null?'':String(detail)})}catch(e){tests.push({name,ok:false,detail:e.message||String(e)})}};
       check('Standalone rest lines never add phantom metres',()=>{const s=M.parser.parse('MAIN SET\n10s rest\n8 x 100 Freestyle\n30s rest\n4 x 50 Choice',{id:'rest-gate'});if(S.total(s)!==1000)throw new Error(`got ${S.total(s)}`);return '800 + 200 · rest 0m'});
+      check('Board targets stay inside a compact parent-set dropdown',()=>{const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development',{id:'target-dropdown',course:'SCM'}),item=s.blocks[0].items[0],html=renderNode(s,s.blocks[0],item);if(!/<details class="pool-targets"><summary>Targets/.test(html)||!/2 × 400 Freestyle/.test(html)||/pool-target-title/.test(html))throw new Error('target detail is not parent-set dropdown markup');return 'set remains visible · targets collapsed'});
+      check('Board exposes direct Swimmers and Performance Pathway access',()=>{const html=quickActions(1);if(!/data-pool-swimmers/.test(html)||!/Swimmers \/ Pathway/.test(html))throw new Error('direct poolside swimmer route missing');return 'Board → Swimmers / Pathway'});
       check('Saved Saturday 6,090m corruption repairs non-destructively to 5,450m',()=>{
         const s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-sat',date:'2026-08-15',dayPart:'AM',squads:['National','Development','Fitness']});
         const warm=s.blocks[0],parent=warm.items.find(x=>x.kind==='set'&&Number(x.reps)===12&&Number(x.distance)===50);

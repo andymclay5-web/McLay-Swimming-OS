@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-poolside-core-20260819d-sessiontruthgate';
+const BUILD='v4-poolside-core-20260819e-poolsideanswers';
 const ATHLETE_ID='predeploy-browser-athlete';
 const NOTE='Predeploy poolside note';
 
@@ -71,12 +71,12 @@ async function appSnapshot(page){
     let snapshot=await appSnapshot(page);
     assert.equal(snapshot.build,BUILD,'unexpected shipping build');
     assert.equal(snapshot.releaseReady,true,'final shipping build is not software-attested');
-    assert.deepEqual(snapshot.guardian,{ok:true,passed:75,total:75,build:BUILD},'browser Guardian is not current and complete');
+    assert.deepEqual(snapshot.guardian,{ok:true,passed:79,total:79,build:BUILD},'browser Guardian is not current and complete');
     assert.ok(snapshot.width.scroll<=snapshot.width.inner+1,`fresh phone page overflows: ${snapshot.width.scroll}px > ${snapshot.width.inner}px`);
 
     await page.click('#newSessionBtn');
     await page.waitForSelector('#coreRaw');
-    await page.fill('#coreRaw','WARM-UP\n4 x 100 Freestyle\n4 x 50 Kick\n\n600m');
+    await page.fill('#coreRaw','WARM-UP\n4 x 100 Freestyle Development 10s Rest\n4 x 50 Kick\n\n600m');
     await page.waitForFunction(()=>document.querySelector('#coreCreate')?.disabled===false);
     await page.click('#coreCreate');
     await page.waitForFunction(()=>window.MSOS4?.currentSession?.()&&window.MSOS4.session.total(window.MSOS4.currentSession())===600);
@@ -102,6 +102,17 @@ async function appSnapshot(page){
     snapshot=await appSnapshot(page);
     assert.ok(snapshot.width.scroll<=snapshot.width.inner+1,`Times overflows at phone width: ${snapshot.width.scroll}px > ${snapshot.width.inner}px`);
 
+    await page.click('[data-nav="board"]');
+    await page.waitForSelector('.pool-targets');
+    assert.equal(await page.locator('.pool-targets').first().getAttribute('open'),null,'Board targets opened inline by default');
+    assert.ok((await page.locator('.pool-line').first().innerText()).includes('4 × 100 Freestyle'),'parent set disappeared behind target UI');
+    await page.locator('.pool-targets summary').first().click();
+    const targetText=await page.locator('.pool-targets').first().innerText();
+    assert.ok(!/No Freestyle T400 loaded|target needed/i.test(targetText),`saved T400 did not resolve on Board: ${targetText}`);
+    assert.ok(/Predeploy|PS\b/.test(targetText),'swimmer target row is missing');
+    await page.click('[data-pool-swimmers]');
+    await page.waitForSelector('#athletesView.active #pathAthlete');
+    assert.ok((await page.locator('#athletesView').innerText()).includes('POOLSIDE ANSWER'),'direct swimmer route did not open the poolside answer surface');
     await page.click('[data-nav="board"]');
     await page.click('[data-sticky-note]');
     await page.fill('#captureText',NOTE);

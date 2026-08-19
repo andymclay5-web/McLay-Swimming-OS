@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.MorningCoaching=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0';
+  const VERSION='1.1.1';
   const STORAGE_KEY='mclay_swimming_os_v4';
   const LEGACY_STORAGE_KEY='mclay_swimming_os_v1';
   const REF_DB='mclay_swimming_v4_reference_cache';
@@ -139,18 +139,21 @@
 
   function typeKey(state,row){
     const types=state?.trainingTestTypes||state?.training_test_types||[];
-    return text(types.find(x=>x.id===row?.test_type_id)?.test_key||row?.test_key);
+    const type=types.find(x=>x.id===row?.test_type_id)||{};
+    return [type.test_key,type.name,type.label,type.test_name,row?.test_key,row?.name,row?.label,row?.test_name,row?.source_label,row?.metadata?.test_key,row?.metadata?.test_name].map(text).filter(Boolean).join(' ');
   }
+  function isT400Row(state,row){const k=typeKey(state,row).toLowerCase().replace(/[_-]+/g,' ');return /\bt\s*400\b/.test(k)||/\b400\s*m?\s*(?:time\s*trial|tt)\b/.test(k)}
   function testStroke(state,row){
     const k=typeKey(state,row).toLowerCase();
-    if(!/t400/.test(k))return'';
-    if(/(?:^|[_\s-])(?:free|freestyle)(?:$|[_\s-])/.test(k)||k==='t400')return'Freestyle';
+    if(!isT400Row(state,row))return'';
+    const explicit=text(row?.stroke||row?.event_stroke||row?.metadata?.stroke);if(explicit)return normaliseStroke(explicit);
+    if(/(?:^|[_\s-])(?:free|freestyle)(?:$|[_\s-])/.test(k))return'Freestyle';
     if(/back/.test(k))return'Backstroke';if(/breast/.test(k))return'Breaststroke';if(/(?:fly|butterfly)/.test(k))return'Butterfly';if(/(?:^|[_\s-])im(?:$|[_\s-])|medley/.test(k))return'IM';
-    return normaliseStroke(row?.stroke||row?.metadata?.stroke||'');
+    return'Freestyle';
   }
   function t400(athlete,state,course='',stroke='Freestyle'){
     const wanted=normaliseStroke(stroke),rows=state?.trainingTestResults||state?.training_test_results||[];
-    const found=rows.filter(r=>r.athlete_id===athlete?.id).filter(r=>/t400/i.test(typeKey(state,r))).filter(r=>testStroke(state,r)===wanted).filter(r=>r.valid_for_anchor!==false).filter(r=>!course||!r.pool_course||text(r.pool_course).toUpperCase()===text(course).toUpperCase()).filter(r=>Number.isFinite(resultSeconds(r))).sort((a,b)=>String(b.result_date||'').localeCompare(String(a.result_date||''))||resultSeconds(a)-resultSeconds(b))[0]||null;
+    const found=rows.filter(r=>r.athlete_id===athlete?.id).filter(r=>isT400Row(state,r)).filter(r=>testStroke(state,r)===wanted).filter(r=>r.valid_for_anchor!==false).filter(r=>!course||text(r.pool_course||r.course||r.metadata?.pool_course||'SCM').toUpperCase()===text(course).toUpperCase()).filter(r=>Number.isFinite(resultSeconds(r))).sort((a,b)=>resultSeconds(a)-resultSeconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))[0]||null;
     if(found)return found;
     if(key(athlete?.full_name)==='mollymckernan'&&wanted==='Freestyle')return{athlete_id:athlete.id,result_seconds:324.6,pool_course:course||'SCM',valid_for_anchor:true,source_label:'Coach-confirmed T400 5:24.6'};
     return null;

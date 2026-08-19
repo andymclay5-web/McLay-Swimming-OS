@@ -16,15 +16,15 @@
   if(!C.baseBuild.match)console.warn('[MSOS v4] Base build differs from validated baseline',C.baseBuild);
 
   M.VERSION='4';
-  M.BUILD='v4-correct-20260819-guardian72';
-  M.CORE='20260819-v4-guardian72';
+  M.BUILD='v4-correct-20260819-poolsideanswers';
+  M.CORE='20260819-v4-poolsideanswers';
 
   // Keep production cloud cutover locked until the corrected bytes pass the real-phone gate.
   M.RELEASE_ATTESTATION=Object.freeze({
     build:M.BUILD,
     softwareReady:C.baseBuild.match,
-    generatedAt:'2026-08-19T10:30:00+12:00',
-    suiteDigest:'v4-contract-20260819-guardian72',
+    generatedAt:'2026-08-19T12:30:00+12:00',
+    suiteDigest:'v4-contract-20260819-poolsideanswers',
     packageDigest:'see-SHA256SUMS',
     note:'Correct Version 4 software-attested; physical Android acceptance, production schema probe and remaining release gates are still required before production cutover.'
   });
@@ -66,25 +66,75 @@
     const raw=Math.floor(t)+r;
     return Math.ceil(raw/5)*5;
   }
-  function typeKey(state,row){
+  function descriptorParts(state,row){
     const types=state?.trainingTestTypes||state?.training_test_types||[];
-    return text(types.find(x=>x.id===row?.test_type_id)?.test_key||row?.test_key);
+    const type=types.find(x=>x.id===row?.test_type_id)||{};
+    return [
+      type.test_key,type.name,type.label,type.test_name,type.test_type,
+      row?.test_key,row?.name,row?.label,row?.test_name,row?.test_type,
+      row?.source_label,row?.metadata?.test_key,row?.metadata?.test_name,row?.metadata?.test_type
+    ].map(text).filter(Boolean);
+  }
+  function typeKey(state,row){
+    return descriptorParts(state,row).join(' ');
+  }
+  function isT400Row(state,row){
+    const k=typeKey(state,row).toLowerCase().replace(/[_-]+/g,' ');
+    return /\bt\s*400\b/.test(k)||/\b400\s*m?\s*(?:time\s*trial|tt)\b/.test(k);
   }
   function testStroke(state,row){
     const k=typeKey(state,row).toLowerCase();
-    if(!/t400/.test(k)) return '';
-    if(/(?:^|[_\s-])(?:free|freestyle)(?:$|[_\s-])/.test(k)||k==='t400') return 'Freestyle';
+    if(!isT400Row(state,row)) return '';
+    const explicit=text(row?.stroke||row?.event_stroke||row?.metadata?.stroke);
+    if(explicit) return normaliseStroke(explicit);
+    if(/(?:^|[_\s-])(?:free|freestyle)(?:$|[_\s-])/.test(k)) return 'Freestyle';
     if(/back/.test(k)) return 'Backstroke';
     if(/breast/.test(k)) return 'Breaststroke';
     if(/(?:fly|butterfly)/.test(k)) return 'Butterfly';
     if(/(?:^|[_\s-])im(?:$|[_\s-])|medley/.test(k)) return 'IM';
-    return normaliseStroke(row?.stroke||row?.metadata?.stroke||'');
+    // Historical generic T400 records were Freestyle. Named-stroke records
+    // must still identify their stroke explicitly and never borrow this anchor.
+    return 'Freestyle';
   }
   function resultSeconds(row){
     return Number(row?.result_seconds||row?.time_seconds||row?.seconds||row?.result_time_seconds);
   }
+  function t400Course(row){
+    return text(row?.pool_course||row?.course||row?.metadata?.pool_course||row?.metadata?.course||'SCM').toUpperCase();
+  }
 
-  C._internals={normaliseStroke,strokeSlug,practicalSendOff,typeKey,testStroke,isSophie,athleteKey};
+  function evidenceIdentity(row,kind){
+    return text(row?.id)||`${kind}|${[
+      row?.athlete_id,row?.test_type_id,row?.result_date,resultSeconds(row),typeKey({},row)
+    ].map(text).join('|')}`;
+  }
+  function mergeMissingEvidence(dest,src,kind){
+    const seen=new Set((dest||[]).map(x=>evidenceIdentity(x,kind)));
+    let added=0;
+    for(const raw of src||[]){
+      if(!raw||typeof raw!=='object')continue;
+      const key=evidenceIdentity(raw,kind);if(seen.has(key))continue;
+      dest.push(U.clone(raw));seen.add(key);added++;
+    }
+    return added;
+  }
+
+  C.hydrateT400Evidence=(state=M.state,legacy=M.store?.legacy?.()||null)=>{
+    if(!state||!legacy)return 0;
+    state.trainingTestTypes=Array.isArray(state.trainingTestTypes)?state.trainingTestTypes:[];
+    state.trainingTestResults=Array.isArray(state.trainingTestResults)?state.trainingTestResults:[];
+    let changed=0;
+    changed+=mergeMissingEvidence(state.trainingTestTypes,legacy.training_test_types||legacy.trainingTestTypes,'type');
+    changed+=mergeMissingEvidence(state.trainingTestResults,legacy.training_test_results||legacy.trainingTestResults,'result');
+    for(const row of state.trainingTestResults){
+      if(!isT400Row(state,row)||text(row.pool_course))continue;
+      // Club T400 evidence is SCM unless the source explicitly says otherwise.
+      row.pool_course=t400Course(row);changed++;
+    }
+    return changed;
+  };
+
+  C._internals={normaliseStroke,strokeSlug,practicalSendOff,typeKey,testStroke,isT400Row,t400Course,isSophie,athleteKey};
 
   C.hydratePlanning=()=>{
     if(!M.state)return;
@@ -141,7 +191,7 @@
       const out=baseEnsureState.apply(this,arguments);
       C.ensureSettings();
       C.hydratePlanning();
-      const changed=C.enforceRoster();
+      const changed=C.hydrateT400Evidence()+Number(C.enforceRoster());
       if(changed) try{M.store?.save?.(M.state)}catch{}
       return out;
     };
@@ -209,10 +259,10 @@
       const rows=state?.trainingTestResults||state?.training_test_results||[];
       return rows
         .filter(r=>r.athlete_id===athlete?.id)
-        .filter(r=>/t400/i.test(typeKey(state,r)))
+        .filter(r=>isT400Row(state,r))
         .filter(r=>testStroke(state,r)===wanted)
         .filter(r=>r.valid_for_anchor!==false)
-        .filter(r=>!course||!r.pool_course||String(r.pool_course).toUpperCase()===String(course).toUpperCase())
+        .filter(r=>!course||t400Course(r)===String(course).toUpperCase())
         .filter(r=>Number.isFinite(resultSeconds(r)))
         // Proven v3 behaviour: fastest valid like-for-like test is the current anchor.
         .sort((a,b)=>resultSeconds(a)-resultSeconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))[0]||null;
@@ -654,10 +704,79 @@
     }
     return [...new Set(rows.filter(Boolean))].slice(0,4);
   }
+  C.poolsidePathwayAnswer=(ath,event)=>{
+    const pb=event?.pb,national=event?.nextNational;
+    if(!ath||!pb||!national)return null;
+    const pbSeconds=Number(pb.result_seconds),nationalSeconds=Number(national.row?._seconds);
+    if(!Number.isFinite(pbSeconds)||!Number.isFinite(nationalSeconds))return null;
+    const candidates=[];
+    for(const x of M.pathway?.pointSteps?.(ath,pb,12)||[]){
+      const seconds=Number(x.seconds);
+      if(seconds<pbSeconds-.01&&seconds>nationalSeconds+.01)candidates.push({label:`${x.points} WA`,seconds,source:'points'});
+    }
+    for(const x of event.qualifying||[]){
+      const seconds=Number(x._seconds);
+      if(seconds<pbSeconds-.01&&seconds>nationalSeconds+.01)candidates.push({label:x._label||'Qualifying step',seconds,source:'qualifying'});
+    }
+    candidates.sort((a,b)=>b.seconds-a.seconds);
+    const steps=[];
+    for(const x of candidates){
+      if(steps.some(y=>Math.abs(y.seconds-x.seconds)<.15))continue;
+      steps.push({...x,gapSeconds:pbSeconds-x.seconds,gapPercentage:(pbSeconds-x.seconds)/x.seconds*100});
+    }
+    const nationalGap={seconds:pbSeconds-nationalSeconds,percentage:(pbSeconds-nationalSeconds)/nationalSeconds*100};
+    const next=steps[0]||{label:national.row?._label||'NZSC',seconds:nationalSeconds,gapSeconds:nationalGap.seconds,gapPercentage:nationalGap.percentage,source:'national'};
+    return{
+      event:`${pb.course} ${pb.distance} ${pb.stroke}`,
+      pbSeconds,
+      nationalLabel:national.row?._label||'NZSC',
+      nationalSeconds,
+      nationalGap,
+      steps,
+      next
+    };
+  };
+
+  function walkTrainingItems(items,multiplier,fn){
+    for(const item of items||[]){
+      if(item?.kind==='group')walkTrainingItems(item.items||[],multiplier*Math.max(1,Number(item.rounds)||1),fn);
+      else if(item?.kind==='set')fn(item,multiplier);
+    }
+  }
+  C.trainingArea=(ath,event,{days=42,state=M.state}={})=>{
+    if(!ath||!event||!state)return null;
+    const wanted=normaliseStroke(event.stroke),distance=Number(event.distance)||0;
+    const today=text(M.currentSession?.()?.identity?.date)||new Date().toISOString().slice(0,10),end=Date.parse(`${today}T23:59:59Z`),cutoff=end-days*86400000;
+    const statuses=new Set(['present','modified','late']),sessions=[];let metres=0,qualityMetres=0,racePaceExposures=0;
+    const quality=new Set(['Development','Overload','Threshold','Clearance','Race quality','Speed']);
+    for(const session of Object.values(state.canonicalSessions||{})){
+      const when=Date.parse(`${session?.identity?.date||''}T12:00:00Z`);
+      if(!Number.isFinite(when)||when<cutoff||when>end)continue;
+      const attendance=(state.attendance||[]).find(x=>x.session_id===session.id&&x.athlete_id===ath.id);
+      if(!statuses.has(text(attendance?.status).toLowerCase()))continue;
+      let sessionMetres=0,sessionQuality=0,sessionRace=0;const lines=[];
+      for(const block of session.blocks||[])walkTrainingItems(block.items||[],1,(item,multiplier)=>{
+        const actual=M.adapt?.item?.(item,ath,state,session)||item;
+        const stroke=M.analysis?.strokeFor?.(actual)||normaliseStroke(actual.stroke||'');
+        if(normaliseStroke(stroke)!==wanted)return;
+        const d=M.session.itemDistance(actual)*multiplier,zone=M.analysis?.zoneFor?.(actual)||'';
+        sessionMetres+=d;if(quality.has(zone))sessionQuality+=d;
+        const raw=text([actual.raw,actual.text,...(actual.cues||[])].filter(Boolean).join(' '));
+        const exactRace=Number(actual.raceIntent?.distance)===distance||new RegExp(`\\b${distance}\\s*m?\\s*(?:race\\s*)?pace\\b`,'i').test(raw);
+        if(exactRace)sessionRace++;
+        if(lines.length<3)lines.push({work:`${Math.max(1,Number(actual.reps)||1)} × ${Number(actual.distance)||0} ${actual.stroke||stroke}${actual.zone?` · ${actual.zone}`:''}`,zone});
+      });
+      if(sessionMetres>0){metres+=sessionMetres;qualityMetres+=sessionQuality;racePaceExposures+=sessionRace;sessions.push({id:session.id,date:session.identity.date,title:session.identity.title||session.identity.dayPart||'Session',metres:sessionMetres,qualityMetres:sessionQuality,racePaceExposures:sessionRace,lines});}
+    }
+    sessions.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const timed=(state.timedSets||[]).filter(x=>x.athlete_id===ath.id&&normaliseStroke(x.stroke||'')===wanted).filter(x=>{const at=Date.parse(x.created_at||x.updated_at||0);return !Number.isFinite(at)||(at>=cutoff&&at<=end)});
+    return{days,event:`${event.course||''} ${distance} ${wanted}`.trim(),sessions:sessions.length,metres,qualityMetres,racePaceExposures,timed:timed.length,recent:sessions.slice(0,4)};
+  };
+
   function t400HistoryFor(ath,course,stroke){
     return (M.state?.trainingTestResults||[])
-      .filter(r=>r.athlete_id===ath.id&&/t400/i.test(typeKey(M.state,r))&&testStroke(M.state,r)===stroke)
-      .filter(r=>!course||!r.pool_course||text(r.pool_course).toUpperCase()===text(course).toUpperCase())
+      .filter(r=>r.athlete_id===ath.id&&isT400Row(M.state,r)&&testStroke(M.state,r)===stroke)
+      .filter(r=>!course||t400Course(r)===text(course).toUpperCase())
       .filter(r=>Number.isFinite(resultSeconds(r)))
       .sort((a,b)=>String(b.result_date||b.created_at||'').localeCompare(String(a.result_date||a.created_at||'')));
   }
@@ -673,6 +792,30 @@
     const today=M.currentSession?.()?.identity?.date||new Date().toISOString().slice(0,10);
     const entries=(M.state?.meetEntries||[]).filter(e=>e.athlete_id===ath.id);
     return (M.state?.meets||[]).filter(m=>m.date>=today&&(!entries.length||entries.some(e=>e.meet_id===m.id))).sort((a,b)=>String(a.date).localeCompare(String(b.date)))[0]||null;
+  }
+  function trainingAreaBody(area,eventLabel){
+    if(!area?.sessions)return `<p class="muted">No attendance-linked ${esc(eventLabel)} training was found in the last ${area?.days||42} days. Check the Roll/evidence record before answering.</p>`;
+    const stroke=text(eventLabel).split(' ').slice(2).join(' ');
+    return `<div class="v4-answer-kpis training"><span><small>Last ${area.days} days</small><b>${area.sessions} session${area.sessions===1?'':'s'}</b></span><span><small>${esc(eventLabel)} stroke work</small><b>${Number(area.metres).toLocaleString()}m</b><em>${Number(area.qualityMetres).toLocaleString()}m quality</em></span><span><small>Specific evidence</small><b>${area.racePaceExposures} race-pace</b><em>${area.timed} timed set${area.timed===1?'':'s'}</em></span></div>${area.recent.map(s=>`<div class="v4-training-session"><b>${esc(s.date)} · ${esc(s.title)}</b><span>${Number(s.metres).toLocaleString()}m ${esc(stroke)}</span>${s.lines.map(x=>`<small>${esc(x.work)}</small>`).join('')}</div>`).join('')}`;
+  }
+  function poolsideAnswerHtml(answer,area){
+    if(!answer)return `<section class="page-card v4-poolside-answer"><div class="eyebrow">POOLSIDE ANSWER</div><h3>Pathway evidence needed</h3><p>No matched PB-to-national pathway is loaded for this swimmer and course. Nothing has been guessed.</p></section>`;
+    const shown=answer.steps.slice(0,5),hidden=Math.max(0,answer.steps.length-shown.length),next=answer.next;
+    const stepWord=answer.steps.length===1?'step':'steps';
+    return `<section class="page-card v4-poolside-answer">
+      <div class="eyebrow">POOLSIDE ANSWER · ${esc(answer.event)}</div>
+      <h3>${answer.steps.length?`${answer.steps.length} manageable ${stepWord} on the way to ${esc(answer.nationalLabel)}`:`${esc(answer.nationalLabel)} is the next measured step`}</h3>
+      <div class="v4-answer-kpis">
+        <span><small>PB</small><b>${clock(answer.pbSeconds)}</b></span>
+        <span><small>Next · ${esc(next.label)}</small><b>${clock(next.seconds)}</b><em>${next.gapSeconds.toFixed(2)}s · ${next.gapPercentage.toFixed(1)}%</em></span>
+        <span><small>${esc(answer.nationalLabel)}</small><b>${clock(answer.nationalSeconds)}</b><em>${answer.nationalGap.seconds.toFixed(2)}s · ${answer.nationalGap.percentage.toFixed(1)}%</em></span>
+      </div>
+      <div class="v4-step-strip"><span class="current"><small>Now</small><b>${clock(answer.pbSeconds)}</b></span>${shown.map((x,i)=>`<span class="${i===0?'next':''}"><small>${esc(x.label)}</small><b>${clock(x.seconds)}</b></span>`).join('')}${hidden?`<span><small>More</small><b>+${hidden}</b></span>`:''}<span class="national"><small>${esc(answer.nationalLabel)}</small><b>${clock(answer.nationalSeconds)}</b></span></div>
+      <p class="v4-coach-line">Next first: ${esc(next.label)} needs ${next.gapSeconds.toFixed(2)}s (${next.gapPercentage.toFixed(1)}%). The full national gap is ${answer.nationalGap.seconds.toFixed(2)}s (${answer.nationalGap.percentage.toFixed(1)}%).</p>
+      <details class="v4-training-area"><summary>How has training in this area been?</summary>
+        ${trainingAreaBody(area,answer.event)}
+      </details>
+    </section>`;
   }
 
   function enhanceSwimmerHub(){
@@ -692,7 +835,7 @@
     const best=C.bestStroke(ath,M.state,course,false),bestNonFree=C.bestStroke(ath,M.state,course,true);
     const freeAnchor=M.targets.t400(ath,M.state,course,'Freestyle');
     const t400History=strokes.flatMap(st=>t400HistoryFor(ath,course,st).slice(0,4).map(r=>({stroke:st,row:r}))).sort((a,b)=>String(b.row.result_date||'').localeCompare(String(a.row.result_date||''))).slice(0,12);
-    const next=profile?.closest||null,meet=athleteNextMeet(ath);
+    const next=profile?.closest||null,meet=athleteNextMeet(ath),answer=C.poolsidePathwayAnswer(ath,next),area=C.trainingArea(ath,next?.pb||null);
     const section=document.createElement('section');
     section.id='v4SwimmerSnapshot';
     section.className='v4-swimmer-snapshot';
@@ -708,6 +851,7 @@
         </div>
         <div class="v4-quick-actions"><button id="v4SwimmerBoard">Board</button><button id="v4SwimmerTimes">Time / T400</button></div>
       </section>
+      ${poolsideAnswerHtml(answer,area)}
       <div class="v4-swimmer-grid">
         <article class="page-card v4-primary-snapshot">
           <h3>Performance snapshot</h3>
@@ -737,6 +881,13 @@
       </details>`;;
     const first=h.firstElementChild;
     first?.insertAdjacentElement('afterend',section);
+    [...h.querySelectorAll('.path-event')].forEach((card,i)=>{
+      const event=profile?.events?.[i];if(!event?.pb)return;
+      const details=document.createElement('details'),label=`${event.pb.course} ${event.pb.distance} ${event.pb.stroke}`;
+      details.className='v4-training-area v4-event-training';
+      details.innerHTML=`<summary>Training in this area</summary>${trainingAreaBody(C.trainingArea(ath,event.pb),label)}`;
+      card.append(details);
+    });
     section.querySelector('#v4SwimmerBoard')?.addEventListener('click',()=>M.nav.show('board',{restoreScroll:true}));
     section.querySelector('#v4SwimmerTimes')?.addEventListener('click',()=>M.nav.show('times',{restoreScroll:false}));
   }
@@ -906,7 +1057,7 @@
   function t400Histories(stroke){
     const wanted=normaliseStroke(stroke);
     return (M.state?.trainingTestResults||[])
-      .filter(r=>/t400/i.test(typeKey(M.state,r))&&testStroke(M.state,r)===wanted)
+      .filter(r=>isT400Row(M.state,r)&&testStroke(M.state,r)===wanted)
       .filter(r=>!isSophie((M.state.athletes||[]).find(a=>a.id===r.athlete_id)))
       .sort((a,b)=>String(b.result_date||b.created_at||'').localeCompare(String(a.result_date||a.created_at||'')));
   }
@@ -1310,6 +1461,21 @@
         tests.push(gtest('T400 Development target keeps authored rest model and practical cycle',Math.abs(dev.seconds-72.63)<.02&&dev.sendOff===85));
       }catch(e){tests.push(gtest('T400 exact-stroke contract',false,e.message));}
       try{
+        const st={trainingTestTypes:[],trainingTestResults:[]},legacy={
+          training_test_types:[{id:'legacy-t400-type',name:'T400 Freestyle'}],
+          training_test_results:[{id:'legacy-t400-result',athlete_id:'legacy-ath',test_type_id:'legacy-t400-type',result_seconds:301.2,result_date:'2026-07-01',valid_for_anchor:true}]
+        };
+        C.hydrateT400Evidence(st,legacy);
+        const anchor=M.targets.t400({id:'legacy-ath'},st,'SCM','Freestyle');
+        tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',anchor?.id==='legacy-t400-result'&&anchor.pool_course==='SCM',anchor?`${clock(resultSeconds(anchor))} · ${anchor.pool_course}`:'missing'));
+      }catch(e){tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',false,e.message));}
+      try{
+        const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,nextNational:{row:{_label:'NZSC',_seconds:55.5},gap:{seconds:4.5,percentage:8.1}},qualifying:[{_label:'Step one',_seconds:58.8},{_label:'Step two',_seconds:57.2}]};
+        const answer=C.poolsidePathwayAnswer(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training':session},attendance:[{session_id:'poolside-training',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]};
+        const area=C.trainingArea(ath,pb,{state,days:42});
+        tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',answer?.steps.length===2&&Math.abs(answer.next.gapSeconds-1.2)<.001&&area?.sessions===1&&area.metres===500&&area.racePaceExposures===1,`${answer?.steps.length||0} steps · ${area?.metres||0}m`));
+      }catch(e){tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',false,e.message));}
+      try{
         const state={
           athletes:[{id:'here',full_name:'Here Swimmer',active:true,squad:'National'},{id:'other',full_name:'Other Squad',active:true,squad:'Intermediate'},{id:'soph',full_name:'Sophie Newlove',active:true,squad:'National'}],
           attendance:[{session_id:'gs',athlete_id:'here',status:'present'},{session_id:'gs',athlete_id:'soph',status:'present'}],
@@ -1366,6 +1532,6 @@
   }
 
   // Guarantee correction settings/roster are present before the base boot handler runs.
-  if(M.state){C.ensureSettings();C.hydratePlanning();C.enforceRoster();}
+  if(M.state){C.ensureSettings();C.hydratePlanning();C.hydrateT400Evidence();C.enforceRoster();}
   if(typeof document!=='undefined'&&document.body)C.renderBaseMismatch();
 })(globalThis);
