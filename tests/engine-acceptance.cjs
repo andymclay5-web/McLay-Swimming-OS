@@ -1,5 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
 const Evidence=require('../engines/evidence.js');
 global.MSOSEngines={Evidence};
 const Aerobic=require('../engines/aerobic.js');global.MSOSEngines.Aerobic=Aerobic;
@@ -22,6 +23,8 @@ x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.de
 x=Modification.adaptItem(a100,ap,state,session);assert.equal(x.reps,5);assert.equal(x.repPattern.length,5);
 state.adaptationOverrides=[{sessionId:'fixture',itemId:'a100',athleteId:'cm',active:true,patch:{stroke:'Backstroke'}}];x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.equal(x.distance,100);assert.equal(x.stroke,'Backstroke');state.adaptationOverrides=[];
 const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});x=Modification.adaptItem(im,cm,state,session);assert.equal(x.distance,100);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,175);
+const pull=set('pull',3,200,{raw:'3 x 200 Pull',cues:['Descend Stroke Count 1-3']});x=Modification.adaptItem(pull,cm,state,session);assert.equal(x.reps,2);assert.match(x.cues.join(' '),/Desc SC 1-2/i);assert.doesNotMatch(x.cues.join(' '),/1-3/);
+const kick=set('kick',5,50,{raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build'],cycleSeconds:60});x=Modification.adaptItem(kick,cm,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,100);x=Modification.adaptItem(kick,cf,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,100);x=Modification.adaptItem(kick,ap,state,session);assert.equal(x.reps,5);assert.equal(x.cycleSeconds,60);assert.match(x.raw,/Upper-body equivalent/i);
 const quality=set('q',6,25,{raw:'6 x 25 #1 Stroke @ 1:00',cycleSeconds:60,repInstructions:[{rep:1,label:'Build',raceIntent:null},...Array.from({length:5},(_,i)=>({rep:i+2,label:'100m Race Pace',raceIntent:{distance:100}}))]});x=Modification.adaptItem(quality,cm,state,session);assert.equal(x.reps,6);assert.equal(x.distance,25);
 const s75=set('s75',8,75,{raw:'8 x 75 with Fins 50 technique / 25 fast',equipment:['Fins']});x=Modification.adaptItem(s75,md,state,session);assert.equal(x.reps,6);assert.equal((x.reps*x.distance/25)%2,0);x=Modification.adaptItem(s75,ap,state,session);assert.equal(x.reps,6);assert.match(x.raw,/Upper-body/i);
 let t=Aerobic.forItem(session,Modification.adaptItem(a400,cm,state,session),cm,state);assert.equal(t.status,'pattern');assert.equal(t.rows.length,2);assert.ok(Number.isFinite(t.rows[0].seconds));
@@ -29,4 +32,7 @@ t=Aerobic.forItem(session,a100,cf,state);assert.equal(t.status,'pattern_fallback
 let r=RacePace.forItem(session,quality,cm,state,'');assert.equal(r.status,'rep_race');assert.ok(r.rows.filter(v=>v.status==='ok').every(v=>v.stroke==='Backstroke'));assert.ok(r.rows.filter(v=>v.status==='ok').length===5);
 r=RacePace.forItem(session,quality,cf,state,'');assert.ok(r.rows.filter(v=>v.status==='ok').every(v=>v.stroke==='Breaststroke'));
 const p=Coordinator.prescription(session,a100,cm,state);assert.equal(p.item.reps,4);assert.equal(p.target.status,'pattern');
+const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');assert.match(board,/msos-mod-target/);assert.match(board,/Modified swimmers are shown beside their own work/);assert.doesNotMatch(board,/host\.className='view active msos-whiteboard-engine'/);
+const navigation=fs.readFileSync(require.resolve('../engines/navigation.js'),'utf8');assert.match(navigation,/bottom-nav \[data-nav\]/);assert.match(navigation,/N\.show=V\.go/);
+const capture=fs.readFileSync(require.resolve('../engines/capture-ui.js'),'utf8');assert.match(capture,/Show squad/);assert.match(capture,/Here now/);
 console.log('ENGINE_ACCEPTANCE_PASS');
