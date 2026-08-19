@@ -1,0 +1,18 @@
+/* McLay Swimming OS — Thursday integrated pass 2 */
+.thu3-all-mods{min-width:0}
+.thu3-mod-list{display:grid;gap:4px;padding:4px}
+.thu3-mod-ath{min-width:0;border:1px solid rgba(134,94,18,.22);border-radius:7px;background:#fffdf7;overflow:hidden}
+.thu3-mod-ath>header{display:flex;align-items:center;justify-content:space-between;padding:3px 5px;background:#f7df9f;border-bottom:1px solid rgba(134,94,18,.18)}
+.thu3-mod-ath>header strong{font-size:.59rem;line-height:1.1;color:#563d08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thu3-mod-ath button{display:block;width:100%;padding:4px 5px;border:0;border-bottom:1px solid rgba(134,94,18,.12);background:transparent;text-align:left;color:#4e3807;box-shadow:none}
+.thu3-mod-ath button:last-child{border-bottom:0}
+.thu3-mod-ath b{display:block;font-size:.57rem;line-height:1.16;overflow-wrap:anywhere}
+.thu3-mod-ath small{display:block;margin-top:1px;font-size:.47rem;line-height:1.15;color:#725b22;overflow-wrap:anywhere}
+.thu3-mod-ath em{display:block;margin-top:2px;font-size:.50rem;line-height:1.15;font-style:normal;font-weight:850;color:#6b4e10;overflow-wrap:anywhere}
+.thu2-mod-selector>b{font-size:.66rem;white-space:nowrap}
+@media(max-width:430px){
+ .thu2-block-grid.has-mod{grid-template-columns:minmax(0,55fr) minmax(0,45fr)}
+ .thu3-mod-list{gap:3px;padding:3px}
+ .thu3-mod-ath>header{padding:3px 4px}.thu3-mod-ath>header strong{font-size:.55rem}
+ .thu3-mod-ath button{padding:4px 3px}.thu3-mod-ath b{font-size:.53rem}.thu3-mod-ath small{font-size:.44rem}.thu3-mod-ath em{font-size:.46rem}
+}
