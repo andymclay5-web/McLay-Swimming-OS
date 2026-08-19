@@ -44,11 +44,13 @@ Rules include:
 - short quality/anaerobic work stays with the team where manageable;
 - larger mixed/aerobic work is resized while preserving authored phases where possible;
 - IM is structurally protected — no silent 50/75 IM units;
-- when complete IM reps are reduced on a fixed cycle, the swimmer's cycle is adjusted to occupy the same overall team work window;
+- when repetitions are reduced on an authored fixed cycle, the modified cycle may be lengthened to keep the swimmer in the same overall team work window instead of forcing the reduced athlete onto an impossible group send-off;
+- when reps change, dependent instructions change with them — e.g. `3×200 Pull · Desc SC 1-3` becoming `2×200 Pull · Desc SC 1-2`, never retaining stale 1-3 wording;
 - return-to-start/pool-end alignment is the default for generated modified work unless an athlete profile explicitly says otherwise;
 - coach-authored shape overrides beat generated modifications;
 - a stroke-only override must never erase the athlete's generated modification shape;
-- athlete capability constraints such as Amber upper-body equivalents and Conor fin/breaststroke restrictions belong here, not in Board code.
+- athlete capability constraints such as Amber upper-body equivalents and Conor fin/breaststroke restrictions belong here, not in Board code;
+- capability substitutions retain relevant coaching intent: e.g. a Kick Build changed to Amber upper-body work keeps the Build instruction without falsely continuing to display Kick.
 
 Outputs: prescription only. Rationale/evidence may be attached for inspection but is not Board copy.
 
@@ -72,11 +74,11 @@ The shop window. It owns how correct answers are presented and interacted with, 
 Board principles from the physical whiteboards:
 - common squad work appears once;
 - modifications sit beside the exact line they modify, not in a separate whole-session card;
-- only the modified prescription is shown in the normal Board view;
+- the modified line always carries enough of the changed prescription to coach it: changed reps/distance, changed send-off/rest, changed instruction/pattern, and the modified swimmer's applicable target/time;
+- modified swimmer targets stay on that swimmer's modified line by default; opening `Times` is for the standard/group swimmers and does not make the coach hunt through a mixed able/modified list;
 - compact first/preferred names, not anonymous initials;
 - first-name collisions use compact surname disambiguation;
 - Times opens across the full Board width;
-- standard swimmers and modified swimmers are visually separated in Times, with modified cards showing the altered work distance/reps before the target;
 - Times shows the answer once (`OL 1:10/1:20 · THR 1:08/1:20`), never every repeated rep or provenance text;
 - multiple swimmers are laid out across the screen, not one giant row per swimmer;
 - stroke is a small tappable pill whose resting label is the resolved stroke (`Fr`, `Bk`, `Br`, `Fly`, `IM`), not a large select box;
@@ -86,8 +88,27 @@ Board principles from the physical whiteboards:
 - rationale/provenance stays behind detail unless required to coach the set;
 - phone and TV use the same whiteboard information hierarchy.
 
+## Navigation engine — `engines/navigation.js`
+Owns top-level view transitions and active-view state. Board, Coach Hub, Roll, Times, Swimmer and TV may request navigation, but may not claim another view's active state.
+
+Rules:
+- bottom navigation and Board quick links use the same route owner;
+- a Board renderer may update Board DOM but cannot force Board active after another view was selected;
+- Board scroll/session context is remembered before leaving and restored when appropriate;
+- Android/browser history remains separate from target/modification logic.
+
+## Capture UI — `engines/capture-ui.js`
+Owns the capture surface only. Evidence saving remains in the existing capture/evidence path.
+
+Rules:
+- the deck exposes one `Capture` entry point instead of three duplicate buttons that open the same place;
+- Note, Voice, Photo and Video remain available inside Capture;
+- attending swimmers are the default visible/selected population;
+- absent squad swimmers are hidden by default and require an explicit `Show squad` action;
+- full squad/pathway administration remains available elsewhere and is not removed from data.
+
 ## Active boundary — 20 Aug 2026
-The Thursday emergency recovery/pass2/deckfit layers are no longer loaded by `index.html`. Session repair, evidence, aerobic targets, T400 capture, race pace, modifications, coordination, compatibility bridging and Board presentation now have separate active owners under `engines/`.
+The Thursday emergency recovery/pass2/deckfit layers are no longer loaded by `index.html`. Session repair, evidence, aerobic targets, T400 capture, race pace, modifications, coordination, compatibility bridging, Board presentation, navigation and capture presentation now have separate active owners under `engines/`.
 
 The old Thursday files remain in the repository only as historical/reference code. They are not part of the active runtime path.
 
