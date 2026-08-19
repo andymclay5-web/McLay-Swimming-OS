@@ -1,0 +1,29 @@
+name: Engine acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  engine-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check active runtime files
+        run: |
+          node --check engines/session-repair.js
+          node --check engines/evidence.js
+          node --check engines/aerobic.js
+          node --check engines/race-pace.js
+          node --check engines/modification.js
+          node --check engines/coordinator.js
+          node --check engines/bridge.js
+          node --check engines/board.js
+          node --check engines/t400-capture.js
+          node --check engines/acceptance.js
+      - name: Run engine coaching regression fixtures
+        run: node tests/engine-acceptance.cjs
