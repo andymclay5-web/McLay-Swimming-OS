@@ -1,17 +1,90 @@
 'use strict';
 (function(root,factory){const api=factory(root.MSOSEngines?.Evidence);if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='2.0.0',clone=v=>v==null?v:JSON.parse(JSON.stringify(v)),text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const VERSION='2.2.0';
+  const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+  const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
-  function profile(ath,state){const rows=state?.adaptationProfiles||state?.athlete_adaptation_profiles||[],p=rows.find(x=>x.athlete_id===ath?.id&&x.active!==false),k=E.key(ath?.full_name);let ratio=Number(p?.default_volume_ratio);if(!Number.isFinite(ratio)||ratio<=0)ratio=1;if(FIXED[k])ratio=FIXED[k];return{ratio:Math.max(.25,Math.min(1,ratio)),key:k,label:p?.profile_label||ath?.modifications||'',returnToStart:p?.return_to_starting_end===true||k==='charlottemurphy'||k==='mckenziedrage'}}
+  const ZONES=['Regeneration','Development','Overload','Threshold','Clearance'];
+  function profile(ath,state){
+    const rows=state?.adaptationProfiles||state?.athlete_adaptation_profiles||[];
+    const aliases=E?.athleteAliases?.(ath,state)||new Set([ath?.id]);
+    const p=rows.find(x=>aliases.has(x.athlete_id)&&x.active!==false)||{};
+    const k=E.key(ath?.full_name);let ratio=Number(p.default_volume_ratio);
+    if(!Number.isFinite(ratio)||ratio<=0)ratio=1;if(FIXED[k])ratio=FIXED[k];
+    return{ratio:Math.max(.25,Math.min(1,ratio)),key:k,label:p.profile_label||ath?.modifications||'',returnToStart:p.return_to_starting_end===true||k==='charlottemurphy'||k==='mckenziedrage'};
+  }
   const poolLength=s=>/LCM/i.test(text(s?.identity?.course))?50:25;
-  function sameTeamExposure(item){const raw=[item?.raw,item?.text,item?.zone,...(item?.cues||[])].filter(Boolean).join(' '),d=Number(item?.distance)||0,r=Number(item?.reps)||1;if(item?.zone||/\b(?:regeneration|development|overload|threshold|clearance|aerobic|capacity|vo2)\b/i.test(raw))return false;if(d<=0||d>100)return false;return /\b(?:max|sprint|race|pace|quality|fast|underwater|drill|scull|skill|build|turn|start)\b/i.test(raw)&&r<=20}
-  function safeReps(reps,distance,ratio,session,returnToStart){reps=Math.max(1,Number(reps)||1);if(ratio>=.98)return reps;const target=reps*Number(distance||0)*ratio;if(!returnToStart||!distance)return Math.max(1,Math.round(reps*ratio));const unit=poolLength(session)*2,c=[];for(let r=1;r<=reps;r++){const m=r*distance;if(Math.abs(m/unit-Math.round(m/unit))<1e-9)c.push({r,delta:Math.abs(m-target),m})}c.sort((a,b)=>a.delta-b.delta||a.m-b.m);return c[0]?.r||Math.max(1,Math.round(reps*ratio))}
-  function safeDistance(distance,ratio,session,returnToStart){if(ratio>=.98)return Number(distance)||0;const pool=poolLength(session),unit=returnToStart?pool*2:pool,target=Math.max(pool,Number(distance||0)*ratio),n=Math.max(1,Math.round(target/unit));return n*unit}
-  function isIM(item){return E.stroke(item?.stroke)==='IM'||/\bIM\b|individual\s+medley/i.test(text(item?.raw||item?.text))}
-  function constrain(item,ath){const k=E.key(ath?.full_name),raw=text(item?.raw||item?.text),x=clone(item);if(k==='conorfischer'&&/\b(?:breaststroke|breast|br)\b/i.test(raw)&&/\bfins?\b/i.test(raw)){x.stroke='Choice';x.raw=`${x.reps} × ${x.distance} Choice non-Br with Fins`;x.adaptationReason='No Breaststroke kick with fins'}if(k==='amberproudfoot'&&/\b(?:kick|fins?|underwater|dive|start)\b/i.test(raw)){x.stroke='Choice';x.equipment=(x.equipment||[]).filter(z=>!/Fins/i.test(z));x.raw=`${x.reps} × ${x.distance} Upper-body equivalent`;x.adaptationReason='Upper-body equivalent'}return x}
-  function activeOverride(item,ath,state,session){return(state?.adaptationOverrides||[]).find(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false)||null}
-  function applyOverride(out,ov){if(!ov)return out;if(ov.raw)out.raw=ov.raw;Object.assign(out,ov.patch||{});return out}
-  function adaptItem(item,ath,state,session){if(item?.kind==='cue')return clone(item);if(item?.kind==='group'){const g=clone(item);g.items=(item.items||[]).map(x=>adaptItem(x,ath,state,session));return g}const p=profile(ath,state),ov=activeOverride(item,ath,state,session),x=constrain(item,ath),baseReps=Number(x.reps)||1,baseDist=Number(x.distance)||0,keep=sameTeamExposure(item);if(!ov&&!keep&&p.ratio<.98){if(isIM(item)&&baseDist>=100)x.reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);else if(baseReps===1&&baseDist>=100)x.distance=safeDistance(baseDist,p.ratio,session,p.returnToStart);else x.reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart)}applyOverride(x,ov);if(isIM(item)&&Number(x.distance)!==baseDist&&!ov){x.distance=baseDist;x.reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart)}if(!ov&&p.returnToStart&&Number(x.distance)>0){const pool=poolLength(session),lengths=(Number(x.reps)||1)*Number(x.distance)/pool;if(Math.abs(lengths-Math.round(lengths))<.001&&Math.round(lengths)%2){x.reps=safeReps(baseReps,Number(x.distance),p.ratio,session,true)}}return x}
-  function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E.stroke(a?.stroke||'')===E.stroke(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)}
-  return{VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM};
+  function energyZones(item){
+    const out=[];if(item?.zone)out.push(item.zone);for(const p of item?.repPattern||[])if(p?.zone)out.push(p.zone);
+    const raw=[item?.raw,item?.text,...(item?.cues||[])].join(' ');
+    for(const z of ZONES)if(new RegExp(`\\b${z}|\\b${z.slice(0,3)}`,'i').test(raw))out.push(z);
+    return [...new Set(out)];
+  }
+  function isAerobic(item){return energyZones(item).length>0||/\b(?:aerobic|capacity|vo2)\b/i.test([item?.raw,item?.text,...(item?.cues||[])].join(' '));}
+  function isIM(item){return E.stroke(item?.stroke)==='IM'||/\bIM\b|individual\s+medley/i.test([item?.raw,item?.text,...(item?.cues||[])].join(' '));}
+  function sameTeamExposure(item){
+    const raw=[item?.raw,item?.text,...(item?.cues||[]),...(item?.repInstructions||[]).map(x=>x.label||'')].join(' '),d=Number(item?.distance)||0,r=Math.max(1,Number(item?.reps)||1),metres=d*r;
+    if(isAerobic(item)||d<=0||d>100||metres>300)return false;
+    return /\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|drill|scull|skill|build|turn|finish)\b/i.test(raw);
+  }
+  function safeReps(reps,distance,ratio,session,returnToStart){
+    reps=Math.max(1,Number(reps)||1);if(ratio>=.98)return reps;const d=Number(distance)||0,target=reps*d*ratio;
+    const candidates=[];for(let r=1;r<=reps;r++){
+      const metres=r*d;if(returnToStart&&d){const unit=poolLength(session)*2;if(Math.abs(metres/unit-Math.round(metres/unit))>.001)continue;}
+      candidates.push({r,delta:Math.abs(metres-target),metres});
+    }
+    if(!candidates.length)return Math.max(1,Math.round(reps*ratio));
+    candidates.sort((a,b)=>a.delta-b.delta||a.metres-b.metres);return candidates[0].r;
+  }
+  function safeDistance(distance,ratio,session,returnToStart,minDistance=25){
+    const d=Number(distance)||0;if(ratio>=.98||!d)return d;const pool=poolLength(session),unit=returnToStart?pool*2:pool,target=Math.max(minDistance,d*ratio),c=[];
+    for(let x=unit;x<=d;x+=unit)c.push({d:x,delta:Math.abs(x-target)});
+    if(!c.length)return Math.max(pool,Math.round(target/pool)*pool);c.sort((a,b)=>a.delta-b.delta||a.d-b.d);return c[0].d;
+  }
+  function remapRepPattern(pattern,oldReps,newReps){
+    if(!Array.isArray(pattern)||!pattern.length||oldReps===newReps)return clone(pattern||[]);
+    const src=Array.from({length:oldReps},(_,i)=>pattern.find(x=>Number(x.rep)===i+1)||pattern[Math.min(pattern.length-1,i)]||{}),out=[];
+    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps)),p=src[idx]||{};out.push({...clone(p),rep:i+1});}
+    return out;
+  }
+  function remapRepInstructions(rows,oldReps,newReps){
+    if(!Array.isArray(rows)||!rows.length||oldReps===newReps)return clone(rows||[]);
+    const src=Array.from({length:oldReps},(_,i)=>rows.find(x=>Number(x.rep)===i+1)||rows[Math.min(rows.length-1,i)]||{}),out=[];
+    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps)),p=src[idx]||{};out.push({...clone(p),rep:i+1});}
+    return out;
+  }
+  function rewriteLead(out,reps,distance){
+    const raw=text(out?.raw||out?.text),lead=`${Math.max(1,Number(reps)||1)} × ${Number(distance)||0}`;
+    out.reps=Math.max(1,Number(reps)||1);out.distance=Number(distance)||0;
+    out.raw=/^\d+\s*[x×]\s*\d+(?:\.5)?/i.test(raw)?raw.replace(/^\d+\s*[x×]\s*\d+(?:\.5)?/i,lead):`${lead}${raw?` · ${raw}`:''}`;out.text=out.raw;
+  }
+  function constrain(item,ath){
+    const k=E.key(ath?.full_name),raw=text(item?.raw||item?.text),x=clone(item);
+    if(k==='conorfischer'&&/\b(?:breaststroke|breast|br)\b/i.test(raw)&&/\bfins?\b/i.test(raw)){x.stroke='Choice';x.raw=`${x.reps} × ${x.distance} Choice non-Br with Fins`;x.text=x.raw;x.adaptationReason='No Breaststroke kick with fins';}
+    if(k==='amberproudfoot'&&/\b(?:kick|fins?|underwater|dive|start)\b/i.test(raw)){x.stroke='Choice';x.equipment=(x.equipment||[]).filter(z=>!/Fins/i.test(z));x.raw=`${x.reps} × ${x.distance} Upper-body equivalent`;x.text=x.raw;x.adaptationReason='Upper-body equivalent';}
+    return x;
+  }
+  function activeOverride(item,ath,state,session){return(state?.adaptationOverrides||[]).find(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false)||null;}
+  function applyOverride(out,ov){if(!ov)return out;if(ov.raw)out.raw=ov.raw;Object.assign(out,ov.patch||{});out.text=out.raw||out.text;return out;}
+  function adaptItem(item,ath,state,session){
+    if(item?.kind==='cue')return clone(item);if(item?.kind==='group'){const g=clone(item);g.items=(item.items||[]).map(x=>adaptItem(x,ath,state,session));return g;}if(item?.kind!=='set')return clone(item);
+    const p=profile(ath,state),ov=activeOverride(item,ath,state,session),x=constrain(item,ath),baseReps=Math.max(1,Number(item.reps)||1),baseDist=Number(item.distance)||0,keep=sameTeamExposure(item),aerobic=isAerobic(item),im=isIM(item);
+    if(!ov&&p.ratio<.98&&!keep){
+      let reps=baseReps,dist=baseDist;
+      if(im&&baseDist>=100){reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);}
+      else if(aerobic&&baseReps<=4&&baseDist>=200&&(item.repPattern||[]).length>=baseReps){dist=safeDistance(baseDist,p.ratio,session,p.returnToStart,100);}
+      else if(baseReps===1&&baseDist>=100){dist=safeDistance(baseDist,p.ratio,session,p.returnToStart,Math.min(100,baseDist));}
+      else{reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);}
+      if(reps!==baseReps||dist!==baseDist){rewriteLead(x,reps,dist);x.repPattern=remapRepPattern(item.repPattern,baseReps,reps);x.repInstructions=remapRepInstructions(item.repInstructions,baseReps,reps);x.adaptationReason=`${Math.round(p.ratio*100)}% profile`;}
+    }
+    applyOverride(x,ov);
+    if(!ov&&im&&Number(x.distance)!==baseDist){rewriteLead(x,Number(x.reps)||baseReps,baseDist);}
+    if(!ov&&p.returnToStart&&Number(x.distance)>0&&Number(x.reps)>0){
+      const pool=poolLength(session),lengths=(Number(x.reps)*Number(x.distance))/pool;
+      if(Math.abs(lengths-Math.round(lengths))<.001&&Math.round(lengths)%2){const reps=safeReps(baseReps,Number(x.distance),p.ratio,session,true);if(reps!==Number(x.reps)){rewriteLead(x,reps,Number(x.distance));x.repPattern=remapRepPattern(item.repPattern,baseReps,reps);x.repInstructions=remapRepInstructions(item.repInstructions,baseReps,reps);}}
+    }
+    return x;
+  }
+  function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E.stroke(a?.stroke||'')===E.stroke(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw);}
+  return{VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,sameTeamExposure,internals:{remapRepPattern,remapRepInstructions,energyZones}};
 });
