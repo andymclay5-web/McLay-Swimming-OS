@@ -1,0 +1,21 @@
+/* McLay Swimming OS — Thursday recovery Board layer */
+.pool-line.thu-has-mods{min-width:0}
+.pool-line.thu-has-mods .pool-work,.pool-line.thu-has-mods .pool-mods{min-width:0}
+.pool-line.thu-has-mods .pool-mod span,.pool-target-row span{overflow-wrap:anywhere}
+.thu-stroke-controls{display:flex;gap:6px;flex-wrap:wrap;padding:6px;margin-bottom:7px;border:1px solid rgba(13,69,102,.14);border-radius:10px;background:#f9fcfd}
+.thu-stroke-controls label{display:flex;align-items:center;gap:5px;min-width:0}
+.thu-stroke-controls b{font-size:.78rem;white-space:nowrap}
+.thu-stroke-controls select{max-width:120px;padding:4px 6px;font-size:.76rem}
+.thu-board-name{margin-top:8px}
+@media(min-width:760px){
+  .pool-line.thu-has-mods{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(220px,.8fr);column-gap:12px;align-items:start}
+  .pool-line.thu-has-mods .pool-mods{margin-top:0;padding-left:10px;border-left:1px solid rgba(13,69,102,.14)}
+  .pool-line.thu-has-mods .pool-targets{grid-column:1/-1}
+}
+@media(max-width:759px){
+  .pool-line.thu-has-mods{display:block}
+  .pool-line.thu-has-mods .pool-mods{margin-top:7px}
+  .thu-stroke-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .thu-stroke-controls label{justify-content:space-between}
+  .thu-stroke-controls select{max-width:96px}
+}
