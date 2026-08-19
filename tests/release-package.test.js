@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.resolve(__dirname,'..');
-const build='v4-poolside-core-20260819e-poolsideanswers';
+const build='v4-poolside-core-20260819f-targettruth';
 const read=file=>fs.readFileSync(path.join(root,file));
 const text=file=>read(file).toString('utf8');
 
@@ -37,9 +37,9 @@ for(const file of required){
   assert.ok(checksumRows.some(row=>row.file===file),`Release checksums omit ${file}`);
   assert.ok(worker.includes(file),`Offline cache omits ${file}`);
 }
-assert.ok(index.includes(`app.js?v=20260819e-poolsideanswers`),'index uses a stale app build');
-assert.ok(index.includes(`v4-correct.js?v=20260819e-poolsideanswers`),'index uses a stale correct-layer build');
-assert.ok(index.includes(`v4-poolside-core.js?v=20260819e-poolsideanswers`),'index uses a stale poolside build');
+assert.ok(index.includes(`app.js?v=20260819f-targettruth`),'index uses a stale app build');
+assert.ok(index.includes(`v4-correct.js?v=20260819f-targettruth`),'index uses a stale correct-layer build');
+assert.ok(index.includes(`v4-poolside-core.js?v=20260819f-targettruth`),'index uses a stale poolside build');
 assert.ok(worker.includes(`const BUILD='${build}'`),'service worker uses a different build');
 assert.ok(app.includes("navigator.serviceWorker.register('./sw.js')"),'Version 4 never registers its offline worker');
 assert.ok(/N\.init=\(\)=>\{[^}]*N\.activateView\(initial\)/.test(app),'saved non-Board view is not activated during startup');
@@ -47,6 +47,9 @@ assert.ok(text('v4-poolside-core.js').includes('known_2026-08-15_duplicate_break
 assert.ok(text('v4-poolside-core.js').includes('<details class="pool-targets">'),'parent-set target dropdown is missing');
 assert.ok(text('v4-poolside-core.js').includes('data-pool-swimmers'),'direct Swimmers / Pathway route is missing');
 assert.ok(text('v4-correct.js').includes('hydrateT400Evidence'),'legacy T400 evidence hydration is missing');
+assert.ok(text('v4-correct.js').includes('legacyPaceRows'),'athlete legacy T400 migration is missing');
+assert.ok(text('v4-poolside-core.js').includes('cueRaceIntent'),'standalone race-pace cue resolution is missing');
+assert.ok(text('v4-poolside-core.js').includes('condensedRepPattern')||text('v4-correct.js').includes('condensedRepPattern'),'modified mixed-zone phase retention is missing');
 assert.ok(text('v4-correct.js').includes('How has training in this area been?'),'poolside pathway-to-training answer is missing');
 assert.equal(manifest.name,'McLay Swimming OS — Version 4','manifest uses a stale product name');
 assert.equal(manifest.short_name,'McLay Swim V4','manifest uses a stale install name');

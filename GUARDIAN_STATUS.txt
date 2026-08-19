@@ -1,15 +1,20 @@
 McLay Swimming OS Version 4
-Build: v4-poolside-core-20260819e-poolsideanswers
+Build: v4-poolside-core-20260819f-targettruth
 Status: SOFTWARE GUARDIAN PASS — PHYSICAL PHONE RELEASE GATE STILL REQUIRED
 
 Complete V4 Guardian
-- 79 / 79 foundation and Version 4 regressions PASS on the shipping source stack:
+- 82 / 82 foundation and Version 4 regressions PASS on the shipping source stack:
   app.js + v4-correct.js + v4-poolside-core.js.
 - The full Guardian is now executed by GitHub Actions on changes to the V4 runtime.
 - Morning Board session/coaching regressions remain PASS.
 - JavaScript syntax checks pass for the main app, V4 layers, Morning Board, engines and service worker.
 
 Resolved in this build
+- The exact Saturday 5,450m source is now the release acceptance fixture. Its 1,100 / 850 / 2,900 / 600 section truth, target-driven lines and known 6,090m saved-state repair are checked together.
+- Historical swimmer `legacy_pace` T400 references migrate into Version 4 Freestyle/SCM test evidence, so the seven attending National swimmers immediately show their existing anchors in Times and Board targets.
+- Standalone authored ranges now retain their target meaning: `#2-6 @ 100m Race Pace`, `#1-4 Overload`, `#5-8 Threshold`, `#2-4 @ 100m Race Pace`, and `Second 100 of 200 Race` each expose a compact target dropdown or an explicit target-needed state.
+- Modified mixed-zone work keeps every authored phase. The Saturday 2 × 400 remains two phases for Charlotte (2 × 200) and McKenzie (2 × 275), with separate Regeneration and Development targets rather than collapsing to one repeat.
+- Target dropdown rows refresh when opened, so asynchronously hydrated T400/PB evidence appears without rebuilding the whole Board or hiding the parent set.
 - Manual T400 initializes and updates the settings object belonging to the state being saved, so a locally entered T400 immediately becomes the swimmer anchor and keeps that swimmer in the session timing roster.
 - 400 IM race intent remains separate from the working stroke. A Fly repeat at 400 IM pace does not invent a straight-line IM-leg target when no exact IM leg model is loaded.
 - Clearing an explicit athlete override resumes the current automatic athlete profile. Charlotte returns to the current 50% profile rather than the obsolete 60% expectation.

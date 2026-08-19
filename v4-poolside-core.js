@@ -3,14 +3,14 @@
   const M=g.MSOS4;
   if(!M) throw new Error('MSOS4 missing');
   const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
-  const BUILD='v4-poolside-core-20260819e-poolsideanswers';
-  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-poolsideanswers';
+  const BUILD='v4-poolside-core-20260819f-targettruth';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-targettruth';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),
     build:BUILD,
     softwareReady:M.RELEASE_ATTESTATION?.softwareReady===true&&M.correct?.baseBuild?.match===true,
-    generatedAt:'2026-08-19T12:30:00+12:00',
-    suiteDigest:'v4-contract-20260819-poolsideanswers',
+    generatedAt:'2026-08-19T16:30:00+12:00',
+    suiteDigest:'v4-contract-20260819f-targettruth',
     packageDigest:'SHA256SUMS.txt'
   });
   const BASE_PARSE=M.parser.parse.bind(M.parser);
@@ -31,6 +31,65 @@
   }
   function repeatLine(s){const m=String(s||'').trim().match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);return m?{reps:Number(m[1]),distance:Number(m[2]),tail:String(m[3]||'').trim()}:null}
   function singleLine(s){const m=String(s||'').trim().match(/^(\d{1,4}(?:\.5)?)\s+(.+)$/);return m?{distance:Number(m[1]),tail:String(m[2]||'').trim()}:null}
+  function targetCueLines(item){
+    return [...new Set([
+      item?.raw,item?.text,
+      ...(item?.cues||[]),
+      ...(item?.repPattern||[]).map(x=>x.text),
+      ...(item?.repInstructions||[]).map(x=>x.label)
+    ].map(txt).filter(Boolean))];
+  }
+  function authoredCueLines(item){
+    return [...new Set([item?.raw,item?.text,...(item?.cues||[]),...(item?.repPattern||[]).map(x=>x.text)].map(txt).filter(Boolean))];
+  }
+  function hashRange(line,reps){
+    const m=txt(line).match(/^#\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?\s*(.*)$/i);
+    if(!m)return null;
+    const start=Math.max(1,Number(m[1])||1),end=Math.max(start,Math.min(Math.max(1,Number(reps)||1),Number(m[2]||m[1])||start));
+    return start>Math.max(1,Number(reps)||1)?null:{start,end,label:txt(m[3])};
+  }
+  function cueZone(line){
+    const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);
+    if(!m)return'';
+    const k=m[1].toLowerCase();
+    if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)/.test(k))return'Overload';if(/^(?:thr|threshold)/.test(k))return'Threshold';return'Clearance';
+  }
+  function cueStroke(line){
+    const t=txt(line);if(/\b(?:individual\s+medley|medley|IM)\b/i.test(t))return'IM';if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';return'';
+  }
+  function cueRaceIntent(line){
+    const raw=txt(line),normal=raw.replace(/\b(50|100|200|400|800|1500)\s*m\b/gi,'$1');
+    const direct=M.parser.raceIntent?.(normal);if(direct)return direct;
+    const segment=normal.match(/\b(first|1st|second|2nd|last|final)\s+(\d{2,4})\s+(?:of\s+(?:the\s+)?)?(\d{2,4})\s*(?:race|event|pace)\b/i);
+    return segment?{distance:Number(segment[3]),eventStroke:cueStroke(normal)||null,workingStroke:cueStroke(normal)||null,segmentDistance:Number(segment[2]),segmentPosition:segment[1].toLowerCase()}:null;
+  }
+  function cueCycle(line){
+    const m=txt(line).match(/^@\s*(\d{1,3})(?::([0-5]\d(?:\.\d+)?))?$/);
+    if(!m)return null;return m[2]==null?Number(m[1]):Number(m[1])*60+Number(m[2]);
+  }
+  function sameJson(a,b){return JSON.stringify(a??null)===JSON.stringify(b??null)}
+  function enhanceSetTargets(item){
+    if(item?.kind!=='set')return 0;
+    const reps=Math.max(1,Number(item.reps)||1),lines=authoredCueLines(item);let changed=0;
+    if(!Number(item.cycleSeconds)){
+      const cycle=lines.map(cueCycle).find(Number.isFinite);if(cycle){item.cycleSeconds=cycle;changed++}
+    }
+    const zones=new Map();
+    for(const line of lines){const range=hashRange(line,reps),zone=cueZone(line);if(!range||!zone)continue;for(let n=range.start;n<=range.end;n++)zones.set(n,{rep:n,zone,text:line})}
+    if(zones.size){const next=[...zones.values()].sort((a,b)=>a.rep-b.rep);if(!sameJson(item.repPattern,next)){item.repPattern=next;changed++}}
+    const instructions=new Map();let hasRace=false;
+    for(const line of lines){const range=hashRange(line,reps);if(!range)continue;const race=cueRaceIntent(line);if(race)hasRace=true;for(let n=range.start;n<=range.end;n++)instructions.set(n,{rep:n,label:range.label||`#${n}`,raceIntent:race,drill:/\bdrill\b/i.test(range.label)})}
+    if(hasRace){
+      const next=Array.from({length:reps},(_,i)=>instructions.get(i+1)||{rep:i+1,label:`#${i+1}`,raceIntent:null,drill:false});
+      if(!sameJson(item.repInstructions,next)){item.repInstructions=next;changed++}
+    }
+    if(!item.raceIntent){
+      const whole=lines.filter(line=>!hashRange(line,reps)).map(cueRaceIntent).find(Boolean);
+      if(whole){item.raceIntent=whole;changed++}
+    }
+    return changed;
+  }
+  function enhanceTargetSemantics(session){let changed=0;S.walkSets(session,item=>{changed+=enhanceSetTargets(item)});return changed}
 
   function normaliseText(source){
     const input=String(source??'').replace(/\r/g,'').split('\n');
@@ -88,7 +147,7 @@
     }
     return a;
   }
-  function compactSession(s){for(const b of s?.blocks||[])b.items=compactItems(b.items||[]);s.metadata=s.metadata||{};s.metadata.parsedTotal=S.total(s);return s}
+  function compactSession(s){for(const b of s?.blocks||[])b.items=compactItems(b.items||[]);enhanceTargetSemantics(s);s.metadata=s.metadata||{};s.metadata.parsedTotal=S.total(s);return s}
 
   const KNOWN_SATURDAY_BEFORE='1700,850,2940,600';
   const KNOWN_SATURDAY_AFTER='1100,850,2900,600';
@@ -156,16 +215,18 @@
     if(!M.state?.canonicalSessions)return 0;
     const selected=M.state.settings?.selectedSessionId||'';let repaired=0;
     for(const [id,session] of Object.entries(M.state.canonicalSessions)){
-      const next=repairKnownSessionTruth(session);if(!next)continue;
+      const truth=repairKnownSessionTruth(session),next=truth||U.clone(session),semantic=enhanceTargetSemantics(next);
+      if(!truth&&!semantic)continue;
+      if(semantic){next.metadata=next.metadata||{};next.metadata.targetSemanticRepair={build:BUILD,at:U.now()}}
       M.state.canonicalSessions[id]=next;repaired++;
-      M.cloud?.stageSession?.(next);
+      if(truth)M.cloud?.stageSession?.(next);
     }
     if(repaired){M.state.settings.selectedSessionId=selected;M.store.save(M.state)}
     return repaired;
   }
 
   M.parser.parse=(source,identity={})=>compactSession(BASE_PARSE(normaliseText(source),identity));
-  M.poolsideCore={BUILD,normaliseText,compactSession,repairKnownSessionTruth,repairKnownSavedSessions,renderNode,targetDetails,quickActions};
+  M.poolsideCore={BUILD,normaliseText,compactSession,enhanceTargetSemantics,repairKnownSessionTruth,repairKnownSavedSessions,renderNode,targetDetails,quickActions};
 
   function attendanceTime(row){return Date.parse(row?.updated_at||row?.updatedAt||row?.created_at||row?.createdAt||0)||0}
   UI.currentAthletes=()=>{const s=M.currentSession();if(!s)return[];const squads=new Set((s.identity?.squads||[]).map(x=>txt(x).toLowerCase()));return (M.state.athletes||[]).filter(a=>a.active!==false&&(!squads.size||squads.has(txt(a.squad).toLowerCase())))};
@@ -180,7 +241,17 @@
   function modifiedFor(item,s){return UI.presentAthletes().map(ath=>({ath,actual:A.item(item,ath,M.state,s)})).filter(x=>!sameWork(item,x.actual))}
   function workHead(i){return `${Math.max(1,Number(i.reps)||1)} × ${Number(i.distance)||0}${i.stroke?` ${i.stroke}`:''}${i.equipment?.length?` · ${i.equipment.join(' + ')}`:''}`}
   function meta(i){const b=[];if(i.zone)b.push(i.zone);if(i.restSeconds)b.push(`${i.restSeconds}s rest`);if(i.cycleSeconds)b.push(`@ ${U.clock(i.cycleSeconds)}`);if(i.composition?.length)b.push(i.composition.map(x=>`${x.distance} ${x.text}`.trim()).join(' / '));if(i.pattern?.length)b.push(i.pattern.map(x=>`${x.count} ${x.text}`).join(' · '));if(i.repPattern?.length)b.push(i.repPattern.map(x=>`#${x.rep} ${x.zone}`).join(' · '));if(i.cues?.length)b.push(i.cues.join(' · '));return [...new Set(b.filter(Boolean))].join(' · ')}
-  function targetDriven(i){return !!(i.targetSeconds||i.zone||i.raceIntent||i.repPattern?.length||i.repInstructions?.some(x=>x.raceIntent))}
+  function targetDriven(i){return !!(i.targetSeconds||i.zone||i.raceIntent||i.repPattern?.length||i.repInstructions?.some(x=>x.raceIntent)||targetCueLines(i).some(x=>cueRaceIntent(x)||(hashRange(x,i.reps)&&cueZone(x))))}
+  function repRange(a,b){return a===b?`#${a}`:`#${a}–${b}`}
+  function groupedRows(rows,key){
+    const out=[];for(const row of rows||[]){const k=key(row),last=out.at(-1);if(last&&last.key===k&&Number(row.rep)===last.end+1){last.end=Number(row.rep);continue}out.push({key:k,start:Number(row.rep)||1,end:Number(row.rep)||1,row})}return out;
+  }
+  function patternTargetBody(rows){
+    return groupedRows(rows,x=>`${x.zone}|${Number(x.seconds)}|${Number(x.sendOff)}`).map(g=>`<span><strong>${repRange(g.start,g.end)} ${esc((g.row.zone||'').slice(0,3))} ${U.clock(g.row.seconds)}</strong><small>on ${U.clock(g.row.sendOff)}</small></span>`).join('');
+  }
+  function raceTargetBody(rows){
+    return groupedRows(rows,x=>x.status==='ok'?`ok|${Number(x.seconds)}|${Number(x.sendOff)}`:`${x.status}|${x.label||x.message||'No pace'}`).map(g=>g.row.status==='ok'?`<span><strong>${repRange(g.start,g.end)} ${U.clock(g.row.seconds)}</strong>${g.row.sendOff?`<small>on ${U.clock(g.row.sendOff)}</small>`:''}</span>`:`<span>${repRange(g.start,g.end)} ${esc(g.row.label||g.row.message||'No pace')}</span>`).join('');
+  }
   function targetRows(s,item){
     const swimmers=UI.presentAthletes();if(!swimmers.length)return '<div class="pool-target-empty">Mark swimmers Here in Roll to load targets.</div>';
     const rows=[];
@@ -188,8 +259,8 @@
       const actual=A.item(item,ath,M.state,s),r=T.forItem(s,actual,ath,M.state);
       let sort=99999,body='';
       if(r.status==='ok'){sort=Number(r.seconds)||99999;body=`<strong>${U.clock(r.seconds)}</strong>${r.sendOff?` <small>on ${U.clock(r.sendOff)}</small>`:''}<em>${esc(r.source||'')}</em>`}
-      else if(r.status==='pattern'){const good=(r.rows||[]).filter(x=>Number.isFinite(Number(x.seconds)));sort=Number(good[0]?.seconds)||99999;body=(r.rows||[]).map(x=>`<span><strong>${esc((x.zone||'').slice(0,3))} ${U.clock(x.seconds)}</strong><small>on ${U.clock(x.sendOff)}</small></span>`).join('')+`<em>${esc(r.source||'')}</em>`}
-      else if(r.status==='rep_race'){const good=(r.rows||[]).filter(x=>x.status==='ok');sort=Number(good[0]?.seconds)||99999;body=(r.rows||[]).map(x=>x.status==='ok'?`<span><strong>#${x.rep} ${U.clock(x.seconds)}</strong></span>`:`<span>${esc(x.label||x.message||'No pace')}</span>`).join('')}
+      else if(r.status==='pattern'){const good=(r.rows||[]).filter(x=>Number.isFinite(Number(x.seconds)));sort=Number(good[0]?.seconds)||99999;body=patternTargetBody(r.rows)+`<em>${esc(r.source||'')}</em>`}
+      else if(r.status==='rep_race'){const good=(r.rows||[]).filter(x=>x.status==='ok');sort=Number(good[0]?.seconds)||99999;body=raceTargetBody(r.rows)}
       else if(r.status==='missing')body=`<span class="missing">${esc(r.message||'Target needed')}</span>`;else continue;
       rows.push({sort,html:`<div class="pool-target-row"><b>${esc(UI.initials(ath))}</b><span>${body}</span></div>`});
     }
@@ -202,7 +273,10 @@
   }
   function targetDetails(s,items,label=''){
     const sets=(items||[]).filter(targetDriven);if(!sets.length)return'';
-    return `<details class="pool-targets"><summary>Targets${sets.length>1?` · ${sets.length} sets`:''}</summary><div class="pool-target-body">${label?`<div class="pool-target-parent">${esc(label)}</div>`:''}${sets.map(item=>{const m=meta(item);return `<section class="pool-target-set"><header><strong>${esc(workHead(item))}</strong>${m?`<small>${esc(m)}</small>`:''}</header>${targetRows(s,item)}</section>`}).join('')}</div></details>`;
+    return `<details class="pool-targets"><summary>Targets${sets.length>1?` · ${sets.length} sets`:''}</summary><div class="pool-target-body">${label?`<div class="pool-target-parent">${esc(label)}</div>`:''}${sets.map(item=>{const m=meta(item);return `<section class="pool-target-set" data-target-item="${esc(item.id)}"><header><strong>${esc(workHead(item))}</strong>${m?`<small>${esc(m)}</small>`:''}</header><div class="pool-target-rows">${targetRows(s,item)}</div></section>`}).join('')}</div></details>`;
+  }
+  function bindTargetDetails(host,s){
+    host.querySelectorAll('details.pool-targets').forEach(details=>details.addEventListener('toggle',()=>{if(!details.open)return;for(const section of details.querySelectorAll('[data-target-item]')){const item=S.findItem(s,section.dataset.targetItem)?.item,rows=section.querySelector('.pool-target-rows');if(item&&rows)rows.innerHTML=targetRows(s,item)}}));
   }
   function renderNode(s,b,item,suppressTargets=false){
     if(item.kind==='cue')return `<div class="cue-line">${esc(item.text)}</div>`;
@@ -226,6 +300,7 @@
     h.querySelector('[data-pool-roll]')?.addEventListener('click',()=>M.nav.show('roll',{restoreScroll:false}));
     h.querySelector('[data-pool-times]')?.addEventListener('click',()=>M.nav.show('times',{restoreScroll:false}));
     h.querySelector('[data-pool-swimmers]')?.addEventListener('click',()=>M.nav.show('athletes',{restoreScroll:false}));
+    bindTargetDetails(h,s);
     h.querySelectorAll('[data-pool-edit]').forEach(x=>x.onclick=()=>M.actions.openEdit(x.dataset.poolEdit));
     h.querySelectorAll('[data-pool-finish]').forEach(x=>x.onclick=()=>M.actions.finishBlock(x.dataset.poolFinish));
   };
@@ -292,6 +367,21 @@
       const check=(name,fn)=>{try{const detail=fn();tests.push({name,ok:true,detail:detail==null?'':String(detail)})}catch(e){tests.push({name,ok:false,detail:e.message||String(e)})}};
       check('Standalone rest lines never add phantom metres',()=>{const s=M.parser.parse('MAIN SET\n10s rest\n8 x 100 Freestyle\n30s rest\n4 x 50 Choice',{id:'rest-gate'});if(S.total(s)!==1000)throw new Error(`got ${S.total(s)}`);return '800 + 200 · rest 0m'});
       check('Board targets stay inside a compact parent-set dropdown',()=>{const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development',{id:'target-dropdown',course:'SCM'}),item=s.blocks[0].items[0],html=renderNode(s,s.blocks[0],item);if(!/<details class="pool-targets"><summary>Targets/.test(html)||!/2 × 400 Freestyle/.test(html)||/pool-target-title/.test(html))throw new Error('target detail is not parent-set dropdown markup');return 'set remains visible · targets collapsed'});
+      check('Saturday range cues expose aerobic and race-pace target dropdowns',()=>{
+        const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development\n#3 Development\n6 x 25\n@ 45\n#1 Build\n#2-6 @ 100m Race Pace\n8 x 100 Freestyle\n#1-4 Overload\n#5-8 Threshold\n1 x 100\nTarget: Second 100 of 200 Race',{id:'sat-target-cues',course:'SCM'}),items=s.blocks[0].items,pace25=items.find(x=>Number(x.reps)===6),aerobic100=items.find(x=>Number(x.reps)===8),second100=items.at(-1),html=items.map(x=>renderNode(s,s.blocks[0],x)).join('');
+        if(items[0].repPattern.map(x=>x.zone).join(',')!=='Regeneration,Development')throw new Error('2 x 400 authored phases were not normalized');
+        if(pace25.cycleSeconds!==45||pace25.repInstructions.filter(x=>x.raceIntent).length!==5)throw new Error('25 race-pace range was not resolved');
+        if(aerobic100.repPattern.length!==8||aerobic100.repPattern[0].zone!=='Overload'||aerobic100.repPattern[7].zone!=='Threshold')throw new Error('8 x 100 zones were not resolved');
+        if(second100.raceIntent?.distance!==200||!/pool-targets/.test(html))throw new Error('race target-needed dropdown is absent');
+        if(enhanceTargetSemantics(s)!==0||pace25.raceIntent)throw new Error('target enrichment is not stable or leaked a rep range onto the whole set');
+        return '2 aerobic phases · #2–6 race pace · #1–4/#5–8 zones · second 100 target check';
+      });
+      check('Modified mixed-zone aerobic work retains every phase with individual distances',()=>{
+        const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development',{id:'modified-phases',course:'SCM'}),item=s.blocks[0].items[0],cm={id:'cm-phase',full_name:'Charlotte Murphy'},md={id:'md-phase',full_name:'McKenzie Drage'},state={adaptationProfiles:[],adaptationOverrides:[],trainingTestTypes:[{id:'phase-t400',test_key:'t400_freestyle'}],trainingTestResults:[{athlete_id:'cm-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true},{athlete_id:'md-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true}]},a=M.adapt.item(item,cm,state,s),b=M.adapt.item(item,md,state,s),ta=T.forItem(s,a,cm,state),tb=T.forItem(s,b,md,state);
+        if(a.reps!==2||a.distance!==200||b.reps!==2||b.distance!==275)throw new Error(`modified shapes ${a.reps}x${a.distance} / ${b.reps}x${b.distance}`);
+        if(ta.status!=='pattern'||tb.status!=='pattern'||ta.rows.length!==2||tb.rows.length!==2)throw new Error('individual phase targets were not retained');
+        return `CM ${a.reps} × ${a.distance} · MD ${b.reps} × ${b.distance} · Reg + Dev retained`;
+      });
       check('Board exposes direct Swimmers and Performance Pathway access',()=>{const html=quickActions(1);if(!/data-pool-swimmers/.test(html)||!/Swimmers \/ Pathway/.test(html))throw new Error('direct poolside swimmer route missing');return 'Board → Swimmers / Pathway'});
       check('Saved Saturday 6,090m corruption repairs non-destructively to 5,450m',()=>{
         const s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-sat',date:'2026-08-15',dayPart:'AM',squads:['National','Development','Fitness']});

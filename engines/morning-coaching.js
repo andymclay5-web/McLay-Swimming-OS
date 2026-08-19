@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.MorningCoaching=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.1';
+  const VERSION='1.1.2';
   const STORAGE_KEY='mclay_swimming_os_v4';
   const LEGACY_STORAGE_KEY='mclay_swimming_os_v1';
   const REF_DB='mclay_swimming_v4_reference_cache';
@@ -163,9 +163,9 @@
     return Math.ceil((Math.floor(t)+r)/5)*5;
   }
   function aerobic(anchor,distance,zone,authoredRest=10){
-    const table=AEROBIC[distance];if(!table||!zone)return null;const rest=Math.max(0,Number(authoredRest)||0),modelRest=rest>=20?30:10,coef=table[modelRest]?.[zone];if(!coef)return null;
-    const seconds=(Number(anchor)/table.divisor)*coef;
-    return{seconds,authoredRest:rest,sendOff:practicalSendOff(seconds,rest),modelRest,sourceModel:`T400 ${distance}m ${zone}`};
+    const d=Number(distance),baseDistance=[50,100,200,400].includes(d)?d:d<50?50:d<100?100:d<200?200:400,table=AEROBIC[baseDistance];if(!table||!zone||!Number.isFinite(d)||d<=0||d>400)return null;const rest=Math.max(0,Number(authoredRest)||0),modelRest=rest>=20?30:10,coef=table[modelRest]?.[zone];if(!coef)return null;
+    const seconds=(Number(anchor)/table.divisor)*coef*(d/baseDistance);
+    return{seconds,authoredRest:rest,sendOff:practicalSendOff(seconds,rest),modelRest,sourceModel:baseDistance===d?`T400 ${d}m ${zone}`:`T400 ${baseDistance}m ${zone} speed scaled to ${d}m`};
   }
   function convert(seconds,from,to,distance,stroke,state={}){
     if(from===to)return{seconds:Number(seconds),source:'Exact course'};

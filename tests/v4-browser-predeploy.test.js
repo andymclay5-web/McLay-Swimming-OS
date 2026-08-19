@@ -4,9 +4,18 @@ const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-poolside-core-20260819e-poolsideanswers';
+const BUILD='v4-poolside-core-20260819f-targettruth';
 const ATHLETE_ID='predeploy-browser-athlete';
 const NOTE='Predeploy poolside note';
+const SATURDAY_ROSTER=[
+  ['sat-thomas','Thomas Cave','4:35.0','present'],
+  ['sat-charlotte','Charlotte Murphy','4:50.0','modified'],
+  ['sat-alex','Alex Gibson','4:29.0','present'],
+  ['sat-william','William Callow','4:44.0','present'],
+  ['sat-mckenzie','McKenzie Drage','5:03.0','modified'],
+  ['sat-luke','Luke Thompson','4:38.0','present'],
+  ['sat-henry','Henry Crump','4:58.0','present']
+].map(([id,full_name,t400,status])=>({id,full_name,t400,status}));
 
 async function appSnapshot(page){
   return page.evaluate(()=>{
@@ -71,7 +80,7 @@ async function appSnapshot(page){
     let snapshot=await appSnapshot(page);
     assert.equal(snapshot.build,BUILD,'unexpected shipping build');
     assert.equal(snapshot.releaseReady,true,'final shipping build is not software-attested');
-    assert.deepEqual(snapshot.guardian,{ok:true,passed:79,total:79,build:BUILD},'browser Guardian is not current and complete');
+    assert.deepEqual(snapshot.guardian,{ok:true,passed:82,total:82,build:BUILD},'browser Guardian is not current and complete');
     assert.ok(snapshot.width.scroll<=snapshot.width.inner+1,`fresh phone page overflows: ${snapshot.width.scroll}px > ${snapshot.width.inner}px`);
 
     await page.click('#newSessionBtn');
@@ -136,20 +145,60 @@ async function appSnapshot(page){
     assert.ok(snapshot.t400.some(x=>x.athleteId===ATHLETE_ID&&x.seconds===269&&x.sessionId===snapshot.sessionId),'manual T400 did not persist against the canonical session');
 
     const acceptedSessionId=snapshot.sessionId;
-    await page.evaluate(()=>{
-      const M=window.MSOS4,s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-saturday-phone-shape',date:'2026-08-15',dayPart:'AM',title:'Sat AM',squads:['National','Development','Fitness']});
+    await page.evaluate(roster=>{
+      const M=window.MSOS4,s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-saturday-phone-shape',date:'2026-08-15',dayPart:'AM',title:'Sat AM',squads:['National','Development','Fitness'],venue:'AquaGym',course:'SCM'});
       const warm=s.blocks[0],parent=warm.items.find(x=>x.kind==='set'&&Number(x.reps)===12&&Number(x.distance)===50);
       warm.items.splice(warm.items.indexOf(parent)+1,0,{id:'phantom-breakdown',kind:'group',rounds:4,text:'4 ROUNDS',items:[{id:'p1',kind:'set',reps:1,distance:50,raw:'1 x 50 Scull'},{id:'p2',kind:'set',reps:1,distance:50,raw:'1 x 50 Drill'},{id:'p3',kind:'set',reps:1,distance:50,raw:'1 x 50 Swim Perfect Technique'}]});
       s.blocks[2].items.splice(1,0,{id:'phantom-rest-10',kind:'set',reps:1,distance:10,raw:'10s rest',text:'10s rest'});
       s.blocks[2].items.push({id:'phantom-rest-30',kind:'set',reps:1,distance:30,raw:'30s rest',text:'30s rest'});
-      M.state.canonicalSessions[s.id]=s;M.state.settings.selectedSessionId=s.id;M.store.save(M.state);
-    });
+      const ids=new Set(roster.map(x=>x.id));
+      M.state.athletes=(M.state.athletes||[]).filter(x=>!ids.has(x.id)).concat(roster.map(x=>({id:x.id,full_name:x.full_name,squad:'National',active:true,legacy_pace:{t400:x.t400,course:'SCM',t400_date:'2026-08-01'}})));
+      M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==s.id).concat(roster.map(x=>({id:`attendance-${s.id}-${x.id}`,session_id:s.id,athlete_id:x.id,status:x.status,updated_at:M.util.now()})));
+      M.state.canonicalSessions[s.id]=s;M.state.settings.selectedSessionId=s.id;M.state.settings.view='board';M.store.save(M.state);
+    },SATURDAY_ROSTER);
     await page.reload({waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>window.MSOS4?.currentSession?.()?.id==='saved-saturday-phone-shape'&&window.MSOS4.session.total(window.MSOS4.currentSession())===5450);
     snapshot=await appSnapshot(page);
     assert.equal(snapshot.sessionTotal,5450,'saved 6,090m Saturday corruption was not repaired on reload');
     assert.deepEqual(snapshot.blockTotals,[1100,850,2900,600],'saved Saturday section truth was not restored');
     assert.ok(snapshot.repairs.some(x=>x.beforeTotal===6090&&x.afterTotal===5450),'saved-session repair audit is missing');
+    const saturdayIds=new Set(SATURDAY_ROSTER.map(x=>x.id));
+    assert.equal(snapshot.t400.filter(x=>saturdayIds.has(x.athleteId)).length,7,'legacy swimmer T400 references did not hydrate for the seven attending swimmers');
+    const saturdayBoard=await page.evaluate(()=>{
+      const lines=[...document.querySelectorAll('#boardView .pool-line')].map(line=>({
+        work:line.querySelector('.pool-work-head strong')?.textContent?.trim()||'',
+        text:line.textContent||'',
+        modified:[...line.querySelectorAll('.pool-mod')].map(x=>x.textContent?.trim()||''),
+        targets:!!line.querySelector('details.pool-targets')
+      }));
+      const details=[...document.querySelectorAll('#boardView details.pool-targets')];
+      for(const detail of details){detail.open=true;detail.dispatchEvent(new Event('toggle'))}
+      return{
+        lines,
+        targetDropdowns:details.length,
+        targetText:details.map(x=>x.textContent||''),
+        targetRows:details.map(x=>x.querySelectorAll('.pool-target-row').length),
+        width:{inner:window.innerWidth,scroll:document.documentElement.scrollWidth}
+      };
+    });
+    assert.equal(saturdayBoard.targetDropdowns,5,'Saturday target-driven sets do not all expose a compact Targets dropdown');
+    assert.ok(saturdayBoard.lines.find(x=>x.work==='2 × 400 Freestyle')?.modified.some(x=>/CM.*2 × 200/s.test(x)),'Charlotte mixed-zone 2 × 400 did not retain two shortened phases');
+    assert.ok(saturdayBoard.lines.find(x=>x.work==='2 × 400 Freestyle')?.modified.some(x=>/MD.*2 × 275/s.test(x)),'McKenzie mixed-zone 2 × 400 did not retain two shortened phases');
+    assert.ok(saturdayBoard.targetText.some(x=>/#2–6/.test(x)),'6 × 25 race-pace target range is missing');
+    assert.ok(saturdayBoard.targetText.some(x=>/#1–4/.test(x)&&/#5–8/.test(x)),'8 × 100 Overload/Threshold target ranges are missing');
+    assert.ok(saturdayBoard.targetText.some(x=>/#2–4/.test(x)),'4 × 50 race-pace target range is missing');
+    assert.ok(saturdayBoard.targetText.some(x=>/Exact race-model segment not loaded|No #1 stroke evidence loaded|PB unavailable/i.test(x)),'second 100 race-model target-needed state is missing');
+    assert.ok(saturdayBoard.targetRows.every(x=>x===7),'a Saturday target dropdown is missing one or more attending swimmers');
+    assert.ok(!saturdayBoard.targetText.some(x=>/No Freestyle T400 loaded/i.test(x)),'legacy Freestyle T400 evidence is still absent on the Board');
+    assert.ok(saturdayBoard.width.scroll<=saturdayBoard.width.inner+1,`Saturday Board overflows at phone width: ${saturdayBoard.width.scroll}px > ${saturdayBoard.width.inner}px`);
+    await page.click('[data-pool-times]');
+    await page.waitForSelector('#timesView.active .v4-timing-roster');
+    const timesText=await page.locator('#timesView').innerText();
+    for(const swimmer of SATURDAY_ROSTER){
+      const display=swimmer.t400.replace(/\.0$/,'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      assert.ok(new RegExp(`${swimmer.full_name}[^]*${display}`).test(timesText),`${swimmer.full_name} T400 is missing from Times`);
+    }
+    await page.click('[data-nav="board"]');
     await page.evaluate(id=>{window.MSOS4.state.settings.selectedSessionId=id;window.MSOS4.store.save(window.MSOS4.state);window.MSOS4.ui.renderCurrent()},acceptedSessionId);
 
     await context.setOffline(true);

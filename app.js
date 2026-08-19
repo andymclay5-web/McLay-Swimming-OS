@@ -889,30 +889,50 @@
 (function(g){
  const M=g.MSOS4,U=M.util,S=M.session,P=M.parser,A=M.adapt,T=M.targets,C=M.changes;
  const G=M.guardian={};
- G.SATURDAY_SOURCE=`WARM-UP
+G.SATURDAY_SOURCE=`WARM-UP
 500
 300 Freestyle
 200 Reverse IM
-12 x 50 #1 Stroke @ 1:10
+12 x 50
 1 Scull
 1 Drill
 1 Swim — Perfect Technique
 
 PRE-SET
-3 x 200 Pull Descend Stroke Count 1-3 15s Rest
-5 x 50 Kick Build @ 1:00
+3 x 200 Pull
+Descend Stroke Count 1-3
+5 x 50
+@ 1:00
 
 MAIN SET
 2 x 400 Freestyle
-1-Reg (P130-140)
-1-Dev (P140-150)
-15SR
-8 x 12.5 #1 Stroke MAX @ 0:45
-3 x 150 Build — Race Quality
-6 x 75 #1 Stroke @ 1:00
+#1 Regeneration
+#2 Development
+#3 Development
+8 x 12.5
+@ 45
+3 x 150
+100 IM / 50 Freestyle
+Build through each 150
+Strong final 25 Freestyle
+Attack last turn and underwater
+Hold the line and finish strong
+6 x 25
+@ 1:00
+#1 Build
+#2-6 @ 100m Race Pace
 8 x 100 Freestyle
-100 Scull / Easy
-4 x 50 #1 Stroke @ 2:00
+#1-4 Overload
+#5-8 Threshold
+1 x 100
+4 x 50
+@ 2:30
+#1 Build
+#2-4 @ 100m Race Pace
+1 x 200
+1 x 100
+Target: Second 100 of 200 Race
+Finish strong under pressure
 
 POST-SET
 8 x 75 with Fins

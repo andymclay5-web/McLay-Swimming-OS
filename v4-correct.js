@@ -16,15 +16,15 @@
   if(!C.baseBuild.match)console.warn('[MSOS v4] Base build differs from validated baseline',C.baseBuild);
 
   M.VERSION='4';
-  M.BUILD='v4-correct-20260819-poolsideanswers';
-  M.CORE='20260819-v4-poolsideanswers';
+  M.BUILD='v4-correct-20260819f-targettruth';
+  M.CORE='20260819-v4-targettruth';
 
   // Keep production cloud cutover locked until the corrected bytes pass the real-phone gate.
   M.RELEASE_ATTESTATION=Object.freeze({
     build:M.BUILD,
     softwareReady:C.baseBuild.match,
-    generatedAt:'2026-08-19T12:30:00+12:00',
-    suiteDigest:'v4-contract-20260819-poolsideanswers',
+    generatedAt:'2026-08-19T16:30:00+12:00',
+    suiteDigest:'v4-contract-20260819f-targettruth',
     packageDigest:'see-SHA256SUMS',
     note:'Correct Version 4 software-attested; physical Android acceptance, production schema probe and remaining release gates are still required before production cutover.'
   });
@@ -102,6 +102,39 @@
   function t400Course(row){
     return text(row?.pool_course||row?.course||row?.metadata?.pool_course||row?.metadata?.course||'SCM').toUpperCase();
   }
+  function legacyPaceSeconds(value){
+    if(Number.isFinite(Number(value))&&Number(value)>0)return Number(value);
+    const seconds=U?.seconds?.(value);
+    return Number.isFinite(Number(seconds))&&Number(seconds)>0?Number(seconds):NaN;
+  }
+  function legacyPaceRows(state){
+    const rows=[];
+    for(const athlete of state?.athletes||[]){
+      const pace=athlete?.legacy_pace;
+      if(pace==null||pace==='')continue;
+      const value=typeof pace==='object'
+        ? pace.t400??pace.t400_time??pace.t400_seconds??pace.freestyle??pace.free
+        : pace;
+      const seconds=legacyPaceSeconds(value);
+      if(!Number.isFinite(seconds))continue;
+      const meta=typeof pace==='object'?pace:{};
+      rows.push({
+        id:U.stableId('legacy-athlete-t400',athlete.id,'Freestyle'),
+        athlete_id:athlete.id,
+        test_type_id:U.stableId('legacy-athlete-t400-type','Freestyle'),
+        result_seconds:seconds,
+        result_date:text(meta.t400_date||meta.test_date||meta.result_date||meta.date||athlete.updated_at||athlete.created_at).slice(0,10),
+        date_precision:text(meta.t400_date||meta.test_date||meta.result_date||meta.date)?'day':'unknown',
+        pool_course:text(meta.pool_course||meta.course||meta.t400_course||'SCM').toUpperCase(),
+        start_type:text(meta.start_type||'Push'),
+        valid_for_anchor:true,
+        source_type:'training',
+        source_label:'Legacy swimmer T400 reference',
+        metadata:{stroke:'Freestyle',migrated_from:'athlete.legacy_pace'}
+      });
+    }
+    return rows;
+  }
 
   function evidenceIdentity(row,kind){
     return text(row?.id)||`${kind}|${[
@@ -120,12 +153,25 @@
   }
 
   C.hydrateT400Evidence=(state=M.state,legacy=M.store?.legacy?.()||null)=>{
-    if(!state||!legacy)return 0;
+    if(!state)return 0;
     state.trainingTestTypes=Array.isArray(state.trainingTestTypes)?state.trainingTestTypes:[];
     state.trainingTestResults=Array.isArray(state.trainingTestResults)?state.trainingTestResults:[];
     let changed=0;
-    changed+=mergeMissingEvidence(state.trainingTestTypes,legacy.training_test_types||legacy.trainingTestTypes,'type');
-    changed+=mergeMissingEvidence(state.trainingTestResults,legacy.training_test_results||legacy.trainingTestResults,'result');
+    if(legacy){
+      changed+=mergeMissingEvidence(state.trainingTestTypes,legacy.training_test_types||legacy.trainingTestTypes,'type');
+      changed+=mergeMissingEvidence(state.trainingTestResults,legacy.training_test_results||legacy.trainingTestResults,'result');
+    }
+    const paceRows=legacyPaceRows(state);
+    if(paceRows.length){
+      changed+=mergeMissingEvidence(state.trainingTestTypes,[{
+        id:U.stableId('legacy-athlete-t400-type','Freestyle'),
+        test_key:'t400_freestyle',
+        name:'T400 Freestyle',
+        active:true,
+        source_label:'Legacy swimmer pace reference'
+      }],'type');
+      changed+=mergeMissingEvidence(state.trainingTestResults,paceRows,'result');
+    }
     for(const row of state.trainingTestResults){
       if(!isT400Row(state,row)||text(row.pool_course))continue;
       // Club T400 evidence is SCM unless the source explicitly says otherwise.
@@ -134,7 +180,7 @@
     return changed;
   };
 
-  C._internals={normaliseStroke,strokeSlug,practicalSendOff,typeKey,testStroke,isT400Row,t400Course,isSophie,athleteKey};
+  C._internals={normaliseStroke,strokeSlug,practicalSendOff,typeKey,testStroke,isT400Row,t400Course,legacyPaceSeconds,legacyPaceRows,isSophie,athleteKey};
 
   C.hydratePlanning=()=>{
     if(!M.state)return;
@@ -235,12 +281,46 @@
     rubystace:{ratio:2/3,label:'~⅔ volume when condensation is needed'}
   });
 
+  function profileDistance(distance,ratio,session,returnToStart){
+    const pool=/LCM/i.test(text(session?.identity?.course))?50:25;
+    const unit=returnToStart?pool*2:pool;
+    const target=Math.max(pool,Number(distance||0)*Number(ratio||1));
+    return Math.max(unit,Math.round(target/unit)*unit);
+  }
+  function condensedRepPattern(pattern,reps){
+    const expanded=(pattern||[]).filter(x=>text(x.zone));
+    const count=Math.max(1,Number(reps)||1);
+    if(!expanded.length)return[];
+    if(count>=expanded.length)return expanded.slice(0,count).map((x,i)=>({...U.clone(x),rep:i+1}));
+    return Array.from({length:count},(_,i)=>{
+      const source=expanded[Math.min(expanded.length-1,Math.floor(i*expanded.length/count))];
+      return{...U.clone(source),rep:i+1};
+    });
+  }
+  function rewriteAdaptedShape(out,reps,distance){
+    const lead=`${Math.max(1,Number(reps)||1)} × ${Number(distance)||0}`;
+    const raw=text(out?.raw||out?.text);
+    out.raw=/^\s*\d+\s*[x×]\s*\d+(?:\.\d+)?/i.test(raw)?raw.replace(/^\s*\d+\s*[x×]\s*\d+(?:\.\d+)?/i,lead):`${lead}${raw?` · ${raw}`:''}`;
+    out.text=out.raw;
+  }
+
   if(M.adapt?.item){
     const baseAdaptItem=M.adapt.item.bind(M.adapt);
     M.adapt.item=(item,athlete,state=M.state,session=null)=>{
       const out=baseAdaptItem(item,athlete,state,session);
-      const key=athleteKey(athlete),raw=text(out?.raw||out?.text||item?.raw||item?.text);
+      const key=athleteKey(athlete),raw=text(out?.raw||out?.text||item?.raw||item?.text),profile=M.adapt.profile(athlete,state);
       const hasExplicit=(state?.adaptationOverrides||[]).some(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===athlete?.id&&x.active!==false);
+      const phases=[...new Set((item?.repPattern||[]).map(x=>text(x.zone)).filter(Boolean))];
+      if(!hasExplicit&&profile.ratio<.98&&phases.length>1&&Number(out?.reps)<phases.length&&Number(item?.distance)>=100){
+        out.reps=Math.max(1,Number(item.reps)||1);
+        out.distance=profileDistance(item.distance,profile.ratio,session,profile.returnToStart);
+        out.repPattern=(item.repPattern||[]).slice(0,out.reps).map((x,i)=>({...U.clone(x),rep:i+1}));
+        rewriteAdaptedShape(out,out.reps,out.distance);
+        out.adaptationReason=[`${Math.round(profile.ratio*100)}% current profile`,'every authored aerobic phase retained',profile.returnToStart?'return to start end':''].filter(Boolean).join(' · ');
+      }else if(!hasExplicit&&item?.repPattern?.length&&Number(out?.reps)<Number(item?.reps)){
+        out.repPattern=condensedRepPattern(item.repPattern,out.reps);
+        out.adaptationReason=[out.adaptationReason,'every authored aerobic phase retained'].filter(Boolean).join(' · ');
+      }
       if(!hasExplicit&&key==='mckenziedrage'&&Number(out?.distance)===75&&/\b(?:fast|max|race|quality|pace)\b/i.test(raw)){
         const current=Number(out.cycleSeconds)||0;
         if(current<115) out.cycleSeconds=115;
@@ -269,19 +349,22 @@
     };
 
     T.aerobic=(anchor,distance,zone,authoredRest=10)=>{
-      const table=T.AEROBIC?.[distance];
-      if(!table||!zone) return null;
+      const d=Number(distance),baseDistance=[50,100,200,400].includes(d)?d:d<50?50:d<100?100:d<200?200:400;
+      const table=T.AEROBIC?.[baseDistance];
+      if(!table||!zone||!Number.isFinite(d)||d<=0||d>400) return null;
       const rest=Math.max(0,Number(authoredRest)||0);
       const modelRest=rest>=20?30:10;
       const coef=table[modelRest]?.[zone];
       if(!coef) return null;
-      const seconds=(Number(anchor)/table.divisor)*coef;
+      const baseSeconds=(Number(anchor)/table.divisor)*coef,seconds=baseSeconds*(d/baseDistance);
       return{
         seconds,
         sendOff:practicalSendOff(seconds,rest),
         modelRest,
         authoredRest:rest,
-        method:`T400 ${distance}m ${zone} (${modelRest}s coefficient; ${rest}s authored rest; practical 5s deck cycle)`
+        method:baseDistance===d
+          ?`T400 ${d}m ${zone} (${modelRest}s coefficient; ${rest}s authored rest; practical 5s deck cycle)`
+          :`T400 ${baseDistance}m ${zone} speed scaled to ${d}m (${rest}s authored rest; practical 5s deck cycle)`
       };
     };
 
@@ -375,6 +458,7 @@
       const raw=text(item?.raw||item?.text);
       const workStroke=text(item?.stroke);
       if(stroke==='IM'&&workStroke&&normaliseStroke(workStroke)!=='IM')return{missing:true,message:'Exact IM leg race model not loaded · target needed'};
+      if(item?.raceIntent?.segmentPosition||item?.raceIntent?.segmentDistance)return{missing:true,message:'Exact race-model segment not loaded · target needed'};
       const sex=text(athlete?.sex||athlete?.gender).toUpperCase();
       if(event===100&&stroke==='Freestyle'&&/^M(?:ALE)?$/.test(sex)){
         if(/\b(?:first|1st)\s*50\b/i.test(raw))return{seconds:total*.4754,source:'John Pike SCM · Male 100 Free first 50'};
@@ -1469,6 +1553,11 @@
         const anchor=M.targets.t400({id:'legacy-ath'},st,'SCM','Freestyle');
         tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',anchor?.id==='legacy-t400-result'&&anchor.pool_course==='SCM',anchor?`${clock(resultSeconds(anchor))} · ${anchor.pool_course}`:'missing'));
       }catch(e){tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',false,e.message));}
+      try{
+        const ath={id:'legacy-pace-ath',full_name:'Legacy Pace Swimmer',legacy_pace:{t400:'4:31.2'}},st={athletes:[ath],trainingTestTypes:[],trainingTestResults:[]};
+        C.hydrateT400Evidence(st,null);const anchor=M.targets.t400(ath,st,'SCM','Freestyle');
+        tests.push(gtest('Saved swimmer legacy pace becomes an immediate Freestyle T400 anchor',Math.abs(resultSeconds(anchor)-271.2)<.001&&anchor?.metadata?.migrated_from==='athlete.legacy_pace',anchor?`${clock(resultSeconds(anchor))} · ${anchor.pool_course}`:'missing'));
+      }catch(e){tests.push(gtest('Saved swimmer legacy pace becomes an immediate Freestyle T400 anchor',false,e.message));}
       try{
         const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,nextNational:{row:{_label:'NZSC',_seconds:55.5},gap:{seconds:4.5,percentage:8.1}},qualifying:[{_label:'Step one',_seconds:58.8},{_label:'Step two',_seconds:57.2}]};
         const answer=C.poolsidePathwayAnswer(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training':session},attendance:[{session_id:'poolside-training',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]};
