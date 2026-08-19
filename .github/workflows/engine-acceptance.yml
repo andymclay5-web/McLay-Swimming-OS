@@ -15,6 +15,7 @@ jobs:
           node-version: 22
       - name: Syntax check active runtime files
         run: |
+          node --check engines/storage.js
           node --check engines/session-repair.js
           node --check engines/evidence.js
           node --check engines/aerobic.js
