@@ -1,6 +1,6 @@
 'use strict';
 (function(root,factory){const api=factory(root.MSOSEngines?.Evidence);if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='2.4.0';
+  const VERSION='2.4.1';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -23,7 +23,7 @@
     .replace(/\bDesc(?:end|ending)?\s+SC\s+1\s*[-–—]\s*\d+\b/ig,`Desc SC 1-${newReps}`)
     .replace(/\bDesc(?:end|ending)?\s+1\s*[-–—]\s*\d+\b/ig,`Desc 1-${newReps}`);
     out.raw=fix(out.raw||out.text);out.text=out.raw;if(Array.isArray(out.cues))out.cues=out.cues.map(fix);if(Array.isArray(out.repInstructions))out.repInstructions=out.repInstructions.map((x,i)=>({...x,rep:i+1,label:fix(x.label||'')}));return out;}
-  function constrain(item,ath){const k=E.key(ath?.full_name),raw=text(item?.raw||item?.text),x=clone(item);if(k==='conorfischer'&&/\b(?:breaststroke|breast|br)\b/i.test(raw)&&/\bfins?\b/i.test(raw)){x.stroke='Choice';x.raw=`${x.reps} × ${x.distance} Choice non-Br with Fins`;x.text=x.raw;x.adaptationReason='No Breaststroke kick with fins';}if(k==='amberproudfoot'&&/\b(?:kick|fins?|underwater|dive|start)\b/i.test(raw)){x.stroke='Choice';x.equipment=(x.equipment||[]).filter(z=>!/Fins/i.test(z));x.raw=`${x.reps} × ${x.distance} Upper-body equivalent${x.cycleSeconds?` @ ${cycleClock(x.cycleSeconds)}`:''}`;x.text=x.raw;x.adaptationReason='Upper-body equivalent';}return x;}
+  function constrain(item,ath){const k=E.key(ath?.full_name),raw=text(item?.raw||item?.text),x=clone(item);if(k==='conorfischer'&&/\b(?:breaststroke|breast|br)\b/i.test(raw)&&/\bfins?\b/i.test(raw)){x.stroke='Choice';x.raw=`${x.reps} × ${x.distance} Choice non-Br with Fins`;x.text=x.raw;x.adaptationReason='No Breaststroke kick with fins';}if(k==='amberproudfoot'&&/\b(?:kick|fins?|underwater|dive|start)\b/i.test(raw)){x.stroke='Choice';x.equipment=(x.equipment||[]).filter(z=>!/Fins/i.test(z));x.raw=`${x.reps} × ${x.distance} Upper-body equivalent${x.cycleSeconds?` @ ${cycleClock(x.cycleSeconds)}`:''}`;x.text=x.raw;x.cues=(x.cues||[]).map(c=>text(c).replace(/\bKick\b/ig,'').replace(/\bFins?\b/ig,'').trim()).filter(Boolean);x.adaptationReason='Upper-body equivalent';}return x;}
   function activeOverride(item,ath,state,session){return(state?.adaptationOverrides||[]).find(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false)||null;}
   function shapeOverride(ov){if(!ov)return false;if(ov.raw)return true;const p=ov.patch||{};return['reps','distance','cycleSeconds','restSeconds','equipment','raw','text'].some(k=>Object.prototype.hasOwnProperty.call(p,k));}
   function applyOverride(out,ov){if(!ov)return out;if(ov.raw)out.raw=ov.raw;Object.assign(out,ov.patch||{});out.text=out.raw||out.text;return out;}
