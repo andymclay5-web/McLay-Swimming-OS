@@ -1,0 +1,19 @@
+/* Thursday compact target-fit correction. Keeps the accepted current-set Board, fixes target density/touch. */
+.thu4-set-view .thu2-mod-selector{display:none}
+.thu4-set-view .thu2-block-grid.has-mod>.thu2-main{position:relative;overflow:visible;z-index:3}
+.thu4-set-view .thu2-mod-rail{position:relative;z-index:1}
+.thu4-set-view .thu2-line-head{min-height:38px;align-items:center}
+.thu4-set-view .thu2-line-head em{display:flex;align-items:center;justify-content:center;min-width:58px;min-height:31px;padding:2px 5px;border:1px solid #9fbfcd;border-radius:8px;background:#eef7fa;color:#1d5b75;font-size:.47rem!important;font-weight:950}
+.thu4-set-view .thu2-line.open>.thu2-line-head em{background:#0d4566;color:#fff;border-color:#0d4566}
+.thu4-set-view .thu6-target-detail{position:relative;z-index:8;width:178.57%;padding:4px 5px 5px!important;border:1px solid #b9d1dc;border-radius:8px;background:#f7fbfd;box-shadow:0 4px 12px rgba(20,60,80,.10)}
+.thu4-set-view .thu6-target-detail .thu2-target-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:3px!important}
+.thu4-set-view .thu6-target-detail .thu2-target-row{grid-template-columns:auto minmax(0,1fr) 42px!important;gap:3px!important;min-height:30px;padding:2px 3px!important}
+.thu4-set-view .thu6-target-detail .thu2-target-row b{font-size:.50rem!important;white-space:nowrap}.thu4-set-view .thu6-target-detail .thu2-target-row span{font-size:.49rem!important;line-height:1.05!important}.thu4-set-view .thu6-target-detail .thu2-target-row select{grid-column:auto!important;width:42px!important;max-width:42px!important;height:24px!important;padding:1px!important;font-size:.45rem!important}
+.thu4-set-view .thu6-target-detail .thu2-detail-actions{margin-top:3px!important}
+.thu4-set-view .thu2-mod-rail>header{display:none}
+.thu4-set-view .thu3-mod-list{gap:1px!important;padding:1px!important}
+.thu4-set-view .thu3-mod-ath{border:0!important;border-bottom:1px solid rgba(134,94,18,.16)!important;border-radius:0!important;background:transparent!important}.thu4-set-view .thu3-mod-ath:last-child{border-bottom:0!important}
+.thu4-set-view .thu3-mod-ath>header{padding:1px 2px!important;background:transparent!important;border:0!important}.thu4-set-view .thu3-mod-ath>header strong{font-size:.49rem!important}
+.thu4-set-view .thu3-mod-ath button{padding:2px!important}.thu4-set-view .thu3-mod-ath b{font-size:.48rem!important}.thu4-set-view .thu3-mod-ath em{font-size:.44rem!important;margin-top:0!important}
+@media(max-width:430px){.thu4-set-view .thu6-target-detail{width:172.414%}.thu4-set-view .thu6-target-detail .thu2-target-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(min-width:760px){.thu4-set-view .thu6-target-detail{width:161.29%}.thu4-set-view .thu6-target-detail .thu2-target-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
