@@ -6,6 +6,8 @@ Each engine owns one kind of truth. If an engine is wrong, fix that engine. Do n
 ## Session / parser truth
 Owns authored workout structure, blocks, rounds, repeats, cues, totals, rest/send-off semantics and canonical session identity. It does not calculate athlete targets or modifications.
 
+The isolated stored-round/source recovery lives in `engines/session-repair.js`. It may repair canonical structure, but it does not touch targets, modification rules or Board rendering.
+
 ## Evidence engine — `engines/evidence.js`
 Owns local evidence hydration and identity matching across current/legacy athlete IDs. It exposes PB rows, training-test/T400 rows and source evidence. It does not calculate training targets.
 
@@ -29,16 +31,19 @@ Outputs: race target, resolved stroke, source or explicit missing-evidence resul
 It must never invent a target when the required evidence/model is missing.
 
 ## Modification engine — `engines/modification.js`
-Owns athlete modification profiles and the final manageable prescription. It receives the canonical group prescription and may use evidence through explicit calls, but does not own PB/T400 formulas.
+Owns athlete modification profiles and the final manageable prescription. It receives the canonical group prescription and may consume evidence, but it does not own PB/T400 formulas.
 
 Rules include:
 - inclusion/stimulus before blind mathematical reduction;
 - 1/2 and 2/3 profiles are starting constraints, not universal arithmetic;
-- short quality/anaerobic work should stay with the team where manageable;
-- IM is structurally protected — do not silently invent 50/75 IM units;
-- return-to-start/pool-end rules apply where required;
-- coach-authored overrides beat generated modifications;
-- a stroke-only override must not erase the athlete's modification shape.
+- short quality/anaerobic work stays with the team where manageable;
+- larger mixed/aerobic work is resized while preserving authored phases where possible;
+- IM is structurally protected — no silent 50/75 IM units;
+- when complete IM reps are reduced on a fixed cycle, the swimmer's cycle is adjusted to occupy the same overall team work window;
+- return-to-start/pool-end alignment is the default for generated modified work unless an athlete profile explicitly says otherwise;
+- coach-authored shape overrides beat generated modifications;
+- a stroke-only override must never erase the athlete's generated modification shape;
+- athlete capability constraints such as Amber upper-body equivalents and Conor fin/breaststroke restrictions belong here, not in Board code.
 
 Outputs: prescription only. Rationale/evidence may be attached for inspection but is not Board copy.
 
@@ -61,19 +66,25 @@ The shop window. It owns how correct answers are presented and interacted with, 
 
 Board principles from the physical whiteboards:
 - common squad work appears once;
-- modifications sit beside the exact work they modify;
-- only differences are shown;
+- modifications sit beside the exact line they modify, not in a separate whole-session card;
+- only the modified prescription is shown in the normal Board view;
 - compact first/preferred names, not anonymous initials;
 - first-name collisions use compact surname disambiguation;
-- targets expand across the available Board width;
-- multiple swimmers are laid out across the screen, not one giant card per swimmer;
-- stroke is a small tappable pill (`Auto`, `Fr`, `Bk`, `Br`, `Fly`, `IM`);
-- tapping a swimmer name opens swimmer information while preserving Board context;
+- Times opens across the full Board width;
+- standard swimmers and modified swimmers are visually separated in Times, with modified cards showing the altered work distance/reps before the target;
+- Times shows the answer once (`OL 1:10/1:20 · THR 1:08/1:20`), never every repeated rep or provenance text;
+- multiple swimmers are laid out across the screen, not one giant row per swimmer;
+- stroke is a small tappable pill whose resting label is the resolved stroke (`Fr`, `Bk`, `Br`, `Fly`, `IM`), not a large select box;
+- a stroke change triggers a fresh engine interpretation while preserving the modification shape;
+- tapping a swimmer name opens swimmer information while preserving Board scroll/context;
 - shorthand such as `4 OL / 4 THR` is preferred over duplicated per-rep prose;
 - rationale/provenance stays behind detail unless required to coach the set;
-- phone and TV preserve the same whiteboard information hierarchy.
+- phone and TV use the same whiteboard information hierarchy.
 
-## Current transition boundary — 20 Aug 2026
-The Thursday recovery/pass2/deckfit files are retained temporarily as renderer/session-repair scaffolding because they contain the current working two-column Board DOM and stored-round recovery. They load before the new bridge. The new isolated bridge then becomes the final owner of target and modification functions, preventing those earlier emergency patches from remaining authoritative.
+## Active boundary — 20 Aug 2026
+The Thursday emergency recovery/pass2/deckfit layers are no longer loaded by `index.html`. Session repair, evidence, aerobic targets, race pace, modifications, coordination, compatibility bridging and Board presentation now have separate active owners under `engines/`.
 
-Next cleanup is to move the remaining renderer/session-repair responsibilities into their proper Board/Session engines and then remove the Thursday scaffold from the active load entirely.
+The old Thursday files remain in the repository only as historical/reference code. They are not part of the active runtime path.
+
+## Starting-point acceptance
+`engines/acceptance.js` runs non-mutating fixture checks at startup for the highest-risk coaching rules: phase-preserving aerobic modification, 8x100 pattern scaling, stroke-override preservation, complete-IM handling and work-window timing, 75m pool-end alignment, #1 evidence resolution, compact repeated-target summaries and HR/SR fallback. A red fixture is an engine failure, not a Board styling problem.
