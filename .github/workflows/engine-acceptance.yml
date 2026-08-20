@@ -18,6 +18,7 @@ jobs:
           node --check engines/storage.js
           node --check engines/startup-gate.js
           node --check engines/guardian-runtime.js
+          node --check engines/cloud-session.js
           node --check engines/data-registry.js
           node --check engines/wa-base-times-2026.js
           node --check engines/reference-bridge.js
@@ -31,10 +32,12 @@ jobs:
           node --check engines/coordinator.js
           node --check engines/bridge.js
           node --check engines/performance.js
+          node --check engines/development.js
           node --check engines/stroke-balance.js
           node --check engines/reporting.js
           node --check engines/board.js
           node --check engines/board-state.js
+          node --check engines/modification-edit.js
           node --check engines/navigation.js
           node --check engines/performance-ui.js
           node --check engines/reporting-ui.js
