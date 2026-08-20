@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const src=fs.readFileSync(require.resolve('../engines/attendance-roster.js'),'utf8');
+assert.match(src,/LEAD SESSION ROSTER/,'lead-session Roll wording missing');
+assert.match(src,/data-roll-add-squad/,'Add squad control missing');
+assert.match(src,/data-roll-add-ath/,'Add individual control missing');
+assert.match(src,/id=\"rosterSearch\"/,'type-to-search swimmer input missing');
+assert.match(src,/slice\(0,8\)/,'swimmer search should stay compact');
+assert.match(src,/type:'add_session_squad'/,'squad add is not journalled as an explicit session identity change');
+assert.match(src,/setAttendance\(s,b\.dataset\.rosterAth,'present'\)/,'individual add should mark the swimmer Here');
+assert.match(src,/\|\|explicit\.has\(a\.id\)/,'cross-squad individual attendance is not included in the session roster');
+console.log('ATTENDANCE_ROSTER_STATIC_PASS');
