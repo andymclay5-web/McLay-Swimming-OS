@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.store)return;
-  const S=M.storageEngine={build:'v4-storage-20260820r'};
+  const S=M.storageEngine={build:'v4-storage-20260820u'};
   const DB='mclay_swimming_v4_operational_state',STORE='state',KEY='latest',UI_KEY='mclay_swimming_os_v4_ui',LOCAL_LIMIT=3200000;
   let writeChain=Promise.resolve(),deferredLiveSave=false;
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -13,19 +13,15 @@
   async function getFull(){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),q=tx.objectStore(STORE).get(KEY);q.onsuccess=()=>{const v=q.result||null;db.close();resolve(v)};q.onerror=()=>{const e=q.error;db.close();reject(e||new Error('IndexedDB read failed'))};})}
   function compact(state){const sid=selectedSession(state),mid=currentMeet(state),sessions={};if(sid&&state?.canonicalSessions?.[sid])sessions[sid]=state.canonicalSessions[sid];const attendance=(state?.attendance||[]).filter(x=>!sid||x.sessionId===sid||x.session_id===sid).slice(-300);const overrides=(state?.adaptationOverrides||[]).filter(x=>x?.active!==false&&(!sid||!x.sessionId||x.sessionId===sid)).slice(-300);const meetEntries=(state?.meetEntries||[]).filter(x=>!mid||x.meetId===mid||x.meet_id===mid).slice(-300),meetRaces=(state?.meetRaces||[]).filter(x=>!mid||x.meetId===mid||x.meet_id===mid).slice(-300);return{schema:4,build:M.BUILD,canonicalSessions:sessions,athletes:state?.athletes||[],attendance,captures:[],timedSets:(state?.timedSets||[]).slice(-20),trainingTestTypes:state?.trainingTestTypes||state?.training_test_types||[],trainingTestResults:(state?.trainingTestResults||state?.training_test_results||[]).slice(-80),adaptationProfiles:state?.adaptationProfiles||state?.athlete_adaptation_profiles||[],adaptationOverrides:overrides,coachResults:[],athleteAchievements:(state?.athleteAchievements||[]).slice(-50),meets:mid?(state?.meets||[]).filter(x=>x.id===mid):(state?.meets||[]).slice(-5),meetEntries,meetRaces,meetEvidence:[],settings:{...(state?.settings||{}),storageMode:'indexeddb',storageCompacted:true},pending:[],guardian:{runs:(state?.guardian?.runs||[]).slice(-5)}}}
   function writeLocalCompact(state){const payload=JSON.stringify(compact(state));try{localStorage.setItem(M.STORAGE_KEY,payload);return true}catch(e){try{localStorage.removeItem(M.STORAGE_KEY);localStorage.setItem(M.STORAGE_KEY,payload);return true}catch{return false}}}
-  function uiSnapshot(state){const s=state?.settings||{};return{view:s.view||'board',selectedSessionId:s.selectedSessionId||'',selectedAthleteId:s.selectedAthleteId||'',selectedSwimmerId:s.selectedSwimmerId||'',pathwayCourse:s.pathwayCourse||'SCM',boardExpandedTargetId:s.boardExpandedTargetId||'',boardFocusMode:s.boardFocusMode!==false,boardBlockBySession:s.boardBlockBySession||{},t400Stroke:s.t400Stroke||'Freestyle',t400PreferredAthleteId:s.t400PreferredAthleteId||'',v4TimingMode:s.v4TimingMode||'t400',reportScope:s.reportScope||'squad',reportDays:s.reportDays===undefined?7:Number(s.reportDays),reportSquad:s.reportSquad||'',reportAthleteId:s.reportAthleteId||'',currentMeetId:s.currentMeetId||'',sessionScroll:s.sessionScroll||{},viewScroll:s.viewScroll||{},savedAt:Date.now()};}
+  function uiSnapshot(state){const s=state?.settings||{};return{view:s.view||'board',selectedSessionId:s.selectedSessionId||'',selectedAthleteId:s.selectedAthleteId||'',selectedSwimmerId:s.selectedSwimmerId||'',pathwayCourse:s.pathwayCourse||'SCM',boardExpandedTargetId:s.boardExpandedTargetId||'',boardFocusMode:s.boardFocusMode!==false,boardBlockBySession:s.boardBlockBySession||{},t400Stroke:s.t400Stroke||'Freestyle',t400PreferredAthleteId:s.t400PreferredAthleteId||'',v4TimingMode:s.v4TimingMode||'t400',reportScope:s.reportScope||'squad',reportDays:s.reportDays===undefined?7:Number(s.reportDays),reportCourse:s.reportCourse||s.pathwayCourse||'SCM',reportSquad:s.reportSquad||'',reportAthleteId:s.reportAthleteId||'',currentMeetId:s.currentMeetId||'',sessionScroll:s.sessionScroll||{},viewScroll:s.viewScroll||{},savedAt:Date.now()};}
   function saveUi(state=M.state){try{localStorage.setItem(UI_KEY,JSON.stringify(uiSnapshot(state)));S.lastUiPersistedAt=Date.now();return true}catch{return false}}
   function readUi(){try{return JSON.parse(localStorage.getItem(UI_KEY)||'null')||null}catch{return null}}
   function applyUi(state){const ui=readUi();if(!ui||!state)return;state.settings=state.settings||{};for(const [k,v] of Object.entries(ui))if(k!=='savedAt'&&v!==undefined)state.settings[k]=v;}
   function publish(state){try{M.live?.publishState?.(state)}catch{}}
   function queueFull(state,{compactAfter=false}={}){const snap=clone(state);writeChain=writeChain.catch(()=>{}).then(()=>putFull(snap)).then(()=>{if(compactAfter)writeLocalCompact(snap);S.lastPersistedAt=Date.now();S.lastError='';return true}).catch(e=>{S.lastError=String(e?.message||e);return false});return writeChain}
   M.store.save=state=>{
-    // The operational store only owns the one live application state object. Guardian and regression
-    // fixtures intentionally create isolated state objects; persisting one of those is a data-loss bug.
     if(state!==M.state){S.blockedForeignStateSaves=Number(S.blockedForeignStateSaves||0)+1;return state;}
     state.build=M.BUILD;state.settings=state.settings||{};
-    // Initial IndexedDB hydration owns startup. A boot-time save must never race ahead of it and replace
-    // the richer durable snapshot with the compact local shell.
     if(!S.ready){deferredLiveSave=true;saveUi(state);return state;}
     if(M.live&&!M.live.suppress)state.settings.liveRevision=Number(state.settings.liveRevision||0)+1;state.settings.storageRevision=Number(state.settings.storageRevision||0)+1;
     let json='';try{json=JSON.stringify(state)}catch{}
@@ -40,8 +36,6 @@
       const row=await getFull();
       if(!row?.payload){applyUi(M.state);S.ready=true;M.store.save(M.state);return;}
       const local=M.state||{},full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full);
-      // Recovery rule: a richer local/legacy session set must never be replaced by an empty or smaller
-      // durable snapshot. This specifically recovers from the old Guardian-fixture overwrite failure.
       const localRicher=localSessions>fullSessions;
       const useFull=(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;
       if(useFull){const preserved={...(full.settings||{}),...(local.settings||{})};for(const k of Object.keys(local))delete local[k];Object.assign(local,clone(full));local.settings=preserved;M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true;}
