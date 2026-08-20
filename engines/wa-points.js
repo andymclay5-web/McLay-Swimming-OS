@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence;if(!M||!E)return;
-  const W=M.waPointsEngine={build:'v4-wa-points-20260820u'};
+  const W=M.waPointsEngine={build:'v4-wa-points-20260820u2'};
   const cache=new WeakMap(),text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const sexKey=v=>{const s=text(v).toUpperCase();if(/^(?:M|MALE|BOY|BOYS|MEN)$/.test(s))return'M';if(/^(?:F|FEMALE|GIRL|GIRLS|WOMEN)$/.test(s))return'F';if(/^(?:OPEN|MIXED|ALL)$/.test(s))return'OPEN';return'';};
   function activeRows(state=M.state){const registry=M.dataRegistry?.activeRowsSync?.('wa_points')||[];if(registry.length)return registry;return[...(state?.worldAquaticsBaseTimes||[]),...(state?._refs?.world_aquatics_base_times||[])];}
@@ -13,5 +13,7 @@
   function pointsFor(ath,row,state=M.state){const t=E.seconds(row),base=baseFor(ath,row,state),meta=activeMeta();if(base){const points=calculate(base.base_seconds,t);return Number.isFinite(points)?{points,baseSeconds:Number(base.base_seconds),tableVersion:meta?.version||base.table_version||base.version||'',datasetId:meta?.id||'',source:meta?.source||base.source||base.source_name||'World Aquatics base time',calculated:true}:null;}const stored=E.points(row);return Number.isFinite(stored)&&stored>0?{points:Math.floor(stored),baseSeconds:null,tableVersion:'stored-result',datasetId:'',source:'Stored result points',calculated:false}:null;}
   function tableInfo(state=M.state){const meta=activeMeta(),rows=activeRows(state);return{active:!!rows.length,datasetId:meta?.id||'',version:meta?.version||rows[0]?.table_version||rows[0]?.version||'',effectiveFrom:meta?.effectiveFrom||rows[0]?.effective_from||'',source:meta?.source||rows[0]?.source||'',rows:rows.length};}
   function invalidate(state=M.state){if(state&&typeof state==='object')cache.delete(state);}
-  W.activeRows=activeRows;W.activeMeta=activeMeta;W.index=index;W.calculate=calculate;W.baseFor=baseFor;W.pointsFor=pointsFor;W.tableInfo=tableInfo;W.invalidate=invalidate;W.sexKey=sexKey;
+  function installPathway(){const P=M.pathway;if(!P||P._waPointsEngineInstalled)return;P._waPointsEngineInstalled=true;P.base=(ath,pb)=>baseFor(ath,pb,M.state);P.points=(ath,pb)=>{const para=Number(pb?.world_para_points||pb?.para_points);if(para>0)return{value:Math.floor(para),label:'World Para',source:'result'};if(P.isPara?.(ath))return{value:null,label:'World Para',source:'classification-specific point model required'};const info=pointsFor(ath,pb,M.state);return info?{value:info.points,label:'WA',source:info.calculated?'MSOS WA calculator':'stored result',baseSeconds:info.baseSeconds,tableVersion:info.tableVersion,referenceSource:info.source}:{value:null,label:'WA',source:'base time not loaded'};};P.pointSteps=(ath,pb,count=2)=>{const pt=P.points(ath,pb);if(pt.label!=='WA'||!pt.value||!pt.baseSeconds)return[];const first=Math.ceil((pt.value+1)/25)*25,steps=[];for(let i=0;i<count;i++){const points=first+i*25,seconds=pt.baseSeconds/Math.cbrt(points/1000);steps.push({points,seconds})}return steps;};}
+  W.activeRows=activeRows;W.activeMeta=activeMeta;W.index=index;W.calculate=calculate;W.baseFor=baseFor;W.pointsFor=pointsFor;W.tableInfo=tableInfo;W.invalidate=invalidate;W.sexKey=sexKey;W.installPathway=installPathway;
+  installPathway();addEventListener('msos:data-updated',e=>{if(!e.detail?.type||e.detail.type==='wa_points'){invalidate();installPathway();}});
 })(globalThis);
