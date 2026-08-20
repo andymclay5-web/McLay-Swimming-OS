@@ -1,10 +1,10 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.guardian?.run)return;
-  const BUILD='v4-guardian-gate-20260821ak',G=M.guardian,S=M.swimmerTabsUI;
+  const BUILD='v4-guardian-gate-20260821al',G=M.guardian,S=M.swimmerTabsUI;
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const baseRun=G.run.bind(G);
-  M.BUILD=BUILD;M.CORE='20260821-guardian-gate-ak';
+  M.BUILD=BUILD;M.CORE='20260821-guardian-gate-al';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,
     generatedAt:new Date().toISOString(),
@@ -13,7 +13,8 @@
   const retired=new Set([
     'Elsie controlled pathway ranks SCM 200 Breast closest and keeps 25-point steps',
     'Conor Breaststroke + fins constraint is semantic',
-    'Final shipping build owns the software attestation'
+    'Final shipping build owns the software attestation',
+    'Poolside swimmer answer links pathway steps to recent training area'
   ]);
   const test=(name,fn)=>{try{const detail=fn();return{name,ok:true,detail:detail==null?'':String(detail)}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
   const assert=(cond,msg)=>{if(!cond)throw new Error(msg||'assertion failed')};
@@ -47,7 +48,7 @@
       for(const r of M.engineAcceptance.results)engine.push({name:`Engine · ${r.name}`,ok:r.ok===true,detail:r.detail||''});
     }else engine.push({name:'Engine acceptance suite executed',ok:false,detail:'engines/acceptance.js did not produce results'});
     const tests=[...retained,...engine,...currentContractTests()],passed=tests.filter(t=>t.ok===true).length;
-    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821ak'};
+    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821al'};
   };
   M.release=M.release||{};
   M.release.guardianGate=()=>{
