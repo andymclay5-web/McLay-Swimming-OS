@@ -24,6 +24,7 @@ jobs:
           node --check engines/coordinator.js
           node --check engines/bridge.js
           node --check engines/board.js
+          node --check engines/board-state.js
           node --check engines/navigation.js
           node --check engines/capture-ui.js
           node --check engines/t400-capture.js
