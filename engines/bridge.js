@@ -1,6 +1,6 @@
 'use strict';
 (function(g){const M=g.MSOS4,E=g.MSOSEngines;if(!M||!E?.Evidence||!E?.Aerobic||!E?.RacePace||!E?.Modification||!E?.Coordinator)throw new Error('MSOS engine bridge dependencies missing');
-  const B={build:'v4-engine-silos-20260820i',hydrated:false};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-i';
+  const B={build:'v4-engine-silos-20260820n',hydrated:false,hydrating:null};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-n';
   M.targets.t400=(ath,state=M.state,_course='',stroke='Freestyle')=>E.Aerobic.t400(ath,state,stroke);
   M.targets.pb=(ath,state=M.state,spec={})=>E.RacePace.pb(ath,state,spec);
   M.targets.forItem=(session,item,ath,state=M.state)=>E.Coordinator.targetForItem(session,item,ath,state);
@@ -8,6 +8,6 @@
   M.adapt.item=(item,ath,state=M.state,session=null)=>E.Modification.adaptItem(item,ath,state,session);
   M.adapt.samePrescription=(a,b)=>E.Modification.samePrescription(a,b);
   M.performanceBridge={ask:(kind,p={})=>kind==='t400'?E.Aerobic.t400(p.athlete,p.state||M.state,p.stroke):kind==='pb'?E.RacePace.pb(p.athlete,p.state||M.state,p):kind==='bestStroke'?E.RacePace.bestStroke(p.athlete,p.state||M.state,p.course||'',!!p.nonFree):null};
-  B.hydrate=async()=>{if(B.hydrated)return true;try{const snap=await E.Evidence.hydrate(M.state||{});for(const k of ['athletes','trainingTestTypes','trainingTestResults','adaptationProfiles','adaptationOverrides','coachResults','resultsEventHistory','resultsPbBoard','courseConversions','worldAquaticsBaseTimes'])if(Array.isArray(snap[k]))M.state[k]=E.Evidence.merge(M.state[k],snap[k]);M.state._refs=snap._refs||M.state._refs||{};B.hydrated=true;M.store?.save?.(M.state);M.ui?.renderCurrent?.();return true;}catch(err){console.warn('[MSOS] evidence hydration failed',err);return false;}};
-  const boot=()=>{B.hydrate();};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+  B.hydrate=async({force=false}={})=>{if(B.hydrated&&!force)return true;if(B.hydrating&&!force)return B.hydrating;B.hydrating=(async()=>{try{const snap=await E.Evidence.hydrate(M.state||{});for(const k of ['athletes','trainingTestTypes','trainingTestResults','adaptationProfiles','adaptationOverrides','coachResults','resultsEventHistory','resultsPbBoard','courseConversions','worldAquaticsBaseTimes'])if(Array.isArray(snap[k]))M.state[k]=E.Evidence.merge(M.state[k],snap[k]);M.state._refs=snap._refs||M.state._refs||{};E.Evidence.ensureVerified?.(M.state);B.hydrated=true;M.ui?.renderCurrent?.();return true;}catch(err){console.warn('[MSOS] evidence hydration failed',err);return false;}finally{B.hydrating=null;}})();return B.hydrating;};
+  const boot=async()=>{try{await M.storageEngine?.readyPromise;}catch{}B.hydrated=false;await B.hydrate({force:true});};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })(globalThis);
