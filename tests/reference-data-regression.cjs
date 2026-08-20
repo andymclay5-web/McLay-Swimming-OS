@@ -34,4 +34,9 @@ const qtPreview=D.preview('meet_qualifying',qt,{version:'NAGS 2027'});
 assert.equal(qtPreview.validCount,1,'qualifying standard should pass preview');
 assert.ok(qtPreview.def.impact.includes('pathway')&&qtPreview.def.impact.includes('reports'),'QT update must invalidate pathway and reports');
 
+const refBridge=fs.readFileSync(`${root}/engines/reference-bridge.js`,'utf8');
+assert.match(refBridge,/recoverLegacyMissing/,'reference bridge must retain a legacy-evidence recovery path');
+assert.match(refBridge,/mclay_swimming_v374_heavy_cache/,'legacy result/reference cache must be merged even when the v4 reference DB already exists');
+assert.match(refBridge,/await recoverLegacyMissing\(\)/,'reference boot must recover legacy evidence before declaring itself booted');
+
 console.log('reference-data regression: PASS');
