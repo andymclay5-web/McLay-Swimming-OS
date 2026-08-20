@@ -16,8 +16,12 @@ jobs:
       - name: Syntax check active runtime files
         run: |
           node --check engines/storage.js
+          node --check engines/startup-gate.js
+          node --check engines/guardian-runtime.js
+          node --check engines/reference-bridge.js
           node --check engines/session-repair.js
           node --check engines/evidence.js
+          node --check engines/evidence-index.js
           node --check engines/aerobic.js
           node --check engines/race-pace.js
           node --check engines/modification.js
