@@ -1,6 +1,6 @@
 'use strict';
 (function(g){const M=g.MSOS4,E=g.MSOSEngines;if(!M||!E?.Evidence||!E?.Aerobic||!E?.RacePace||!E?.Modification||!E?.Coordinator)throw new Error('MSOS engine bridge dependencies missing');
-  const B={build:'v4-engine-silos-20260820s',hydrated:false,hydrating:null};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-s';
+  const B={build:'v4-engine-silos-20260820t',hydrated:false,hydrating:null};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-t';
   M.targets.t400=(ath,state=M.state,_course='',stroke='Freestyle')=>E.Aerobic.t400(ath,state,stroke);
   M.targets.pb=(ath,state=M.state,spec={})=>E.RacePace.pb(ath,state,spec);
   M.targets.forItem=(session,item,ath,state=M.state)=>E.Coordinator.targetForItem(session,item,ath,state);
