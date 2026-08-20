@@ -38,6 +38,15 @@ assert.equal(RacePace.bestEvent(will,willState,'SCM').stroke,'IM');
 assert.equal(RacePace.bestStroke(will,willState,'SCM',false),'Freestyle');
 assert.equal(RacePace.bestStroke(will,willState,'SCM',true),'Butterfly');
 
+const female={id:'female',full_name:'Female Test',sex:'F'};
+const femaleState={athletes:[female],resultsPbBoard:[{athlete_id:'female',distance:100,stroke:'Freestyle',course:'SCM',result_seconds:60}],resultsEventHistory:[],coachResults:[],worldAquaticsBaseTimes:[
+  {id:'m',course:'SCM',distance:100,stroke:'Freestyle',sex:'Male',base_seconds:55,active:true},
+  {id:'f',course:'SCM',distance:100,stroke:'Freestyle',sex:'Female',base_seconds:50,active:true}
+]};
+const femaleRank=RacePace.rankedEvents(female,femaleState,'SCM')[0];
+assert.ok(femaleRank);
+assert.equal(Math.round(femaleRank.score),Math.round(1000*Math.pow(50/60,3)));
+
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
 assert.match(board,/if\(!changed&&!needsTarget\)continue/);
 assert.match(board,/Modified swimmers are shown beside their own work/);
@@ -86,9 +95,13 @@ assert.match(performance,/bestFormStroke/);
 assert.match(performance,/selectStrokeForContext/);
 assert.match(performance,/E\.RacePace\.rankedEvents/);
 assert.doesNotMatch(performance,/M\.pathway\?\.event/);
+const raceSource=fs.readFileSync(require.resolve('../engines/race-pace.js'),'utf8');
+assert.match(raceSource,/baseCache/);
+assert.match(raceSource,/FEMALE/);
 const repair=fs.readFileSync(require.resolve('../engines/session-repair.js'),'utf8');
 assert.match(repair,/sourceVerifiedMismatch/);
 assert.match(repair,/old\?\.currentSource\?\.text/);
+assert.match(repair,/repairStored\(\{all=false\}/);
 const balance=fs.readFileSync(require.resolve('../engines/stroke-balance.js'),'utf8');
 assert.match(balance,/incidentalFree/);
 assert.match(balance,/weeklyEmphasis/);
