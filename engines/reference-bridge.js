@@ -22,10 +22,11 @@
         if(current.length)R.merge(k,current); // current v4 rows win on identical ids; legacy only fills gaps
         counts[k]=Math.max(0,(R.data?.[k]||[]).length-before[k]);
       }
+      const recovered=Object.values(counts).some(n=>n>0);
       cache.clear();
-      try{await R.save?.();}catch{}
-      B.legacyRecovery={at:new Date().toISOString(),counts};
-      return{recovered:Object.values(counts).some(n=>n>0),counts};
+      if(recovered)try{await R.save?.();}catch{}
+      B.legacyRecovery={at:new Date().toISOString(),counts,recovered};
+      return{recovered,counts};
     }catch(err){
       console.warn('[MSOS] legacy reference recovery deferred',err);
       return{recovered:false,counts:{},error:String(err?.message||err)};
