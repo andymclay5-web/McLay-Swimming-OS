@@ -33,6 +33,15 @@ assert.match(board,/Modified swimmers are shown beside their own work/);
 const bridge=fs.readFileSync(require.resolve('../engines/bridge.js'),'utf8');
 assert.match(bridge,/storageEngine\?\.readyPromise/);
 assert.match(bridge,/hydrate\(\{force:true\}\)/);
+assert.match(bridge,/pathwayEvidence/);
+assert.match(bridge,/resultsPbBoard/);
+const storage=fs.readFileSync(require.resolve('../engines/storage.js'),'utf8');
+assert.match(storage,/saveUi/);
+assert.match(storage,/mclay_swimming_os_v4_ui/);
+const boardState=fs.readFileSync(require.resolve('../engines/board-state.js'),'utf8');
+assert.match(boardState,/stopImmediatePropagation/);
+assert.match(boardState,/boardExpandedTargetId/);
+assert.doesNotMatch(boardState,/M\.store\?\.save/);
 
 const easy={id:'easy',kind:'set',reps:1,distance:200,raw:'200 Easy',text:'200 Easy',stroke:'',cycleSeconds:null,restSeconds:null,repPattern:[],repInstructions:[],cues:[],equipment:[],composition:[]};
 const charlotte={id:'cm',full_name:'Charlotte Murphy'};
