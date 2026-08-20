@@ -12,7 +12,8 @@ Evidence.ensureVerified(state);
 const brT400=Evidence.t400Rows(conor,state,'Breaststroke');
 assert.equal(brT400.length,1);
 assert.equal(brT400[0].result_seconds,545.2);
-assert.equal(RacePace.bestStroke(conor,state,'SCM',false),'Breaststroke');
+// T400 proves an aerobic anchor, not a race-event rank. No PB evidence means #1 remains unknown.
+assert.equal(RacePace.bestStroke(conor,state,'SCM',false),'');
 
 state.resultsPbBoard=[
   {athlete_id:'cf',distance:100,stroke:'Breaststroke',course:'SCM',result_seconds:80,wa_points:620},
@@ -26,14 +27,24 @@ assert.equal(result.status,'rep_race');
 assert.equal(result.stroke,'Breaststroke');
 assert.equal(result.rows.filter(x=>x.status==='ok').length,3);
 
+const will={id:'will',full_name:'William Test'};
+const willState={athletes:[will],resultsPbBoard:[
+  {athlete_id:'will',distance:400,stroke:'IM',course:'SCM',result_seconds:300,wa_points:700},
+  {athlete_id:'will',distance:400,stroke:'Freestyle',course:'SCM',result_seconds:260,wa_points:650},
+  {athlete_id:'will',distance:100,stroke:'Butterfly',course:'SCM',result_seconds:62,wa_points:640},
+  {athlete_id:'will',distance:100,stroke:'Backstroke',course:'SCM',result_seconds:66,wa_points:610}
+],resultsEventHistory:[],coachResults:[],worldAquaticsBaseTimes:[]};
+assert.equal(RacePace.bestEvent(will,willState,'SCM').stroke,'IM');
+assert.equal(RacePace.bestStroke(will,willState,'SCM',false),'Freestyle');
+assert.equal(RacePace.bestStroke(will,willState,'SCM',true),'Butterfly');
+
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
-assert.match(board,/boardTargetAnchor/);
 assert.match(board,/if\(!changed&&!needsTarget\)continue/);
 assert.match(board,/Modified swimmers are shown beside their own work/);
 const bridge=fs.readFileSync(require.resolve('../engines/bridge.js'),'utf8');
 assert.match(bridge,/storageEngine\?\.readyPromise/);
-assert.match(bridge,/hydrate\(\{force:true\}\)/);
-assert.match(bridge,/pathwayEvidence/);
+assert.match(bridge,/refs\?\.boot/);
+assert.match(bridge,/mergeReferenceEvidence/);
 assert.match(bridge,/resultsPbBoard/);
 const storage=fs.readFileSync(require.resolve('../engines/storage.js'),'utf8');
 assert.match(storage,/saveUi/);
@@ -41,7 +52,21 @@ assert.match(storage,/mclay_swimming_os_v4_ui/);
 const boardState=fs.readFileSync(require.resolve('../engines/board-state.js'),'utf8');
 assert.match(boardState,/stopImmediatePropagation/);
 assert.match(boardState,/boardExpandedTargetId/);
+assert.match(boardState,/insertAdjacentHTML/);
+assert.match(boardState,/data-msos-fast-stroke/);
 assert.doesNotMatch(boardState,/M\.store\?\.save/);
+const performance=fs.readFileSync(require.resolve('../engines/performance.js'),'utf8');
+assert.match(performance,/bestEvent/);
+assert.match(performance,/bestFormStroke/);
+assert.match(performance,/selectStrokeForContext/);
+const balance=fs.readFileSync(require.resolve('../engines/stroke-balance.js'),'utf8');
+assert.match(balance,/incidentalFree/);
+assert.match(balance,/weeklyEmphasis/);
+assert.match(balance,/recommendStroke/);
+const reporting=fs.readFileSync(require.resolve('../engines/reporting.js'),'utf8');
+assert.match(reporting,/Stroke focus/);
+assert.match(reporting,/T400 \/ tests/);
+assert.match(reporting,/scope/);
 
 const easy={id:'easy',kind:'set',reps:1,distance:200,raw:'200 Easy',text:'200 Easy',stroke:'',cycleSeconds:null,restSeconds:null,repPattern:[],repInstructions:[],cues:[],equipment:[],composition:[]};
 const charlotte={id:'cm',full_name:'Charlotte Murphy'};
