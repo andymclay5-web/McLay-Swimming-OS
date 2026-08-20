@@ -19,6 +19,7 @@ jobs:
           node --check engines/startup-gate.js
           node --check engines/guardian-runtime.js
           node --check engines/data-registry.js
+          node --check engines/wa-base-times-2026.js
           node --check engines/reference-bridge.js
           node --check engines/evidence.js
           node --check engines/evidence-index.js
