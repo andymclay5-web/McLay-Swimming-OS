@@ -54,7 +54,11 @@ assert.match(boardState,/stopImmediatePropagation/);
 assert.match(boardState,/boardExpandedTargetId/);
 assert.match(boardState,/insertAdjacentHTML/);
 assert.match(boardState,/data-msos-fast-stroke/);
-assert.doesNotMatch(boardState,/M\.store\?\.save/);
+const openPanel=boardState.match(/function openPanel\(btn\)\{[\s\S]*?\n  \}/)?.[0]||'';
+assert.match(openPanel,/saveUi\(\)/);
+assert.doesNotMatch(openPanel,/saveData\(\)|store\?\.save/);
+const setStroke=boardState.match(/function setStroke\(session,item,ath,value\)\{[\s\S]*?\n  \}/)?.[0]||'';
+assert.match(setStroke,/saveData\(\)/);
 const performance=fs.readFileSync(require.resolve('../engines/performance.js'),'utf8');
 assert.match(performance,/bestEvent/);
 assert.match(performance,/bestFormStroke/);
@@ -63,10 +67,12 @@ const balance=fs.readFileSync(require.resolve('../engines/stroke-balance.js'),'u
 assert.match(balance,/incidentalFree/);
 assert.match(balance,/weeklyEmphasis/);
 assert.match(balance,/recommendStroke/);
+assert.match(balance,/Date\.now\(\)/);
 const reporting=fs.readFileSync(require.resolve('../engines/reporting.js'),'utf8');
 assert.match(reporting,/Stroke focus/);
 assert.match(reporting,/T400 \/ tests/);
-assert.match(reporting,/scope/);
+assert.match(reporting,/registerField/);
+assert.match(reporting,/spec\.days===undefined/);
 
 const easy={id:'easy',kind:'set',reps:1,distance:200,raw:'200 Easy',text:'200 Easy',stroke:'',cycleSeconds:null,restSeconds:null,repPattern:[],repInstructions:[],cues:[],equipment:[],composition:[]};
 const charlotte={id:'cm',full_name:'Charlotte Murphy'};
