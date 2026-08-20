@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,G=M?.guardian;if(!M||!G?.run||!M.store?.save)return;
-  const R=M.guardianRuntime={build:'v4-guardian-runtime-20260820y'},fullRun=G.run.bind(G),baseSave=M.store.save.bind(M.store);
+  const R=M.guardianRuntime={build:'v4-guardian-runtime-20260820z'},fullRun=G.run.bind(G),baseSave=M.store.save.bind(M.store);
   const latestReal=()=>[...(M.state?.guardian?.runs||[])].reverse().find(x=>Array.isArray(x?.tests)&&x.tests.length&&!x.deferred)||null;
   G.run=()=>({ok:false,tests:[],passed:0,total:0,at:new Date().toISOString(),build:M.BUILD,deferred:true});
   M.store.save=state=>{const runs=state?.guardian?.runs,last=runs?.at?.(-1);if(state===M.state&&last?.deferred){runs.pop();R.startupRunSuppressed=true;M.storageEngine?.saveUi?.(state);return state;}return baseSave(state);};
