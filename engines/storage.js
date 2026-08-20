@@ -1,12 +1,13 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.store)return;
-  const S=M.storageEngine={build:'v4-storage-20260820q'};
+  const S=M.storageEngine={build:'v4-storage-20260820r'};
   const DB='mclay_swimming_v4_operational_state',STORE='state',KEY='latest',UI_KEY='mclay_swimming_os_v4_ui',LOCAL_LIMIT=3200000;
-  let writeChain=Promise.resolve();
+  let writeChain=Promise.resolve(),deferredLiveSave=false;
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const selectedSession=s=>s?.settings?.selectedSessionId||'';
   const currentMeet=s=>s?.settings?.currentMeetId||'';
+  const sessionCount=s=>Object.keys(s?.canonicalSessions||{}).length;
   function openDb(){return new Promise((resolve,reject)=>{try{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE)};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('IndexedDB open failed'));}catch(e){reject(e)}})}
   async function putFull(state){const snap=clone(state);const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put({savedAt:Date.now(),revision:Number(state?.settings?.storageRevision||0),payload:snap},KEY);tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{const e=tx.error;db.close();reject(e||new Error('IndexedDB write failed'))};tx.onabort=()=>{const e=tx.error;db.close();reject(e||new Error('IndexedDB write aborted'))};})}
   async function getFull(){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),q=tx.objectStore(STORE).get(KEY);q.onsuccess=()=>{const v=q.result||null;db.close();resolve(v)};q.onerror=()=>{const e=q.error;db.close();reject(e||new Error('IndexedDB read failed'))};})}
@@ -17,9 +18,16 @@
   function readUi(){try{return JSON.parse(localStorage.getItem(UI_KEY)||'null')||null}catch{return null}}
   function applyUi(state){const ui=readUi();if(!ui||!state)return;state.settings=state.settings||{};for(const [k,v] of Object.entries(ui))if(k!=='savedAt'&&v!==undefined)state.settings[k]=v;}
   function publish(state){try{M.live?.publishState?.(state)}catch{}}
-  function queueFull(state,{compactAfter=false}={}){writeChain=writeChain.catch(()=>{}).then(()=>putFull(state)).then(()=>{if(compactAfter)writeLocalCompact(state);S.lastPersistedAt=Date.now();S.lastError='';return true}).catch(e=>{S.lastError=String(e?.message||e);return false});return writeChain}
+  function queueFull(state,{compactAfter=false}={}){const snap=clone(state);writeChain=writeChain.catch(()=>{}).then(()=>putFull(snap)).then(()=>{if(compactAfter)writeLocalCompact(snap);S.lastPersistedAt=Date.now();S.lastError='';return true}).catch(e=>{S.lastError=String(e?.message||e);return false});return writeChain}
   M.store.save=state=>{
-    state.build=M.BUILD;state.settings=state.settings||{};if(M.live&&!M.live.suppress)state.settings.liveRevision=Number(state.settings.liveRevision||0)+1;state.settings.storageRevision=Number(state.settings.storageRevision||0)+1;
+    // The operational store only owns the one live application state object. Guardian and regression
+    // fixtures intentionally create isolated state objects; persisting one of those is a data-loss bug.
+    if(state!==M.state){S.blockedForeignStateSaves=Number(S.blockedForeignStateSaves||0)+1;return state;}
+    state.build=M.BUILD;state.settings=state.settings||{};
+    // Initial IndexedDB hydration owns startup. A boot-time save must never race ahead of it and replace
+    // the richer durable snapshot with the compact local shell.
+    if(!S.ready){deferredLiveSave=true;saveUi(state);return state;}
+    if(M.live&&!M.live.suppress)state.settings.liveRevision=Number(state.settings.liveRevision||0)+1;state.settings.storageRevision=Number(state.settings.storageRevision||0)+1;
     let json='';try{json=JSON.stringify(state)}catch{}
     const oversized=json.length>LOCAL_LIMIT;
     if(!oversized){try{localStorage.setItem(M.STORAGE_KEY,json)}catch{queueFull(state,{compactAfter:true});saveUi(state);publish(state);return state}}
@@ -28,10 +36,19 @@
     saveUi(state);publish(state);return state;
   };
   S.save=M.store.save;S.saveUi=saveUi;S.readUi=readUi;S.applyUi=applyUi;S.compact=compact;S.putFull=putFull;S.getFull=getFull;
-  async function hydrate(){try{const row=await getFull();if(!row?.payload){applyUi(M.state);const raw=JSON.stringify(M.state||{});if(raw.length>LOCAL_LIMIT)await queueFull(M.state,{compactAfter:true});else await queueFull(M.state);S.ready=true;return}
-      const local=M.state||{},full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0);if(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev){const preserved={...(full.settings||{}),...(local.settings||{})};for(const k of Object.keys(local))delete local[k];Object.assign(local,clone(full));local.settings=preserved;M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true;}applyUi(M.state);
-      S.ready=true;requestAnimationFrame(()=>M.ui?.renderCurrent?.());
-    }catch(e){S.lastError=String(e?.message||e);applyUi(M.state);S.ready=true}}
+  async function hydrate(){try{
+      const row=await getFull();
+      if(!row?.payload){applyUi(M.state);S.ready=true;M.store.save(M.state);return;}
+      const local=M.state||{},full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full);
+      // Recovery rule: a richer local/legacy session set must never be replaced by an empty or smaller
+      // durable snapshot. This specifically recovers from the old Guardian-fixture overwrite failure.
+      const localRicher=localSessions>fullSessions;
+      const useFull=(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;
+      if(useFull){const preserved={...(full.settings||{}),...(local.settings||{})};for(const k of Object.keys(local))delete local[k];Object.assign(local,clone(full));local.settings=preserved;M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true;}
+      else if(localRicher){S.recoveredRicherLocalState=true;}
+      applyUi(M.state);S.ready=true;
+      if(deferredLiveSave||localRicher)M.store.save(M.state);
+      requestAnimationFrame(()=>M.ui?.renderCurrent?.());
+    }catch(e){S.lastError=String(e?.message||e);applyUi(M.state);S.ready=true;if(deferredLiveSave)M.store.save(M.state)}}
   S.ready=false;S.readyPromise=hydrate();
-  try{const raw=localStorage.getItem(M.STORAGE_KEY)||'';if(raw.length>LOCAL_LIMIT)queueFull(M.state,{compactAfter:true})}catch{}
 })(globalThis);
