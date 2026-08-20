@@ -5,7 +5,7 @@
   const readMeta=()=>{try{return JSON.parse(localStorage.getItem(PB_META_KEY)||'null')||null}catch{return null}};
   const org=()=>M.cloud?.org?.()||M.state?.settings?.organisationId||'';
   const initialMeta=readMeta(),metaCurrent=initialMeta?.complete===true&&String(initialMeta.organisationId||'')===String(org()||'');
-  const B={build:'v4-engine-silos-board-20260820aa',hydrated:false,hydrating:null,pathwayPbCache:new Map(),athleteEvidencePulls:new Map(),pbRosterSync:metaCurrent?{status:'done',rows:Number(initialMeta.rows)||0,error:'',at:initialMeta.at||'',cached:true}:{status:'idle',rows:0,error:''}};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-aa';
+  const B={build:'v4-engine-silos-board-20260820ab',hydrated:false,hydrating:null,pathwayPbCache:new Map(),athleteEvidencePulls:new Map(),pbRosterSync:metaCurrent?{status:'done',rows:Number(initialMeta.rows)||0,error:'',at:initialMeta.at||'',cached:true}:{status:'idle',rows:0,error:''}};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260820-engine-silos-ab';
   M.targets.t400=(ath,state=M.state,_course='',stroke='Freestyle')=>E.Aerobic.t400(ath,state,stroke);
   M.targets.pb=(ath,state=M.state,spec={})=>E.RacePace.pb(ath,state,spec);
   M.targets.forItem=(session,item,ath,state=M.state)=>E.Coordinator.targetForItem(session,item,ath,state);
