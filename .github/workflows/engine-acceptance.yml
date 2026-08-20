@@ -18,10 +18,12 @@ jobs:
           node --check engines/storage.js
           node --check engines/startup-gate.js
           node --check engines/guardian-runtime.js
+          node --check engines/data-registry.js
           node --check engines/reference-bridge.js
-          node --check engines/session-repair.js
           node --check engines/evidence.js
           node --check engines/evidence-index.js
+          node --check engines/wa-points.js
+          node --check engines/session-repair.js
           node --check engines/aerobic.js
           node --check engines/race-pace.js
           node --check engines/modification.js
@@ -35,9 +37,11 @@ jobs:
           node --check engines/navigation.js
           node --check engines/performance-ui.js
           node --check engines/reporting-ui.js
+          node --check engines/data-admin-ui.js
           node --check engines/capture-ui.js
           node --check engines/t400-capture.js
           node --check engines/acceptance.js
+          node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
           node tests/engine-acceptance.cjs
