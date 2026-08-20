@@ -39,6 +39,7 @@ jobs:
           node --check engines/board-state.js
           node --check engines/modification-edit.js
           node --check engines/navigation.js
+          node --check engines/attendance-roster.js
           node --check engines/performance-ui.js
           node --check engines/reporting-ui.js
           node --check engines/data-admin-ui.js
@@ -51,3 +52,4 @@ jobs:
           node tests/engine-acceptance.cjs
           node tests/board-evidence-regression.cjs
           node tests/reference-data-regression.cjs
+          node tests/attendance-roster-static.cjs
