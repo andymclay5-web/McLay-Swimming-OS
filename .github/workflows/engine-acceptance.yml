@@ -47,3 +47,4 @@ jobs:
         run: |
           node tests/engine-acceptance.cjs
           node tests/board-evidence-regression.cjs
+          node tests/reference-data-regression.cjs
