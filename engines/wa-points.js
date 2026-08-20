@@ -1,0 +1,17 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4,E=g.MSOSEngines?.Evidence;if(!M||!E)return;
+  const W=M.waPointsEngine={build:'v4-wa-points-20260820u'};
+  const cache=new WeakMap(),text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const sexKey=v=>{const s=text(v).toUpperCase();if(/^(?:M|MALE|BOY|BOYS|MEN)$/.test(s))return'M';if(/^(?:F|FEMALE|GIRL|GIRLS|WOMEN)$/.test(s))return'F';if(/^(?:OPEN|MIXED|ALL)$/.test(s))return'OPEN';return'';};
+  function activeRows(state=M.state){const registry=M.dataRegistry?.activeRowsSync?.('wa_points')||[];if(registry.length)return registry;return[...(state?.worldAquaticsBaseTimes||[]),...(state?._refs?.world_aquatics_base_times||[])];}
+  function activeMeta(){return M.dataRegistry?.activeMeta?.('wa_points')||null;}
+  function signature(state){const a=activeMeta(),rows=activeRows(state);return`${a?.id||'legacy'}|${a?.version||''}|${rows.length}|${state?._evidenceBridge?.hydratedAt||''}`;}
+  function index(state=M.state){const sig=signature(state),old=cache.get(state);if(old?.sig===sig)return old;const map=new Map(),rows=activeRows(state);for(const r of rows){if(!r||r.active===false)continue;const c=E.course(r)||text(r.course||r.pool_course).toUpperCase(),d=E.distance(r)||Number(r.distance||r.event_distance),st=E.rowStroke(r)||E.stroke(r.stroke||r.event_stroke),sx=sexKey(r.sex||r.gender),b=Number(r.base_seconds??r.base_time_seconds??r.base_time??r.seconds);if(!c||!d||!st||!b)continue;const row={...r,course:c,distance:d,stroke:st,sex:sx||'OPEN',base_seconds:b};const k=`${c}|${d}|${st}|${sx||'OPEN'}`;if(!map.has(k))map.set(k,row);}const out={sig,map,rows};cache.set(state,out);return out;}
+  function calculate(baseSeconds,resultSeconds){const b=Number(baseSeconds),t=Number(resultSeconds);if(!(b>0&&t>0))return null;return Math.floor(1000*Math.pow(b/t,3));}
+  function baseFor(ath,row,state=M.state){const c=E.course(row)||text(row?.course||row?.pool_course).toUpperCase(),d=E.distance(row)||Number(row?.distance||row?.event_distance),st=E.rowStroke(row)||E.stroke(row?.stroke||row?.event_stroke),sx=sexKey(ath?.sex||ath?.gender),idx=index(state).map;return(sx&&idx.get(`${c}|${d}|${st}|${sx}`))||idx.get(`${c}|${d}|${st}|OPEN`)||null;}
+  function pointsFor(ath,row,state=M.state){const t=E.seconds(row),base=baseFor(ath,row,state),meta=activeMeta();if(base){const points=calculate(base.base_seconds,t);return Number.isFinite(points)?{points,baseSeconds:Number(base.base_seconds),tableVersion:meta?.version||base.table_version||base.version||'',datasetId:meta?.id||'',source:meta?.source||base.source||base.source_name||'World Aquatics base time',calculated:true}:null;}const stored=E.points(row);return Number.isFinite(stored)&&stored>0?{points:Math.floor(stored),baseSeconds:null,tableVersion:'stored-result',datasetId:'',source:'Stored result points',calculated:false}:null;}
+  function tableInfo(state=M.state){const meta=activeMeta(),rows=activeRows(state);return{active:!!rows.length,datasetId:meta?.id||'',version:meta?.version||rows[0]?.table_version||rows[0]?.version||'',effectiveFrom:meta?.effectiveFrom||rows[0]?.effective_from||'',source:meta?.source||rows[0]?.source||'',rows:rows.length};}
+  function invalidate(state=M.state){if(state&&typeof state==='object')cache.delete(state);}
+  W.activeRows=activeRows;W.activeMeta=activeMeta;W.index=index;W.calculate=calculate;W.baseFor=baseFor;W.pointsFor=pointsFor;W.tableInfo=tableInfo;W.invalidate=invalidate;W.sexKey=sexKey;
+})(globalThis);
