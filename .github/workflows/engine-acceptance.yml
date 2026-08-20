@@ -29,4 +29,6 @@ jobs:
           node --check engines/t400-capture.js
           node --check engines/acceptance.js
       - name: Run engine coaching regression fixtures
-        run: node tests/engine-acceptance.cjs
+        run: |
+          node tests/engine-acceptance.cjs
+          node tests/board-evidence-regression.cjs
