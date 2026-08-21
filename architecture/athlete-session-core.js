@@ -1,9 +1,11 @@
 'use strict';
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSArchitecture=root.MSOSArchitecture||{};root.MSOSArchitecture.AthleteSession=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0-bd';
+  const VERSION='1.1.0-be';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const roundsOf=g=>Math.max(1,Number(g?.rounds)||1);
+  const squadKey=v=>norm(v).replace(/\s+/g,'-');
   function executionRows(session){
     const out=[];
     const walk=(items,block,path=[])=>{for(const item of items||[]){if(item?.kind==='group'){const n=roundsOf(item);for(let round=1;round<=n;round++)walk(item.items||[],block,[...path,{groupId:item.id,round,rounds:n,label:text(item.text||item.raw||`${n} rounds`)}]);}else if(item?.kind==='set')out.push({index:out.length,block,item,roundPath:clone(path)});}};
@@ -15,18 +17,24 @@
   function embeddedBoundary(session,athleteId){return clone(session?.metadata?.athleteSessionBoundaries?.[athleteId]||null);}
   function suppliedBoundary(boundaries,sessionId,athleteId){if(!boundaries)return null;if(Array.isArray(boundaries)){const rows=boundaries.filter(x=>x?.session_id===sessionId&&x?.athlete_id===athleteId);return clone(rows.sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')))[0]||null);}const direct=boundaries?.[sessionId]?.[athleteId]||boundaries?.[`${sessionId}|${athleteId}`];return clone(direct||null);}
   function athleteBoundary({session,athleteId,boundaries=null}={}){return suppliedBoundary(boundaries,session?.id,athleteId)||embeddedBoundary(session,athleteId)||null;}
-  function canonicalBoundary(boundary,kind='athlete_end'){if(!boundary)return null;const src=boundary.end||boundary;return{kind,itemId:src.itemId||src.item_id||'',blockId:src.blockId||src.block_id||'',roundByGroup:clone(src.roundByGroup||src.round_by_group||{}),at:src.at||boundary.updated_at||'',label:text(src.label||'')};}
-  function deliveryWindow({session,athleteId,boundaries=null}={}){
-    const rows=executionRows(session),ath=athleteBoundary({session,athleteId,boundaries}),squad=sessionFinishBoundary(session),start=ath?.start?canonicalBoundary(ath.start,'athlete_start'):null,end=ath?.end?canonicalBoundary(ath.end,'athlete_end'):null;
-    const squadIx=boundaryIndex(rows,squad),startIx=start?boundaryIndex(rows,start):null,endIx=end?boundaryIndex(rows,end):null;
+  function embeddedSquadBoundary(session,squad){const rows=session?.metadata?.squadSessionBoundaries||{},want=squadKey(squad);if(!want)return null;for(const [k,v] of Object.entries(rows)){if(squadKey(k)===want||squadKey(v?.squad)===want)return clone(v);}return null;}
+  function suppliedSquadBoundary(boundaries,sessionId,squad){if(!boundaries||!squad)return null;const want=squadKey(squad);if(Array.isArray(boundaries)){const rows=boundaries.filter(x=>x?.session_id===sessionId&&squadKey(x?.squad)===want);return clone(rows.sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')))[0]||null);}const nested=boundaries?.[sessionId]||{},direct=nested?.[squad]||nested?.[want]||boundaries?.[`${sessionId}|${want}`];if(direct)return clone(direct);for(const v of Object.values(nested||{}))if(squadKey(v?.squad)===want)return clone(v);return null;}
+  function squadBoundary({session,squad,boundaries=null}={}){return suppliedSquadBoundary(boundaries,session?.id,squad)||embeddedSquadBoundary(session,squad)||null;}
+  function canonicalBoundary(boundary,kind='athlete_end'){if(!boundary)return null;const src=boundary.end||boundary.start||boundary;return{kind,itemId:src.itemId||src.item_id||'',blockId:src.blockId||src.block_id||'',roundByGroup:clone(src.roundByGroup||src.round_by_group||{}),at:src.at||boundary.updated_at||'',label:text(src.label||'')};}
+  function startTruth({session,athlete,athleteId,boundaries=null,squadBoundaries=null}={}){const id=athleteId||athlete?.id||'',ath=athleteBoundary({session,athleteId:id,boundaries}),sq=squadBoundary({session,squad:athlete?.squad,squadBoundaries,boundaries:squadBoundaries});if(ath?.start)return{source:'athlete_start',boundary:canonicalBoundary(ath.start,'athlete_start'),record:ath,joinWork:clone(ath.joinWork||ath.join_work||null)};if(sq?.start)return{source:'squad_start',boundary:canonicalBoundary(sq.start,'squad_start'),record:sq,joinWork:clone(sq.joinWork||sq.join_work||null)};return{source:'session_start',boundary:null,record:null,joinWork:null};}
+  function deliveryWindow({session,athlete=null,athleteId='',boundaries=null,squadBoundaries=null}={}){
+    const rows=executionRows(session),id=athleteId||athlete?.id||'',ath=athleteBoundary({session,athleteId:id,boundaries}),squad=squadBoundary({session,squad:athlete?.squad,boundaries:squadBoundaries}),squadFinish=sessionFinishBoundary(session),startInfo=ath?.start?{source:'athlete_start',boundary:canonicalBoundary(ath.start,'athlete_start'),record:ath,joinWork:clone(ath.joinWork||ath.join_work||null)}:squad?.start?{source:'squad_start',boundary:canonicalBoundary(squad.start,'squad_start'),record:squad,joinWork:clone(squad.joinWork||squad.join_work||null)}:{source:'session_start',boundary:null,record:null,joinWork:null},end=ath?.end?canonicalBoundary(ath.end,'athlete_end'):null;
+    const squadIx=boundaryIndex(rows,squadFinish),startIx=startInfo.boundary?boundaryIndex(rows,startInfo.boundary):null,endIx=end?boundaryIndex(rows,end):null;
     let from=startIx==null?0:Math.max(0,startIx),to=rows.length-1,endSource='planned';
     if(squadIx!=null){to=squadIx;endSource='squad_finish';}
     if(endIx!=null&&(squadIx==null||endIx<squadIx)){to=endIx;endSource='athlete_end';}
-    if(to<from)return{rows:[],allRows:rows,from,to,squadBoundary:squad,athleteBoundary:ath,endSource,endedEarly:endSource==='athlete_end',startSource:start?'athlete_start':'session_start'};
-    return{rows:rows.slice(from,to+1),allRows:rows,from,to,squadBoundary:squad,athleteBoundary:ath,endSource,endedEarly:endSource==='athlete_end',startSource:start?'athlete_start':'session_start'};
+    const common={allRows:rows,from,to,squadBoundary:squadFinish,athleteBoundary:ath,squadStartBoundary:squad,startBoundary:startInfo.boundary,startSource:startInfo.source,startRecord:startInfo.record,joinWork:startInfo.joinWork,endSource,endedEarly:endSource==='athlete_end'};
+    if(to<from)return{...common,rows:[]};
+    return{...common,rows:rows.slice(from,to+1)};
   }
-  function boundaryLabel(session,boundary){if(!boundary)return'';const rows=executionRows(session),ix=boundaryIndex(rows,canonicalBoundary(boundary));if(ix==null)return text(boundary?.label||boundary?.end?.label||'');const r=rows[ix];return text(r?.item?.raw||r?.item?.text||r?.block?.title||'');}
+  function boundaryLabel(session,boundary){if(!boundary)return'';const rows=executionRows(session),ix=boundaryIndex(rows,canonicalBoundary(boundary));if(ix==null)return text(boundary?.label||boundary?.end?.label||boundary?.start?.label||'');const r=rows[ix];return text(r?.item?.raw||r?.item?.text||r?.block?.title||'');}
   function makeEnd({session,athleteId,itemId,blockId='',roundByGroup={},at=new Date().toISOString(),label=''}={}){return{session_id:session?.id||'',athlete_id:athleteId||'',start:null,end:{itemId:itemId||'',blockId:blockId||'',roundByGroup:clone(roundByGroup||{}),at,label:text(label)},status:'ended_early',updated_at:at};}
-  function makeStart({session,athleteId,itemId,blockId='',roundByGroup={},at=new Date().toISOString(),label=''}={}){return{session_id:session?.id||'',athlete_id:athleteId||'',start:{itemId:itemId||'',blockId:blockId||'',roundByGroup:clone(roundByGroup||{}),at,label:text(label)},end:null,status:'started_late',updated_at:at};}
-  return{VERSION,text,clone,executionRows,boundaryIndex,sessionFinishBoundary,athleteBoundary,canonicalBoundary,deliveryWindow,boundaryLabel,makeEnd,makeStart};
+  function makeStart({session,athleteId,itemId,blockId='',roundByGroup={},at=new Date().toISOString(),label='',joinWork=null}={}){return{session_id:session?.id||'',athlete_id:athleteId||'',start:{itemId:itemId||'',blockId:blockId||'',roundByGroup:clone(roundByGroup||{}),at,label:text(label)},end:null,joinWork:clone(joinWork),status:'started_late',updated_at:at};}
+  function makeSquadStart({session,squad,itemId,blockId='',roundByGroup={},at=new Date().toISOString(),label='',joinWork=null}={}){return{session_id:session?.id||'',squad:text(squad),start:{itemId:itemId||'',blockId:blockId||'',roundByGroup:clone(roundByGroup||{}),at,label:text(label)},joinWork:clone(joinWork),status:'squad_layer_start',updated_at:at};}
+  return{VERSION,text,norm,clone,squadKey,executionRows,boundaryIndex,sessionFinishBoundary,athleteBoundary,squadBoundary,startTruth,canonicalBoundary,deliveryWindow,boundaryLabel,makeEnd,makeStart,makeSquadStart};
 });
