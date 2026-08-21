@@ -13,6 +13,7 @@ const charlotteEnd=A.makeEnd({session,athleteId:'charlotte',itemId:'m2',blockId:
 const amber={id:'amber',full_name:'Amber Proudfoot',squad:'Development'};
 const amberStart=A.makeStart({session,athleteId:'amber',itemId:'m2',blockId:'main',label:'3 x 50 Fly @ 200 Pace',joinWork:{text:'200 own warm-up',metres:200,strokes:{Freestyle:200}}});
 const amberEnd=A.makeEnd({session,athleteId:'amber',itemId:'m3',blockId:'main',label:'4 x 100 Threshold'});
+const amberBoundary={...amberStart,end:amberEnd.end,status:'bounded',updated_at:amberEnd.updated_at};
 const attendance=[{session_id:'mix',athlete_id:'charlotte',status:'modified'},{session_id:'mix',athlete_id:'amber',status:'modified'}];
 const captures=[
  {id:'g-before',session_id:'mix',block_id:'wu',capture_type:'note',text_content:'National-only warm-up note',created_at:'2026-08-22T07:00:00Z'},
@@ -45,7 +46,7 @@ assert.equal(charlotteProjection.evidence.namedCount,1);
 assert.equal(charlotteProjection.evidence.groupCount,2,'group cue in her window plus session-level group note');
 assert(!charlotteProjection.evidence.combined.some(x=>x.id==='g-before'),'group capture before squad start must not leak into individual history');
 assert(charlotteProjection.evidence.combined.some(x=>x.id==='c-video'&&x.evidence_scope==='named'));
-const amberProjection=R.athleteSessionProjection({session,athlete:amber,attendance,athleteSessionBoundaries:[amberStart,amberEnd],squadSessionBoundaries:[developmentStart],prescribe,captures});
+const amberProjection=R.athleteSessionProjection({session,athlete:amber,attendance,athleteSessionBoundaries:[amberBoundary],squadSessionBoundaries:[developmentStart],prescribe,captures});
 assert.equal(amberProjection.start.source,'athlete_start','individual late arrival overrides Development squad start');
 assert.equal(amberProjection.start.joinWork.metres,200);
 assert.equal(amberProjection.finish.source,'athlete_end');
