@@ -7,16 +7,26 @@ Even with zero athlete-specific captures, MSOS still knows the session prescript
 
 ## Truth order
 1. Delivered athlete-specific override / timed evidence
-2. Finished canonical session + attendance + athlete prescription
-3. Current attended canonical session + athlete prescription
-4. Planned canonical session + athlete projection
-5. Notes/captures enrich the record; they do not create the training record
+2. Explicit athlete start/end boundary
+3. Finished canonical session + attendance + athlete prescription
+4. Current attended canonical session + athlete prescription
+5. Planned canonical session + athlete projection
+6. Notes/captures enrich the record; they do not create the training record
 
 Never label a projected or attendance-unknown prescription as definitely completed.
 
+## Default completion rule
+The coach must not have to mark every swimmer through every set.
+
+For a swimmer recorded Here/Modified/Late with no individual exception, MSOS treats that swimmer as having completed **their own derived prescription through the squad's actual canonical Finish point** once the session is finished.
+
+This is not `100% of the squad session` and must never be displayed as a percentage. It means the swimmer completed the work MSOS prescribed for them through the point the squad actually reached.
+
+If a swimmer leaves early, the coach records **End swimmer's session here** at an exact canonical line/round. The swimmer remains attended; only their delivered-training interval ends earlier. A future **Start swimmer here** boundary uses the same model for late arrivals without requiring rep-by-rep monitoring.
+
 ## Default Training screen
 The first screen must answer, without digging:
-- What did I do / what was I prescribed today?
+- What did I actually do / what am I currently prescribed today?
 - What were my targets?
 - How much have I accumulated in the last 7 days?
 - How much in the last 30 days?
@@ -25,10 +35,10 @@ The first screen must answer, without digging:
 - How does this recent work relate to my current performance priorities?
 
 ## Today / selected session
-Show athlete prescription, not squad metres.
+Show athlete work, not squad percentages.
 
 For each block show:
-- athlete metres
+- actual individual metres through the effective delivery boundary
 - actual adapted set wording
 - zone / phase pattern
 - target or target range
@@ -36,20 +46,22 @@ For each block show:
 - adaptive choice where selected
 - relevant timing/evidence if captured
 
-If no athlete-specific capture exists, say that no extra capture was made; do not say there is no swimmer evidence when the canonical prescription exists.
+Do not show `50% volume profile`, `67% of squad`, `100% completed`, or similar percentage-of-squad language on the swimmer-facing Training summary. Ratio remains an internal adaptation rule/audit input only.
+
+If no athlete-specific capture exists, say that no extra capture was made; do not say there is no swimmer evidence when canonical prescription and attendance/delivery truth exist.
 
 ## Accumulation
-Provide compact 7-day and 30-day summaries:
-- attended sessions
-- confirmed delivered prescription metres
-- current attended prescription metres
+Provide compact 7-day and 30-day summaries in concrete work, not percentage of squad:
+- confirmed delivered sessions
+- confirmed individual delivered metres
+- current attended prescription separately until Finish
 - attendance-unknown matching sessions separately
 - zone metres: Regeneration / Development / Overload / Threshold / Clearance
 - race-pace / quality / skill / kick / pull exposure
-- stroke exposure
+- stroke metres
 - evidence count only as a secondary layer
 
-Unknown attendance must never be silently counted as work completed.
+Unknown attendance must never be silently counted as work completed. An unfinished current session must not be counted as fully completed merely because the swimmer is Here.
 
 ## Performance ↔ Training
 Training and Performance are two views of the same athlete record.
@@ -58,8 +70,8 @@ For each leading event / meaningful opportunity show:
 - PB and performance score where valid
 - next real milestone / para MQS development rung
 - gap in seconds / percent where valid
-- recent same-stroke exposure
-- recent race-pace exposure
+- actual recent same-stroke exposure
+- actual recent race-pace exposure
 - relevant recent test / timed evidence
 - upcoming programme exposure where useful
 
@@ -80,7 +92,7 @@ Show the next few matching squad sessions transformed through the athlete prescr
 The screen should be glanceable on deck. Full per-session detail sits behind compact expandable blocks.
 
 ## Accessibility / modified athletes
-Modified swimmers must see their actual projected prescription and accumulated athlete metres, not the squad total multiplied by a generic percentage after the fact. The adaptation engine is authoritative per item.
+Modified swimmers must see their actual projected/delivered prescription and accumulated athlete metres, not the squad total multiplied by a generic percentage after the fact. The adaptation engine is authoritative per item.
 
 ## Reporting link
 The same athlete training ledger feeds:
