@@ -7,6 +7,7 @@ on:
       - 'v4-architecture-*'
       - 'v4-training-intelligence-*'
       - 'v4-athlete-session-*'
+      - 'v4-squad-layer-starts-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
