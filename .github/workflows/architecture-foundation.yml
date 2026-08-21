@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'v4-architecture-*'
+      - 'v4-training-intelligence-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
@@ -38,3 +39,5 @@ jobs:
         run: node architecture/v4-adapter.test.js
       - name: Run learning replication and consent tests
         run: node architecture/learning-sync.test.js
+      - name: Run athlete training history tests
+        run: node architecture/training-history.test.js
