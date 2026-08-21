@@ -1,10 +1,10 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.guardian?.run)return;
-  const BUILD='v4-adaptive-calendar-20260821am',G=M.guardian,S=M.swimmerTabsUI,A=M.adaptiveDelivery;
+  const BUILD='v4-adaptive-guardian-20260821an',G=M.guardian,S=M.swimmerTabsUI,A=M.adaptiveDelivery;
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const baseRun=G.run.bind(G);
-  M.BUILD=BUILD;M.CORE='20260821-adaptive-calendar-am';
+  M.BUILD=BUILD;M.CORE='20260821-adaptive-guardian-an';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,
     generatedAt:new Date().toISOString(),
@@ -14,7 +14,8 @@
     'Elsie controlled pathway ranks SCM 200 Breast closest and keeps 25-point steps',
     'Conor Breaststroke + fins constraint is semantic',
     'Final shipping build owns the software attestation',
-    'Poolside swimmer answer links pathway steps to recent training area'
+    'Poolside swimmer answer links pathway steps to recent training area',
+    'Amber underwater/kick constraint remains upper-body equivalent'
   ]);
   const test=(name,fn)=>{try{const detail=fn();return{name,ok:true,detail:detail==null?'':String(detail)}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
   const assert=(cond,msg)=>{if(!cond)throw new Error(msg||'assertion failed')};
@@ -47,6 +48,10 @@
       const item={id:'amber-guardian',kind:'set',reps:8,distance:75,stroke:'Choice',raw:'8 x 75 with Fins 50 technique / 25 fast',text:'8 x 75 with Fins 50 technique / 25 fast',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:90},ath={id:'amber-guardian-ath',full_name:'Amber Proudfoot'},state={adaptationProfiles:[],adaptationOverrides:[]},session={id:'amber-guardian-session',identity:{course:'SCM'}};
       const x=A.adaptItem(item,ath,state,session);assert((x.adaptiveOptions||[]).length===6,'adaptive choices missing');assert(/Adaptive options:/i.test((x.cues||[]).join(' ')),'Board option cue missing');return `${x.adaptiveMode} · ${x.reps}×${x.distance}`;
     }));
+    out.push(test('Amber constrained work stays upper-body adaptive without kick/fins mechanics',()=>{
+      const item={id:'amber-semantic',kind:'set',reps:6,distance:50,stroke:'Choice',raw:'6 x 50 Kick with Fins @ 1:10',text:'6 x 50 Kick with Fins @ 1:10',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:70},ath={id:'amber-semantic-ath',full_name:'Amber Proudfoot'},state={adaptationProfiles:[],adaptationOverrides:[]},session={id:'amber-semantic-session',identity:{course:'SCM'}};
+      const x=A.adaptItem(item,ath,state,session);assert(/Upper-body/i.test(x.raw),'upper-body intent lost');assert(!(x.equipment||[]).some(v=>/fins?|kick/i.test(String(v))),'kick/fins mechanics leaked');assert((x.adaptiveOptions||[]).length===6,'adaptive choices missing');assert(x.adaptiveRuleStatus==='coach-confirmed','adaptive rule not coach-confirmed');return `${x.adaptiveMode} · ${x.raw}`;
+    }));
     out.push(test('Amber Scull option protects slow 2:00-per-50 timing',()=>{
       const item={id:'amber-scull',kind:'set',reps:4,distance:50,stroke:'Choice',raw:'4 x 50 Kick with Fins @ 1:00',text:'4 x 50 Kick with Fins @ 1:00',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:60},ath={id:'amber-scull-ath',full_name:'Amber Proudfoot'},state={adaptationProfiles:[],adaptationOverrides:[{sessionId:'amber-scull-session',itemId:'amber-scull',athleteId:'amber-scull-ath',active:true,patch:{adaptiveMode:'Scull'}}]},session={id:'amber-scull-session',identity:{course:'SCM'}};
       const x=A.adaptItem(item,ath,state,session);assert(x.adaptiveMode==='Scull','Scull override not selected');assert(Number(x.cycleSeconds)>=120,`cycle ${x.cycleSeconds}`);return `50 Scull @ ${M.util?.clock?.(x.cycleSeconds)||x.cycleSeconds}`;
@@ -56,8 +61,8 @@
       const x=A.adaptItem(item,ath,state,session);assert(!(x.adaptiveStrokeChoices||[]).includes('Breaststroke'),'Breaststroke leaked into fins options');assert(/non-Breaststroke/i.test(x.raw),'known constraint not visible');return (x.adaptiveOptions||[]).map(o=>o.label).join(' / ');
     }));
     out.push(test('Past blank sessions are hidden while logged history remains visible',()=>{
-      assert(typeof A?.hidePastBlank==='function','session visibility engine missing');const today='2026-08-21',blank={id:'blank',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[]},logged={id:'logged',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[],finish:{finishedAt:'2026-08-01T08:00:00Z'}};
-      const oldNow=Date.now;assert(A.hidePastBlank(blank)===true,'past blank session remained visible');assert(A.hidePastBlank(logged)===false,'logged past session was hidden');return 'blank past hidden · delivered past retained';
+      assert(typeof A?.hidePastBlank==='function','session visibility engine missing');const blank={id:'blank',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[]},logged={id:'logged',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[],finish:{finishedAt:'2026-08-01T08:00:00Z'}};
+      assert(A.hidePastBlank(blank)===true,'past blank session remained visible');assert(A.hidePastBlank(logged)===false,'logged past session was hidden');return 'blank past hidden · delivered past retained';
     }));
     out.push(test('Calendar distinguishes planned, authored, delivered and not-logged slots',()=>{const c=A?.checks?.()||{};assert((c.calendarStatuses||[]).join('|')==='planned|authored|delivered|not_logged',(c.calendarStatuses||[]).join('|'));return 'planned → authored → delivered / not_logged';}));
     return out;
@@ -67,7 +72,7 @@
     if(M.engineAcceptance?.results?.length){for(const r of M.engineAcceptance.results)engine.push({name:`Engine · ${r.name}`,ok:r.ok===true,detail:r.detail||''});}
     else engine.push({name:'Engine acceptance suite executed',ok:false,detail:'engines/acceptance.js did not produce results'});
     const tests=[...retained,...engine,...currentContractTests()],passed=tests.filter(t=>t.ok===true).length;
-    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821am'};
+    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821an'};
   };
   M.release=M.release||{};
   M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};
