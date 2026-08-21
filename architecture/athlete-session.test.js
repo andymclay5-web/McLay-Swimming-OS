@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const A=require('./athlete-session-core');
 const T=require('./training-history-core');
 const athlete={id:'charlotte',full_name:'Charlotte Murphy',squad:'National'};
-const session={id:'sat',identity:{date:'2026-08-22',title:'Saturday AM',squads:['National'],course:'SCM'},blocks:[
+const session={id:'sat',identity:{date:'2026-08-22',title:'Saturday AM',squads:['National','Development','Fitness'],course:'SCM'},blocks:[
  {id:'wu',title:'Warm Up',items:[{id:'w',kind:'set',reps:2,distance:100,stroke:'Freestyle',raw:'2 x 100 Free'}]},
  {id:'main',title:'Main Set',items:[{id:'m',kind:'set',reps:4,distance:100,stroke:'Freestyle',zone:'Development',raw:'4 x 100 Development'}]},
  {id:'post',title:'Post Set',items:[{id:'p',kind:'set',reps:5,distance:200,stroke:'Freestyle',raw:'5 x 200 Pull'}]},
@@ -12,7 +12,8 @@ const session={id:'sat',identity:{date:'2026-08-22',title:'Saturday AM',squads:[
 const attendance=[{session_id:'sat',athlete_id:'charlotte',status:'modified'}];
 const prescribe=(s,item)=>{const reps={w:1,m:2,p:3,d:1}[item.id]||item.reps;return{item:{...item,reps},target:{status:'none'}};};
 let record=T.recordSession({session,athlete,attendance,prescribe});
-assert.equal(record.prescribedMetres,1100,'planned individual prescription');
+assert.equal(record.fullSessionPrescriptionMetres,1100,'full individual prescription retained for audit');
+assert.equal(record.prescribedMetres,900,'effective prescription follows squad actual finish');
 assert.equal(record.deliveredMetres,900,'normal attended swimmer stops at squad actual finish');
 assert.equal(record.delivery,'delivered-prescription');
 assert.equal(record.blocks.at(-1).id,'post');
@@ -25,9 +26,26 @@ assert.equal(record.participation.status,'attended','ending early must not erase
 const normal={id:'seth',full_name:'Seth Knights',squad:'National'};
 record=T.recordSession({session,athlete:normal,attendance:[{session_id:'sat',athlete_id:'seth',status:'present'}],prescribe:(s,i)=>({item:i,target:{status:'none'}})});
 assert.equal(record.deliveredMetres,1600,'normal swimmer needs no per-rep monitoring; squad finish is enough');
-assert.equal(record.prescribedMetres,1800);
+assert.equal(record.fullSessionPrescriptionMetres,1800);
+assert.equal(record.prescribedMetres,1600);
+const development={id:'dev',full_name:'Development Swimmer',squad:'Development'};
+const devStart=A.makeSquadStart({session,squad:'Development',itemId:'m',blockId:'main',label:'4 x 100 Development',joinWork:{text:'300 easy + build before joining',metres:300}});
+record=T.recordSession({session,athlete:development,attendance:[{session_id:'sat',athlete_id:'dev',status:'present'}],squadSessionBoundaries:[devStart],prescribe:(s,i)=>({item:i,target:{status:'none'}})});
+assert.equal(record.startSource,'squad_start','Development inherits the squad layer start');
+assert.match(record.startLabel,/4 x 100 Development/);
+assert.equal(record.prescribedMetres,1400,'pre-layer squad work is not prescribed to Development');
+assert.equal(record.deliveredMetres,1700,'join warm-up plus work from layer start to squad finish');
+assert.equal(record.joinWork.metres,300);
+assert.equal(record.tags['Join warm-up'],300);
+assert.equal(record.blocks[0].id,'join-warmup');
+const laterIndividual=A.makeStart({session,athleteId:'dev',itemId:'p',blockId:'post',label:'5 x 200 Pull',joinWork:{text:'200 own warm-up',metres:200}});
+record=T.recordSession({session,athlete:development,attendance:[{session_id:'sat',athlete_id:'dev',status:'present'}],athleteSessionBoundaries:[laterIndividual],squadSessionBoundaries:[devStart],prescribe:(s,i)=>({item:i,target:{status:'none'}})});
+assert.equal(record.startSource,'athlete_start','individual late start overrides squad layer start');
+assert.equal(record.prescribedMetres,1000);
+assert.equal(record.deliveredMetres,1200);
+assert.equal(record.joinWork.metres,200);
 const repeat={id:'repeat',identity:{date:'2026-08-22'},blocks:[{id:'b',title:'Main',items:[{id:'g',kind:'group',rounds:2,text:'2 Rounds',items:[{id:'a',kind:'set',reps:4,distance:100,raw:'4 x 100'},{id:'b2',kind:'set',reps:2,distance:50,raw:'2 x 50'}]}]}],finish:{throughItemId:'a',throughBlockId:'b',roundByGroup:{g:2}}};
 const win=A.deliveryWindow({session:repeat,athleteId:'x'});
 assert.equal(win.rows.length,3,'round-aware finish includes full round one plus selected line in round two');
 assert.deepEqual(win.rows.map(r=>[r.item.id,r.roundPath[0]?.round]),[['a',1],['b2',1],['a',2]]);
-console.log('athlete-session-bd: 15 assertions passed');
+console.log('athlete-session-be: squad layers, individual joins and finish boundaries passed');
