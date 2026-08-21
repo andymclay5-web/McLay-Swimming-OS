@@ -1,0 +1,31 @@
+name: Architecture Foundation
+
+on:
+  push:
+    branches:
+      - main
+      - 'v4-architecture-*'
+    paths:
+      - 'architecture/**'
+      - 'ARCHITECTURE_20260822.md'
+      - '.github/workflows/architecture-foundation.yml'
+  pull_request:
+    paths:
+      - 'architecture/**'
+      - 'ARCHITECTURE_20260822.md'
+      - '.github/workflows/architecture-foundation.yml'
+
+jobs:
+  architecture-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check architecture modules
+        run: |
+          for f in architecture/*-core.js; do node --check "$f"; done
+      - name: Run architecture contract tests
+        run: node architecture/architecture.test.js
