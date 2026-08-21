@@ -51,11 +51,13 @@ jobs:
           node --check engines/amber-alignment-aq.js
           node --check engines/para-pathway-ar.js
           node --check engines/amber-alignment-as.js
+          node --check engines/amber-alignment-at.js
           node --check engines/release-guardian-ao.js
           node --check engines/release-guardian-ap.js
           node --check engines/release-guardian-aq.js
           node --check engines/release-guardian-ar.js
           node --check engines/release-guardian-as.js
+          node --check engines/release-guardian-at.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
