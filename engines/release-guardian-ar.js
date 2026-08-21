@@ -1,0 +1,21 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4,Q=M?.paraPathwayAR;if(!M?.guardian?.run||!Q)return;
+  const BUILD='v4-para-mqs-pathway-20260821ar',G=M.guardian,baseRun=G.run.bind(G);
+  M.BUILD=BUILD;M.CORE='20260821-para-mqs-pathway-ar';
+  M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'Para international pathway candidate. Current-build Guardian and physical Android acceptance required.'});
+  const test=(name,fn)=>{try{const detail=fn();return{name,ok:true,detail:detail==null?'':String(detail)}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')};
+  function tests(){const out=[];
+    out.push(test('Para pathway · female S7 100 Free loads official Singapore MET/MQS',()=>{const a={sex:'F',current_s_class:'S7',modifications:'Para swimmer'},pb={course:'LCM',distance:100,stroke:'Freestyle',result_seconds:95},x=Q.summary(a,pb);assert(x?.mqs===77.77,`mqs ${x?.mqs}`);assert(x?.met===79.95,`met ${x?.met}`);return `MET ${M.util.clock(x.met)} · MQS ${M.util.clock(x.mqs)}`;}));
+    out.push(test('Para pathway · Breaststroke uses SB class, not S class',()=>{const a={sex:'M',current_s_class:'S7',current_sb_class:'SB7',current_sm_class:'SM7',modifications:'Para swimmer'},pb={course:'LCM',distance:100,stroke:'Breaststroke',result_seconds:118},x=Q.summary(a,pb);assert(x?.class==='SB7',x?.class);assert(x?.mqs===92.76,`mqs ${x?.mqs}`);return `SB7 MQS ${M.util.clock(x.mqs)}`;}));
+    out.push(test('Para pathway · IM uses SM class, not S class',()=>{const a={sex:'M',current_s_class:'S7',current_sb_class:'SB7',current_sm_class:'SM7',modifications:'Para swimmer'},pb={course:'LCM',distance:200,stroke:'IM',result_seconds:220},x=Q.summary(a,pb);assert(x?.class==='SM7',x?.class);assert(x?.mqs===179.53,`mqs ${x?.mqs}`);return `SM7 MQS ${M.util.clock(x.mqs)}`;}));
+    out.push(test('Para pathway · near-MQS swimmer gets 5% development bands',()=>{const a={sex:'F',current_s_class:'S7',modifications:'Para swimmer'},pb={course:'LCM',distance:100,stroke:'Freestyle',result_seconds:90},x=Q.summary(a,pb);assert(JSON.stringify(x?.bands)===JSON.stringify([15,10,5]),JSON.stringify(x?.bands));return x.bands.map(p=>`+${p}%`).join(' → ');}));
+    out.push(test('Para pathway · distant swimmer gets reachable 5% bands instead of a 100% jump',()=>{const a={sex:'M',current_s_class:'S7',modifications:'Para swimmer'},pb={course:'LCM',distance:50,stroke:'Freestyle',result_seconds:62.92},x=Q.summary(a,pb);assert(JSON.stringify(x?.bands)===JSON.stringify([100,95,90,85,80]),JSON.stringify(x?.bands));return x.bands.map(p=>`+${p}%`).join(' → ');}));
+    out.push(test('Para pathway · Cameron international final/podium benchmarks remain real milestones',()=>{const a={full_name:'Ruby Stace',sex:'F',current_s_class:'S13',current_sb_class:'SB13',current_sm_class:'SM13',modifications:'Para swimmer'},pb={course:'LCM',distance:100,stroke:'Breaststroke',result_seconds:115.93},rows=Q.camRows(a,pb);assert(rows.some(r=>r._label==='Paris final benchmark'&&r._seconds===83.82),JSON.stringify(rows));assert(rows.some(r=>r._label==='Manchester podium benchmark'&&r._seconds===78.45),JSON.stringify(rows));return 'Manchester podium + Paris final retained';}));
+    out.push(test('Para pathway · SCM comparison is labelled tracking-only against LCM MQS',()=>{const a={sex:'F',current_s_class:'S8',modifications:'Para swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:87.64},x=Q.summary(a,pb);assert(x?.crossCourse===true,'SCM comparison not flagged');assert(x?.mqs===76.13,`mqs ${x?.mqs}`);return 'SCM PB → LCM MQS tracking flag';}));
+    return out;
+  }
+  G.run=()=>{const base=baseRun()||{},all=[...(base.tests||[]),...tests()],passed=all.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests:all,passed,total:all.length,ok:all.length>0&&passed===all.length,contract:'20260821ar'};};
+  M.release=M.release||{};M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true;
+})(globalThis);
