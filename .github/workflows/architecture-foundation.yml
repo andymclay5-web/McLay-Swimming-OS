@@ -6,6 +6,7 @@ on:
       - main
       - 'v4-architecture-*'
       - 'v4-training-intelligence-*'
+      - 'v4-athlete-session-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
@@ -40,4 +41,6 @@ jobs:
       - name: Run learning replication and consent tests
         run: node architecture/learning-sync.test.js
       - name: Run athlete training history tests
-        run: node architecture/training-history.test.js
+        run: |
+          node architecture/training-history.test.js
+          node architecture/athlete-session.test.js
