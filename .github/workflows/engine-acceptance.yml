@@ -63,6 +63,7 @@ jobs:
           node --check engines/release-guardian-at.js
           node --check engines/release-guardian-bc.js
           node --check engines/release-guardian-bd.js
+          node --check engines/release-guardian-be.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
