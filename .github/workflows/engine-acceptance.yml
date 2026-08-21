@@ -46,6 +46,8 @@ jobs:
           node --check engines/capture-ui.js
           node --check engines/t400-capture.js
           node --check engines/acceptance.js
+          node --check engines/phone-fixes-ao.js
+          node --check engines/release-guardian-ao.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
