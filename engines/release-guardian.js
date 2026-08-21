@@ -1,10 +1,10 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.guardian?.run)return;
-  const BUILD='v4-guardian-gate-20260821al',G=M.guardian,S=M.swimmerTabsUI;
+  const BUILD='v4-adaptive-calendar-20260821am',G=M.guardian,S=M.swimmerTabsUI,A=M.adaptiveDelivery;
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const baseRun=G.run.bind(G);
-  M.BUILD=BUILD;M.CORE='20260821-guardian-gate-al';
+  M.BUILD=BUILD;M.CORE='20260821-adaptive-calendar-am';
   M.RELEASE_ATTESTATION=Object.freeze({
     ...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,
     generatedAt:new Date().toISOString(),
@@ -40,20 +40,36 @@
       return ans.milestones.map(x=>x._label).join(' → ');
     }));
     out.push(test('Coach Loop and swimmer tabs are both active over one canonical session',()=>{assert(!!M.coachLoopUI,'coach loop missing');assert(!!S,'swimmer tabs missing');assert(S?.checks?.()?.preservesCoachLoop===true,'swimmer tabs replaced coach loop')}));
+    out.push(test('Amber adaptive engine offers coach-confirmed upper-body variation',()=>{
+      const c=A?.checks?.()||{},modes=c.amberModes||[],strokes=c.amberStrokes||[];
+      assert(['Pull','Swim','Paddles','Drill','Scull','Body alignment'].every(x=>modes.includes(x)),modes.join(' | '));
+      assert(['Freestyle','Backstroke','Breaststroke','Butterfly','IM','Choice'].every(x=>strokes.includes(x)),strokes.join(' | '));
+      const item={id:'amber-guardian',kind:'set',reps:8,distance:75,stroke:'Choice',raw:'8 x 75 with Fins 50 technique / 25 fast',text:'8 x 75 with Fins 50 technique / 25 fast',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:90},ath={id:'amber-guardian-ath',full_name:'Amber Proudfoot'},state={adaptationProfiles:[],adaptationOverrides:[]},session={id:'amber-guardian-session',identity:{course:'SCM'}};
+      const x=A.adaptItem(item,ath,state,session);assert((x.adaptiveOptions||[]).length===6,'adaptive choices missing');assert(/Adaptive options:/i.test((x.cues||[]).join(' ')),'Board option cue missing');return `${x.adaptiveMode} · ${x.reps}×${x.distance}`;
+    }));
+    out.push(test('Amber Scull option protects slow 2:00-per-50 timing',()=>{
+      const item={id:'amber-scull',kind:'set',reps:4,distance:50,stroke:'Choice',raw:'4 x 50 Kick with Fins @ 1:00',text:'4 x 50 Kick with Fins @ 1:00',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:60},ath={id:'amber-scull-ath',full_name:'Amber Proudfoot'},state={adaptationProfiles:[],adaptationOverrides:[{sessionId:'amber-scull-session',itemId:'amber-scull',athleteId:'amber-scull-ath',active:true,patch:{adaptiveMode:'Scull'}}]},session={id:'amber-scull-session',identity:{course:'SCM'}};
+      const x=A.adaptItem(item,ath,state,session);assert(x.adaptiveMode==='Scull','Scull override not selected');assert(Number(x.cycleSeconds)>=120,`cycle ${x.cycleSeconds}`);return `50 Scull @ ${M.util?.clock?.(x.cycleSeconds)||x.cycleSeconds}`;
+    }));
+    out.push(test('Conor adaptive framework keeps Breaststroke kick out of fins work',()=>{
+      const item={id:'conor-guardian',kind:'set',reps:4,distance:50,stroke:'Breaststroke',raw:'4 x 50 Breaststroke with Fins',text:'4 x 50 Breaststroke with Fins',cues:[],pattern:[],repPattern:[],repInstructions:[],equipment:['Fins'],composition:[],restSeconds:10,cycleSeconds:null},ath={id:'conor-guardian-ath',full_name:'Conor Fischer'},state={adaptationProfiles:[],adaptationOverrides:[]},session={id:'conor-guardian-session',identity:{course:'SCM'}};
+      const x=A.adaptItem(item,ath,state,session);assert(!(x.adaptiveStrokeChoices||[]).includes('Breaststroke'),'Breaststroke leaked into fins options');assert(/non-Breaststroke/i.test(x.raw),'known constraint not visible');return (x.adaptiveOptions||[]).map(o=>o.label).join(' / ');
+    }));
+    out.push(test('Past blank sessions are hidden while logged history remains visible',()=>{
+      assert(typeof A?.hidePastBlank==='function','session visibility engine missing');const today='2026-08-21',blank={id:'blank',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[]},logged={id:'logged',identity:{date:'2026-08-01'},blocks:[],currentSource:{text:''},changes:[],finish:{finishedAt:'2026-08-01T08:00:00Z'}};
+      const oldNow=Date.now;assert(A.hidePastBlank(blank)===true,'past blank session remained visible');assert(A.hidePastBlank(logged)===false,'logged past session was hidden');return 'blank past hidden · delivered past retained';
+    }));
+    out.push(test('Calendar distinguishes planned, authored, delivered and not-logged slots',()=>{const c=A?.checks?.()||{};assert((c.calendarStatuses||[]).join('|')==='planned|authored|delivered|not_logged',(c.calendarStatuses||[]).join('|'));return 'planned → authored → delivered / not_logged';}));
     return out;
   }
   G.run=()=>{
     const base=baseRun()||{},retained=(base.tests||[]).filter(t=>!retired.has(text(t.name))),engine=[];
-    if(M.engineAcceptance?.results?.length){
-      for(const r of M.engineAcceptance.results)engine.push({name:`Engine · ${r.name}`,ok:r.ok===true,detail:r.detail||''});
-    }else engine.push({name:'Engine acceptance suite executed',ok:false,detail:'engines/acceptance.js did not produce results'});
+    if(M.engineAcceptance?.results?.length){for(const r of M.engineAcceptance.results)engine.push({name:`Engine · ${r.name}`,ok:r.ok===true,detail:r.detail||''});}
+    else engine.push({name:'Engine acceptance suite executed',ok:false,detail:'engines/acceptance.js did not produce results'});
     const tests=[...retained,...engine,...currentContractTests()],passed=tests.filter(t=>t.ok===true).length;
-    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821al'};
+    return {...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,retiredTests:[...retired],contract:'20260821am'};
   };
   M.release=M.release||{};
-  M.release.guardianGate=()=>{
-    const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);
-    return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};
-  };
+  M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};
   M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true;
 })(globalThis);
