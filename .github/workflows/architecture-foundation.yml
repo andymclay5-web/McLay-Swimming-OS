@@ -32,3 +32,5 @@ jobs:
         run: node architecture/architecture.test.js
       - name: Run end-to-end poolside runtime tests
         run: node architecture/runtime.test.js
+      - name: Run voice Board swimmer and Meet surface tests
+        run: node architecture/vision-surface.test.js
