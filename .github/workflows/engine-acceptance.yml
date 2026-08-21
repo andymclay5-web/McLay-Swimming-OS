@@ -52,12 +52,16 @@ jobs:
           node --check engines/para-pathway-ar.js
           node --check engines/amber-alignment-as.js
           node --check engines/amber-alignment-at.js
+          node --check engines/eyes-up-bridge-ay.js
           node --check engines/release-guardian-ao.js
           node --check engines/release-guardian-ap.js
           node --check engines/release-guardian-aq.js
           node --check engines/release-guardian-ar.js
           node --check engines/release-guardian-as.js
           node --check engines/release-guardian-at.js
+          node --check engines/release-guardian-ay.js
+          for f in architecture/*-core.js; do node --check "$f"; done
+          node --check architecture/poolside-runtime.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
@@ -65,3 +69,10 @@ jobs:
           node tests/board-evidence-regression.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
+      - name: Run eyes-up architecture fixtures
+        run: |
+          node architecture/architecture.test.js
+          node architecture/runtime.test.js
+          node architecture/vision-surface.test.js
+          node architecture/v4-adapter.test.js
+          node architecture/learning-sync.test.js
