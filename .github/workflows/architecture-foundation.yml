@@ -27,5 +27,8 @@ jobs:
       - name: Syntax check architecture modules
         run: |
           for f in architecture/*-core.js; do node --check "$f"; done
+          node --check architecture/poolside-runtime.js
       - name: Run architecture contract tests
         run: node architecture/architecture.test.js
+      - name: Run end-to-end poolside runtime tests
+        run: node architecture/runtime.test.js
