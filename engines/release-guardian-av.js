@@ -1,0 +1,19 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4,C=M?.contextEngineAV,V=M?.voiceRouterAV,Q=M?.rainbowRulesAU;if(!M?.guardian?.run||!C||!V||!Q)return;
+  const BUILD='v4-context-voice-foundation-20260822av',G=M.guardian,baseRun=G.run.bind(G),text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  M.BUILD=BUILD;M.CORE='20260822-context-voice-av';
+  M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'Rainbow coaching fixes plus context/voice foundation. Guardian and physical Android acceptance required.'});
+  const retired=new Set(['Guardian is running the current candidate build','Candidate attestation is locked until Guardian and phone acceptance']);
+  const test=(name,fn)=>{try{const detail=fn();return{name,ok:true,detail:detail==null?'':String(detail)}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')};
+  function tests(){const out=[];
+    out.push(test('Context engine derives a practical authored timeline',()=>{const s={id:'ctx',identity:{date:'2026-08-22',time:'05:30',course:'SCM'},blocks:[{id:'b',title:'Main Set',items:[{id:'a',kind:'set',reps:4,distance:100,cycleSeconds:90,raw:'4 x 100 @ 1:30'},{id:'c',kind:'set',reps:2,distance:200,restSeconds:10,raw:'2 x 200 Development 10 sec Rest'}]}]},t=C.plannedTimeline(s);assert(t.rows.length===2,`rows ${t.rows.length}`);assert(t.durationSeconds>360,'duration too short');return`${t.rows.length} rows · ${Math.round(t.durationSeconds/60)} min`; }));
+    out.push(test('Voice parser resolves swimmer metric note without AI',()=>{const s={id:'v',identity:{date:'2026-08-22',time:'05:30',course:'SCM'},blocks:[{id:'b',title:'Pre Set',items:[{id:'i',kind:'set',reps:8,distance:50,raw:'8 x 50'}]}]},state={athletes:[{id:'h',full_name:'Henry Crump'}],contextAnchors:[]},p=C.parseVoice('Henry fourth 50 34.2 stroke rate 56',{session:s,state});assert(p.intent==='capture_note',p.intent);assert(p.athlete?.id==='h','Henry not resolved');assert(p.payload.strokeRate===56,`sr ${p.payload.strokeRate}`);return'coach note + Henry + SR 56';}));
+    out.push(test('Voice PB query remains deterministic and context-aware',()=>{const p=C.parseVoice('Henry 100 fly PB',{session:null,state:{athletes:[{id:'h',full_name:'Henry Crump'}],contextAnchors:[]}});assert(p.intent==='query_pb',p.intent);assert(p.athlete?.id==='h','Henry not resolved');return'query_pb · Henry';}));
+    out.push(test('Rainbow Overload to Threshold becomes two phase rows',()=>{const x=Q.applyZoneTransition({id:'z',kind:'set',reps:4,distance:150,raw:'4 x 150 Overload to Threshold',cues:[]});assert((x.repPattern||[]).length===4,'no rep pattern');assert(x.repPattern[0].zone==='Overload'&&x.repPattern[1].zone==='Overload','first half wrong');assert(x.repPattern[2].zone==='Threshold'&&x.repPattern[3].zone==='Threshold','second half wrong');return'2 Overload + 2 Threshold';}));
+    out.push(test('Current candidate build is context voice AV',()=>{assert(M.BUILD===BUILD,`runtime ${M.BUILD}`);assert(M.RELEASE_ATTESTATION?.build===BUILD,'attestation mismatch');return BUILD;}));
+    return out;}
+  G.run=()=>{const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(text(t.name))),all=[...kept,...tests()],passed=all.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests:all,passed,total:all.length,ok:all.length>0&&passed===all.length,contract:'20260822av',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
+  M.release=M.release||{};M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true;
+})(globalThis);
