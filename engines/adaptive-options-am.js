@@ -38,12 +38,12 @@
     out.adaptiveOptions=AMBER_MODES.map(x=>({...x}));out.adaptiveMode=mode;out.adaptiveStrokeChoices=[...AMBER_STROKES];out.adaptiveRuleStatus='coach-confirmed';out.adaptiveNote='Upper-body variation · all strokes available · Scull very slow, up to 2:00 per 50';
     out.equipment=[...(out.equipment||[])].filter(x=>!/\b(?:Fins?|Kick)\b/i.test(String(x)));
     let label='';
-    if(mode==='Pull')label=`${stroke} Pull`;
-    else if(mode==='Paddles'){label=`${stroke} Paddles`;if(!out.equipment.some(x=>/paddles/i.test(String(x))))out.equipment.push('Paddles');}
-    else if(mode==='Swim')label=`${stroke} Swim`;
-    else if(mode==='Drill')label=`${stroke} Drill`;
-    else if(mode==='Scull'){label=`${stroke} Scull`;const min=ceil5((Number(out.distance)||50)/50*Number(meta.scullCyclePer50||120));if(Number(out.cycleSeconds||0)<min)out.cycleSeconds=min;}
-    else label='Body alignment';
+    if(mode==='Pull')label=`Upper-body ${stroke} Pull`;
+    else if(mode==='Paddles'){label=`Upper-body ${stroke} Paddles`;if(!out.equipment.some(x=>/paddles/i.test(String(x))))out.equipment.push('Paddles');}
+    else if(mode==='Swim')label=`Upper-body ${stroke} Swim`;
+    else if(mode==='Drill')label=`Upper-body ${stroke} Drill`;
+    else if(mode==='Scull'){label=`Upper-body ${stroke} Scull`;const min=ceil5((Number(out.distance)||50)/50*Number(meta.scullCyclePer50||120));if(Number(out.cycleSeconds||0)<min)out.cycleSeconds=min;}
+    else label='Upper-body · Body alignment';
     rewrite(out,label);out.adaptationReason=`Amber adaptive upper-body · ${mode}`;
     out.cues=[...(out.cues||[]).filter(x=>!/^Adaptive options:/i.test(text(x))),`Adaptive options: Pull / Swim / Paddles / Drill / Scull / Alignment`];
     return out;
