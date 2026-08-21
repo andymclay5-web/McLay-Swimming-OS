@@ -36,3 +36,5 @@ jobs:
         run: node architecture/vision-surface.test.js
       - name: Run current v4 adapter tests
         run: node architecture/v4-adapter.test.js
+      - name: Run learning replication and consent tests
+        run: node architecture/learning-sync.test.js
