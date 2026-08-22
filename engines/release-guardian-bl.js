@@ -1,0 +1,39 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4,G=M?.guardian,A=M?.access,D=M?.meet,U=M?.util,P=M?.privacyHardeningBK;
+  if(!M||!G?.run||!A||!D||!P)return;
+  const BUILD='v4-guardian-runtime-order-20260822bl',baseRun=G.run.bind(G),clean=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const retired=new Set([
+    'Legacy evidence is never assumed swimmer-visible without an explicit v4 audience',
+    'Swimmer role cannot see another swimmer or coach editing capabilities',
+    'Meet Deck race truth is separate from training-session truth and swimmer queue is private',
+    'Swimmer Meet evidence is own-athlete and shared-only',
+    'Guardian is running the current presence-persistence candidate',
+    'Squad layer candidate is active and remains release locked',
+    'Truth release stays field-acceptance locked'
+  ]);
+  const test=(name,fn)=>{try{const detail=fn();return{name,ok:true,detail:detail==null?'':String(detail)}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')};
+  const clone=v=>U?.clone?U.clone(v):JSON.parse(JSON.stringify(v));
+  function withState(fn){
+    const old={athletes:clone(M.state.athletes||[]),attendance:clone(M.state.attendance||[]),meetEntries:clone(M.state.meetEntries||[]),meetEvidence:clone(M.state.meetEvidence||[]),settings:clone(M.state.settings||{})};
+    try{return fn()}finally{M.state.athletes=old.athletes;M.state.attendance=old.attendance;M.state.meetEntries=old.meetEntries;M.state.meetEvidence=old.meetEvidence;M.state.settings=old.settings;}
+  }
+  function setSwimmer(id){Object.assign(M.state.settings,{activeRole:'swimmer',activeUserAthleteId:id,roleBindingVersion:'bh1',roleBindingKind:'swimmer',roleBindingAthleteId:id,roleBindingReason:'guardian-fixture'});assert(A.role()==='swimmer',`role resolved ${A.role()}`);}
+  function currentTests(){const out=[];
+    out.push(test('Current privacy · legacy coach evidence requires explicit swimmer audience',()=>withState(()=>{M.state.athletes=[{id:'legacy-a',full_name:'Legacy Athlete',active:true,squad:'National'}];setSwimmer('legacy-a');const legacy={athlete_id:'legacy-a',athlete_ids:['legacy-a'],text_content:'old coach note',legacy_capture:true};assert(A.captureVisible(legacy)===false,'legacy coach evidence became swimmer-visible');assert(A.captureVisible({...legacy,audience:'shared'})===true,'explicit shared evidence was hidden');return'legacy defaults private · explicit shared visible';})));
+    out.push(test('Current privacy · swimmer sees only self and no coach editing capabilities',()=>withState(()=>{M.state.athletes=[{id:'sa',full_name:'Test Athlete Alpha',active:true,squad:'National'},{id:'sb',full_name:'Test Athlete Beta',active:true,squad:'National'}];const sid=M.currentSession?.()?.id||'role-session';M.state.attendance=[{session_id:sid,athlete_id:'sa',status:'present'},{session_id:sid,athlete_id:'sb',status:'present'}];setSwimmer('sa');assert(A.visibleAthletes().map(x=>x.id).join(',')==='sa','other swimmer visible');assert(!A.can('session.edit')&&!A.can('attendance.read'),'coach controls leaked');assert(A.can('pathway.read_own')&&A.can('capture.write_own'),'own capabilities missing');return'own athlete only · coach edit denied';})));
+    out.push(test('Current privacy · swimmer Meet queue contains only own entries',()=>withState(()=>{M.state.athletes=[{id:'ma',full_name:'Meet Athlete Alpha',active:true,squad:'National'},{id:'mb',full_name:'Meet Athlete Beta',active:true,squad:'National'}];M.state.meetEntries=[{id:'ea',meet_id:'m',athlete_id:'ma',event_number:1,event:'100 Free'},{id:'eb',meet_id:'m',athlete_id:'mb',event_number:2,event:'50 Fly'}];setSwimmer('ma');const rows=D.visibleEntries('m');assert(rows.length===1&&rows[0].athlete_id==='ma',JSON.stringify(rows));assert(!A.can('meet.manage'),'swimmer gained meet management');return'1 own entry · other athlete hidden';})));
+    out.push(test('Current privacy · swimmer Meet evidence is own-athlete and shared-only',()=>withState(()=>{M.state.athletes=[{id:'a',full_name:'Meet Evidence Athlete',active:true,squad:'National'},{id:'b',full_name:'Other Meet Athlete',active:true,squad:'National'}];M.state.meetEntries=[{id:'e',meet_id:'m',athlete_id:'a',event:'100 Free'}];M.state.meetEvidence=[{id:'shared',entry_id:'e',athlete_id:'a',audience:'shared',text:'Hold the line'},{id:'private',entry_id:'e',athlete_id:'a',audience:'coach',text:'Private note'},{id:'other',entry_id:'e',athlete_id:'b',audience:'shared',text:'Other swimmer'}];setSwimmer('a');const rows=D.visibleEvidence('e');assert(rows.length===1&&rows[0].id==='shared',JSON.stringify(rows));return'own shared evidence only';})));
+    out.push(test('Current privacy · swimmer cannot write Meet evidence to another athlete',()=>withState(()=>{M.state.athletes=[{id:'a',full_name:'Meet Writer Athlete',active:true,squad:'National'},{id:'b',full_name:'Other Writer Athlete',active:true,squad:'National'}];M.state.meetEntries=[{id:'ea',meet_id:'m',athlete_id:'a',event:'100 Free'},{id:'eb',meet_id:'m',athlete_id:'b',event:'50 Free'}];M.state.meetEvidence=[];setSwimmer('a');let blocked=false;try{D.addEvidence({entryId:'eb',athleteId:'b',text:'should fail'})}catch(e){blocked=/not your race|not permitted/i.test(e.message)}assert(blocked,'cross-athlete Meet evidence write was allowed');assert(M.state.meetEvidence.length===0,'blocked write still created evidence');return'cross-athlete write blocked';})));
+    out.push(test('Current integration · presence persistence remains connected under current build',()=>{assert(!!M.presencePersistenceBC,'presence persistence missing');assert(M.BUILD===BUILD,`runtime ${M.BUILD}`);return'presence persistence connected';}));
+    out.push(test('Current integration · squad and individual session boundaries remain connected',()=>{const x=M.athleteSessionBE;assert(typeof x?.startAtItem==='function','Start swimmer missing');assert(typeof x?.startSquadAtItem==='function','Start squad missing');assert(typeof x?.endAtItem==='function','End swimmer missing');return'Start swimmer · Start squad · End swimmer';}));
+    out.push(test('Current integration · truth-release architecture remains connected and field locked',()=>{assert(g.MSOSArchitecture?.AthleteSession,'AthleteSession missing');assert(g.MSOSArchitecture?.TrainingHistory,'TrainingHistory missing');assert(g.MSOSArchitecture?.AthleteObservation,'AthleteObservation missing');assert(g.MSOSArchitecture?.AthleteReport,'AthleteReport missing');assert(M.RELEASE_ATTESTATION?.build===BUILD,'attestation mismatch');assert(M.RELEASE_ATTESTATION?.softwareReady===false,'candidate claimed release-ready');return'athlete truth connected · physical acceptance still required';}));
+    return out;
+  }
+  M.BUILD=BUILD;M.CORE='20260822-guardian-runtime-order-bl';
+  M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'BL fixes browser Guardian ordering so the final current-build Guardian cannot be overwritten by a late dynamically loaded older Guardian layer. Physical Android acceptance remains separate.'});
+  G.run=()=>{const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentTests()],passed=tests.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260822bl',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
+  M.release=M.release||{};M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};
+  M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true&&M.release?.deviceAccepted?.()===true;
+})(globalThis);
