@@ -33,14 +33,17 @@ assert.equal(molly.session.id,'dev','remote pilot should receive the newest squa
 assert.equal(molly.attended,false,'opening a remote prescription must not fabricate attendance');
 
 const ash=P.resolve(state,'erin-mcbain');
-assert.equal(ash.status,'roster-match-needed');
+assert.equal(ash.status,'candidate-needs-confirmation');
 assert.equal(ash.entry.confirmed,false);
-assert.equal(ash.athlete,null,'unconfirmed candidate must not invent an athlete record');
+assert.equal(ash.athlete,null,'unconfirmed candidate must not expose swimmer data');
+assert.equal(ash.candidateMatch,null);
 
 const exact={...state,athletes:[...state.athletes,{id:'erin',full_name:'Erin McBain',squad:'Development',active:true}]};
 const erin=P.resolve(exact,'erin-mcbain');
-assert.equal(erin.athlete.id,'erin');
-assert.equal(erin.status,'candidate-needs-confirmation','exact roster match still stays visibly unconfirmed until coach confirms pilot identity');
+assert.equal(erin.athlete,null,'candidate must stay locked even when an exact active roster name exists');
+assert.equal(erin.candidateMatch.id,'erin','exact roster match may be surfaced only as a confirmation candidate');
+assert.equal(erin.status,'candidate-needs-confirmation');
+assert.equal(erin.session,null,'unconfirmed candidate must not receive session data');
 
 const portal=fs.readFileSync(__dirname+'/swimmer-portal-bm.js','utf8');
 assert(/athlete_self_report/.test(portal),'portal must preserve athlete self-report provenance');
@@ -57,4 +60,4 @@ for(const htmlName of ['portal.html','tv.html']){
   assert(storage>=0&&app>=0&&storage<app,`${htmlName} must isolate storage before loading app.js`);
 }
 
-console.log('pilot-bm: swimmer linking, remote non-attendance, self-report provenance, storage isolation and TV read-only checks passed');
+console.log('pilot-bm: confirmed swimmer linking, remote non-attendance, candidate lock, self-report provenance, storage isolation and TV read-only checks passed');
