@@ -45,7 +45,8 @@ const femaleState={athletes:[female],resultsPbBoard:[{athlete_id:'female',distan
 ]};
 const femaleRank=RacePace.rankedEvents(female,femaleState,'SCM')[0];
 assert.ok(femaleRank);
-assert.equal(Math.round(femaleRank.score),Math.round(1000*Math.pow(50/60,3)));
+assert.equal(femaleRank.baseSeconds,50);
+assert.equal(femaleRank.score,Math.floor(1000*Math.pow(50/60,3)));
 
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
 assert.match(board,/if\(!changed&&!needsTarget\)continue/);
