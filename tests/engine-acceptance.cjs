@@ -24,8 +24,8 @@ x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.de
 x=Modification.adaptItem(a100,ap,state,session);assert.equal(x.reps,5);assert.equal(x.repPattern.length,5);
 state.adaptationOverrides=[{sessionId:'fixture',itemId:'a100',athleteId:'cm',active:true,patch:{stroke:'Backstroke'}}];x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.equal(x.distance,100);assert.equal(x.stroke,'Backstroke');state.adaptationOverrides=[];
 
-// Rep-count reduction preserves coach-authored timing.
-const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});x=Modification.adaptItem(im,cm,state,session);assert.equal(x.distance,100);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,105);assert.match(x.cyclePolicy||'',/authored send-off preserved/i);
+// Generic rep-count reductions retain authored timing; reduced complete IM reps align to the squad work window.
+const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});x=Modification.adaptItem(im,cm,state,session);assert.equal(x.distance,100);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,175);assert.match(x.cyclePolicy||'',/aligns to squad work window/i);assert.match(x.raw,/2:55/);
 const timed75=set('timed75',4,75,{raw:'4 x 75 Pull @ 1:45',cycleSeconds:105});x=Modification.adaptItem(timed75,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,105);assert.doesNotMatch(x.raw,/3:30/);
 const timed25=set('timed25',4,25,{raw:'4 x 25 Body line @ 0:45',cycleSeconds:45});x=Modification.adaptItem(timed25,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,25);assert.equal(x.cycleSeconds,45);assert.doesNotMatch(x.raw,/1:30/);
 
