@@ -8,6 +8,7 @@ on:
       - 'v4-training-intelligence-*'
       - 'v4-athlete-session-*'
       - 'v4-squad-layer-starts-*'
+      - 'v4-evidence-backed-mods-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
@@ -46,3 +47,5 @@ jobs:
           node architecture/training-history.test.js
           node architecture/athlete-session.test.js
           node architecture/athlete-report.test.js
+      - name: Run evidence-backed adaptation tests
+        run: node architecture/adaptation-evidence.test.js
