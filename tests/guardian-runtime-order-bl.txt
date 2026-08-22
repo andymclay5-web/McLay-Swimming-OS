@@ -1,0 +1,5 @@
+BL acceptance contract
+- stability-identity-bh.js contains no dynamic loadFullGuardian path
+- index.html loads stability -> guardian-device-state-bj -> privacy-hardening-bk -> release-guardian-bj -> release-guardian-bl -> guardian-runtime
+- final runtime build is v4-guardian-runtime-order-20260822bl
+- Full Guardian must run on every v4 candidate and must include runtime-order regression
