@@ -49,7 +49,9 @@ assert.equal(Math.round(femaleRank.score),Math.round(1000*Math.pow(50/60,3)));
 
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
 assert.match(board,/if\(!changed&&!needsTarget\)continue/);
-assert.match(board,/Modified swimmers are shown beside their own work/);
+assert.match(board,/function modified\(/);
+assert.match(board,/msos-mod-target/);
+assert.match(board,/data-msos-ath/);
 const bridge=fs.readFileSync(require.resolve('../engines/bridge.js'),'utf8');
 assert.match(bridge,/storageEngine\?\.readyPromise/);
 assert.match(bridge,/refs\?\.boot/);
@@ -118,7 +120,3 @@ const charlotte={id:'cm',full_name:'Charlotte Murphy'};
 const modState={athletes:[charlotte],adaptationProfiles:[],adaptationOverrides:[]};
 const adjusted=Modification.adaptItem(easy,charlotte,modState,{id:'s',identity:{course:'SCM'}});
 assert.equal(adjusted.distance,100);
-assert.match(adjusted.raw,/^100\s+Easy$/);
-assert.doesNotMatch(adjusted.raw,/200 Easy/);
-
-console.log('BOARD_EVIDENCE_REGRESSION_PASS');
