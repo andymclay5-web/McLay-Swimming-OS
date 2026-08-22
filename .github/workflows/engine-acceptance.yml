@@ -2,7 +2,9 @@ name: Engine acceptance
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'v4-truth-release-*'
   pull_request:
 
 jobs:
