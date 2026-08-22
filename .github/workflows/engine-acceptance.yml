@@ -53,6 +53,11 @@ jobs:
           node --check engines/amber-alignment-as.js
           node --check engines/amber-alignment-at.js
           node --check engines/presence-persistence-bc.js
+          node --check architecture/interaction-core.js
+          node --check architecture/athlete-session-core.js
+          node --check architecture/training-history-core.js
+          node --check architecture/athlete-observation-core.js
+          node --check architecture/athlete-report-core.js
           node --check engines/athlete-session-bd.js
           node --check engines/swimmer-training-bd.js
           node --check engines/release-guardian-ao.js
@@ -64,6 +69,7 @@ jobs:
           node --check engines/release-guardian-bc.js
           node --check engines/release-guardian-bd.js
           node --check engines/release-guardian-be.js
+          node --check engines/release-guardian-bg.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
