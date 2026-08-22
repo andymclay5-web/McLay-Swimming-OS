@@ -19,8 +19,13 @@ const state={
   settings:{selectedSessionId:'nat'}
 };
 
+assert.equal(P.PILOTS.length,2,'pilot roster should contain only the two confirmed Ashburton AquaGym swimmers');
+assert.deepEqual(P.PILOTS.map(x=>x.name),['Matthew Robertson','Molly McKernan']);
+assert(P.PILOTS.every(x=>x.club==='AquaGym'&&x.location==='Ashburton'&&x.remote===true&&x.confirmed===true),'both pilots must be confirmed AquaGym Ashburton remote swimmers');
+
 const matt=P.resolve(state,'matthew-robertson');
 assert.equal(matt.entry.confirmed,true);
+assert.equal(matt.remote,true,'Matthew is a remote-coaching pilot even when he attends an AquaGym session');
 assert.equal(matt.athlete.id,'mat');
 assert.equal(matt.session.id,'nat');
 assert.equal(matt.attended,true);
@@ -32,18 +37,11 @@ assert.equal(molly.athlete.id,'mol');
 assert.equal(molly.session.id,'dev','remote pilot should receive the newest squad-matching canonical session');
 assert.equal(molly.attended,false,'opening a remote prescription must not fabricate attendance');
 
-const ash=P.resolve(state,'erin-mcbain');
-assert.equal(ash.status,'candidate-needs-confirmation');
-assert.equal(ash.entry.confirmed,false);
-assert.equal(ash.athlete,null,'unconfirmed candidate must not expose swimmer data');
-assert.equal(ash.candidateMatch,null);
-
-const exact={...state,athletes:[...state.athletes,{id:'erin',full_name:'Erin McBain',squad:'Development',active:true}]};
-const erin=P.resolve(exact,'erin-mcbain');
-assert.equal(erin.athlete,null,'candidate must stay locked even when an exact active roster name exists');
-assert.equal(erin.candidateMatch.id,'erin','exact roster match may be surfaced only as a confirmation candidate');
-assert.equal(erin.status,'candidate-needs-confirmation');
-assert.equal(erin.session,null,'unconfirmed candidate must not receive session data');
+const unknown=P.resolve(state,'erin-mcbain');
+assert.equal(unknown.status,'unknown-pilot');
+assert.equal(unknown.entry,null,'occasional Ashburton visitors must not be promoted into remote-coaching accounts by assumption');
+assert.equal(unknown.athlete,null);
+assert.equal(unknown.session,null);
 
 const portal=fs.readFileSync(__dirname+'/swimmer-portal-bm.js','utf8');
 assert(/athlete_self_report/.test(portal),'portal must preserve athlete self-report provenance');
@@ -60,4 +58,4 @@ for(const htmlName of ['portal.html','tv.html']){
   assert(storage>=0&&app>=0&&storage<app,`${htmlName} must isolate storage before loading app.js`);
 }
 
-console.log('pilot-bm: confirmed swimmer linking, remote non-attendance, candidate lock, self-report provenance, storage isolation and TV read-only checks passed');
+console.log('pilot-bn: Matthew + Molly remote coaching identity, non-attendance, self-report provenance, storage isolation and TV read-only checks passed');

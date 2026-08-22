@@ -4,17 +4,13 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSPilotLink=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.1-bm';
+  const VERSION='1.1.0-bn';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 
   const PILOTS=Object.freeze([
-    {slug:'matthew-robertson',name:'Matthew Robertson',cohort:'club-pilot',remote:false,confirmed:true},
-    {slug:'molly-mckernan',name:'Molly McKernan',cohort:'club-and-remote-pilot',remote:true,confirmed:true},
-    {slug:'erin-mcbain',name:'Erin McBain',cohort:'ashburton-candidate',remote:true,confirmed:false},
-    {slug:'isabelle-morten',name:'Isabelle Morten',cohort:'ashburton-candidate',remote:true,confirmed:false},
-    {slug:'elliot-watson',name:'Elliot Watson',cohort:'ashburton-candidate',remote:true,confirmed:false},
-    {slug:'william-summerfield',name:'William Summerfield',cohort:'ashburton-candidate',remote:true,confirmed:false}
+    {slug:'matthew-robertson',name:'Matthew Robertson',club:'AquaGym',location:'Ashburton',cohort:'aquagym-ashburton-remote-pilot',remote:true,confirmed:true},
+    {slug:'molly-mckernan',name:'Molly McKernan',club:'AquaGym',location:'Ashburton',cohort:'aquagym-ashburton-remote-pilot',remote:true,confirmed:true}
   ]);
 
   function pilot(slug){return PILOTS.find(x=>x.slug===norm(slug))||null;}
