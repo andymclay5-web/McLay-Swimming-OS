@@ -9,6 +9,7 @@ on:
       - 'v4-athlete-session-*'
       - 'v4-squad-layer-starts-*'
       - 'v4-athlete-set-evidence-*'
+      - 'v4-truth-release-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
