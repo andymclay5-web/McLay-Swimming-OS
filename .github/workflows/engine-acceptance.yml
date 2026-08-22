@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'v4-truth-release-*'
+      - 'v4-guardian-swimmer-*'
   pull_request:
 
 jobs:
@@ -72,6 +73,7 @@ jobs:
           node --check engines/release-guardian-bd.js
           node --check engines/release-guardian-be.js
           node --check engines/release-guardian-bg.js
+          node --check tests/guardian-runtime-sandbox.cjs
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
@@ -79,3 +81,4 @@ jobs:
           node tests/board-evidence-regression.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
+          node tests/guardian-runtime-sandbox.cjs
