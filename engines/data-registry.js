@@ -34,7 +34,7 @@
   function detect(parsed){const rows=parsed?.rows||[],f=lc(parsed?.filename),r=rows[0]||{},keys=Object.keys(r).join(' ').toLowerCase(),sample=lc(JSON.stringify(r).slice(0,1500));
     const waShape=/(^|\s)(course|pool_course)(\s|$)/.test(keys)&&/(^|\s)(sex|gender)(\s|$)/.test(keys)&&/(^|\s)(distance|event_distance)(\s|$)/.test(keys)&&/(^|\s)(stroke|event_stroke)(\s|$)/.test(keys)&&/(^|\s)(base_seconds|base_time)(\s|$)/.test(keys);
     if(waShape||(/world.*aquatics|fina.*point|base.*time|\bwa\b.*base/.test(f+' '+keys+' '+sample)&&/(base_seconds|base_time|base time)/.test(keys+' '+sample)))return'wa_points';
-    if(/qualif|qt|standard/.test(f+' '+keys+' '+sample)&&/meet|champ|event_name|competition/.test(f+' '+keys+' '+sample))return'meet_qualifying';
+    if(/qualif|qt|standard/.test(f+' '+keys+' '+sample)&&(/meet|champ|event_name|competition/.test(f+' '+keys+' '+sample)||/\bqt\b|qualifying/.test(f)))return'meet_qualifying';
     if(/qualif|qt|standard|national/.test(f+' '+keys+' '+sample)&&/(time|seconds|standard)/.test(keys+' '+sample))return'national_standards';
     if(/calendar|timetable|schedule/.test(f)&&rows.some(x=>x?.date||x?.sessions))return'calendar';
     if(/season/.test(f+' '+keys+' '+sample)&&/plan|phase|macro|meso/.test(f+' '+keys+' '+sample))return'season_plan';
