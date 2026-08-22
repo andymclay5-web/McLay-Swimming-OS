@@ -1,0 +1,44 @@
+name: Swimmer and TV pilot surfaces
+
+on:
+  push:
+    branches:
+      - 'v4-swimmer-tv-pilot-*'
+    paths:
+      - 'pilot/**'
+      - '.github/workflows/pilot-surfaces.yml'
+  pull_request:
+    paths:
+      - 'pilot/**'
+      - '.github/workflows/pilot-surfaces.yml'
+
+jobs:
+  pilot-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check pilot modules
+        run: |
+          node --check pilot/pilot-link.js
+          node --check pilot/pilot-storage.js
+          node --check pilot/swimmer-portal-bm.js
+          node --check pilot/eyes-up-bridge-bm.js
+          node --check pilot/tv-overlay-bm.js
+          node --check pilot/pilot.test.js
+      - name: Run pilot safety and identity tests
+        run: node pilot/pilot.test.js
+      - name: Verify isolated entry-point contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'data-pilot-surface="portal"' pilot/portal.html
+          grep -q 'data-pilot-surface="tv"' pilot/tv.html
+          grep -q './swimmer-portal-bm.js' pilot/portal.html
+          grep -q './eyes-up-bridge-bm.js' pilot/tv.html
+          grep -q './tv-overlay-bm.js' pilot/tv.html
+          grep -q '../architecture/board-projection-core.js' pilot/tv.html
+          echo 'PASS pilot entry-point wiring'
