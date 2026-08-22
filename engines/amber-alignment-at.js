@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M||!E?.Modification)return;
-  const BUILD='v4-para-mqs-stable-20260821at',Q=M.amberAlignmentAT={build:BUILD};
+  const BUILD='v4-modification-consolidation-20260823bp',Q=M.amberAlignmentAT={build:BUILD};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const key=a=>text(a?.full_name).toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -11,7 +11,6 @@
   const manualShape=ov=>E.Modification.shapeOverride?.(ov)||!!(ov&&(ov.raw||['reps','distance','cycleSeconds','restSeconds','equipment','raw','text'].some(k=>Object.prototype.hasOwnProperty.call(ov.patch||{},k))));
   const evidence=item=>M.amberRatioAP?.evidenceMeasured?.(item)===true;
   const independent=item=>M.amberRatioAP?.independentSkill?.(item)===true;
-  const ceil5=n=>Math.ceil(Number(n||0)/5)*5;
   function alignedReps(item,ath,state,session){
     const p=E.Modification.profile?.(ath,state)||{ratio:1},base=Math.max(1,Number(item?.reps)||1),d=Number(item?.distance)||0,pool=poolLength(session),ratio=Math.max(.25,Math.min(1,Number(p.ratio)||1));
     if(ratio>=.98||!d||d%pool!==0)return Math.max(1,Math.round(base*ratio));
@@ -38,11 +37,11 @@
       if(reps!==Number(out.reps)){
         rewriteLead(out,reps,d);if(I.remapRepPattern)out.repPattern=I.remapRepPattern(item.repPattern,baseReps,reps);if(I.remapRepInstructions)out.repInstructions=I.remapRepInstructions(item.repInstructions,baseReps,reps);if(I.rewriteInstructionRanges)I.rewriteInstructionRanges(out,baseReps,reps);if(I.syncRepeatBreakdown)I.syncRepeatBreakdown(out,item);
       }
-      const baseCycle=Number(item.cycleSeconds)||0;if(baseCycle){let cycle=ceil5(baseReps*baseCycle/reps);if(text(out.adaptiveMode)==='Scull')cycle=Math.max(120,cycle);rewriteCycle(out,cycle);}
-      out.adaptationReason=`${Math.round(ratio*100)}% Amber volume profile · return-to-start enforced${out.adaptiveMode?` · ${out.adaptiveMode}`:''}`;
+      const baseCycle=Number(item.cycleSeconds)||0;if(baseCycle){const scull=text(out.adaptiveMode)==='Scull',cycle=scull?Math.max(120,baseCycle):baseCycle;rewriteCycle(out,cycle);out.cyclePolicy=scull?'scull hard constraint':'authored send-off preserved when only rep count changes';}
+      out.adaptationReason=`${Math.round(ratio*100)}% Amber load-profile fallback · return-to-start enforced${out.adaptiveMode?` · ${out.adaptiveMode}`:''}`;
     }
     return out;
   }
   E.Modification.adaptItem=adapt;if(M.adapt)M.adapt.item=adapt;if(M.adaptiveDelivery)M.adaptiveDelivery.adaptItem=adapt;if(M.phoneAcceptanceAO)M.phoneAcceptanceAO.adaptItem=adapt;if(M.amberRatioAP)M.amberRatioAP.adaptItem=adapt;if(M.amberAlignmentAQ)M.amberAlignmentAQ.adaptItem=adapt;if(M.amberAlignmentAS)M.amberAlignmentAS.adaptItem=adapt;Q.adaptItem=adapt;Q.alignedReps=alignedReps;
-  Q.checks=()=>({scm75:'8×75 at 2/3 → 6×75 = 450m',reason:'nearest 2/3 volume that returns to starting end'});
+  Q.checks=()=>({scm75:'8×75 at fallback load ratio → aligned reps; authored send-off preserved',reason:'rep-count changes do not invent a longer cycle'});
 })(globalThis);

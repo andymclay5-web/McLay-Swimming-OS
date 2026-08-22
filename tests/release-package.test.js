@@ -51,8 +51,12 @@ assert.ok(text('engines/release-guardian-bl.js').includes(build),'BL Guardian do
 assert.ok(text('engines/guardian-runtime.js').includes('fullRun'),'explicit full Guardian handle is missing');
 assert.ok(text('engines/guardian-runtime.js').includes('Run full Guardian'),'phone Guardian no longer exposes the full suite');
 assert.ok(text('engines/guardian-device-state-bj.js').includes('No placeholder/test swimmers in production roster'),'device-state placeholder check is missing');
-assert.ok(text('.github/workflows/full-guardian.yml').includes("'v4-*'"),'full Guardian does not run on every v4 candidate upload');
-assert.ok(text('.github/workflows/full-guardian.yml').includes('guardian-runtime-order-bl.cjs'),'Full Guardian does not test browser Guardian ordering');
+const guardianWorkflow=text('.github/workflows/full-guardian.yml');
+assert.ok(guardianWorkflow.includes('- main'),'Full Guardian no longer protects main');
+assert.ok(guardianWorkflow.includes('pull_request:'),'Full Guardian no longer protects candidate PRs');
+assert.ok(guardianWorkflow.includes('github.event.pull_request.draft == false'),'Full Guardian no longer suppresses draft PR churn');
+assert.ok(!guardianWorkflow.includes("'v4-*'"),'Full Guardian reintroduced duplicate v4 branch-push runs');
+assert.ok(guardianWorkflow.includes('guardian-runtime-order-bl.cjs'),'Full Guardian does not test browser Guardian ordering');
 assert.ok(worker.includes(`const BUILD='${build}'`),'service worker uses a different build');
 assert.ok(worker.includes(`const CACHE='mclay-swimming-os-${build}'`),'service-worker cache does not match release build');
 assert.ok(app.includes("navigator.serviceWorker.register('./sw.js')"),'Version 4 never registers its offline worker');

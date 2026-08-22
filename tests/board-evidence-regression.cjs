@@ -6,7 +6,7 @@ global.MSOSEngines={Evidence};
 const RacePace=require('../engines/race-pace.js');
 const Modification=require('../engines/modification.js');
 
-const conor={id:'cf',full_name:'Conor Fischer'};
+const conor={id:'cf',full_name:'Conor Fischer',sex:'M'};
 const state={athletes:[conor],trainingTestTypes:[],trainingTestResults:[],resultsPbBoard:[],resultsEventHistory:[],coachResults:[],courseConversions:[],worldAquaticsBaseTimes:[],adaptationProfiles:[],adaptationOverrides:[]};
 Evidence.ensureVerified(state);
 const brT400=Evidence.t400Rows(conor,state,'Breaststroke');

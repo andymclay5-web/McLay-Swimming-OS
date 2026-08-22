@@ -49,3 +49,5 @@ jobs:
           node architecture/athlete-session.test.js
           node architecture/athlete-report.test.js
           node architecture/athlete-observation.test.js
+      - name: Run evidence-backed adaptation tests
+        run: node architecture/adaptation-evidence.test.js
