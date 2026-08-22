@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#061d2c">
+<title>MSOS TV Board Pilot</title>
+<link rel="stylesheet" href="../styles.css?v=20260816-core401">
+<link rel="stylesheet" href="../v4-correct.css?v=20260819f-targettruth">
+<link rel="stylesheet" href="../v4-poolside-core.css?v=20260819f-targettruth">
+<link rel="stylesheet" href="../engines/board.css?v=20260820w">
+<link rel="stylesheet" href="./pilot.css?v=20260822bm">
+<script src="./pilot-storage.js?v=20260822bm"></script>
+</head>
+<body data-pilot-surface="tv">
+<header class="app-header"><div class="top-row"><select id="sessionSelect"></select><button id="newSessionBtn">＋</button><button id="guardianShortcut">Guardian</button></div><div class="squad-row"><div id="squadTabs"></div><button id="wakeBtn">Keep awake</button><button id="tvModeBtn">TV Board</button><button id="meetModeBtn">Meet</button><span id="roleBadge">Owner</span><span id="buildBadge">v4</span></div></header>
+<main id="appMain"><section id="boardView" class="view"></section><section id="tvView" class="view active"></section><section id="hubView" class="view"></section><section id="swimmerView" class="view"></section><section id="meetView" class="view"></section><section id="athletesView" class="view"></section><section id="reportsView" class="view"></section><section id="dataView" class="view"></section><section id="rollView" class="view"></section><section id="timesView" class="view"></section><section id="connectionView" class="view"></section><section id="guardianView" class="view"></section></main>
+<div class="sticky-actions"><button data-sticky-note>Capture</button><button data-sticky-voice hidden>Voice</button><button data-sticky-video hidden>Video</button><button data-sticky-edit>Edit</button><button data-sticky-finish>Finish</button></div><nav class="bottom-nav"></nav><button id="undoBtn">Undo</button><div id="toast" class="toast"></div><div id="modalHost"></div>
+<script src="../config.js"></script>
+<script src="../seed.js"></script>
+<script src="../app.js?v=20260821ak-cache" defer></script>
+<script src="../engines/storage.js?v=20260820u" defer></script>
+<script src="../engines/startup-gate.js?v=20260820t" defer></script>
+<script src="../engines/cloud-session.js?v=20260820z" defer></script>
+<script src="../v4-correct.js?v=20260821ak-cache" defer></script>
+<script src="../v4-poolside-core.js?v=20260819f-targettruth" defer></script>
+<script src="../engines/session-repair.js?v=20260821af" defer></script>
+<script src="../engines/evidence.js?v=20260821af" defer></script>
+<script src="../engines/data-registry.js?v=20260822bg" defer></script>
+<script src="../engines/wa-base-times-2026.js?v=20260820u" defer></script>
+<script src="../engines/reference-bridge.js?v=20260820x" defer></script>
+<script src="../engines/wa-points.js?v=20260820aa" defer></script>
+<script src="../engines/aerobic.js?v=20260821ak-cache" defer></script>
+<script src="../engines/race-pace.js?v=20260820aa" defer></script>
+<script src="../engines/modification.js?v=20260821ak-cache" defer></script>
+<script src="../engines/coordinator.js?v=20260820v" defer></script>
+<script src="../engines/bridge.js?v=20260821ak-cache" defer></script>
+<script src="../engines/contract-fixes-ak.js?v=20260821ak" defer></script>
+<script src="../engines/performance.js?v=20260821ag" defer></script>
+<script src="../engines/board.js?v=20260821ah" defer></script>
+<script src="../engines/board-state.js?v=20260820aa" defer></script>
+<script src="../engines/attendance-roster.js?v=20260820ad" defer></script>
+<script src="../engines/amber-ratio-ap.js?v=20260821ap" defer></script>
+<script src="../engines/amber-alignment-aq.js?v=20260821aq" defer></script>
+<script src="../engines/para-pathway-ar.js?v=20260821ar" defer></script>
+<script src="../engines/amber-alignment-as.js?v=20260821as" defer></script>
+<script src="../engines/amber-alignment-at.js?v=20260821at" defer></script>
+<script src="../engines/presence-persistence-bc.js?v=20260822bg" defer></script>
+<script src="../architecture/context-core.js?v=20260822bm" defer></script>
+<script src="../architecture/performance-core.js?v=20260822bm" defer></script>
+<script src="../architecture/projection-core.js?v=20260822bm" defer></script>
+<script src="../architecture/board-projection-core.js?v=20260822bm" defer></script>
+<script src="../architecture/swimmer-deck-core.js?v=20260822bm" defer></script>
+<script src="../architecture/v4-adapter-core.js?v=20260822bm" defer></script>
+<script src="./eyes-up-bridge-bm.js?v=20260822bm" defer></script>
+<script src="./tv-overlay-bm.js?v=20260822bm" defer></script>
+</body>
+</html>
