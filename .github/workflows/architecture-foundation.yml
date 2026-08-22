@@ -8,6 +8,7 @@ on:
       - 'v4-training-intelligence-*'
       - 'v4-athlete-session-*'
       - 'v4-squad-layer-starts-*'
+      - 'v4-athlete-set-evidence-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
@@ -46,3 +47,4 @@ jobs:
           node architecture/training-history.test.js
           node architecture/athlete-session.test.js
           node architecture/athlete-report.test.js
+          node architecture/athlete-observation.test.js
