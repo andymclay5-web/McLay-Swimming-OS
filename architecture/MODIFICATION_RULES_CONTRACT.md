@@ -10,6 +10,10 @@ The modification system must be able to explain, persist, version and evolve coa
 
 A modified session is an athlete-specific projection of the canonical squad session, not a second independent workout.
 
+The core principle is:
+
+> They are doing the same thing at the same time as the group — their version of it.
+
 Each modified line should retain:
 - canonical session/item ID;
 - athlete ID;
@@ -27,9 +31,10 @@ Use the first applicable rule unless the coach deliberately overrides it:
 1. explicit coach edit for this exact session/item;
 2. active temporary athlete constraint;
 3. valid stimulus-specific model, e.g. the Race pace model for race work or eligible T400/training-test evidence for aerobic work;
-4. coach-approved athlete/set-type rule;
-5. athlete baseline load profile such as 1/2 or 2/3 plus movement/end-of-pool constraints;
-6. no safe rule: preserve coach-authored work/timing or ask for a coach decision rather than inventing precision.
+4. valid like-for-like performance evidence for athlete-vs-group scaling;
+5. coach-approved athlete/set-type rule;
+6. athlete baseline load profile such as 1/2 or 2/3 plus movement/end-of-pool constraints;
+7. no safe rule: preserve coach-authored work/timing or ask for a coach decision rather than inventing precision.
 
 A percentage is a fallback load guide, not a performance-speed model.
 
@@ -45,18 +50,39 @@ Examples:
 - `4 x 75 @ 1:45` -> `2 x 75 @ 1:45`, not `2 x 75 @ 3:30`.
 - `4 x 25 @ 0:45` -> `2 x 25 @ 0:45`, not `2 x 25 @ 1:30`.
 
-### Modified IM exception — preserve the team work window
+### Modified IM — performance-relative timing and group connection
 
-Complete IM units are a specific coach-confirmed exception. When a modified swimmer must keep complete IM repetitions but does fewer reps than the squad, the practical send-off should keep that swimmer aligned with the squad's total work window rather than inheriting an interval that is too fast for the modified prescription.
+Complete IM units are a specific coach-confirmed case. The swimmer should keep the complete IM unit, but the interval should be proportionally similar to the group's interval relative to actual performance evidence.
 
-Example:
-- squad `5 x 100 IM @ 1:45` = 8:45 total work window;
-- modified swimmer `3 x 100 IM` stays as complete 100 IM units;
-- `8:45 / 3 = 2:55`, so the modified prescription is `3 x 100 IM @ 2:55`.
+Use this sequence:
 
-Practical modified send-offs round **up** to the next five-second deck interval after the team-window calculation. This IM rule is not permission to stretch unrelated 75s, 25s, technical work or ordinary rep reductions.
+1. get a robust main-group PB/performance reference for the exact IM distance and course;
+2. get the modified swimmer's matching PB/performance;
+3. calculate the group cycle/performance relationship;
+4. apply that relationship to the modified swimmer;
+5. round the resulting send-off **up** to the next five seconds;
+6. choose the complete-rep count whose total time keeps the swimmer closest to the group's authored set window.
 
-A changed cycle is valid only when justified by real coaching logic: the modified-IM team-window rule, coach override, athlete-specific timing rule, aerobic target/recovery evidence, or a confirmed capability rule.
+Example using approximate evidence:
+- group 100 IM reference `1:10` = 70 s;
+- group set `5 x 100 IM @ 1:45` = 105 s cycle and 8:45 total set window;
+- cycle/performance factor = `105 / 70 = 1.50`.
+
+McKenzie at roughly `1:52` = 112 s:
+- `112 x 1.50 = 168`;
+- practical send-off = `2:50`;
+- 3 reps = 8:30, keeping her connected to the group's 8:45 set.
+
+Charlotte at roughly `2:12` = 132 s:
+- `132 x 1.50 = 198`;
+- practical send-off = `3:20`;
+- choose the complete-rep count closest to the same 8:45 group window.
+
+These example PBs are illustrative only. MSOS must use actual stored exact-course evidence in production.
+
+If exact performance evidence is unavailable, a lower-confidence complete-IM fallback may use the set window, but it must be labelled as a fallback rather than represented as athlete-specific performance logic.
+
+A changed cycle is valid only when justified by real coaching logic: performance-relative work:rest, coach override, athlete-specific timing rule, aerobic target/recovery evidence, or a confirmed capability rule.
 
 If distance per repetition changes, target and recovery must be recalculated from athlete evidence where the set is target-driven. Do not carry a target from the old distance onto the new distance.
 
@@ -78,7 +104,7 @@ Examples:
 
 ### Race / quality / max
 - Protect race shape, purpose and recovery.
-- Prefer the authored/common interval where only rep count changes, except where a specific coach-confirmed set-type rule such as modified IM requires different timing.
+- Prefer the authored/common interval where only rep count changes, except where a genuine performance-relative or athlete-specific rule requires different timing.
 - Do not automatically shorten important starts, finishes, maximum-speed or race-quality work.
 - Use the SCM Race pace model only where its event/segment evidence genuinely applies.
 - If a required race target is unsupported, say target required rather than inventing a generic division.
@@ -108,6 +134,7 @@ The engine may choose the nearest useful repetition/distance that:
 - preserves complete IM units where required;
 - uses practical pool lengths;
 - keeps the athlete at the coaching end where that is an active athlete rule;
+- keeps the swimmer reasonably connected to the group's set window;
 - does not destroy the intended stimulus.
 
 The reason should be auditable.
@@ -189,9 +216,9 @@ Rule: MD technical volume v3
 ```
 
 ```text
-Charlotte · 3 x 100 IM @ 2:55
-Why: complete IM units · reduced reps · aligned to squad 8:45 work window
-Rule: Modified IM team-window timing
+McKenzie · 3 x 100 IM @ 2:50
+Why: group 100 IM reference 1:10 · athlete 1:52 · same work:rest proportion · 8:30 vs group 8:45 set window
+Rule: Modified IM performance-relative timing
 ```
 
 The system must remain understandable and usable even when no AI assistant is available.
