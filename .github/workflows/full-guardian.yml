@@ -1,0 +1,65 @@
+name: Full Guardian
+
+on:
+  push:
+    branches:
+      - main
+      - 'v4-*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check active runtime
+        run: |
+          node --check app.js
+          node --check v4-correct.js
+          node --check v4-poolside-core.js
+          node --check sw.js
+          node --check engines/guardian-runtime.js
+          node --check engines/stability-identity-bh.js
+          node --check engines/guardian-device-state-bj.js
+          node --check engines/release-guardian-bj.js
+          for f in architecture/*-core.js; do node --check "$f"; done
+      - name: Session truth regression
+        run: node tests/session-truth.test.js
+      - name: Complete V4 Guardian
+        run: node tests/v4-guardian.test.js
+      - name: Engine regression
+        run: |
+          node tests/engine-acceptance.cjs
+          node tests/board-evidence-regression.cjs
+          node tests/reference-data-regression.cjs
+          node tests/attendance-roster-static.cjs
+          node tests/stability-identity-bh.cjs
+          node tests/guardian-device-state-bj.cjs
+      - name: Architecture regression
+        run: |
+          node architecture/architecture.test.js
+          node architecture/runtime.test.js
+          node architecture/vision-surface.test.js
+          node architecture/v4-adapter.test.js
+          node architecture/learning-sync.test.js
+          node architecture/training-history.test.js
+          node architecture/athlete-session.test.js
+          node architecture/athlete-report.test.js
+          node architecture/athlete-observation.test.js
+      - name: Guardian upload contract
+        run: node tests/guardian-full-upload-contract-bj.cjs
+      - name: Release package integrity
+        run: node tests/release-package.test.js
+      - name: Morning Board wiring
+        run: |
+          grep -q 'engines/session-truth.js' morning-board.html
+          grep -q 'engines/morning-coaching.js' morning-board.html
+          grep -q 'morning-board.js' morning-board.html
+          grep -q 'morning-board.css' morning-board.html
+          grep -q 'morning-board.html' sw.js
+          grep -q 'engines/morning-coaching.js' sw.js
