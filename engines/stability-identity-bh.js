@@ -90,4 +90,12 @@
   }
   const afterHydrate=()=>{const p=purgePlaceholders(),n=normalize();if((p.changed||n.changed)&&M.ui?.renderCurrent)requestAnimationFrame(()=>M.ui.renderCurrent());};
   if(M.storageEngine?.readyPromise?.then)M.storageEngine.readyPromise.then(afterHydrate).catch(()=>{});
+
+  I.loadFullGuardian=()=>{
+    if(I.guardianLoadPromise)return I.guardianLoadPromise;
+    const add=src=>new Promise((resolve,reject)=>{if(document.querySelector(`script[data-bj-src="${src}"]`))return resolve();const s=document.createElement('script');s.src=src;s.defer=true;s.dataset.bjSrc=src;s.onload=resolve;s.onerror=()=>reject(new Error(`Could not load ${src}`));document.head.appendChild(s);});
+    I.guardianLoadPromise=add('engines/guardian-device-state-bj.js?v=20260822bj').then(()=>add('engines/release-guardian-bj.js?v=20260822bj')).then(()=>{M.ui?.renderHeader?.();return true;}).catch(e=>{I.guardianLoadError=e?.message||String(e);return false;});
+    return I.guardianLoadPromise;
+  };
+  if(typeof document!=='undefined')I.loadFullGuardian();
 })(globalThis);
