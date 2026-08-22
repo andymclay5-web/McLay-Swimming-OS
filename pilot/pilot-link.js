@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.MSOSPilotLink=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0-bm';
+  const VERSION='1.0.1-bm';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 
@@ -46,11 +46,14 @@
     return attendedHit||((allowRemote&&rows[0])||null);
   }
   function resolve(state,slug,options={}){
-    const entry=pilot(slug),athlete=findAthlete(state,entry),session=athlete?chooseSession(state,athlete,{allowRemote:entry?.remote!==false,...options}):null;
+    const entry=pilot(slug),candidateMatch=findAthlete(state,entry);
+    if(!entry)return{entry:null,athlete:null,candidateMatch:null,session:null,status:'unknown-pilot',remote:false,attended:false};
+    if(!entry.confirmed)return{entry,athlete:null,candidateMatch,session:null,status:'candidate-needs-confirmation',remote:!!entry.remote,attended:false};
+    const athlete=candidateMatch,session=athlete?chooseSession(state,athlete,{allowRemote:entry.remote!==false,...options}):null;
     return{
-      entry,athlete,session,
-      status:!entry?'unknown-pilot':!athlete?'roster-match-needed':!entry.confirmed?'candidate-needs-confirmation':session?'ready':'no-session',
-      remote:!!entry?.remote,
+      entry,athlete,candidateMatch,session,
+      status:!athlete?'roster-match-needed':session?'ready':'no-session',
+      remote:!!entry.remote,
       attended:!!(athlete&&session&&attended(state,session.id,athlete.id))
     };
   }
