@@ -1,6 +1,6 @@
 'use strict';
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSArchitecture=root.MSOSArchitecture||{};root.MSOSArchitecture.AdaptationEvidence=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.0.0-bf';
+  const VERSION='1.0.1-bf';
   const finite=v=>Number.isFinite(Number(v));
   const n=v=>Number(v);
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -76,9 +76,9 @@
       let cycle=baseCycle;
       let cycleSource=baseCycle?'authored-cycle':'';
       if(target&&finite(input.referenceTargetSeconds)&&baseCycle){
-        const ref=n(input.referenceTargetSeconds),delta=Math.abs(target-ref)/ref;
-        if(delta>.08){cycle=cycleForWorkRest(target,ref,baseCycle);cycleSource='matched-work-rest';}
-        else cycleSource='shared-cycle-work-rest-close';
+        const matched=cycleForWorkRest(target,n(input.referenceTargetSeconds),baseCycle);
+        if(matched&&Math.abs(matched-baseCycle)<=2.5){cycle=baseCycle;cycleSource='shared-cycle-work-rest-close';}
+        else if(matched){cycle=matched;cycleSource='matched-work-rest';}
       }
       return{mode:'evidence',reps:baseReps,distance:evidence.distance,targetSeconds:target,cycleSeconds:cycle,cycleSource,speedFactor:evidence.factor,referenceTargetSeconds:finite(input.referenceTargetSeconds)?n(input.referenceTargetSeconds):null,evidenceSource:input.evidenceSource||'',targetSource:input.targetSource||'',confidence:input.confidence||'evidence-backed',reason:evidence.why.join(' · ')};
     }
