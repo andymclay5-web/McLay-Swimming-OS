@@ -11,7 +11,14 @@ const M=global.MSOS4={
   presencePersistenceBC:{mergeRows:(a,b)=>[...a,...b]},
   athleteSessionBE:{startAtItem(){},startSquadAtItem(){},endAtItem(){}},
   release:{deviceAccepted:()=>false},
-  parser:{parse:(source,{id,course})=>({id,identity:{course},blocks:[{items:[source.includes('400 IM pace')?{raceIntent:{distance:400,eventStroke:'IM',workingStroke:'Butterfly'}}:{repInstructions:[{rep:1,raceIntent:{distance:200}},{rep:2,raceIntent:null,label:'Drill'},{rep:3,raceIntent:{distance:200}},{rep:4,raceIntent:null,label:'Drill'}]}}]}]})},
+  parser:{
+    parse(source,{id,course}={}){
+      const item=source.includes('400 IM pace')
+        ?{raceIntent:{distance:400,eventStroke:'IM',workingStroke:'Butterfly'}}
+        :{repInstructions:[{rep:1,raceIntent:{distance:200}},{rep:2,raceIntent:null,label:'Drill'},{rep:3,raceIntent:{distance:200}},{rep:4,raceIntent:null,label:'Drill'}]};
+      return{id,identity:{course},blocks:[{items:[item]}]};
+    }
+  },
   access:{
     role:()=>state.settings.activeRole||'owner',
     can:cap=>caps[state.settings.activeRole||'owner']?.has(cap)||false,
