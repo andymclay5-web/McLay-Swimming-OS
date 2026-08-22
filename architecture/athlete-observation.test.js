@@ -38,6 +38,9 @@ assert.equal(line.performanceSummary.rpe.values[0],7);
 assert.equal(line.performanceSummary.completeness,'partial','partial observations must not claim whole-set performance');
 assert(line.performanceSummary.feelings.includes('Strong but last one hurt'));
 assert(line.performanceSummary.notes.some(x=>/Held body line/.test(x)));
+assert.equal(line.targetComparison.compared,3,'all three observed times can compare with the common 45.0 target');
+assert.equal(Number(line.targetComparison.meanDelta.toFixed(2)),0.10);
+assert.equal(Number(line.targetComparison.bestDelta.toFixed(2)),-0.10);
 
 const report=R.athleteReport({athlete:amber,sessions:[session],attendance,prescribe,captures:[coachVoice,self,laterCoachNote],asOf:new Date('2026-08-22T12:00:00Z')});
 assert.equal(report.profileEvidence.length,1,'coach notes added outside a session stay on the athlete timeline');
@@ -45,4 +48,4 @@ assert.equal(report.profileEvidence[0].id,'later-note');
 assert.equal(report.evidenceCount,3);
 assert.equal(report.projections[0].blocks[0].items[0].observations.length,2);
 assert.equal(R.captureContext(coachVoice).itemId,'f50','nested architecture context must be respected');
-console.log('athlete-observation-bf: 24 assertions passed');
+console.log('athlete-observation-bf: 26 assertions passed');
