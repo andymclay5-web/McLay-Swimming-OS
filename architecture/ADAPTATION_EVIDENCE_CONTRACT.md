@@ -1,10 +1,16 @@
 # MSOS Evidence-Backed Adaptation Contract
 
-Build: `v4-mod-im-team-window-20260823br`
+Build: `v4-im-performance-relative-20260823bs`
 
 ## Purpose
 
 Modified work must preserve the intended training stimulus for the individual swimmer. A fixed session-load fraction such as 1/2 or 2/3 is a fallback guide, not a pace model, target-time model, or automatic interval multiplier.
+
+The core coaching principle is:
+
+> The modified swimmer is doing the same set at the same time as the group — their version of it.
+
+That means preserving comparable work:rest relationships and keeping the swimmer connected to the group set window, rather than simply copying the group send-off or stretching an interval from rep-count arithmetic.
 
 ## Product naming
 
@@ -26,7 +32,7 @@ For an individual line, use the strongest applicable evidence in this order:
 2. exact Race pace model evidence for race-specific work;
 3. valid matching T400 evidence for aerobic work;
 4. matching stroke/course/event PB or recent measured set evidence to derive an athlete-to-reference speed factor;
-5. accepted athlete-specific or set-type hard rule, including modified IM team-window timing;
+5. accepted athlete-specific or set-type hard rule;
 6. only then, a fallback load ratio.
 
 Unsupported target work must say target required or remain target-free. Do not invent precision.
@@ -43,29 +49,55 @@ Example: athlete SCM 200 Free = 3:21.00 (201 s), reference/main-group 200 Free =
 
 So the athlete is approximately 78.6% of the reference speed for that evidence, not 2/3 by assumption.
 
-Use a robust main-group reference (normally median or trimmed mean of valid like-for-like target evidence) rather than allowing one outlier to define the group.
+Use a robust main-group reference, normally the median or trimmed mean of valid like-for-like evidence, rather than allowing one outlier to define the group.
 
 ## Work/rest matching
 
 The aim is similar stimulus, not identical metres.
 
-For target-driven work:
+For target-driven or performance-scaled work:
 
-1. calculate the main/reference target work time and rest relationship;
-2. calculate the modified swimmer's target from their own evidence at each practical candidate distance;
-3. choose the practical distance/repetition pattern that makes work duration and work:rest relationship closest to the reference while preserving the set purpose and pool-end constraints;
-4. calculate the swimmer's target time again for the chosen distance;
-5. use the shared send-off when the resulting work/rest relationship is close enough; otherwise calculate a swimmer-specific send-off from the same work/rest relationship.
+1. identify the group's reference performance or target for the same event/stroke/course;
+2. identify the modified swimmer's own matching evidence;
+3. preserve the group's work:rest proportion by scaling the send-off from those performance times;
+4. round the resulting practical send-off **up** to the next five-second deck interval;
+5. then choose the practical rep count that keeps the swimmer's total set time closest to the group's authored set window while preserving complete movement units and the intended stimulus.
 
 A reduced distance must never inherit the old target time just because the line was shortened.
 
 ## Send-off rules
 
 - Reducing **rep count only** does not normally justify stretching the send-off. `4 x 75 @ 1:45 -> 2 x 75 @ 1:45` and `4 x 25 @ 0:45 -> 2 x 25 @ 1:30` are invalid automatic transformations.
-- **Modified IM is a coach-confirmed exception.** When the swimmer must retain complete IM units but does fewer repetitions, preserve the squad's total work window. Example: `5 x 100 IM @ 1:45` is an 8:45 window; `3 x 100 IM` therefore uses `2:55` so the modified swimmer remains aligned with the team.
-- Modified IM team-window send-offs round **up** to the next five-second deck interval after the window calculation.
+- Where there is a genuine performance relationship, use it. The interval should be proportionally similar to the group's interval relative to performance, not derived from the swimmer's 1/2 or 2/3 load profile.
 - Reducing **distance per rep** requires target/recovery recalculation from athlete evidence. Do not blindly keep either the old target or an arithmetically multiplied interval.
-- The IM exception must not be generalized to unrelated 25s, 50s, 75s, technical work or ordinary rep-count reductions.
+
+### Modified IM example
+
+For complete IM repetitions, use exact-course IM performance evidence where available.
+
+If the main group has a robust 100 IM reference of `1:10` and swims `5 x 100 IM @ 1:45`:
+
+- group performance = 70 s;
+- group cycle = 105 s;
+- cycle/performance factor = `105 / 70 = 1.50`;
+- group set window = `5 x 105 = 525 s` = `8:45`.
+
+If McKenzie has a 100 IM PB around `1:52` (112 s):
+
+- proportional cycle = `112 x 1.50 = 168 s`;
+- round up to `2:50`;
+- `3 x 2:50 = 8:30`, which remains close to the group's 8:45 window;
+- `4 x 2:50 = 11:20`, which disconnects her from the group.
+
+If Charlotte has a 100 IM PB around `2:12` (132 s):
+
+- proportional cycle = `132 x 1.50 = 198 s`;
+- round up to `3:20`;
+- compare the practical total-time choices against the group's 8:45 window and choose the closest useful complete-rep option.
+
+These are illustrations only. Production uses the swimmer's actual stored evidence and the actual group reference for that session.
+
+If exact-course IM evidence is missing, the system must label any fallback as lower-confidence rather than pretending the timing is performance-derived.
 
 ## Intent-specific rules
 
@@ -79,7 +111,7 @@ Use the athlete's own Race pace model evidence, matching course/stroke/event and
 
 ### Modified IM
 
-Preserve complete IM units first. If the modified swimmer does fewer complete IM reps than the squad, distribute the squad's total authored work window across the delivered modified reps, then round the practical send-off up to five seconds. This is a set-structure timing rule, not a claim that the swimmer's performance speed equals their load percentage.
+Preserve complete IM units. Use exact-course IM PB/performance evidence to scale the group cycle proportionally, then choose the rep count that keeps the swimmer connected to the group's total set window. Load ratio remains only a fallback if performance evidence is unavailable.
 
 ### Max / starts / finishes / technical quality
 
@@ -100,6 +132,7 @@ Every generated adaptation decision should retain:
 - athlete target/performance;
 - derived speed factor where used;
 - chosen reps, distance, target and send-off;
+- group set window and athlete projected set time;
 - reason/confidence;
 - any coach override that replaced the suggestion.
 

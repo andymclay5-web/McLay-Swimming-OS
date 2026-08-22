@@ -24,23 +24,24 @@ x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.de
 x=Modification.adaptItem(a100,ap,state,session);assert.equal(x.reps,5);assert.equal(x.repPattern.length,5);
 state.adaptationOverrides=[{sessionId:'fixture',itemId:'a100',athleteId:'cm',active:true,patch:{stroke:'Backstroke'}}];x=Modification.adaptItem(a100,cm,state,session);assert.equal(x.reps,4);assert.equal(x.distance,100);assert.equal(x.stroke,'Backstroke');state.adaptationOverrides=[];
 
-// Generic rep-count reductions retain authored timing; reduced complete IM reps align to the squad work window.
-const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});x=Modification.adaptItem(im,cm,state,session);assert.equal(x.distance,100);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,175);assert.match(x.cyclePolicy||'',/aligns to squad work window/i);assert.match(x.raw,/2:55/);
+// Generic rep reductions retain authored timing. Modified IM uses exact-course performance to preserve work:rest proportion and group connection.
+const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});
+const g1={id:'g1',full_name:'Group One',sex:'M'},g2={id:'g2',full_name:'Group Two',sex:'F'},g3={id:'g3',full_name:'Group Three',sex:'M'};
+const imState={...state,athletes:[cm,md,g1,g2,g3],resultsPbBoard:[...state.resultsPbBoard,{athlete_id:g1.id,distance:100,stroke:'IM',course:'SCM',result_seconds:68},{athlete_id:g2.id,distance:100,stroke:'IM',course:'SCM',result_seconds:70},{athlete_id:g3.id,distance:100,stroke:'IM',course:'SCM',result_seconds:72},{athlete_id:md.id,distance:100,stroke:'IM',course:'SCM',result_seconds:112},{athlete_id:cm.id,distance:100,stroke:'IM',course:'SCM',result_seconds:132}]};
+x=Modification.adaptItem(im,md,imState,session);assert.equal(x.distance,100);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,170);assert.match(x.cyclePolicy||'',/performance-relative/i);assert.match(x.raw,/2:50/);assert.equal(x.imPerformancePlan.referenceSeconds,70);assert.equal(x.imPerformancePlan.athleteSeconds,112);assert.equal(x.imPerformancePlan.groupWindowSeconds,525);assert.equal(x.imPerformancePlan.totalSeconds,510);
+x=Modification.adaptItem(im,cm,imState,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,200);assert.match(x.raw,/3:20/);assert.equal(x.imPerformancePlan.athleteSeconds,132);assert.equal(x.imPerformancePlan.totalSeconds,600);
 const timed75=set('timed75',4,75,{raw:'4 x 75 Pull @ 1:45',cycleSeconds:105});x=Modification.adaptItem(timed75,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,105);assert.doesNotMatch(x.raw,/3:30/);
 const timed25=set('timed25',4,25,{raw:'4 x 25 Body line @ 0:45',cycleSeconds:45});x=Modification.adaptItem(timed25,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,25);assert.equal(x.cycleSeconds,45);assert.doesNotMatch(x.raw,/1:30/);
 
-// Normal two-rep descent becomes Build/Fast; stroke-count descent stays stroke-count semantics.
 const desc=set('desc',4,100,{raw:'4 x 100 Freestyle Descend 1-4 @ 1:45',cues:['Descend 1-4'],cycleSeconds:105});x=Modification.adaptItem(desc,cm,state,session);assert.equal(x.reps,2);assert.match([x.raw,...x.cues].join(' '),/1 Build \/ 1 Fast/i);assert.deepEqual(x.repInstructions.map(v=>v.label),['Build','Fast']);
 const pull=set('pull',3,200,{raw:'3 x 200 Pull',cues:['Descend Stroke Count 1-3']});x=Modification.adaptItem(pull,cm,state,session);assert.equal(x.reps,2);assert.match(x.cues.join(' '),/Desc SC 1-2/i);assert.doesNotMatch(x.cues.join(' '),/1 Build \/ 1 Fast/i);
 
-// A changed distance invalidates a stale target so Coordinator can recalculate for delivered work.
 const fixedTarget=set('fixed-target',1,200,{stroke:'Freestyle',raw:'200 Freestyle target 2:00',targetSeconds:120,cycleSeconds:150});x=Modification.adaptItem(fixedTarget,cm,state,session);assert.equal(x.distance,100);assert.equal(x.targetMustRecalculate,true);assert.equal(x.targetSeconds,undefined);assert.equal(x.referenceTargetSeconds,120);
 
 const kick=set('kick',5,50,{raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build'],cycleSeconds:60});x=Modification.adaptItem(kick,cm,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,135);assert.equal(x.kickCycleRange?.min,130);assert.equal(x.kickCycleRange?.max,140);x=Modification.adaptItem(kick,cf,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,60);x=Modification.adaptItem(kick,ap,state,session);assert.equal(x.reps,5);assert.equal(x.cycleSeconds,60);assert.match(x.raw,/Upper-body equivalent/i);
 const repeat=set('repeat',12,50,{raw:'12 x 50 #1 Stroke',repeatBreakdown:{rounds:4,unitReps:3,unit:[{count:1,text:'Scull'},{count:1,text:'Drill'},{count:1,text:'Swim — Perfect Technique'}]},repeatBreakdownCue:'4 rounds · Scull / Drill / Swim — Perfect Technique',cues:['4 rounds · Scull / Drill / Swim — Perfect Technique']});x=Modification.adaptItem(repeat,cm,state,session);assert.equal(x.reps,6);assert.match(x.repeatBreakdownCue,/^2 rounds · Scull \/ Drill \/ Swim/);x=Modification.adaptItem(repeat,md,state,session);assert.equal(x.reps,8);assert.match(x.repeatBreakdownCue,/^2 rounds · Scull \/ Drill \/ Swim.*\+ Scull \/ Drill/);
 const quality=set('q',6,25,{raw:'6 x 25 #1 Stroke @ 1:00',cycleSeconds:60,repInstructions:[{rep:1,label:'Build',raceIntent:null},...Array.from({length:5},(_,i)=>({rep:i+2,label:'100m Race Pace',raceIntent:{distance:100}}))]});x=Modification.adaptItem(quality,cm,state,session);assert.equal(x.reps,6);assert.equal(x.distance,25);
 
-// Production runtime loads the AT Amber-alignment owner after the base Modification engine.
 global.MSOS4={state,currentSession:()=>session,util:{clock:s=>`${Math.floor(Number(s||0)/60)}:${String(Math.round(Number(s||0)%60)).padStart(2,'0')}`},amberRatioAP:{evidenceMeasured:()=>false,independentSkill:()=>false}};
 require('../engines/amber-alignment-at.js');
 const ActiveModification=global.MSOSEngines.Modification;
@@ -49,7 +50,6 @@ const s75=set('s75',8,75,{raw:'8 x 75 with Fins 50 technique / 25 fast @ 1:45',c
 let t=Aerobic.forItem(session,ActiveModification.adaptItem(a400,cm,state,session),cm,state);assert.equal(t.status,'pattern');assert.equal(t.rows.length,2);assert.ok(Number.isFinite(t.rows[0].seconds));
 t=Aerobic.forItem(session,a100,cf,state);assert.equal(t.status,'pattern_fallback');assert.ok(t.rows.every(r=>r.hr));
 
-// Full SCM Race pace model replaces generic PB division and exposes source truth.
 let rp=RacePace.racePace(60,100,50,{item:{raw:'first 50'},athlete:h,stroke:'Freestyle',course:'SCM'});assert.ok(Math.abs(rp.seconds-28.524)<0.001);assert.match(rp.source,/Race pace model/i);
 rp=RacePace.racePace(60,100,25,{item:{raw:'race start'},athlete:h,stroke:'Freestyle',course:'SCM'});assert.ok(Number.isFinite(rp.seconds)&&rp.seconds>0);assert.match(rp.source,/Race pace model/i);
 const femaleFly={id:'ff',full_name:'Female Fly',sex:'F'};rp=RacePace.racePace(70,100,50,{item:{raw:'second 50'},athlete:femaleFly,stroke:'Butterfly',course:'SCM'});assert.ok(Number.isFinite(rp.seconds)&&rp.seconds>35);assert.match(rp.source,/Race pace model/i);

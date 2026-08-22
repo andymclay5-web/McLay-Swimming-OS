@@ -25,12 +25,13 @@
   function raceState(ath,row){return{athletes:[ath],adaptationProfiles:[],adaptationOverrides:[],trainingTestTypes:[],trainingTestResults:[],resultsPbBoard:[row],resultsEventHistory:[],coachResults:[],courseConversions:[],worldAquaticsBaseTimes:[]};}
   function reconcileEngineAcceptance(){
     if(!E?.Modification)return;const current=M.engineAcceptance;if(!current?.results)return;
-    const stale='Reduced IM keeps the same total team work window';
-    const kept=current.results.filter(x=>clean(x?.name)!==stale);
-    const session={id:'guardian-current-im-cycle',identity:{course:'SCM'}},ath={id:'guardian-current-cm',full_name:'Charlotte Murphy'},state={athletes:[ath],adaptationProfiles:[],adaptationOverrides:[]};
+    const staleNames=new Set(['Reduced IM keeps the same total team work window','Reduced IM preserves authored send-off when only reps change','Reduced IM keeps complete IM units aligned to the team work window']);
+    const kept=current.results.filter(x=>!staleNames.has(clean(x?.name)));
+    const session={id:'guardian-current-im-cycle',identity:{course:'SCM'}},ath={id:'guardian-current-md',full_name:'McKenzie Drage',sex:'F'},g1={id:'guardian-g1',full_name:'Group One'},g2={id:'guardian-g2',full_name:'Group Two'},g3={id:'guardian-g3',full_name:'Group Three'};
+    const state={athletes:[ath,g1,g2,g3],adaptationProfiles:[],adaptationOverrides:[],resultsPbBoard:[{athlete_id:g1.id,distance:100,stroke:'IM',course:'SCM',result_seconds:68},{athlete_id:g2.id,distance:100,stroke:'IM',course:'SCM',result_seconds:70},{athlete_id:g3.id,distance:100,stroke:'IM',course:'SCM',result_seconds:72},{athlete_id:ath.id,distance:100,stroke:'IM',course:'SCM',result_seconds:112}],resultsEventHistory:[],coachResults:[]};
     const item={id:'guardian-current-im',kind:'set',reps:5,distance:100,stroke:'IM',raw:'5 x 100 IM @ 1:45',text:'5 x 100 IM @ 1:45',cues:[],pattern:[],repPattern:[],repInstructions:[],raceIntent:null,zone:'',restSeconds:10,cycleSeconds:105,equipment:[],composition:[]};
-    const out=E.Modification.adaptItem(item,ath,state,session),replacement={name:'Reduced IM keeps complete IM units aligned to the team work window',ok:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===175&&/2:55/.test(String(out?.raw||'')),detail:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===175&&/2:55/.test(String(out?.raw||''))?'':JSON.stringify(out)};
-    const results=[...kept,replacement];M.engineAcceptance={...current,build:'20260823br-current-contract',results,ok:results.every(x=>x.ok===true),ranAt:new Date().toISOString()};
+    const out=E.Modification.adaptItem(item,ath,state,session),replacement={name:'Reduced IM uses performance-relative send-off and stays connected to the group set window',ok:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===170&&/2:50/.test(String(out?.raw||''))&&out?.imPerformancePlan?.referenceSeconds===70&&out?.imPerformancePlan?.groupWindowSeconds===525,detail:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===170&&/2:50/.test(String(out?.raw||''))?'':JSON.stringify(out)};
+    const results=[...kept,replacement];M.engineAcceptance={...current,build:'20260823bs-current-contract',results,ok:results.every(x=>x.ok===true),ranAt:new Date().toISOString()};
   }
   function currentTests(){const out=[];
     if(E?.RacePace&&M.parser?.parse){
@@ -50,7 +51,7 @@
   M.BUILD=BUILD;M.CORE='20260822-guardian-runtime-order-bl';
   M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'BL fixes browser Guardian ordering so the final current-build Guardian cannot be overwritten by a late dynamically loaded older Guardian layer. Physical Android acceptance remains separate.'});
   reconcileEngineAcceptance();
-  G.run=()=>{reconcileEngineAcceptance();const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentTests()],passed=tests.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260823br',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
+  G.run=()=>{reconcileEngineAcceptance();const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentTests()],passed=tests.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260823bs',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
   M.release=M.release||{};M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};
   M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true&&M.release?.deviceAccepted?.()===true;
 })(globalThis);
