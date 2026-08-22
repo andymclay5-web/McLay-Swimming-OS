@@ -26,7 +26,9 @@ jobs:
           node --check engines/guardian-runtime.js
           node --check engines/stability-identity-bh.js
           node --check engines/guardian-device-state-bj.js
+          node --check engines/privacy-hardening-bk.js
           node --check engines/release-guardian-bj.js
+          node --check engines/release-guardian-bk.js
           for f in architecture/*-core.js; do node --check "$f"; done
       - name: Session truth regression
         run: node tests/session-truth.test.js
@@ -40,6 +42,7 @@ jobs:
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
           node tests/guardian-device-state-bj.cjs
+          node tests/guardian-current-runtime-bk.cjs
       - name: Architecture regression
         run: |
           node architecture/architecture.test.js
