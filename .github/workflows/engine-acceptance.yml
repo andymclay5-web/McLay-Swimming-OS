@@ -7,9 +7,12 @@ on:
       - 'v4-truth-release-*'
       - 'v4-stability-identity-*'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 jobs:
   engine-acceptance:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
