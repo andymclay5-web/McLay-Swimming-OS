@@ -2,6 +2,24 @@ name: Morning Board check
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'engines/session-truth.js'
+      - 'engines/morning-coaching.js'
+      - 'app.js'
+      - 'v4-correct.js'
+      - 'v4-poolside-core.js'
+      - 'index.html'
+      - 'tests/session-truth.test.js'
+      - 'tests/v4-guardian.test.js'
+      - 'tests/release-package.test.js'
+      - 'SHA256SUMS.txt'
+      - 'manifest.webmanifest'
+      - 'morning-board.html'
+      - 'morning-board.js'
+      - 'morning-board.css'
+      - 'sw.js'
+      - '.github/workflows/morning-board-check.yml'
   push:
     branches: [main]
     paths:
@@ -25,6 +43,7 @@ on:
 
 jobs:
   verify:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
