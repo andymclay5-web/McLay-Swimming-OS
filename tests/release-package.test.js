@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.resolve(__dirname,'..');
-const build='v4-truth-release-20260822bg';
+const build='v4-stability-identity-20260822bh';
 const read=file=>fs.readFileSync(path.join(root,file));
 const text=file=>read(file).toString('utf8');
 
@@ -52,19 +52,20 @@ const liveRuntimeFiles=[
   'engines/athlete-session-bd.js',
   'engines/swimmer-training-bd.js',
   'engines/swimmer-training-bd.css',
-  'engines/release-guardian-bg.js'
+  'engines/release-guardian-bg.js',
+  'engines/stability-identity-bh.js'
 ];
 for(const file of liveRuntimeFiles){
-  assert.ok(fs.existsSync(path.join(root,file)),`Missing truth-release runtime file: ${file}`);
-  assert.ok(worker.includes(file),`Offline cache omits truth-release runtime file: ${file}`);
+  assert.ok(fs.existsSync(path.join(root,file)),`Missing current runtime file: ${file}`);
+  assert.ok(worker.includes(file),`Offline cache omits current runtime file: ${file}`);
 }
 
-assert.equal(version,`McLay Swimming OS Version 4 · ${build}`,'VERSION.txt does not match truth release');
+assert.equal(version,`McLay Swimming OS Version 4 · ${build}`,'VERSION.txt does not match current release candidate');
 assert.ok(index.includes('app.js?v=20260821ak-cache'),'index uses a stale app build');
 assert.ok(index.includes('v4-correct.js?v=20260821ak-cache'),'index uses a stale correct-layer build');
 assert.ok(index.includes('v4-poolside-core.js?v=20260819f-targettruth'),'index uses a stale poolside build');
 for(const file of liveRuntimeFiles.filter(x=>x.endsWith('.js'))){
-  assert.ok(index.includes(file),`index does not load truth-release runtime file: ${file}`);
+  assert.ok(index.includes(file),`index does not load current runtime file: ${file}`);
 }
 assert.ok(worker.includes(`const BUILD='${build}'`),'service worker uses a different build');
 assert.ok(worker.includes(`const CACHE='mclay-swimming-os-${build}'`),'service-worker cache does not match release build');
@@ -83,7 +84,9 @@ assert.ok(text('engines/athlete-session-bd.js').includes('startSquadAtItem'),'sq
 assert.ok(text('engines/athlete-session-bd.js').includes('endAtItem'),'individual session end action is missing');
 assert.ok(text('engines/swimmer-training-bd.js').includes('projectionFor'),'Training UI is not connected to athlete-session projection');
 assert.ok(text('engines/swimmer-training-bd.js').includes('Partial evidence'),'set-level partial evidence presentation is missing');
+assert.ok(text('engines/stability-identity-bh.js').includes('migrate-pre-bh-role-state'),'stale role migration guard is missing');
+assert.ok(text('engines/stability-identity-bh.js').includes('phoneSafeChecks'),'phone-safe Guardian binding is missing');
 assert.equal(manifest.name,'McLay Swimming OS — Version 4','manifest uses a stale product name');
 assert.equal(manifest.short_name,'McLay Swim V4','manifest uses a stale install name');
 
-console.log(`Release package PASS · ${checksumRows.length-2} stable hashes · ${liveRuntimeFiles.length} truth-release runtime connections · ${build}`);
+console.log(`Release package PASS · ${checksumRows.length-2} stable hashes · ${liveRuntimeFiles.length} current runtime connections · ${build}`);
