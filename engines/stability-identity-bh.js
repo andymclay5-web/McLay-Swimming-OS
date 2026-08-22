@@ -3,12 +3,11 @@
   const M=g.MSOS4;if(!M?.state||!M?.access)return;
   const BUILD='v4-stability-identity-20260822bh',BINDING='bh1';
   const I=M.stabilityIdentityBH={build:BUILD,bindingVersion:BINDING};
-  const A=M.access,UI=M.ui||{},G=M.guardian||{},U=M.util||{};
-  const esc=v=>U.escape?U.escape(v):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const A=M.access;
   const saveUi=()=>{try{if(M.storageEngine?.saveUi)M.storageEngine.saveUi(M.state);else M.store?.save?.(M.state)}catch{}};
   const saveFull=()=>{try{M.store?.save?.(M.state)}catch{}};
   const athlete=id=>(M.state.athletes||[]).find(x=>x.id===id&&x.active!==false)||null;
-  const placeholderName=name=>/^swimmer\s+[a-z0-9]+$/i.test(String(name||'').trim());
+  const placeholderName=name=>/^swimmer\s+[a-z0-9]+$/i.test(String(name||'').replace(/\s+/g,' ').trim());
   const isPlaceholderAthlete=a=>placeholderName(a?.full_name||a?.name||'');
   const validLinkedAthlete=id=>{const a=athlete(id);return !!a&&!isPlaceholderAthlete(a)};
 
@@ -19,19 +18,15 @@
     const ids=new Set(removed.map(a=>a.id).filter(Boolean));
     M.state.athletes=list.filter(a=>!ids.has(a.id));
     for(const key of ['attendance','adaptationProfiles','adaptationOverrides','trainingTestResults','coachResults','athleteAchievements','timedSets']){
-      if(!Array.isArray(M.state[key]))continue;
-      M.state[key]=M.state[key].filter(row=>!ids.has(row?.athlete_id)&&!ids.has(row?.athleteId));
+      if(Array.isArray(M.state[key]))M.state[key]=M.state[key].filter(row=>!ids.has(row?.athlete_id)&&!ids.has(row?.athleteId));
     }
-    if(Array.isArray(M.state.captures))M.state.captures=M.state.captures.flatMap(row=>{
-      const one=row?.athlete_id||row?.athleteId||'';
-      const key=Array.isArray(row?.athlete_ids)?'athlete_ids':Array.isArray(row?.athleteIds)?'athleteIds':'';
-      const many=key?[...row[key]].filter(id=>!ids.has(id)):[];
-      if(one&&ids.has(one)&&!many.length)return[];
-      if(!one&&!key)return[row];
+    if(Array.isArray(M.state.captures))M.state.captures=M.state.captures.map(row=>{
       const next={...row};
-      if(one&&ids.has(one)){if('athlete_id'in next)next.athlete_id=many.length===1?many[0]:null;if('athleteId'in next)next.athleteId=many.length===1?many[0]:null;}
-      if(key)next[key]=many;
-      return[next];
+      if(ids.has(next.athlete_id))next.athlete_id=null;
+      if(ids.has(next.athleteId))next.athleteId=null;
+      if(Array.isArray(next.athlete_ids))next.athlete_ids=next.athlete_ids.filter(id=>!ids.has(id));
+      if(Array.isArray(next.athleteIds))next.athleteIds=next.athleteIds.filter(id=>!ids.has(id));
+      return next;
     });
     const s=M.state.settings=M.state.settings||{};
     if(ids.has(s.selectedAthleteId))s.selectedAthleteId='';
@@ -39,9 +34,12 @@
     if(ids.has(s.activeUserAthleteId)){s.activeUserAthleteId='';s.activeRole='owner';s.view='board';}
     if(Array.isArray(s.timingRoster))s.timingRoster=s.timingRoster.filter(id=>!ids.has(id));
     M.state.migrations=M.state.migrations||{};
-    const prior=Array.isArray(M.state.migrations.removedPlaceholderAthletes)?M.state.migrations.removedPlaceholderAthletes:[];
     const stamp=new Date().toISOString();
-    M.state.migrations.removedPlaceholderAthletes=[...prior,...removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||''),removedAt:stamp,reason:'test-placeholder-roster-cleanup'}))].slice(-20);
+    M.state.migrations.removedPlaceholderAthletes=[...(M.state.migrations.removedPlaceholderAthletes||[]),...removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||''),removedAt:stamp,reason:'test-placeholder-roster-cleanup'}))].slice(-20);
+    M.state.guardian=M.state.guardian||{};
+    M.state.guardian.fieldIncidents=M.state.guardian.fieldIncidents||[];
+    M.state.guardian.fieldIncidents.push({id:`placeholder-${Date.now()}`,type:'placeholder_roster_contamination',names:removed.map(a=>String(a.full_name||a.name||'')),detectedAt:stamp,resolvedBy:'automatic local cleanup'});
+    M.state.guardian.fieldIncidents=M.state.guardian.fieldIncidents.slice(-20);
     if(persist)saveFull();
     return{changed:true,removed:removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||'')}))};
   }
@@ -50,7 +48,7 @@
     const s=M.state.settings=M.state.settings||{};
     s.activeRole='owner';s.activeUserAthleteId='';s.assistantId='';
     s.roleBindingVersion=BINDING;s.roleBindingKind='owner';s.roleBindingAthleteId='';s.roleBindingReason=reason;
-    if(['swimmer','athletes','meet'].includes(s.view))s.view='board';
+    if(['swimmer','athletes'].includes(s.view))s.view='board';
     if(persist)saveUi();
     return'owner';
   }
@@ -69,71 +67,35 @@
   }
   I.athlete=athlete;I.placeholderName=placeholderName;I.isPlaceholderAthlete=isPlaceholderAthlete;I.validLinkedAthlete=validLinkedAthlete;I.purgePlaceholders=purgePlaceholders;I.resetOwner=resetOwner;I.normalize=normalize;
 
-  const initialPurge=purgePlaceholders({persist:false});
-  const initialIdentity=normalize({persist:false});
-  if(initialPurge.changed)saveFull();else if(initialIdentity.changed)saveUi();
+  const firstPurge=purgePlaceholders({persist:false}),firstIdentity=normalize({persist:false});
+  if(firstPurge.changed)saveFull();else if(firstIdentity.changed)saveUi();
 
   const oldRole=typeof A.role==='function'?A.role.bind(A):()=>M.state.settings.activeRole||'owner';
   const oldSetRole=typeof A.setRole==='function'?A.setRole.bind(A):null;
-  A.role=()=>{
-    const role=oldRole();
-    if(role==='swimmer'){
-      const s=M.state.settings||{};
-      if(s.roleBindingVersion!==BINDING||s.roleBindingKind!=='swimmer'||s.roleBindingAthleteId!==s.activeUserAthleteId||!validLinkedAthlete(s.activeUserAthleteId))return resetOwner('runtime-invalid-swimmer-link');
-    }
-    return role;
-  };
+  A.role=()=>{const role=oldRole();if(role==='swimmer'){const s=M.state.settings||{};if(s.roleBindingVersion!==BINDING||s.roleBindingKind!=='swimmer'||s.roleBindingAthleteId!==s.activeUserAthleteId||!validLinkedAthlete(s.activeUserAthleteId))return resetOwner('runtime-invalid-swimmer-link');}return role;};
   A.setRole=(role,opts={})=>{
     if(role==='swimmer'){
-      const id=String(opts.athleteId||'');
-      if(!validLinkedAthlete(id))throw new Error('Choose a real active swimmer before linking a swimmer device');
+      const id=String(opts.athleteId||'');if(!validLinkedAthlete(id))throw new Error('Choose a real active swimmer before linking a swimmer device');
       if(oldSetRole)oldSetRole(role,{...opts,athleteId:id});else{M.state.settings.activeRole='swimmer';M.state.settings.activeUserAthleteId=id;}
-      M.state.settings.roleBindingVersion=BINDING;M.state.settings.roleBindingKind='swimmer';M.state.settings.roleBindingAthleteId=id;M.state.settings.roleBindingReason='explicit-swimmer-link';saveUi();return role;
+      Object.assign(M.state.settings,{roleBindingVersion:BINDING,roleBindingKind:'swimmer',roleBindingAthleteId:id,roleBindingReason:'explicit-swimmer-link'});saveUi();return role;
     }
-    if(role==='owner'){
-      if(oldSetRole)oldSetRole('owner',opts);else M.state.settings.activeRole='owner';
-      return resetOwner('explicit-owner');
-    }
+    if(role==='owner'){if(oldSetRole)oldSetRole('owner',opts);else M.state.settings.activeRole='owner';return resetOwner('explicit-owner');}
     if(oldSetRole)oldSetRole(role,opts);else M.state.settings.activeRole=role;
-    M.state.settings.roleBindingVersion=BINDING;M.state.settings.roleBindingKind=role;M.state.settings.roleBindingAthleteId='';M.state.settings.roleBindingReason=`explicit-${role}`;saveUi();return role;
+    Object.assign(M.state.settings,{roleBindingVersion:BINDING,roleBindingKind:role,roleBindingAthleteId:'',roleBindingReason:`explicit-${role}`});saveUi();return role;
   };
 
-  M.BUILD=BUILD;M.CORE='20260822-stability-identity-bh';
-  M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'BH stability candidate: owner identity guard, placeholder roster cleanup and phone-safe Guardian. Full regression remains CI-owned; physical Android acceptance remains required.'});
-
-  function phoneSafeChecks(){
-    const tests=[],test=(name,fn)=>{try{const detail=fn();tests.push({name,ok:true,detail:detail==null?'':String(detail)})}catch(e){tests.push({name,ok:false,detail:e?.message||String(e)})}},assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')};
-    test('Current role identity is coherent',()=>{assert(!(M.state.athletes||[]).some(isPlaceholderAthlete),'placeholder test swimmer still in roster');const role=A.role(),s=M.state.settings||{};if(role==='swimmer'){assert(validLinkedAthlete(s.activeUserAthleteId),'linked swimmer missing');assert(s.roleBindingKind==='swimmer','swimmer binding missing');return athlete(s.activeUserAthleteId)?.full_name||s.activeUserAthleteId}assert(role==='owner'||role==='assistant',`unexpected role ${role}`);return role});
-    test('Owner role cannot retain a swimmer identity',()=>{const s=M.state.settings||{};if(A.role()==='owner')assert(!s.activeUserAthleteId,'owner still has active swimmer id');return'clean'});
-    test('Current session identity resolves',()=>{const id=M.state.settings?.selectedSessionId||'',s=M.currentSession?.();assert(!id||s?.id===id,`selected ${id} did not resolve`);return s?.id||'no session selected'});
-    test('Attendance merge is non-destructive',()=>{const P=M.presencePersistenceBC;if(!P?.mergeRows)return'presence engine unavailable';const local=[{session_id:'bh',athlete_id:'a',status:'present',updated_at:'2026-08-22T00:00:00Z'}],merged=P.mergeRows(local,[],'bh');assert(merged.length===1,'empty payload erased presence');return'1 row retained'});
-    test('Guardian is phone-safe',()=>{assert(G.runAndRender===I.runPhoneSafe,'full Guardian still bound to phone action');return'full regression kept out of UI thread'});
-    const passed=tests.filter(x=>x.ok).length;return{ok:passed===tests.length,passed,total:tests.length,tests,at:new Date().toISOString(),build:BUILD,phoneSafe:true};
+  if(typeof M.ui?.configureRoleChrome==='function'){
+    const oldConfigure=M.ui.configureRoleChrome.bind(M.ui);
+    M.ui.configureRoleChrome=()=>{purgePlaceholders();normalize();oldConfigure();};
   }
-  I.phoneSafeChecks=phoneSafeChecks;
-  function latestPhoneSafe(){return(M.state.guardian?.phoneSafeRuns||[]).at?.(-1)||null}
-  function renderGuardian(result=null){
-    const h=document.querySelector('#guardianView');if(!h)return;
-    const r=result||latestPhoneSafe(),status=r?`${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`:'Not run on this load';
-    h.innerHTML=`<section class="page-card"><div class="eyebrow">GUARDIAN · PHONE-SAFE</div><h1>${esc(status)}</h1><p><b>${esc(BUILD)}</b></p><p class="muted">The full regression suite is deliberately not executed on the coaching phone. It belongs in CI so Guardian cannot freeze the Board. These checks only verify device identity, selected-session coherence, attendance protection and the phone-safe Guardian binding.</p>${r?`<div class="guardian-list">${r.tests.map(t=>`<div class="check-card ${t.ok?'ok':'bad'}"><b>${t.ok?'✓':'✕'} ${esc(t.name)}</b>${t.detail?`<small>${esc(t.detail)}</small>`:''}</div>`).join('')}</div>`:''}<div class="hub-actions"><button id="runPhoneSafeGuardian">Run phone-safe checks</button><button id="guardianBackBoard">Back to Board</button></div></section>`;
-    h.querySelector('#runPhoneSafeGuardian')?.addEventListener('click',()=>I.runPhoneSafe());
-    h.querySelector('#guardianBackBoard')?.addEventListener('click',()=>M.nav?.show?.('board',{restoreScroll:false}));
-  }
-  I.renderGuardian=renderGuardian;
-  I.runPhoneSafe=()=>{
-    const h=document.querySelector('#guardianView');if(h)h.innerHTML='<section class="page-card"><div class="eyebrow">GUARDIAN · PHONE-SAFE</div><h1>Checking…</h1><p class="muted">Short device checks only.</p></section>';
-    setTimeout(()=>{const r=phoneSafeChecks();M.state.guardian=M.state.guardian||{};M.state.guardian.phoneSafeRuns=M.state.guardian.phoneSafeRuns||[];M.state.guardian.phoneSafeRuns.push(r);M.state.guardian.phoneSafeRuns=M.state.guardian.phoneSafeRuns.slice(-20);saveFull();renderGuardian(r);M.toast?.(`Phone checks ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`)},0);
-    return{deferred:true,phoneSafe:true,build:BUILD};
-  };
-  G.runAndRender=I.runPhoneSafe;
-  UI.renderGuardian=renderGuardian;
-
-  if(typeof UI.configureRoleChrome==='function'){
-    const oldConfigure=UI.configureRoleChrome.bind(UI);
-    UI.configureRoleChrome=()=>{purgePlaceholders();normalize();oldConfigure();const guard=document.querySelector('#guardianShortcut');if(guard&&!guard.hidden)guard.onclick=()=>M.nav?.show?.('guardian',{restoreScroll:false});};
-  }
-
   const afterHydrate=()=>{const p=purgePlaceholders(),n=normalize();if((p.changed||n.changed)&&M.ui?.renderCurrent)requestAnimationFrame(()=>M.ui.renderCurrent());};
   if(M.storageEngine?.readyPromise?.then)M.storageEngine.readyPromise.then(afterHydrate).catch(()=>{});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{purgePlaceholders();normalize();if(A.role()==='owner'&&['swimmer','athletes','meet'].includes(M.state.settings.view))M.state.settings.view='board';},{once:true});
+
+  I.loadFullGuardian=()=>{
+    if(I.guardianLoadPromise)return I.guardianLoadPromise;
+    const add=src=>new Promise((resolve,reject)=>{if(document.querySelector(`script[data-bj-src="${src}"]`))return resolve();const s=document.createElement('script');s.src=src;s.defer=true;s.dataset.bjSrc=src;s.onload=resolve;s.onerror=()=>reject(new Error(`Could not load ${src}`));document.head.appendChild(s);});
+    I.guardianLoadPromise=add('engines/guardian-device-state-bj.js?v=20260822bj').then(()=>add('engines/release-guardian-bj.js?v=20260822bj')).then(()=>{M.ui?.renderHeader?.();return true;}).catch(e=>{I.guardianLoadError=e?.message||String(e);return false;});
+    return I.guardianLoadPromise;
+  };
+  if(typeof document!=='undefined')I.loadFullGuardian();
 })(globalThis);
