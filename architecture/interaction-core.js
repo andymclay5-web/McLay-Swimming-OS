@@ -8,7 +8,7 @@
     root.MSOSArchitecture.Interaction = api;
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function factory() {
-  const VERSION = '1.0.0-aw';
+  const VERSION = '1.1.0-bf';
   const text = v => String(v ?? '').replace(/\s+/g, ' ').trim();
   const key = v => text(v).toLowerCase().replace(/[^a-z0-9]+/g, '');
   const STROKES = [
@@ -80,10 +80,15 @@
     return null;
   }
 
+  function spokenDecimal(s) {
+    const m = text(s).match(/(?:^|\s)(\d{1,3})\s+point\s+(\d{1,2})(?=\s|$|[,.])/i);
+    return m ? Number(`${m[1]}.${m[2]}`) : null;
+  }
+
   function metrics(s) {
     const t = text(s);
     const out = {};
-    let m = t.match(/\bstroke\s*rate\s*(?:is|of|=)?\s*(\d{2,3})\b/i);
+    let m = t.match(/\b(?:stroke\s*rate|sr)\s*(?:is|of|=)?\s*(\d{2,3})\b/i);
     if (m) out.strokeRate = Number(m[1]);
     m = t.match(/\b(?:heart\s*rate|hr)\s*(?:is|of|=)?\s*(\d{2,3})\b/i);
     if (m) out.heartRate = Number(m[1]);
@@ -91,8 +96,10 @@
     if (m) out.rpe = Number(m[1]);
     const clock = t.match(/(?:^|\s)(\d{1,2}):(\d{2}(?:\.\d+)?)(?=\s|$|[,.])/);
     const decimal = t.match(/(?:^|\s)(\d{1,3}\.\d+)(?=\s|$|[,.])/);
+    const spoken = spokenDecimal(t);
     if (clock) out.timeSeconds = Number(clock[1]) * 60 + Number(clock[2]);
     else if (decimal) out.timeSeconds = Number(decimal[1]);
+    else if (spoken != null) out.timeSeconds = spoken;
     const rep = ordinalRep(t);
     if (rep) out.rep = rep;
     return out;
@@ -164,5 +171,5 @@
     };
   }
 
-  return { VERSION, resolveAthlete, leadingAthletePhrase, eventSpec, metrics, wantsPublic, parseDeterministic, actionEnvelope, CAPABILITY_BY_INTENT };
+  return { VERSION, resolveAthlete, leadingAthletePhrase, eventSpec, ordinalRep, spokenDecimal, metrics, wantsPublic, parseDeterministic, actionEnvelope, CAPABILITY_BY_INTENT };
 });
