@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,U=M?.util;if(!M||!U)return;
-  const D=M.dataRegistry={build:'v4-data-registry-20260820u'};
+  const D=M.dataRegistry={build:'v4-data-registry-20260822bg'};
   const DB='mclay_swimming_v4_data_registry',STORE='datasets';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),lc=v=>text(v).toLowerCase(),now=()=>new Date().toISOString();
   const TYPES={
@@ -32,7 +32,8 @@
   function csv(textValue){const s=String(textValue||'').replace(/^\uFEFF/,'');const lines=s.split(/\r?\n/).filter(x=>x.trim());if(!lines.length)return[];const parse=line=>{const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(cur.trim());cur='';}else cur+=c;}out.push(cur.trim());return out;};const head=parse(lines[0]).map(x=>lc(x).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''));return lines.slice(1).map(line=>Object.fromEntries(parse(line).map((v,i)=>[head[i]||`field_${i+1}`,v])));}
   function parseText(raw,filename=''){const t=String(raw||'').trim();if(!t)return{rows:[],payload:null,filename};if(/^[\[{]/.test(t)){const value=JSON.parse(t);if(Array.isArray(value))return{rows:value,payload:value,filename};if(Array.isArray(value.rows))return{rows:value.rows,payload:value,filename};if(Array.isArray(value.dates))return{rows:value.dates,payload:value,filename};if(Array.isArray(value.results))return{rows:value.results,payload:value,filename};if(Array.isArray(value.entries))return{rows:value.entries,payload:value,filename};return{rows:[value],payload:value,filename};}return{rows:csv(t),payload:null,filename};}
   function detect(parsed){const rows=parsed?.rows||[],f=lc(parsed?.filename),r=rows[0]||{},keys=Object.keys(r).join(' ').toLowerCase(),sample=lc(JSON.stringify(r).slice(0,1500));
-    if(/world.*aquatics|fina.*point|base.*time/.test(f+' '+keys+' '+sample)&&/(base_seconds|base_time|base time)/.test(keys+' '+sample))return'wa_points';
+    const waShape=/(^|\s)(course|pool_course)(\s|$)/.test(keys)&&/(^|\s)(sex|gender)(\s|$)/.test(keys)&&/(^|\s)(distance|event_distance)(\s|$)/.test(keys)&&/(^|\s)(stroke|event_stroke)(\s|$)/.test(keys)&&/(^|\s)(base_seconds|base_time)(\s|$)/.test(keys);
+    if(waShape||(/world.*aquatics|fina.*point|base.*time|\bwa\b.*base/.test(f+' '+keys+' '+sample)&&/(base_seconds|base_time|base time)/.test(keys+' '+sample)))return'wa_points';
     if(/qualif|qt|standard/.test(f+' '+keys+' '+sample)&&/meet|champ|event_name|competition/.test(f+' '+keys+' '+sample))return'meet_qualifying';
     if(/qualif|qt|standard|national/.test(f+' '+keys+' '+sample)&&/(time|seconds|standard)/.test(keys+' '+sample))return'national_standards';
     if(/calendar|timetable|schedule/.test(f)&&rows.some(x=>x?.date||x?.sessions))return'calendar';
