@@ -35,17 +35,28 @@ A percentage is a fallback load guide, not a performance-speed model.
 
 ## Work shape and timing are separate decisions
 
-Reducing repetitions or distance does **not** mean stretching the send-off to occupy the original total set time.
+Reducing repetitions or distance does **not automatically** mean stretching the send-off to occupy the original total set time.
 
 Default rule:
 
-> When a coach-authored cycle/send-off exists, retain it after a rep-count reduction unless a stronger athlete/stimulus timing rule explicitly changes it.
+> When a coach-authored cycle/send-off exists, retain it after a normal rep-count reduction unless a stronger athlete/stimulus timing rule explicitly changes it.
 
 Examples:
 - `4 x 75 @ 1:45` -> `2 x 75 @ 1:45`, not `2 x 75 @ 3:30`.
 - `4 x 25 @ 0:45` -> `2 x 25 @ 0:45`, not `2 x 25 @ 1:30`.
 
-A changed cycle is valid only when justified by real coaching logic: coach override, athlete-specific timing rule, aerobic target/recovery evidence, or a confirmed capability rule.
+### Modified IM exception — preserve the team work window
+
+Complete IM units are a specific coach-confirmed exception. When a modified swimmer must keep complete IM repetitions but does fewer reps than the squad, the practical send-off should keep that swimmer aligned with the squad's total work window rather than inheriting an interval that is too fast for the modified prescription.
+
+Example:
+- squad `5 x 100 IM @ 1:45` = 8:45 total work window;
+- modified swimmer `3 x 100 IM` stays as complete 100 IM units;
+- `8:45 / 3 = 2:55`, so the modified prescription is `3 x 100 IM @ 2:55`.
+
+Practical modified send-offs round **up** to the next five-second deck interval after the team-window calculation. This IM rule is not permission to stretch unrelated 75s, 25s, technical work or ordinary rep reductions.
+
+A changed cycle is valid only when justified by real coaching logic: the modified-IM team-window rule, coach override, athlete-specific timing rule, aerobic target/recovery evidence, or a confirmed capability rule.
 
 If distance per repetition changes, target and recovery must be recalculated from athlete evidence where the set is target-driven. Do not carry a target from the old distance onto the new distance.
 
@@ -67,7 +78,7 @@ Examples:
 
 ### Race / quality / max
 - Protect race shape, purpose and recovery.
-- Prefer the authored/common interval where only rep count changes.
+- Prefer the authored/common interval where only rep count changes, except where a specific coach-confirmed set-type rule such as modified IM requires different timing.
 - Do not automatically shorten important starts, finishes, maximum-speed or race-quality work.
 - Use the SCM Race pace model only where its event/segment evidence genuinely applies.
 - If a required race target is unsupported, say target required rather than inventing a generic division.
@@ -94,6 +105,7 @@ Practical coaching structure outranks exact percentage arithmetic.
 
 The engine may choose the nearest useful repetition/distance that:
 - preserves complete descent/build/round structures where possible;
+- preserves complete IM units where required;
 - uses practical pool lengths;
 - keeps the athlete at the coaching end where that is an active athlete rule;
 - does not destroy the intended stimulus.
@@ -168,12 +180,18 @@ Temporary return/injury rules expire and fall back to the underlying durable pro
 
 The Board stays compact, but an opened modified line must be able to answer `Why?`.
 
-Example:
+Examples:
 
 ```text
 McKenzie · 2 x 75 @ 1:45
 Why: 2/3 load profile · coaching-end rule · authored 1:45 retained
 Rule: MD technical volume v3
+```
+
+```text
+Charlotte · 3 x 100 IM @ 2:55
+Why: complete IM units · reduced reps · aligned to squad 8:45 work window
+Rule: Modified IM team-window timing
 ```
 
 The system must remain understandable and usable even when no AI assistant is available.

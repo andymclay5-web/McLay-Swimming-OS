@@ -1,6 +1,6 @@
 # MSOS Evidence-Backed Adaptation Contract
 
-Build: `v4-modification-consolidation-20260823bp`
+Build: `v4-mod-im-team-window-20260823br`
 
 ## Purpose
 
@@ -14,7 +14,7 @@ The short-course race-distribution source is displayed in-product as **Race pace
 
 1. **Load profile** — how much total session volume/load is normally appropriate for the swimmer. Legacy 1/2 or 2/3 values can remain as last-resort load guides.
 2. **Performance scale** — how fast this swimmer is for the relevant stroke/course/event or training mode, derived from actual evidence such as a matching PB, Race pace model target, or T400 anchor.
-3. **Set intent** — aerobic, race pace, max/quality, technical/skill, recovery, or another coach-authored purpose.
+3. **Set intent** — aerobic, race pace, max/quality, technical/skill, recovery, modified IM structure, or another coach-authored purpose.
 
 Never use the load profile as though it were the swimmer's performance speed.
 
@@ -26,7 +26,7 @@ For an individual line, use the strongest applicable evidence in this order:
 2. exact Race pace model evidence for race-specific work;
 3. valid matching T400 evidence for aerobic work;
 4. matching stroke/course/event PB or recent measured set evidence to derive an athlete-to-reference speed factor;
-5. accepted athlete-specific hard constraint or learned rule;
+5. accepted athlete-specific or set-type hard rule, including modified IM team-window timing;
 6. only then, a fallback load ratio.
 
 Unsupported target work must say target required or remain target-free. Do not invent precision.
@@ -61,9 +61,11 @@ A reduced distance must never inherit the old target time just because the line 
 
 ## Send-off rules
 
-- Reducing **rep count only** does not justify stretching the send-off. `4 x 75 @ 1:45 -> 2 x 75 @ 1:45` and `4 x 25 @ 0:45 -> 2 x 25 @ 1:30` are invalid automatic transformations.
+- Reducing **rep count only** does not normally justify stretching the send-off. `4 x 75 @ 1:45 -> 2 x 75 @ 1:45` and `4 x 25 @ 0:45 -> 2 x 25 @ 1:30` are invalid automatic transformations.
+- **Modified IM is a coach-confirmed exception.** When the swimmer must retain complete IM units but does fewer repetitions, preserve the squad's total work window. Example: `5 x 100 IM @ 1:45` is an 8:45 window; `3 x 100 IM` therefore uses `2:55` so the modified swimmer remains aligned with the team.
+- Modified IM team-window send-offs round **up** to the next five-second deck interval after the window calculation.
 - Reducing **distance per rep** requires target/recovery recalculation from athlete evidence. Do not blindly keep either the old target or an arithmetically multiplied interval.
-- Practical five-second rounding happens only after the target/recovery decision.
+- The IM exception must not be generalized to unrelated 25s, 50s, 75s, technical work or ordinary rep-count reductions.
 
 ## Intent-specific rules
 
@@ -74,6 +76,10 @@ Matching T400 evidence is authoritative where the model applies. Use athlete-spe
 ### Race pace
 
 Use the athlete's own Race pace model evidence, matching course/stroke/event and named segment where applicable. The model target must be recalculated after any distance change. If the required event evidence is not available, do not substitute a generic T400 or simple PB division.
+
+### Modified IM
+
+Preserve complete IM units first. If the modified swimmer does fewer complete IM reps than the squad, distribute the squad's total authored work window across the delivered modified reps, then round the practical send-off up to five seconds. This is a set-structure timing rule, not a claim that the swimmer's performance speed equals their load percentage.
 
 ### Max / starts / finishes / technical quality
 

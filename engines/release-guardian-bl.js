@@ -29,8 +29,8 @@
     const kept=current.results.filter(x=>clean(x?.name)!==stale);
     const session={id:'guardian-current-im-cycle',identity:{course:'SCM'}},ath={id:'guardian-current-cm',full_name:'Charlotte Murphy'},state={athletes:[ath],adaptationProfiles:[],adaptationOverrides:[]};
     const item={id:'guardian-current-im',kind:'set',reps:5,distance:100,stroke:'IM',raw:'5 x 100 IM @ 1:45',text:'5 x 100 IM @ 1:45',cues:[],pattern:[],repPattern:[],repInstructions:[],raceIntent:null,zone:'',restSeconds:10,cycleSeconds:105,equipment:[],composition:[]};
-    const out=E.Modification.adaptItem(item,ath,state,session),replacement={name:'Reduced IM preserves authored send-off when only reps change',ok:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===105,detail:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===105?'':JSON.stringify(out)};
-    const results=[...kept,replacement];M.engineAcceptance={...current,build:'20260823bq-current-contract',results,ok:results.every(x=>x.ok===true),ranAt:new Date().toISOString()};
+    const out=E.Modification.adaptItem(item,ath,state,session),replacement={name:'Reduced IM keeps complete IM units aligned to the team work window',ok:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===175&&/2:55/.test(String(out?.raw||'')),detail:out?.distance===100&&out?.reps===3&&out?.cycleSeconds===175&&/2:55/.test(String(out?.raw||''))?'':JSON.stringify(out)};
+    const results=[...kept,replacement];M.engineAcceptance={...current,build:'20260823br-current-contract',results,ok:results.every(x=>x.ok===true),ranAt:new Date().toISOString()};
   }
   function currentTests(){const out=[];
     if(E?.RacePace&&M.parser?.parse){
@@ -50,7 +50,7 @@
   M.BUILD=BUILD;M.CORE='20260822-guardian-runtime-order-bl';
   M.RELEASE_ATTESTATION=Object.freeze({...(M.RELEASE_ATTESTATION||{}),build:BUILD,softwareReady:false,generatedAt:new Date().toISOString(),note:'BL fixes browser Guardian ordering so the final current-build Guardian cannot be overwritten by a late dynamically loaded older Guardian layer. Physical Android acceptance remains separate.'});
   reconcileEngineAcceptance();
-  G.run=()=>{reconcileEngineAcceptance();const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentTests()],passed=tests.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260823bq',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
+  G.run=()=>{reconcileEngineAcceptance();const base=baseRun()||{},kept=(base.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentTests()],passed=tests.filter(x=>x.ok===true).length;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260823br',retiredTests:[...new Set([...(base.retiredTests||[]),...retired])]};};
   M.release=M.release||{};M.release.guardianGate=()=>{const runs=M.state?.guardian?.runs||[],r=[...runs].reverse().find(x=>x?.build===BUILD&&!x.deferred);return{build:BUILD,ok:!!r?.ok,passed:r?.passed||0,total:r?.total||0,ranAt:r?.at||null};};
   M.release.canCutover=()=>M.release.guardianGate().ok&&M.RELEASE_ATTESTATION?.softwareReady===true&&M.release?.deviceAccepted?.()===true;
 })(globalThis);
