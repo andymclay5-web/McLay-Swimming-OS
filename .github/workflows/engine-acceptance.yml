@@ -21,6 +21,7 @@ jobs:
           node-version: 22
       - name: Syntax check active runtime files
         run: |
+          node --check v4-poolside-core.js
           node --check engines/storage.js
           node --check engines/startup-gate.js
           node --check engines/guardian-runtime.js
@@ -86,6 +87,7 @@ jobs:
           node tests/swimmer-display-regression.cjs
           node tests/performance-wps-regression.cjs
           node tests/board-evidence-regression.cjs
+          node tests/friday-session-board-regression.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
