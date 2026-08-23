@@ -105,10 +105,9 @@
   async function completeEvidence(ath){
     if(!ath)return{ok:false,rows:0,error:'No swimmer selected'};
     if(!(M.engineBridge?.canAttemptCloudRead?.()||M.cloud?.ready?.()))return{ok:false,rows:0,error:'Connected swimmer evidence is unavailable'};
-    const id=encodeURIComponent(String(ath.id||'')),name=encodeURIComponent(String(ath.full_name||'')),org=encodeURIComponent(String(ath.organisation_id||M.cloud?.org?.()||M.state?.settings?.organisationId||''));let added=0,errors=[];
+    const id=encodeURIComponent(String(ath.id||'')),org=encodeURIComponent(String(ath.organisation_id||M.cloud?.org?.()||M.state?.settings?.organisationId||''));let added=0,errors=[];
     const jobs=[];
-    if(id){jobs.push(['results_pb_board','resultsPbBoard',`/rest/v1/results_pb_board?select=*&athlete_id=eq.${id}`],['coach_results','coachResults',`/rest/v1/coach_results?select=*&athlete_id=eq.${id}`],['results_event_history','resultsEventHistory',`/rest/v1/results_event_history?select=*&athlete_id=eq.${id}`],['training_test_results','trainingTestResults',`/rest/v1/training_test_results?select=*&athlete_id=eq.${id}`]);}
-    if(name){jobs.push(['results_pb_board','resultsPbBoard',`/rest/v1/results_pb_board?select=*&full_name=eq.${name}`],['coach_results','coachResults',`/rest/v1/coach_results?select=*&swimmer_name=eq.${name}`]);}
+    if(id)jobs.push(['results_pb_board','resultsPbBoard',`/rest/v1/results_pb_board?select=*&athlete_id=eq.${id}`],['coach_results','coachResults',`/rest/v1/coach_results?select=*&athlete_id=eq.${id}`],['results_event_history','resultsEventHistory',`/rest/v1/results_event_history?select=*&athlete_id=eq.${id}`],['training_test_results','trainingTestResults',`/rest/v1/training_test_results?select=*&athlete_id=eq.${id}`]);
     if(org)jobs.push(['training_test_types','trainingTestTypes',`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}`]);
     if(!(standardRows().length))jobs.push(['pathway_standards','pathwayStandards','/rest/v1/pathway_standards?select=*']);
     if(!(meetRows().length))jobs.push(['pathway_meets','pathwayMeets','/rest/v1/pathway_meets?select=*']);
