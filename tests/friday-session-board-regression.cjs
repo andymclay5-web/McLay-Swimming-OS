@@ -72,11 +72,9 @@ assert.equal(Number(session.metadata.explicitTotal),6200);
 const main=session.blocks.find(b=>b.type==='main_set');
 const dev=main.items.find(x=>x.kind==='set'&&x.reps===3&&x.distance===200);
 assert.equal(dev.zone,'Development','3x200 Development lost its authored zone');
-assert.equal(dev.restSeconds,10,'3x200 Development lost authored 10 sec rest');
 
 const olThr=main.items.find(x=>x.kind==='set'&&x.reps===4&&x.distance===150);
 assert.deepEqual(olThr.repPattern.map(x=>x.zone),['Overload','Overload','Threshold','Threshold'],'Overload to Threshold must resolve 2 OL / 2 THR');
-assert.equal(olThr.restSeconds,30);
 
 const im=main.items.find(x=>x.kind==='set'&&x.reps===3&&x.distance===100&&x.stroke==='IM');
 assert.equal(im.cycleSeconds,105);
@@ -95,6 +93,8 @@ const Coordinator=require('../engines/coordinator.js');global.MSOSEngines.Coordi
 require('../engines/board.js');
 const B=M.boardEngine;
 
+assert.equal(Aerobic.authoredRest(dev),10,'3x200 Development must retain authored 10 sec rest');
+assert.equal(Aerobic.authoredRest(olThr),30,'4x150 OL→THR must retain authored 30 sec rest');
 assert.equal(B.workLabel(dev),'3×200 DEV');
 assert.match(B.cueText(dev),/Rest · 10 sec/);
 assert.equal(B.workLabel(olThr),'4×150');
