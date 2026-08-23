@@ -68,6 +68,8 @@ jobs:
           node --check engines/athlete-session-bd.js
           node --check engines/swimmer-training-bd.js
           node --check engines/swimmer-performance-bm.js
+          node --check engines/swimmer-invite-bn.js
+          node --check swimmer-portal.js
           node --check engines/release-guardian-ao.js
           node --check engines/release-guardian-ap.js
           node --check engines/release-guardian-aq.js
@@ -93,3 +95,4 @@ jobs:
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
           node tests/swimmer-performance-bm.cjs
+          node tests/swimmer-secure-onboarding-bn.cjs
