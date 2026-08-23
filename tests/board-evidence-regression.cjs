@@ -49,7 +49,13 @@ assert.equal(femaleRank.baseSeconds,50);
 assert.equal(femaleRank.score,Math.floor(1000*Math.pow(50/60,3)));
 
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
-assert.match(board,/if\(!changed&&!needsTarget\)continue/);
+// Board should keep a modified swimmer visible when either the prescription changed OR the line carries timing/stroke interaction.
+assert.match(board,/function timingIntent\(/);
+assert.match(board,/if\(!changed&&!showTiming\)continue/);
+assert.match(board,/m\.showTiming\?strokePill/);
+assert.match(board,/function modGroupKey\(/);
+assert.match(board,/members\.map\(m=>modPerson/);
+assert.doesNotMatch(board,/msos-mod-target-line/);
 assert.match(board,/function modified\(/);
 assert.match(board,/msos-mod-target/);
 assert.match(board,/data-msos-ath/);
@@ -88,7 +94,8 @@ assert.match(boardState,/insertAdjacentHTML/);
 assert.match(boardState,/data-msos-fast-stroke/);
 assert.match(boardState,/function openPanel\(btn\)\{[^\n]*saveUi\(\)[^\n]*insertAdjacentHTML/);
 assert.doesNotMatch(boardState,/function openPanel\(btn\)\{[^\n]*saveData\(\)/);
-assert.match(boardState,/function setStroke\(session,item,ath,value\)\{[^\n]*saveData\(\)/);
+assert.match(boardState,/function setStroke\(session,item,ath,value\)/);
+assert.match(boardState,/saveData\(\);render\(\)/);
 const navigation=fs.readFileSync(require.resolve('../engines/navigation.js'),'utf8');
 assert.match(navigation,/saveUi/);
 assert.doesNotMatch(navigation,/M\.store\?*\.save|M\.store\.save/);

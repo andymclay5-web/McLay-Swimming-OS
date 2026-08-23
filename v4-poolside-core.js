@@ -48,12 +48,9 @@
     const start=Math.max(1,Number(m[1])||1),end=Math.max(start,Math.min(Math.max(1,Number(reps)||1),Number(m[2]||m[1])||start));
     return start>Math.max(1,Number(reps)||1)?null:{start,end,label:txt(m[3])};
   }
-  function cueZone(line){
-    const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);
-    if(!m)return'';
-    const k=m[1].toLowerCase();
-    if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)/.test(k))return'Overload';if(/^(?:thr|threshold)/.test(k))return'Threshold';return'Clearance';
-  }
+  function zoneValue(v){const k=txt(v).toLowerCase();if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)/.test(k))return'Overload';if(/^(?:thr|threshold)/.test(k))return'Threshold';if(/^(?:cl|clearance)/.test(k))return'Clearance';return'';}
+  function cueZone(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);return m?zoneValue(m[1]):'';}
+  function zoneProgression(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b\s*(?:to|→|->)\s*\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(!m)return null;const from=zoneValue(m[1]),to=zoneValue(m[2]);return from&&to&&from!==to?{from,to,text:txt(line)}:null;}
   function cueStroke(line){
     const t=txt(line);if(/\b(?:individual\s+medley|medley|IM)\b/i.test(t))return'IM';if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';return'';
   }
@@ -67,6 +64,7 @@
     const m=txt(line).match(/^@\s*(\d{1,3})(?::([0-5]\d(?:\.\d+)?))?$/);
     if(!m)return null;return m[2]==null?Number(m[1]):Number(m[1])*60+Number(m[2]);
   }
+  function inlineCycle(line){const m=txt(line).match(/(?:@|on)\s*(\d{1,3})(?::|\.)([0-5]\d(?:\.\d+)?)\b/i);return m?Number(m[1])*60+Number(m[2]):null;}
   function sameJson(a,b){return JSON.stringify(a??null)===JSON.stringify(b??null)}
   function enhanceSetTargets(item){
     if(item?.kind!=='set')return 0;
@@ -77,6 +75,10 @@
     const zones=new Map();
     for(const line of lines){const range=hashRange(line,reps),zone=cueZone(line);if(!range||!zone)continue;for(let n=range.start;n<=range.end;n++)zones.set(n,{rep:n,zone,text:line})}
     if(zones.size){const next=[...zones.values()].sort((a,b)=>a.rep-b.rep);if(!sameJson(item.repPattern,next)){item.repPattern=next;changed++}}
+    else{
+      const progression=lines.map(zoneProgression).find(Boolean);
+      if(progression&&reps>1){const firstCount=Math.max(1,Math.floor(reps/2)),next=Array.from({length:reps},(_,i)=>({rep:i+1,zone:i<firstCount?progression.from:progression.to,text:progression.text}));if(!sameJson(item.repPattern,next)){item.repPattern=next;changed++}}
+    }
     const instructions=new Map();let hasRace=false;
     for(const line of lines){const range=hashRange(line,reps);if(!range)continue;const race=cueRaceIntent(line);if(race)hasRace=true;for(let n=range.start;n<=range.end;n++)instructions.set(n,{rep:n,label:range.label||`#${n}`,raceIntent:race,drill:/\bdrill\b/i.test(range.label)})}
     if(hasRace){
@@ -134,8 +136,13 @@
   }
 
   function strippedWork(set){return txt(set?.raw||set?.text).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')}
+  function promoteExplicitCycleComponent(item){
+    if(item?.kind!=='component')return item;
+    const raw=txt(item.raw||item.text),cycle=inlineCycle(raw);if(!cycle)return item;
+    return {...item,kind:'set',reps:1,stroke:cueStroke(raw),zone:cueZone(raw),restSeconds:null,cycleSeconds:cycle,equipment:[],raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:[],raceIntent:cueRaceIntent(raw),targetSeconds:null,unclassifiedTerms:[]};
+  }
   function compactItems(items){
-    const a=(items||[]).map(x=>{const c=U.clone(x);if(c.kind==='group')c.items=compactItems(c.items||[]);return c});
+    const a=(items||[]).map(x=>{let c=U.clone(x);if(c.kind==='group')c.items=compactItems(c.items||[]);c=promoteExplicitCycleComponent(c);return c});
     for(let i=0;i<a.length;i++){
       const p=a[i];if(p?.kind!=='set'||Number(p.reps)<2)continue;
       let j=i+1,kids=[],sumReps=0;
