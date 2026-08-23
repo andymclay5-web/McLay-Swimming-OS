@@ -42,9 +42,10 @@ These files contain useful behaviour that must be folded into an owner before th
 
 - `v4-correct.js` — contains proven compatibility behaviour but also wraps adaptation/target/timing surfaces. Fold durable coaching policy back into authoritative engines.
 - `engines/contract-fixes-ak.js` / `engines/contract-fixes-al.js` — compatibility layers; retire rules into their true owners.
-- `engines/adaptive-options-am.js` — athlete-option projection; ensure policy lives in Modification, not the UI adapter.
+- `engines/adaptive-options-am.js` — athlete-option projection; currently replaces the Modification owner as well as exposing UI. Fold policy back into `engines/modification.js`, then leave only the editor/projection behaviour.
 - `engines/phone-fixes-ao.js` — phone presentation/interaction fixes only; no domain policy should remain here.
 - `engines/amber-ratio-ap.js`, `engines/amber-alignment-aq.js`, `engines/amber-alignment-as.js`, `engines/amber-alignment-at.js` — athlete-specific correction chain. Durable constraints must migrate to athlete profile/rule data or `engines/modification.js`, then these layers retire.
+- `engines/rainbow-rules-au.js` — currently wraps parser, RacePace and Modification behaviour. Its valid race-distribution/zone-transition rules must be moved into the parser/race/modification owners rather than retained as a late policy layer.
 - `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without test-result replacement/filtering.
 
 ## Modification-specific consolidation rule
