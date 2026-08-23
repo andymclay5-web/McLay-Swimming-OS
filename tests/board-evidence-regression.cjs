@@ -52,7 +52,7 @@ const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
 // Board should keep a modified swimmer visible when either the prescription changed OR the line carries timing/stroke interaction.
 assert.match(board,/function timingIntent\(/);
 assert.match(board,/if\(!changed&&!showTiming\)continue/);
-assert.match(board,/showTiming\?strokePill/);
+assert.match(board,/showStroke\?strokePill/);
 assert.match(board,/function modified\(/);
 assert.match(board,/msos-mod-target/);
 assert.match(board,/data-msos-ath/);
