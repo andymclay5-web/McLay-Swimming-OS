@@ -83,21 +83,23 @@
     if(!c.length)return Math.max(pool,Math.round(target/pool)*pool);
     c.sort((a,b)=>a.delta-b.delta||b.d-a.d);return c[0].d;
   }
-  function nearestPracticalDistance(target,session,{returnToStart=false,minDistance=25,maxDistance=Infinity}={}){
-    const pool=poolLength(session),unit=returnToStart?pool*2:pool,min=Math.max(unit,Number(minDistance)||unit),max=Math.max(min,Number(maxDistance)||min),c=[];
-    for(let d=unit;d<=max;d+=unit)if(d>=min)c.push({d,delta:Math.abs(d-Number(target||0))});
-    if(!c.length)return min;c.sort((a,b)=>a.delta-b.delta||b.d-a.d);return c[0].d;
+  function nearestPracticalDistance(distance,session,{returnToStart=false,minDistance=25,maxDistance=null}={}){
+    const pool=poolLength(session),unit=returnToStart?pool*2:pool,max=Number(maxDistance)||Math.max(pool,Number(distance)||pool),target=Math.max(minDistance,Number(distance)||pool),c=[];
+    for(let d=unit;d<=max;d+=unit)c.push({d,delta:Math.abs(d-target)});
+    if(!c.length)return Math.min(max,Math.max(pool,Math.round(target/pool)*pool));
+    c.sort((a,b)=>a.delta-b.delta||b.d-a.d);return c[0].d;
   }
+
   function remapRepPattern(pattern,oldReps,newReps){
     if(!Array.isArray(pattern)||!pattern.length||oldReps===newReps)return clone(pattern||[]);
     const src=Array.from({length:oldReps},(_,i)=>pattern.find(x=>Number(x.rep)===i+1)||pattern[Math.min(pattern.length-1,i)]||{}),out=[];
-    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps)),p=src[idx]||{};out.push({...clone(p),rep:i+1});}
+    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps));out.push({...clone(src[idx]||{}),rep:i+1});}
     return out;
   }
   function remapRepInstructions(rows,oldReps,newReps){
     if(!Array.isArray(rows)||!rows.length||oldReps===newReps)return clone(rows||[]);
     const src=Array.from({length:oldReps},(_,i)=>rows.find(x=>Number(x.rep)===i+1)||rows[Math.min(rows.length-1,i)]||{}),out=[];
-    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps)),p=src[idx]||{};out.push({...clone(p),rep:i+1});}
+    for(let i=0;i<newReps;i++){const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps));out.push({...clone(src[idx]||{}),rep:i+1});}
     return out;
   }
   function remapComposition(rows,oldDistance,newDistance,session){
@@ -108,10 +110,12 @@
     for(let i=0;i<count;i++){
       const x=valid[i],left=count-i-1;
       if(i===count-1){out.push({...x,distance:remaining});break;}
-      const proportional=newDistance*(x.distance/total),minLeft=left*pool;let d=Math.round(proportional/pool)*pool;
-      d=Math.max(pool,d);d=Math.min(Math.max(pool,remaining-minLeft),d);out.push({...x,distance:d});remaining-=d;
+      const proportional=newDistance*(x.distance/total),minLeft=left*pool;
+      let d=Math.round(proportional/pool)*pool;d=Math.max(pool,d);d=Math.min(Math.max(pool,remaining-minLeft),d);
+      out.push({...x,distance:d});remaining-=d;
     }
-    if(out.some(x=>x.distance<=0)||Math.abs(out.reduce((n,x)=>n+x.distance,0)-newDistance)>.001)return clone(rows||[]);return out;
+    if(out.some(x=>x.distance<=0)||Math.abs(out.reduce((n,x)=>n+x.distance,0)-newDistance)>.001)return clone(rows||[]);
+    return out;
   }
   function repeatCue(rb,reps){
     const unit=rb?.unit||[],unitReps=Math.max(1,Number(rb?.unitReps)||unit.reduce((n,x)=>n+Math.max(1,Number(x.count)||1),0)||1),total=Math.max(1,Number(reps)||1),rounds=Math.floor(total/unitReps),rem=total%unitReps,expanded=[];
@@ -120,47 +124,62 @@
     let out=rounds?`${rounds} round${rounds===1?'':'s'} · ${core}`:'';if(rem)out+=`${out?' + ':''}${expanded.slice(0,rem).join(' / ')}`;return out||core;
   }
   function syncRepeatBreakdown(out,source){
-    const rb=out?.repeatBreakdown||source?.repeatBreakdown;if(!rb)return out;out.repeatBreakdown=clone(rb);
-    const old=source?.repeatBreakdownCue||out.repeatBreakdownCue||'',next=repeatCue(rb,Math.max(1,Number(out.reps)||1));
+    const rb=out?.repeatBreakdown||source?.repeatBreakdown;if(!rb)return out;
+    out.repeatBreakdown=clone(rb);const old=source?.repeatBreakdownCue||out.repeatBreakdownCue||'',next=repeatCue(rb,Math.max(1,Number(out.reps)||1));
     out.cues=[...(out.cues||[])].filter(c=>text(c)!==text(old)&&text(c)!==text(out.repeatBreakdownCue));out.repeatBreakdownCue=next;
     if(next&&!out.cues.some(c=>text(c)===text(next)))out.cues.push(next);out.pattern=[];return out;
   }
   function rewriteLead(out,reps,distance){
-    const raw=text(out?.raw||out?.text),n=Math.max(1,Number(reps)||1),d=Number(distance)||0,lead=n>1?`${n} × ${d}`:`${d}`;out.reps=n;out.distance=d;
+    const raw=text(out?.raw||out?.text),n=Math.max(1,Number(reps)||1),d=Number(distance)||0,lead=n>1?`${n} × ${d}`:`${d}`;
+    out.reps=n;out.distance=d;
     if(/^\d+\s*[x×]\s*\d+(?:\.5)?/i.test(raw))out.raw=raw.replace(/^\d+\s*[x×]\s*\d+(?:\.5)?/i,lead);
     else if(/^\d+(?:\.5)?\b/.test(raw))out.raw=raw.replace(/^\d+(?:\.5)?\b/,lead);
-    else out.raw=`${lead}${raw?` · ${raw}`:''}`;out.text=out.raw;
+    else out.raw=`${lead}${raw?` · ${raw}`:''}`;
+    out.text=out.raw;return out;
   }
   function rewriteCycle(out,oldCycle,newCycle){
-    if(!newCycle)return;const next=cycleClock(newCycle),old=Number(oldCycle)||Number(out?.cycleSeconds)||0;
-    const re=old?new RegExp(`(?:@|on)\\s*${cycleClock(old).replace(':','[:.]')}`,'i'):/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i;
-    const fix=s=>{const v=text(s);return re.test(v)?v.replace(re,`@ ${next}`):v;};
+    if(!newCycle)return out;const next=cycleClock(newCycle),old=Number(oldCycle)||0;
+    const fix=s=>{s=text(s);if(old){const o=cycleClock(old);const re=new RegExp(`(?:@|on)\\s*${o.replace(':','[:.]')}`,'i');if(re.test(s))return s.replace(re,`@ ${next}`);}return /(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i.test(s)?s.replace(/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i,`@ ${next}`):s;};
     out.raw=fix(out.raw||out.text);out.text=out.raw;out.cycleSeconds=Number(newCycle);
-    if(Array.isArray(out.cues))out.cues=out.cues.map(fix);if(Array.isArray(out.pattern))out.pattern=out.pattern.map(x=>({...x,text:fix(x.text||'')}));
-    if(Array.isArray(out.repPattern))out.repPattern=out.repPattern.map(x=>({...x,text:x.text?fix(x.text):x.text}));if(Array.isArray(out.repInstructions))out.repInstructions=out.repInstructions.map(x=>({...x,label:x.label?fix(x.label):x.label}));if(out.repeatBreakdownCue)out.repeatBreakdownCue=fix(out.repeatBreakdownCue);
+    if(Array.isArray(out.cues))out.cues=out.cues.map(fix);
+    if(Array.isArray(out.pattern))out.pattern=out.pattern.map(x=>({...x,text:fix(x.text||'')}));
+    if(Array.isArray(out.repPattern))out.repPattern=out.repPattern.map(x=>({...x,text:x.text?fix(x.text):x.text}));
+    if(Array.isArray(out.repInstructions))out.repInstructions=out.repInstructions.map(x=>({...x,label:x.label?fix(x.label):x.label}));
+    if(out.repeatBreakdownCue)out.repeatBreakdownCue=fix(out.repeatBreakdownCue);return out;
   }
-  function preserveAuthoredTiming(out,item,reason='Common send-off remains appropriate for this stimulus'){
-    const cycle=Number(item?.cycleSeconds)||0;if(!cycle)return out;rewriteCycle(out,Number(out?.cycleSeconds)||cycle,cycle);
-    out.adaptationTiming={mode:'common-squad-cycle',cycleSeconds:cycle,source:'Coach-authored session timing',reason};out.cyclePolicy='common squad send-off retained only when the individual stimulus remains appropriate';return out;
+  function preserveAuthoredTiming(out,item,reason='Common starts preserved; authored send-off still protects the intended stimulus'){
+    const cycle=Number(item?.cycleSeconds)||null;if(!cycle)return out;
+    rewriteCycle(out,Number(out?.cycleSeconds)||cycle,cycle);
+    out.adaptationTiming={mode:'common-start',cycleSeconds:cycle,source:'Coach-authored session timing',reason};
+    out.cyclePolicy='common send-off retained because the individual stimulus remains valid';return out;
   }
 
   function bestEventSeconds(ath,state,distance,strokeWanted,session){
-    const course=courseOf(session),rows=E?.pbRows?.(ath,state)||[],vals=rows.filter(r=>Number(E?.distance?.(r)??r?.distance)===Number(distance)&&E?.stroke?.(E?.rowStroke?.(r)||r?.stroke||r?.event_stroke||'')===E?.stroke?.(strokeWanted)&&String(E?.course?.(r)||r?.course||r?.pool_course||'').toUpperCase()===course).map(r=>Number(E?.seconds?.(r)??r?.result_seconds)).filter(v=>Number.isFinite(v)&&v>0);
+    const course=courseOf(session),rows=E?.pbRows?.(ath,state)||[],wanted=E?.stroke?.(strokeWanted)||strokeWanted;
+    const vals=rows.filter(r=>Number(E?.distance?.(r))===Number(distance)&&E?.stroke?.(E?.rowStroke?.(r)||r?.stroke||r?.event_stroke||'')===wanted&&String(E?.course?.(r)||'').toUpperCase()===course).map(r=>Number(E?.seconds?.(r))).filter(v=>Number.isFinite(v)&&v>0);
     return vals.length?Math.min(...vals):null;
   }
-  function t400Seconds(ath,state,stroke){const r=A?.t400?.(ath,state,stroke)||(E?.t400Rows?.(ath,state,stroke)||[])[0];const n=Number(E?.seconds?.(r)??r?.result_seconds??r?.seconds);return Number.isFinite(n)&&n>0?n:null;}
-  function median(values){const x=values.filter(v=>Number.isFinite(v)&&v>0).sort((a,b)=>a-b);if(!x.length)return null;const m=Math.floor(x.length/2);return x.length%2?x[m]:(x[m-1]+x[m])/2;}
-  const normSquad=v=>text(v).toLowerCase();
-  function assignedSquad(ath,session){
-    const explicit=normSquad(ath?.squad||ath?.assigned_squad||ath?.squad_name);if(explicit)return explicit;
-    const rows=[...(Array.isArray(session?.identity?.squads)?session.identity.squads:[]),...(Array.isArray(session?.squads)?session.squads:[]),session?.identity?.squad,session?.squad].filter(Boolean);return normSquad(rows[0]||'');
+  function t400Seconds(ath,state,stroke='Freestyle'){
+    try{const row=A?.t400?.(ath,state,stroke)||(E?.t400Rows?.(ath,state,stroke)||[])[0];const s=Number(E?.seconds?.(row));return Number.isFinite(s)&&s>0?s:null;}catch{return null;}
   }
-  function referenceCandidate(a,state,squad){if(!a||a.active===false||profile(a,state).ratio<.98)return false;return !squad||normSquad(a?.squad||a?.assigned_squad||a?.squad_name)===squad;}
-  function relevantGroupAthletes(ath,state,session){const squad=assignedSquad(ath,session);return(state?.athletes||[]).filter(a=>a?.id!==ath?.id&&referenceCandidate(a,state,squad));}
+  function median(values){const x=values.filter(v=>Number.isFinite(v)&&v>0).sort((a,b)=>a-b);if(!x.length)return null;const m=Math.floor(x.length/2);return x.length%2?x[m]:(x[m-1]+x[m])/2;}
+  function assignedSquad(ath,session){
+    if(text(ath?.squad))return text(ath.squad).toLowerCase();
+    const squads=[...(session?.identity?.squads||[]),...(session?.squads||[])].map(x=>text(x).toLowerCase()).filter(Boolean);return squads[0]||'';
+  }
+  function referenceCandidate(a,state,squad){
+    if(!a||a.active===false)return false;if(squad&&text(a.squad).toLowerCase()!==squad)return false;
+    return profile(a,state).ratio>=.98;
+  }
+  function relevantGroupAthletes(ath,state,session){
+    const squad=assignedSquad(ath,session),all=(state?.athletes||[]).filter(a=>a?.id!==ath?.id&&referenceCandidate(a,state,squad));
+    const liveIds=new Set((state?.attendance||[]).filter(r=>r?.session_id===session?.id&&['present','modified','late'].includes(text(r?.status).toLowerCase())).map(r=>r.athlete_id).filter(Boolean));
+    const live=all.filter(a=>liveIds.has(a.id));return live.length?live:all;
+  }
   function comparisonEventSpec(item){
     const race=item?.raceIntent||item?.repInstructions?.find(x=>x?.raceIntent)?.raceIntent||null;
     const d=Number(item?.distance)||0;
-    const eventDistance=Number(race?.distance)||(d<=50?50:d<=125?100:d<=300?200:400);
+    const eventDistance=Number(race?.distance)|| (d<=50?50:d<=125?100:d<=300?200:400);
     let stroke=E?.stroke?.(race?.eventStroke||item?.stroke||'')||'';
     if(stroke==='Choice')stroke='';
     return{distance:eventDistance,stroke};
@@ -308,7 +327,7 @@
         }else if(baseDist>50&&!preservePattern){
           const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Work distance reduced so the swimmer remains on the squad starts rather than finishing the set early');out.adaptationReason=`${evidence?.referenceSeconds?'Relative performance':'Load fallback'} · ${baseDist}→${desired} · common starts retained`;out.adaptationConfidence=evidence?.confidence||'low';}
-        }else if(baseDist<=50&&baseReps*baseDist<=300){
+        }else if(baseDist<=50&&baseReps*baseDist<=300&&sameTeamExposure(item)){
           out.adaptationReason='Short work retained with squad · load recovered elsewhere';preserveAuthoredTiming(out,item,'Short work remains connected to the squad; global load is not enforced by cutting every small set');
         }else{
           const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);out.adaptationReason=`${Math.round(p.ratio*100)}% load fallback · no fair performance comparator`;out.adaptationConfidence='low';if(Number(item.cycleSeconds)>0)preserveAuthoredTiming(out,item,'Fallback rep reduction only; no evidence supports inventing a new send-off');}
@@ -316,13 +335,19 @@
       }
     }
 
+    // Athlete-specific confirmed rules that remain valid after general shaping.
     if(!manualShape&&(key==='mckenziedrage'||key==='mackenziedrage')&&Number(item.distance)===50&&/\bkick\b/i.test(raw)&&Number(item.cycleSeconds)>0)preserveAuthoredTiming(out,item,'McKenzie 50 kick keeps the coach-authored cycle');
-    applyCharlotteKickBase(out,ath,manualShape);applyOverride(out,ov);adaptiveLabel(out,item,ath);syncRepeatBreakdown(out,item);return out;
+    applyCharlotteKickBase(out,ath,manualShape);
+    adaptiveLabel(out,item,ath);
+    applyOverride(out,ov);
+    syncRepeatBreakdown(out,item);
+    return out;
   }
 
   function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
+
   return{
-    VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,independentSkill,targetDriven,sameTeamExposure,shapeOverride,
+    VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,targetDriven,sameTeamExposure,shapeOverride,
     AMBER_MODES,AMBER_STROKES,CONOR_MODES,relativeEvidence,commonIntervalSafe,performancePlan,relevantGroupAthletes,
     internals:{remapRepPattern,remapRepInstructions,remapComposition,rewriteInstructionRanges,energyZones,applyCharlotteKickBase,preserveAuthoredTiming,bestEventSeconds,t400Seconds,relevantGroupAthletes,relativeEvidence,performancePlan,imPerformancePlan,applyPerformancePlan,applyIMPerformancePlan,alignIMTeamWindow,invalidateDistanceTarget,rewriteCycle,rewriteLead,repeatCue,syncRepeatBreakdown,nearestPracticalDistance,comparisonEventSpec,referenceValues}
   };
