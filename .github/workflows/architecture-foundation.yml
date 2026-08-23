@@ -10,14 +10,23 @@ on:
       - 'v4-squad-layer-starts-*'
       - 'v4-athlete-set-evidence-*'
       - 'v4-truth-release-*'
+      - 'v4-consolidation-*'
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
+      - 'index.html'
+      - 'app.js'
+      - 'v4-correct.js'
+      - 'engines/**'
       - '.github/workflows/architecture-foundation.yml'
   pull_request:
     paths:
       - 'architecture/**'
       - 'ARCHITECTURE_20260822.md'
+      - 'index.html'
+      - 'app.js'
+      - 'v4-correct.js'
+      - 'engines/**'
       - '.github/workflows/architecture-foundation.yml'
 
 jobs:
@@ -33,6 +42,8 @@ jobs:
         run: |
           for f in architecture/*-core.js; do node --check "$f"; done
           node --check architecture/poolside-runtime.js
+      - name: Run authority consolidation gate
+        run: node architecture/authority-audit.test.js
       - name: Run architecture contract tests
         run: node architecture/architecture.test.js
       - name: Run end-to-end poolside runtime tests
