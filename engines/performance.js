@@ -35,7 +35,7 @@
   }
   function rows(ath,state=M.state,course=''){
     const wanted=text(course).toUpperCase(),ranked=rankedEvents(ath,state,course),scores=new Map(ranked.map(x=>[rowKey(x.raw),x]));let src=[];try{src=E.Evidence.pbRows(ath,state)||[]}catch{}
-    return src.map(r=>{const rank=scores.get(rowKey(r)),score=rank||scoreForRow(ath,r,state);return{raw:r,distance:E.Evidence.distance(r),stroke:E.Evidence.rowStroke(r),course:courseOf(r),seconds:E.Evidence.seconds(r),points:Number.isFinite(Number(score?.points))?Number(score.points):null,pointSource:score?.pointSource||score?.source||'',pointVersion:score?.pointVersion||'',pointSystem:score?.pointSystem||score?.label||scoreSystem(ath),paraClass:isPara(ath)?paraClass(ath,E.Evidence.rowStroke(r)):''};}).filter(r=>r.distance&&r.stroke&&Number.isFinite(r.seconds)&&r.seconds>0&&(!wanted||!r.course||r.course===wanted));
+    return src.map(r=>{const rank=scores.get(rowKey(r)),score=rank||scoreForRow(ath,r,state);return{raw:r,distance:E.Evidence.distance(r),stroke:E.Evidence.rowStroke(r),course:courseOf(r),seconds:E.Evidence.seconds(r),points:Number(score?.points)>0?Number(score.points):null,pointSource:score?.pointSource||score?.source||'',pointVersion:score?.pointVersion||'',pointSystem:score?.pointSystem||score?.label||scoreSystem(ath),paraClass:isPara(ath)?paraClass(ath,E.Evidence.rowStroke(r)):''};}).filter(r=>r.distance&&r.stroke&&Number.isFinite(r.seconds)&&r.seconds>0&&(!wanted||!r.course||r.course===wanted));
   }
   function bestEvent(ath,state=M.state,course=''){return rankedEvents(ath,state,course)[0]||null;}
   function bestStroke(ath,state=M.state,course='',nonFree=false){const allowed=nonFree?FORMS:STROKES;return rankedEvents(ath,state,course).find(r=>allowed.includes(r.stroke))||null;}
