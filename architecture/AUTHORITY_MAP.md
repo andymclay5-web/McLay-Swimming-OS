@@ -46,6 +46,8 @@ These files contain useful behaviour that must be folded into an owner before th
 - `engines/phone-fixes-ao.js` — phone presentation/interaction fixes only; no domain policy should remain here.
 - `engines/amber-ratio-ap.js`, `engines/amber-alignment-aq.js`, `engines/amber-alignment-as.js`, `engines/amber-alignment-at.js` — athlete-specific correction chain. Durable constraints must migrate to athlete profile/rule data or `engines/modification.js`, then these layers retire.
 - `engines/rainbow-rules-au.js` — currently wraps parser, RacePace and Modification behaviour. Its valid race-distribution/zone-transition rules must be moved into the parser/race/modification owners rather than retained as a late policy layer.
+- `engines/presence-persistence-bc.js` — currently wraps `M.store.save` to journal attendance/presence. Move this to a storage hook/event API so persistence remains the single save owner.
+- `engines/guardian-runtime.js` — currently wraps `M.store.save` to suppress a startup Guardian save. Move Guardian-specific persistence through an explicit storage API rather than replacing global save.
 - `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without test-result replacement/filtering.
 
 ## Modification-specific consolidation rule
