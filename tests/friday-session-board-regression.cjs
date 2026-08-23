@@ -65,8 +65,8 @@ TOTAL 6200m`;
 
 const M=global.MSOS4;
 const session=M.parser.parse(source,{id:'friday-contract',date:'2026-08-22',dayPart:'AM',course:'SCM',squads:['National','Development']});
+assert.deepEqual(session.blocks.map(M.session.blockDistance),[2100,2900,1000,200],'Friday block totals expose exactly where parser lost work');
 assert.equal(M.session.total(session),6200,'exact Friday source must parse to written 6200m');
-assert.deepEqual(session.blocks.map(M.session.blockDistance),[2100,2900,1000,200]);
 assert.equal(Number(session.metadata.explicitTotal),6200);
 
 const main=session.blocks.find(b=>b.type==='main_set');
