@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(E,A){
-  const VERSION='3.0.3-ca';
+  const VERSION='3.0.4-ca';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -185,7 +185,7 @@
   function comparisonEventSpec(item){
     const race=item?.raceIntent||item?.repInstructions?.find(x=>x?.raceIntent)?.raceIntent||null;
     const d=Number(item?.distance)||0;
-    const eventDistance=Number(race?.distance)|| (d<=50?50:d<=125?100:d<=300?200:400);
+    const eventDistance=Number(race?.distance)||(d<=50?50:d<=125?100:d<=300?200:400);
     let stroke=E?.stroke?.(race?.eventStroke||item?.stroke||'')||'';
     if(stroke==='Choice')stroke='';
     return{distance:eventDistance,stroke};
@@ -335,8 +335,13 @@
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Aerobic work distance adjusted while the target engine recalculates athlete pace/recovery');out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · ${baseDist}→${desired} · authored phases retained`;out.adaptationConfidence=evidence?.confidence||'low';}
           else{const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · reps adjusted because distance cannot shorten without losing the aerobic unit`;out.adaptationConfidence=evidence?.confidence||'low';}}
         }else if(baseDist>50&&!preservePattern){
-          const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);
-          if(reps!==baseReps){reshapeWithReps(out,item,reps);preserveAuthoredTiming(out,item,'No fair performance evidence requires a shorter repeat; preserve authored distance and adjust total work by reps');out.adaptationReason=`Load fallback · ${baseReps}→${reps} reps · authored ${baseDist}m repeat retained`;out.adaptationConfidence='low';}
+          if(baseReps===1){
+            const desired=nearestPracticalDistance(baseDist*p.ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
+            if(desired<baseDist){reshapeWithDistance(out,item,desired,session);out.adaptationReason=`Load fallback · ${baseDist}→${desired} single continuous work`;out.adaptationConfidence='low';}
+          }else{
+            const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);
+            if(reps!==baseReps){reshapeWithReps(out,item,reps);preserveAuthoredTiming(out,item,'No fair performance evidence requires a shorter repeat; preserve authored distance and adjust total work by reps');out.adaptationReason=`Load fallback · ${baseReps}→${reps} reps · authored ${baseDist}m repeat retained`;out.adaptationConfidence='low';}
+          }
         }else if(baseDist<=50&&baseReps*baseDist<=300&&sameTeamExposure(item)){
           out.adaptationReason='Short work retained with squad · load recovered elsewhere';preserveAuthoredTiming(out,item,'Short work remains connected to the squad; global load is not enforced by cutting every small set');
         }else{
