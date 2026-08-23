@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d4566">
-<title>McLay Swimming OS · Swimmer</title>
+<title>MSOS Swimmer Portal Pilot</title>
 <link rel="stylesheet" href="../styles.css?v=20260816-core401">
 <link rel="stylesheet" href="../v4-correct.css?v=20260819f-targettruth">
 <link rel="stylesheet" href="../v4-poolside-core.css?v=20260819f-targettruth">
@@ -14,19 +14,73 @@
 <link rel="stylesheet" href="../engines/swimmer-tabs.css?v=20260821aj">
 <link rel="stylesheet" href="../engines/phone-fixes-ao.css?v=20260821ao">
 <link rel="stylesheet" href="../engines/swimmer-training-bd.css?v=20260822bg">
-<link rel="stylesheet" href="../engines/swimmer-performance-bm.css?v=20260824bm">
 <link rel="stylesheet" href="./pilot.css?v=20260822bm">
-<style>
-.secure-swimmer-gate{position:fixed;inset:0;z-index:99999;background:#f4f7f9;display:flex;align-items:center;justify-content:center;padding:20px}.secure-swimmer-card{width:min(100%,430px);background:white;border-radius:18px;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.14)}.secure-swimmer-card h1{margin:.3rem 0 1rem}.secure-swimmer-card label{display:block;margin:14px 0;font-weight:700}.secure-swimmer-card input{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid #b8c5ce;border-radius:10px;font:inherit}.secure-swimmer-actions{display:flex;gap:10px;margin:18px 0}.secure-swimmer-actions button{flex:1}.secure-swimmer-card small{display:block;line-height:1.4;color:#52606a}
-</style>
-<script src="./pilot-storage.js?v=20260824bn"></script>
+<script src="./pilot-storage.js?v=20260822bm"></script>
 </head>
 <body data-pilot-surface="portal">
-<section id="secureSwimmerGate" class="secure-swimmer-gate"><div class="secure-swimmer-card"><div class="eyebrow">MCLAY SWIMMING OS</div><h1>Swimmer sign in</h1><p data-secure-message>Secure swimmer access is loading…</p><label>Email<input data-email type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label>Password<input data-password type="password" autocomplete="current-password" minlength="8" placeholder="8+ characters"></label><div class="secure-swimmer-actions"><button data-signin>Sign in</button><button data-signup>Create account</button></div><small>Your account is linked server-side to one swimmer profile. A coach invite can only be claimed once.</small></div></section>
 <header class="app-header"><div class="top-row"><select id="sessionSelect" aria-label="Session"></select><button id="newSessionBtn">＋</button><button id="guardianShortcut">Guardian</button></div><div class="squad-row"><div id="squadTabs"></div><button id="wakeBtn">Keep awake</button><button id="tvModeBtn">TV Board</button><button id="meetModeBtn">Meet</button><span id="roleBadge">Swimmer</span><span id="buildBadge">v4</span></div></header>
-<main id="appMain"><section id="boardView" class="view"></section><section id="tvView" class="view"></section><section id="hubView" class="view"></section><section id="swimmerView" class="view"></section><section id="meetView" class="view"></section><section id="athletesView" class="view active"></section><section id="reportsView" class="view"></section><section id="dataView" class="view"></section><section id="rollView" class="view"></section><section id="timesView" class="view"></section><section id="connectionView" class="view"></section><section id="guardianView" class="view"></section></main>
-<div class="sticky-actions"><button data-sticky-note>Capture</button><button data-sticky-voice hidden>Voice</button><button data-sticky-video hidden>Video</button><button data-sticky-edit>Edit</button><button data-sticky-finish>Finish</button></div><nav class="bottom-nav"></nav><button id="undoBtn">Undo</button><div id="toast" class="toast"></div><div id="modalHost"></div>
-<script src="../config.js"></script><script src="../seed.js"></script>
-<script src="../app.js?v=20260821ak-cache" defer></script><script src="../engines/storage.js?v=20260820u" defer></script><script src="../engines/startup-gate.js?v=20260820t" defer></script><script src="../engines/cloud-session.js?v=20260820z" defer></script><script src="../v4-correct.js?v=20260821ak-cache" defer></script><script src="../v4-poolside-core.js?v=20260819f-targettruth" defer></script><script src="../engines/session-repair.js?v=20260821af" defer></script><script src="../engines/evidence.js?v=20260821af" defer></script><script src="../engines/evidence-index.js?v=20260820t" defer></script><script src="../engines/data-registry.js?v=20260822bg" defer></script><script src="../engines/wa-base-times-2026.js?v=20260820u" defer></script><script src="../engines/reference-bridge.js?v=20260820x" defer></script><script src="../engines/wa-points.js?v=20260820aa" defer></script><script src="../engines/aerobic.js?v=20260821ak-cache" defer></script><script src="../engines/race-pace.js?v=20260820aa" defer></script><script src="../engines/modification.js?v=20260821ak-cache" defer></script><script src="../engines/coordinator.js?v=20260820v" defer></script><script src="../engines/bridge.js?v=20260821ak-cache" defer></script><script src="../engines/contract-fixes-ak.js?v=20260821ak" defer></script><script src="../engines/performance.js?v=20260821ag" defer></script><script src="../engines/development.js?v=20260820ab" defer></script><script src="../engines/stroke-balance.js?v=20260820q" defer></script><script src="../engines/reporting.js?v=20260820ab" defer></script><script src="../engines/board.js?v=20260821ah" defer></script><script src="../engines/board-state.js?v=20260820aa" defer></script><script src="../engines/modification-edit.js?v=20260820ab" defer></script><script src="../engines/navigation.js?v=20260820v" defer></script><script src="../engines/attendance-roster.js?v=20260820ad" defer></script><script src="../engines/performance-ui.js?v=20260821ah" defer></script><script src="../engines/capture-ui.js?v=20260821ah" defer></script><script src="../engines/t400-capture.js?v=20260820r" defer></script><script src="../engines/coach-loop-ui.js?v=20260821ai" defer></script><script src="../engines/meet-field-au.js?v=20260821au" defer></script><script src="../engines/meet-ops-av.js?v=20260821aw" defer></script><script src="../engines/meet-board-ay.js?v=20260821ay" defer></script><script src="../engines/meet-board-az.js?v=20260821az" defer></script><script src="../engines/meet-program-ba.js?v=20260821ba" defer></script><script src="../engines/swimmer-tabs-ui.js?v=20260821aj" defer></script><script src="../engines/contract-fixes-al.js?v=20260821al" defer></script><script src="../engines/adaptive-options-am.js?v=20260821an" defer></script><script src="../engines/phone-fixes-ao.js?v=20260821ao" defer></script><script src="../engines/amber-ratio-ap.js?v=20260821ap" defer></script><script src="../engines/amber-alignment-aq.js?v=20260821aq" defer></script><script src="../engines/para-pathway-ar.js?v=20260821ar" defer></script><script src="../engines/amber-alignment-as.js?v=20260821as" defer></script><script src="../engines/amber-alignment-at.js?v=20260821at" defer></script><script src="../engines/presence-persistence-bc.js?v=20260822bg" defer></script><script src="../architecture/interaction-core.js?v=20260822bg" defer></script><script src="../architecture/athlete-session-core.js?v=20260822bg" defer></script><script src="../architecture/training-history-core.js?v=20260822bg" defer></script><script src="../architecture/athlete-observation-core.js?v=20260822bg" defer></script><script src="../architecture/athlete-report-core.js?v=20260822bg" defer></script><script src="../engines/athlete-session-bd.js?v=20260822bg" defer></script><script src="../engines/swimmer-training-bd.js?v=20260822bg" defer></script><script src="../engines/stability-identity-bh.js?v=20260822bl" defer></script><script src="../engines/privacy-hardening-bk.js?v=20260822bl" defer></script><script src="../engines/swimmer-performance-bm.js?v=20260824bm" defer></script><script src="./secure-swimmer-bn.js?v=20260824bn" defer></script>
+<main id="appMain"><section id="boardView" class="view"></section><section id="tvView" class="view"></section><section id="hubView" class="view"></section><section id="swimmerView" class="view active"></section><section id="meetView" class="view"></section><section id="athletesView" class="view"></section><section id="reportsView" class="view"></section><section id="dataView" class="view"></section><section id="rollView" class="view"></section><section id="timesView" class="view"></section><section id="connectionView" class="view"></section><section id="guardianView" class="view"></section></main>
+<div class="sticky-actions"><button data-sticky-note>Capture</button><button data-sticky-voice hidden>Voice</button><button data-sticky-video hidden>Video</button><button data-sticky-edit>Edit</button><button data-sticky-finish>Finish</button></div>
+<nav class="bottom-nav"></nav><button id="undoBtn">Undo</button><div id="toast" class="toast"></div><div id="modalHost"></div>
+<script src="../config.js"></script>
+<script src="../seed.js"></script>
+<script src="../app.js?v=20260821ak-cache" defer></script>
+<script src="../engines/storage.js?v=20260820u" defer></script>
+<script src="../engines/startup-gate.js?v=20260820t" defer></script>
+<script src="../engines/cloud-session.js?v=20260820z" defer></script>
+<script src="../v4-correct.js?v=20260821ak-cache" defer></script>
+<script src="../v4-poolside-core.js?v=20260819f-targettruth" defer></script>
+<script src="../engines/session-repair.js?v=20260821af" defer></script>
+<script src="../engines/evidence.js?v=20260821af" defer></script>
+<script src="../engines/evidence-index.js?v=20260820t" defer></script>
+<script src="../engines/data-registry.js?v=20260822bg" defer></script>
+<script src="../engines/wa-base-times-2026.js?v=20260820u" defer></script>
+<script src="../engines/reference-bridge.js?v=20260820x" defer></script>
+<script src="../engines/wa-points.js?v=20260820aa" defer></script>
+<script src="../engines/aerobic.js?v=20260821ak-cache" defer></script>
+<script src="../engines/race-pace.js?v=20260820aa" defer></script>
+<script src="../engines/modification.js?v=20260821ak-cache" defer></script>
+<script src="../engines/coordinator.js?v=20260820v" defer></script>
+<script src="../engines/bridge.js?v=20260821ak-cache" defer></script>
+<script src="../engines/contract-fixes-ak.js?v=20260821ak" defer></script>
+<script src="../engines/performance.js?v=20260821ag" defer></script>
+<script src="../engines/development.js?v=20260820ab" defer></script>
+<script src="../engines/stroke-balance.js?v=20260820q" defer></script>
+<script src="../engines/reporting.js?v=20260820ab" defer></script>
+<script src="../engines/board.js?v=20260821ah" defer></script>
+<script src="../engines/board-state.js?v=20260820aa" defer></script>
+<script src="../engines/modification-edit.js?v=20260820ab" defer></script>
+<script src="../engines/navigation.js?v=20260820v" defer></script>
+<script src="../engines/attendance-roster.js?v=20260820ad" defer></script>
+<script src="../engines/performance-ui.js?v=20260821ah" defer></script>
+<script src="../engines/capture-ui.js?v=20260821ah" defer></script>
+<script src="../engines/t400-capture.js?v=20260820r" defer></script>
+<script src="../engines/coach-loop-ui.js?v=20260821ai" defer></script>
+<script src="../engines/meet-field-au.js?v=20260821au" defer></script>
+<script src="../engines/meet-ops-av.js?v=20260821aw" defer></script>
+<script src="../engines/meet-board-ay.js?v=20260821ay" defer></script>
+<script src="../engines/meet-board-az.js?v=20260821az" defer></script>
+<script src="../engines/meet-program-ba.js?v=20260821ba" defer></script>
+<script src="../engines/swimmer-tabs-ui.js?v=20260821aj" defer></script>
+<script src="../engines/contract-fixes-al.js?v=20260821al" defer></script>
+<script src="../engines/adaptive-options-am.js?v=20260821an" defer></script>
+<script src="../engines/phone-fixes-ao.js?v=20260821ao" defer></script>
+<script src="../engines/amber-ratio-ap.js?v=20260821ap" defer></script>
+<script src="../engines/amber-alignment-aq.js?v=20260821aq" defer></script>
+<script src="../engines/para-pathway-ar.js?v=20260821ar" defer></script>
+<script src="../engines/amber-alignment-as.js?v=20260821as" defer></script>
+<script src="../engines/amber-alignment-at.js?v=20260821at" defer></script>
+<script src="../engines/presence-persistence-bc.js?v=20260822bg" defer></script>
+<script src="../architecture/interaction-core.js?v=20260822bg" defer></script>
+<script src="../architecture/athlete-session-core.js?v=20260822bg" defer></script>
+<script src="../architecture/training-history-core.js?v=20260822bg" defer></script>
+<script src="../architecture/athlete-observation-core.js?v=20260822bg" defer></script>
+<script src="../architecture/athlete-report-core.js?v=20260822bg" defer></script>
+<script src="../engines/athlete-session-bd.js?v=20260822bg" defer></script>
+<script src="../engines/swimmer-training-bd.js?v=20260822bg" defer></script>
+<script src="../engines/stability-identity-bh.js?v=20260822bl" defer></script>
+<script src="../engines/privacy-hardening-bk.js?v=20260822bl" defer></script>
+<script src="./pilot-link.js?v=20260822bm" defer></script>
+<script src="./swimmer-portal-bm.js?v=20260822bm" defer></script>
 </body>
 </html>
