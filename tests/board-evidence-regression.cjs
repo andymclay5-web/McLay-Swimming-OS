@@ -49,7 +49,10 @@ assert.equal(femaleRank.baseSeconds,50);
 assert.equal(femaleRank.score,Math.floor(1000*Math.pow(50/60,3)));
 
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
-assert.match(board,/if\(!changed&&!needsTarget\)continue/);
+// Board should keep a modified swimmer visible when either the prescription changed OR the line carries timing/stroke interaction.
+assert.match(board,/function timingIntent\(/);
+assert.match(board,/if\(!changed&&!showTiming\)continue/);
+assert.match(board,/showTiming\?strokePill/);
 assert.match(board,/function modified\(/);
 assert.match(board,/msos-mod-target/);
 assert.match(board,/data-msos-ath/);
