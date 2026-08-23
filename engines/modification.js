@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(E,A){
-  const VERSION='3.0.0-bu';
+  const VERSION='3.0.1-bv';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -56,13 +56,14 @@
   }
   function isAerobic(item){return energyZones(item).length>0||/\b(?:aerobic|capacity|vo2)\b/i.test(rawOf(item));}
   function isIM(item){return E?.stroke?.(item?.stroke)==='IM'||/\bIM\b|individual\s+medley/i.test(rawOf(item));}
-  function isQuality(item){return /\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|build|turn|finish)\b/i.test(rawOf(item));}
+  function hasRaceIntent(item){return !!(item?.raceIntent||(item?.repInstructions||[]).some(x=>x?.raceIntent));}
+  function isQuality(item){return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|build|turn|finish)\b/i.test(rawOf(item));}
   function independentSkill(item){return /\b(?:dive|start|turn|finish)\b/i.test(rawOf(item))&&!/\b(?:kick|fins?|underwater)\b/i.test(rawOf(item));}
-  function targetDriven(item){return !!(item?.targetSeconds||item?.raceIntent||item?.repInstructions?.some(x=>x?.raceIntent)||item?.zone||(item?.repPattern||[]).length);}
+  function targetDriven(item){return !!(item?.targetSeconds||hasRaceIntent(item)||item?.zone||(item?.repPattern||[]).length);}
   function sameTeamExposure(item){
     const d=Number(item?.distance)||0,r=Math.max(1,Number(item?.reps)||1),metres=d*r;
     if(isAerobic(item)||d<=0||d>100||metres>300||/\bkick\b/i.test(rawOf(item)))return false;
-    return /\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|drill|scull|skill|build|turn|finish)\b/i.test(rawOf(item));
+    return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|drill|scull|skill|build|turn|finish)\b/i.test(rawOf(item));
   }
 
   function safeReps(reps,distance,ratio,session,returnToStart){
@@ -143,9 +144,7 @@
     out.raw=fix(out.raw||out.text);out.text=out.raw;out.cycleSeconds=Number(newCycle);
     if(Array.isArray(out.cues))out.cues=out.cues.map(fix);
     if(Array.isArray(out.pattern))out.pattern=out.pattern.map(x=>({...x,text:fix(x.text||'')}));
-    if(Array.isArray(out.repPattern))out.repPattern=out.repPattern.map(x=>({...x,text:x.text?fix(x.text):x.text}));
-    if(Array.isArray(out.repInstructions))out.repInstructions=out.repInstructions.map(x=>({...x,label:x.label?fix(x.label):x.label}));
-    if(out.repeatBreakdownCue)out.repeatBreakdownCue=fix(out.repeatBreakdownCue);return out;
+    if(Array.isArray(out.repPattern))out.repPattern=out.repPattern.map(x=>({...x,text:x.text?fix(x.text):x.text}));if(Array.isArray(out.repInstructions))out.repInstructions=out.repInstructions.map(x=>({...x,label:x.label?fix(x.label):x.label}));if(out.repeatBreakdownCue)out.repeatBreakdownCue=fix(out.repeatBreakdownCue);return out;
   }
   function preserveAuthoredTiming(out,item,reason='Common starts preserved; authored send-off still protects the intended stimulus'){
     const cycle=Number(item?.cycleSeconds)||null;if(!cycle)return out;
@@ -234,7 +233,7 @@
     const next=ceil5(cycle*from/to);rewriteCycle(out,cycle,next);out.adaptationTiming={mode:'low-confidence-team-window-fallback',cycleSeconds:next,source:'No fair squad performance comparator available',reason:'Fallback only: keep complete IM units near the squad set window'};out.cyclePolicy='low-confidence IM set-window fallback';out.adaptationConfidence='low';return out;
   }
   function relativeDistance(item,evidence,session,p){
-    const base=Number(item?.distance)||0;if(base<=50||isIM(item)||item?.raceIntent||item?.repInstructions?.some(x=>x?.raceIntent)||!evidence?.speedFactor)return null;
+    const base=Number(item?.distance)||0;if(base<=50||isIM(item)||hasRaceIntent(item)||!evidence?.speedFactor)return null;
     const desired=base*evidence.speedFactor;if(desired>=base-.01)return null;
     const d=nearestPracticalDistance(desired,session,{returnToStart:p?.returnToStart,minDistance:poolLength(session),maxDistance:base});return d<base?d:null;
   }
@@ -318,7 +317,7 @@
         const preservePattern=!!item?.repeatBreakdown||/\bdesc(?:end|ending)?(?:\s+stroke\s+count|\s+sc|\s+1\s*[-–—])/i.test(raw);
         if(evidenceDistance){
           reshapeWithDistance(out,item,evidenceDistance,session);preserveAuthoredTiming(out,item,'Distance adjusted from relative performance evidence so the swimmer can keep common starts');out.adaptationReason=`Relative ${evidence.kind} · ${Math.round(evidence.speedFactor*100)}% squad speed · ${baseDist}→${evidenceDistance} to preserve group rhythm`;out.adaptationConfidence=evidence.confidence;
-        }else if((im||item?.raceIntent||item?.repInstructions?.some(x=>x?.raceIntent)||quality)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){
+        }else if((im||hasRaceIntent(item)||quality)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){
           const plan=performancePlan(item,ath,state,session,evidence);applyPerformancePlan(out,item,plan,im?'Modified IM':'Relative quality');
         }else if(aerobic&&baseDist>=100){
           const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:Math.min(100,baseDist),maxDistance:baseDist});
@@ -335,7 +334,6 @@
       }
     }
 
-    // Athlete-specific confirmed rules that remain valid after general shaping.
     if(!manualShape&&(key==='mckenziedrage'||key==='mackenziedrage')&&Number(item.distance)===50&&/\bkick\b/i.test(raw)&&Number(item.cycleSeconds)>0)preserveAuthoredTiming(out,item,'McKenzie 50 kick keeps the coach-authored cycle');
     applyCharlotteKickBase(out,ath,manualShape);
     adaptiveLabel(out,item,ath);
@@ -347,7 +345,7 @@
   function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
 
   return{
-    VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,targetDriven,sameTeamExposure,shapeOverride,
+    VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,hasRaceIntent,targetDriven,sameTeamExposure,shapeOverride,
     AMBER_MODES,AMBER_STROKES,CONOR_MODES,relativeEvidence,commonIntervalSafe,performancePlan,relevantGroupAthletes,
     internals:{remapRepPattern,remapRepInstructions,remapComposition,rewriteInstructionRanges,energyZones,applyCharlotteKickBase,preserveAuthoredTiming,bestEventSeconds,t400Seconds,relevantGroupAthletes,relativeEvidence,performancePlan,imPerformancePlan,applyPerformancePlan,applyIMPerformancePlan,alignIMTeamWindow,invalidateDistanceTarget,rewriteCycle,rewriteLead,repeatCue,syncRepeatBreakdown,nearestPracticalDistance,comparisonEventSpec,referenceValues}
   };
