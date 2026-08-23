@@ -61,7 +61,8 @@ const allowedAdaptWriters = new Set([
   'engines/amber-ratio-ap.js',
   'engines/amber-alignment-aq.js',
   'engines/amber-alignment-as.js',
-  'engines/amber-alignment-at.js'
+  'engines/amber-alignment-at.js',
+  'engines/rainbow-rules-au.js'
 ]);
 const unexpectedAdapt = adaptItemWriters.filter(x => !allowedAdaptWriters.has(x));
 assert.deepEqual(unexpectedAdapt, [], `Unexpected M.adapt.item policy writer(s): ${unexpectedAdapt.join(', ')}`);
