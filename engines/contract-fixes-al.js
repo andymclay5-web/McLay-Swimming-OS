@@ -1,59 +1,52 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M)return;
-  const F=M.contractFixesAL={build:'v4-contract-fixes-20260821al'};
+  const F=M.contractFixesAL={build:'v4-contract-fixes-20260824cf'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const compact=/\b([2-9]|[12]\d|30)(800|400|200|150|100|75|50|35|25)s\b/gi;
   const expandCompact=s=>String(s??'').replace(compact,'$1 x $2');
+  const athleteKey=a=>E?.Evidence?.key?.(a?.full_name)||text(a?.full_name).toLowerCase().replace(/[^a-z0-9]/g,'');
+  const rawOf=item=>text([item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' '));
+  const isKick=item=>/\bkick\b/i.test(rawOf(item));
+  const isUnderwater=item=>/\bunderwater\b/i.test(rawOf(item));
+  const explicitStroke=item=>{const st=E?.Evidence?.stroke?.(item?.stroke||'')||'';if(st&&st!=='Choice')return st;const raw=rawOf(item);if(/\b(?:free|freestyle)\s+kick\b/i.test(raw))return'Freestyle';if(/\b(?:back|backstroke)\s+kick\b/i.test(raw))return'Backstroke';if(/\b(?:breast|breaststroke)\s+kick\b/i.test(raw))return'Breaststroke';if(/\b(?:fly|butterfly|dolphin)\s+kick\b/i.test(raw))return'Butterfly';if(/\b(?:IM|medley)\s+kick\b/i.test(raw))return'IM';return'';};
+  const genericKick=item=>isKick(item)&&!explicitStroke(item);
+  const strokeAssignmentIntent=item=>/#\s*1\b/i.test(rawOf(item))||!!item?.numberOneStroke||isKick(item);
+  const SYSTEM_SOURCE='coach-confirmed-morning-cf';
 
-  // Parser compatibility remains here. Modification policy no longer does.
+  function setsInOrder(session){const out=[];const walk=items=>{for(const x of items||[]){if(x?.kind==='group')walk(x.items||[]);else if(x?.kind==='set')out.push(x)}};for(const b of session?.blocks||[])walk(b.items||[]);return out;}
+  function tagStrokePolicy(session){for(const x of setsInOrder(session)){const explicit=explicitStroke(x);if(explicit){if(!x.stroke||x.stroke==='Choice')x.stroke=explicit;x.kickStrokePolicy='authored';}else if(isKick(x)){x.numberOneStroke=true;x.strokePolicy='number1';x.kickStrokePolicy='number1';}}return session;}
+
   if(M.parser?.parse){
-    if(M.parser.normalise){
-      const priorNormalise=M.parser.normalise.bind(M.parser);
-      M.parser.normalise=s=>priorNormalise(expandCompact(s));
-    }
+    if(M.parser.normalise){const priorNormalise=M.parser.normalise.bind(M.parser);M.parser.normalise=s=>priorNormalise(expandCompact(s));}
     const priorParse=M.parser.parse.bind(M.parser);
-    const setsInOrder=session=>{const out=[];const walk=items=>{for(const x of items||[]){if(x?.kind==='group')walk(x.items||[]);else if(x?.kind==='set')out.push(x)}};for(const b of session?.blocks||[])walk(b.items||[]);return out;};
-    const attachStandaloneRest=(session,source)=>{
-      const lines=String(source??'').replace(/\r/g,'').split('\n').map(x=>x.trim()),sets=setsInOrder(session);let cursor=0;
-      for(let i=1;i<lines.length;i++){
-        const rm=lines[i].match(/^(\d{1,2})\s*(?:s|sec|seconds?)\s*(?:r|rest)\b/i);if(!rm)continue;
-        let j=i-1;while(j>=0&&!lines[j])j--;if(j<0)continue;
-        const pm=lines[j].match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b/i);if(!pm)continue;
-        const reps=Number(pm[1]),distance=Number(pm[2]),rest=Number(rm[1]);let found=-1;
-        for(let k=cursor;k<sets.length;k++){if(Number(sets[k].reps||1)===reps&&Number(sets[k].distance||0)===distance){found=k;break}}
-        if(found<0)for(let k=0;k<sets.length;k++){if(Number(sets[k].reps||1)===reps&&Number(sets[k].distance||0)===distance){found=k;break}}
-        if(found>=0){sets[found].restSeconds=rest;cursor=found+1;}
-      }
-      return session;
-    };
-    M.parser.parse=(source,identity={})=>{const src=expandCompact(source),session=priorParse(src,identity);return attachStandaloneRest(session,src)};
-    F.expandCompact=expandCompact;F.attachStandaloneRest=attachStandaloneRest;
+    const attachStandaloneRest=(session,source)=>{const lines=String(source??'').replace(/\r/g,'').split('\n').map(x=>x.trim()),sets=setsInOrder(session);let cursor=0;for(let i=1;i<lines.length;i++){const rm=lines[i].match(/^(\d{1,2})\s*(?:s|sec|seconds?)\s*(?:r|rest)\b/i);if(!rm)continue;let j=i-1;while(j>=0&&!lines[j])j--;if(j<0)continue;const pm=lines[j].match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b/i);if(!pm)continue;const reps=Number(pm[1]),distance=Number(pm[2]),rest=Number(rm[1]);let found=-1;for(let k=cursor;k<sets.length;k++){if(Number(sets[k].reps||1)===reps&&Number(sets[k].distance||0)===distance){found=k;break}}if(found<0)for(let k=0;k<sets.length;k++){if(Number(sets[k].reps||1)===reps&&Number(sets[k].distance||0)===distance){found=k;break}}if(found>=0){sets[found].restSeconds=rest;cursor=found+1;}}return session;};
+    M.parser.parse=(source,identity={})=>{const src=expandCompact(source),session=priorParse(src,identity);attachStandaloneRest(session,src);return tagStrokePolicy(session)};
+    F.expandCompact=expandCompact;F.attachStandaloneRest=attachStandaloneRest;F.tagStrokePolicy=tagStrokePolicy;
   }
 
-  // Compatibility handle only. All athlete/set prescription policy now lives in engines/modification.js.
-  F.adaptItem=(item,ath,state,session)=>E?.Modification?.adaptItem?.(item,ath,state,session);
+  const cycleClock=s=>{s=Number(s)||0;return`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;};
+  function rewriteCycleText(s,oldCycle,newCycle){s=text(s);if(!newCycle)return s;const next=cycleClock(newCycle),old=Number(oldCycle)||0;if(old){const o=cycleClock(old),re=new RegExp(`(?:@|on)\\s*${o.replace(':','[:.]')}`,'i');if(re.test(s))return s.replace(re,`@ ${next}`);}return /(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i.test(s)?s.replace(/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i,`@ ${next}`):s;}
+  function originalDescGroup(item){for(const s of [item?.raw,item?.text,...(item?.cues||[])]){const m=text(s).match(/\bDesc(?:end|ending)?\s+1\s*[-–—]\s*(\d+)\b/i);if(m)return Number(m[1]);}return 0;}
+  function descentFor(reps,original){const n=Math.max(1,Number(reps)||1),o=Math.max(0,Number(original)||0);if(n<=1)return'';if(n===2)return'1 Build / 1 Fast';if(o>=3&&n%o===0)return`Desc 1-${o}`;const divisors=[];for(let d=3;d<=n;d++)if(n%d===0)divisors.push(d);if(divisors.length){divisors.sort((a,b)=>Math.abs(a-o)-Math.abs(b-o)||b-a);return`Desc 1-${divisors[0]}`;}return`Desc 1-${n}`;}
+  function rewriteDescText(s,from,to){s=text(s);if(!from||!to)return s;return s.replace(/\bDesc(?:end|ending)?\s+1\s*[-–—]\s*\d+\b/ig,to);}
+  function shapePatch(item,reps,cycle){const d=Number(item?.distance)||0,oldCycle=Number(item?.cycleSeconds)||0,n=Math.max(1,Number(reps)||1),lead=n>1?`${n} × ${d}`:`${d}`,src=text(item?.raw||item?.text),desc=descentFor(n,originalDescGroup(item));let raw=/^\d+\s*[x×]\s*\d+(?:\.5)?/i.test(src)?src.replace(/^\d+\s*[x×]\s*\d+(?:\.5)?/i,lead):src;raw=rewriteCycleText(raw,oldCycle,cycle);raw=rewriteDescText(raw,originalDescGroup(item),desc);const cues=(item?.cues||[]).map(c=>rewriteDescText(rewriteCycleText(c,oldCycle,cycle),originalDescGroup(item),desc));if(desc&&!cues.some(c=>c.toLowerCase()===desc.toLowerCase())&&!raw.toLowerCase().includes(desc.toLowerCase()))cues.push(desc);return{reps:n,distance:d,cycleSeconds:Number(cycle)||oldCycle||null,raw,text:raw,cues};}
+  function activeOverride(item,ath,state,session){return(state?.adaptationOverrides||[]).find(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false)||null;}
+  function contextualStroke(item,ath,state,session){try{const c=M.performanceEngine?.selectStrokeForContext?.(ath,{...item,numberOneStroke:true},state,session,{formOnly:false});if(c?.stroke)return E?.Evidence?.stroke?.(c.stroke)||c.stroke;}catch{}return'Freestyle';}
+  function rulePatchFor(item,ath,state=M.state,session=M.currentSession?.()||{}){if(item?.kind!=='set'||!ath)return null;const key=athleteKey(ath),d=Number(item?.distance)||0,reps=Math.max(1,Number(item?.reps)||1);let patch={};if(key==='charlottemurphy'&&isUnderwater(item)&&d<=25&&reps>1)patch={...patch,...shapePatch(item,Math.max(1,Math.round(reps*.75)),60)};else if(isKick(item)&&d===100&&reps>1){if(key==='charlottemurphy')patch={...patch,...shapePatch(item,Math.max(1,Math.round(reps*.5)),270)};else if(key==='mckenziedrage'||key==='mackenziedrage')patch={...patch,...shapePatch(item,Math.max(1,Math.round(reps*(2/3))),225)};}else if(isKick(item)&&d===200&&/\bfins?\b/i.test(rawOf(item))&&reps>1){if(key==='charlottemurphy')patch={...patch,...shapePatch(item,Math.max(1,Math.round(reps*.5)),330)};else if(key==='mckenziedrage'||key==='mackenziedrage')patch={...patch,...shapePatch(item,Math.max(1,Math.round(reps*(2/3))),270)};}
+    const explicit=explicitStroke(item);if(explicit&&isKick(item))patch.stroke=explicit;else if(genericKick(item)||/#\s*1\b/i.test(rawOf(item))||item?.numberOneStroke)patch.stroke=contextualStroke(item,ath,state,session);return Object.keys(patch).length?patch:null;}
+  function samePatch(a,b){try{return JSON.stringify(a||{})===JSON.stringify(b||{})}catch{return false}}
+  function ensureMorningOverrides(session=M.currentSession?.(),state=M.state){if(!session||!state)return false;const rows=state.adaptationOverrides=state.adaptationOverrides||[],athletes=M.ui?.presentAthletes?.()||state.athletes||[];let changed=false;for(const item of setsInOrder(session))for(const ath of athletes){const expected=rulePatchFor(item,ath,state,session);if(!expected)continue;let row=activeOverride(item,ath,state,session);if(row&&row.source!==SYSTEM_SOURCE)continue;if(row&&row.source===SYSTEM_SOURCE&&row.updatedAt&&row.systemAppliedAt&&row.updatedAt!==row.systemAppliedAt)continue;if(!row){const now=new Date().toISOString();row={id:M.util?.uid?.('mod')||`mod-${Date.now()}-${ath.id}`,sessionId:session.id,itemId:item.id,athleteId:ath.id,patch:expected,active:true,source:SYSTEM_SOURCE,createdAt:now,updatedAt:now,systemAppliedAt:now};rows.push(row);changed=true;}else if(!samePatch(row.patch,expected)){const now=new Date().toISOString();row.patch=expected;row.updatedAt=now;row.systemAppliedAt=now;row.active=true;changed=true;}}if(changed){E?.Coordinator?.clearCache?.();E?.RacePace?.invalidate?.(state);M.performanceEngine?.invalidate?.(state);M.store?.save?.(state);M.cloud?.stageAdaptationsForSession?.(session);}return changed;}
+  F.adaptItem=(item,ath,state,session)=>E?.Modification?.adaptItem?.(item,ath,state,session);F.rulePatchFor=rulePatchFor;F.ensureMorningOverrides=ensureMorningOverrides;
 
-  // Development opportunities require actual PB evidence. Coverage monitoring can
-  // still say what is missing, but it must not invent a target event for a blank profile.
-  if(M.developmentEngine?.profile){
-    const D=M.developmentEngine,priorProfile=D.profile.bind(D);
-    const fixedProfile=(ath,state=M.state,course='SCM')=>{const out=priorProfile(ath,state,course);if(Number(out?.pbEvents||0)===0)out.opportunities=[];return out};
-    D.profile=fixedProfile;
-    D.squad=(state=M.state,{course='SCM',athletes=null}={})=>{const list=(athletes||state?.athletes||[]).filter(a=>a.active!==false),rows=list.map(a=>fixedProfile(a,state,course));return{rows,summary:{athletes:rows.length,withPb:rows.filter(r=>r.pbEvents>0).length,noPb:rows.filter(r=>!r.pbEvents).length,withOpportunities:rows.filter(r=>r.opportunities.length).length,xlr8Monitored:rows.filter(r=>r.xlr8?.monitored).length,xlr8CoverageReady:rows.filter(r=>r.xlr8?.complete).length}}};
-  }
+  function setStroke(session,item,ath,value){const rows=M.state.adaptationOverrides=M.state.adaptationOverrides||[];let x=activeOverride(item,ath,M.state,session),stroke=value==='AUTO'?'':(E?.Evidence?.stroke?.(value)||value);if(!x){x={id:M.util?.uid?.('mod')||`mod-${Date.now()}`,sessionId:session.id,itemId:item.id,athleteId:ath.id,patch:{},active:true,source:'coach-poolside',createdAt:new Date().toISOString()};rows.push(x);}x.patch=x.patch||{};if(stroke)x.patch.stroke=stroke;else delete x.patch.stroke;x.source='coach-poolside';x.updatedAt=new Date().toISOString();x.systemAppliedAt='';if(!Object.keys(x.patch).length)x.active=false;E?.Coordinator?.clearCache?.();E?.RacePace?.invalidate?.(M.state);M.performanceEngine?.invalidate?.(M.state);M.store?.save?.(M.state);M.cloud?.stageAdaptationsForSession?.(session);M.ui?.renderBoard?.();}
+  function findItem(session,id){let hit=null;const walk=items=>{for(const n of items||[]){if(n?.id===id){hit=n;return}if(n?.kind==='group')walk(n.items);if(hit)return}};for(const b of session?.blocks||[]){walk(b.items);if(hit)break}return hit;}
+  const shortStroke=s=>({Freestyle:'Fr',Backstroke:'Bk',Breaststroke:'Br',Butterfly:'Fly',IM:'IM'})[s]||s||'Auto';
+  function decorateBoard(){if(typeof document==='undefined')return;const host=document.querySelector('#boardView'),session=M.currentSession?.();if(!host||!session)return;if(ensureMorningOverrides(session,M.state)){requestAnimationFrame(()=>M.ui?.renderBoard?.());return;}const athletes=M.ui?.presentAthletes?.()||[];for(const row of host.querySelectorAll('.msos-work-row[data-item]')){if(row.querySelector('[data-cf-stroke-strip]'))continue;const item=findItem(session,row.dataset.item);if(!item||!strokeAssignmentIntent(item))continue;const cell=row.querySelector('.msos-group-cell');if(!cell)continue;const strip=document.createElement('div');strip.dataset.cfStrokeStrip='1';strip.style.cssText='display:flex;flex-wrap:wrap;gap:5px 8px;align-items:center;margin-top:6px';for(const ath of athletes){const wrap=document.createElement('span');wrap.style.cssText='display:inline-flex;align-items:center;gap:3px';const nm=document.createElement('small');nm.textContent=M.boardEngine?.name?.(ath,athletes)||text(ath.full_name).split(' ')[0]||'Swimmer';const b=document.createElement('button');b.className='msos-stroke-pill';const actual=E?.Modification?.adaptItem?.(item,ath,M.state,session),resolved=E?.Evidence?.stroke?.(actual?.stroke||'')||actual?.stroke||'Auto';b.textContent=shortStroke(resolved);b.title='Tap to change stroke';b.onclick=e=>{e.stopPropagation();host.querySelectorAll('.msos-stroke-menu').forEach(x=>x.remove());const menu=document.createElement('div');menu.className='msos-stroke-menu';for(const [v,l] of [['AUTO','Auto / #1'],['Freestyle','Fr'],['Backstroke','Bk'],['Breaststroke','Br'],['Butterfly','Fly'],['IM','IM']]){const x=document.createElement('button');x.textContent=l;x.onclick=ev=>{ev.stopPropagation();setStroke(session,item,ath,v)};menu.appendChild(x)}wrap.appendChild(menu);setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0)};wrap.append(nm,b);strip.appendChild(wrap)}cell.appendChild(strip)}}
+  if(typeof document!=='undefined'){const boot=()=>{const h=document.querySelector('#boardView');if(!h)return setTimeout(boot,100);decorateBoard();if(!F._boardObserver){F._boardObserver=new MutationObserver(()=>requestAnimationFrame(decorateBoard));F._boardObserver.observe(h,{childList:true,subtree:true})}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();}
+  F.strokeAssignmentIntent=strokeAssignmentIntent;F.genericKick=genericKick;F.explicitStroke=explicitStroke;F.descentFor=descentFor;F.decorateBoard=decorateBoard;
 
-  // Replace the obsolete point-step/training-link assertion with the same linkage
-  // against the real milestone pathway contract.
-  if(M.guardian?.run){
-    const priorRun=M.guardian.run.bind(M.guardian),obsolete='Poolside swimmer answer links pathway steps to recent training area';
-    M.guardian.run=()=>{
-      const r=priorRun()||{},tests=(r.tests||[]).filter(t=>text(t.name)!==obsolete),test={name:'Poolside swimmer answer links real milestones to recent training area',ok:false,detail:''};
-      try{
-        const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,qualifying:[{_label:'Meet QT',_kind:'qualifying',_seconds:58}],deeper:[{_label:'Finalist',_kind:'benchmark',_seconds:56}]},answer=M.correct?.poolsidePathwayAnswer?.(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training-al',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training-al':session},attendance:[{session_id:'poolside-training-al',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]},area=M.correct?.trainingArea?.(ath,pb,{state,days:42});
-        if(answer?.milestones?.length!==2)throw new Error(`${answer?.milestones?.length||0} real milestones`);if(area?.sessions!==1||area?.metres!==500||area?.racePaceExposures!==1)throw new Error(`${area?.metres||0}m · ${area?.racePaceExposures||0} race-pace`);test.ok=true;test.detail=`2 real milestones · ${area.metres}m · ${area.racePaceExposures} race-pace`;
-      }catch(e){test.detail=e?.message||String(e)}
-      tests.push(test);const passed=tests.filter(x=>x.ok===true).length;return{...r,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
-    };
-  }
+  if(M.developmentEngine?.profile){const D=M.developmentEngine,priorProfile=D.profile.bind(D);const fixedProfile=(ath,state=M.state,course='SCM')=>{const out=priorProfile(ath,state,course);if(Number(out?.pbEvents||0)===0)out.opportunities=[];return out};D.profile=fixedProfile;D.squad=(state=M.state,{course='SCM',athletes=null}={})=>{const list=(athletes||state?.athletes||[]).filter(a=>a.active!==false),rows=list.map(a=>fixedProfile(a,state,course));return{rows,summary:{athletes:rows.length,withPb:rows.filter(r=>r.pbEvents>0).length,noPb:rows.filter(r=>!r.pbEvents).length,withOpportunities:rows.filter(r=>r.opportunities.length).length,xlr8Monitored:rows.filter(r=>r.xlr8?.monitored).length,xlr8CoverageReady:rows.filter(r=>r.xlr8?.complete).length}}};}
+
+  if(M.guardian?.run){const priorRun=M.guardian.run.bind(M.guardian),obsolete='Poolside swimmer answer links pathway steps to recent training area';M.guardian.run=()=>{const r=priorRun()||{},tests=(r.tests||[]).filter(t=>text(t.name)!==obsolete),test={name:'Poolside swimmer answer links real milestones to recent training area',ok:false,detail:''};try{const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,qualifying:[{_label:'Meet QT',_kind:'qualifying',_seconds:58}],deeper:[{_label:'Finalist',_kind:'benchmark',_seconds:56}]},answer=M.correct?.poolsidePathwayAnswer?.(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training-al',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training-al':session},attendance:[{session_id:'poolside-training-al',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]},area=M.correct?.trainingArea?.(ath,pb,{state,days:42});if(answer?.milestones?.length!==2)throw new Error(`${answer?.milestones?.length||0} real milestones`);if(area?.sessions!==1||area?.metres!==500||area?.racePaceExposures!==1)throw new Error(`${area?.metres||0}m · ${area?.racePaceExposures||0} race-pace`);test.ok=true;test.detail=`2 real milestones · ${area.metres}m · ${area.racePaceExposures} race-pace`;}catch(e){test.detail=e?.message||String(e)}tests.push(test);const passed=tests.filter(x=>x.ok===true).length;return{...r,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};};}
 })(globalThis);

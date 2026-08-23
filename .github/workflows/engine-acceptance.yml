@@ -38,6 +38,7 @@ jobs:
           node --check engines/modification.js
           node --check engines/coordinator.js
           node --check engines/bridge.js
+          node --check engines/contract-fixes-al.js
           node --check engines/performance.js
           node --check engines/development.js
           node --check engines/stroke-balance.js
@@ -87,6 +88,7 @@ jobs:
           node tests/engine-acceptance.cjs
           node tests/modification-consolidation-regression.cjs
           node tests/modification-stimulus-contract.cjs
+          node tests/morning-mod-kick-cf.cjs
           node tests/swimmer-display-regression.cjs
           node tests/performance-wps-regression.cjs
           node tests/board-evidence-regression.cjs
