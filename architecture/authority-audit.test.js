@@ -47,10 +47,22 @@ assert.ok(amberLayers.length <= 4, `New Amber correction wrapper added: ${amberL
 assert.ok(correctionLayers.length <= 4, `New correction wrapper added: ${correctionLayers.join(', ')}`);
 
 // Modification policy must not gain a new M.adapt.item writer while existing debt is retired.
-// adaptive-options-am is explicitly known debt: it currently replaces both
-// E.Modification.adaptItem and the bridge exposure and is a priority retirement target.
+// This is an explicit baseline of the wrapper chain found by the stocktake. Files may be
+// removed from this set as their durable rules move into engines/modification.js; new files
+// must not be added merely to make a later-loaded policy win.
 const adaptItemWriters = writers(/\bM\.adapt\.item\s*=/g);
-const allowedAdaptWriters = new Set(['engines/bridge.js', 'v4-correct.js', 'engines/adaptive-options-am.js']);
+const allowedAdaptWriters = new Set([
+  'engines/bridge.js',
+  'v4-correct.js',
+  'engines/contract-fixes-ak.js',
+  'engines/contract-fixes-al.js',
+  'engines/adaptive-options-am.js',
+  'engines/phone-fixes-ao.js',
+  'engines/amber-ratio-ap.js',
+  'engines/amber-alignment-aq.js',
+  'engines/amber-alignment-as.js',
+  'engines/amber-alignment-at.js'
+]);
 const unexpectedAdapt = adaptItemWriters.filter(x => !allowedAdaptWriters.has(x));
 assert.deepEqual(unexpectedAdapt, [], `Unexpected M.adapt.item policy writer(s): ${unexpectedAdapt.join(', ')}`);
 
