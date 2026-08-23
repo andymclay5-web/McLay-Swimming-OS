@@ -87,6 +87,7 @@ jobs:
           node tests/engine-acceptance.cjs
           node tests/modification-consolidation-regression.cjs
           node tests/modification-stimulus-contract.cjs
+          node tests/swimmer-fast-open-cg.cjs
           node tests/swimmer-display-regression.cjs
           node tests/performance-wps-regression.cjs
           node tests/board-evidence-regression.cjs
