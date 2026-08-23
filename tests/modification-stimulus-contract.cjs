@@ -20,6 +20,13 @@ assert.equal(x.reps,8);
 assert.equal(x.distance,25);
 assert.equal(x.cycleSeconds,90);
 
+// A raw short-quality line with no parsed cycle still remains same-team exposure; Guardian must not depend on a cycle field just to recognise the coaching intent.
+const noCycleQuality=set('no-cycle-quality',8,25,{raw:'8 x 25 MAX @ 1:00'});
+x=Modification.adaptItem(noCycleQuality,cm,baseState,session);
+assert.equal(x.reps,8);
+assert.equal(x.distance,25);
+assert.match(x.adaptationReason||'',/same team exposure/i);
+
 // IM stays in complete IM units when there is no fair comparator. Missing evidence is not permission to turn 100 IM into 50 IM.
 const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});
 x=Modification.adaptItem(im,cm,baseState,session);
@@ -52,6 +59,18 @@ x=Modification.adaptItem(mixed,cm,baseState,session);
 assert.equal(x.repPattern.length,2);
 assert.deepEqual(x.repPattern.map(r=>r.zone),['Regeneration','Development']);
 assert.equal(x.distance,200);
+
+// Without an authored interval McKenzie can stay closer to the load target; once a common cycle exists, pool-end/group rhythm may supersede the exact ratio.
+x=Modification.adaptItem(mixed,md,baseState,session);
+assert.equal(x.reps,2);
+assert.equal(x.distance,275);
+assert.deepEqual(x.repPattern.map(r=>r.zone),['Regeneration','Development']);
+const mixedTimed={...mixed,id:'mixed-timed',raw:'2 x 400 Freestyle @ 5:00',text:'2 x 400 Freestyle @ 5:00',cycleSeconds:300};
+x=Modification.adaptItem(mixedTimed,md,baseState,session);
+assert.equal(x.reps,2);
+assert.equal(x.distance,250);
+assert.equal(x.cycleSeconds,300);
+assert.deepEqual(x.repPattern.map(r=>r.zone),['Regeneration','Development']);
 
 // Coach shape override wins while active; deactivating it immediately returns to current automatic truth.
 const twelve=set('twelve',12,50,{raw:'12 x 50 Choice'});
