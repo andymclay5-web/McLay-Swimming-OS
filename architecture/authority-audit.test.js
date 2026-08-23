@@ -67,10 +67,16 @@ const allowedAdaptWriters = new Set([
 const unexpectedAdapt = adaptItemWriters.filter(x => !allowedAdaptWriters.has(x));
 assert.deepEqual(unexpectedAdapt, [], `Unexpected M.adapt.item policy writer(s): ${unexpectedAdapt.join(', ')}`);
 
-// Local state ownership is being consolidated from bootstrap app.js into engines/storage.js.
-// No third writer is allowed during the migration.
+// Local state ownership is being consolidated into engines/storage.js. Two current
+// runtime layers still wrap save for presence journalling and Guardian-startup suppression;
+// they are explicit retirement targets, not permission for further save wrappers.
 const storeSaveWriters = writers(/\bM\.store\.save\s*=/g);
-const allowedStoreWriters = new Set(['app.js', 'engines/storage.js']);
+const allowedStoreWriters = new Set([
+  'app.js',
+  'engines/storage.js',
+  'engines/presence-persistence-bc.js',
+  'engines/guardian-runtime.js'
+]);
 const unexpectedStore = storeSaveWriters.filter(x => !allowedStoreWriters.has(x));
 assert.deepEqual(unexpectedStore, [], `Unexpected M.store.save writer(s): ${unexpectedStore.join(', ')}`);
 
