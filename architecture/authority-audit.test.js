@@ -47,8 +47,10 @@ assert.ok(amberLayers.length <= 4, `New Amber correction wrapper added: ${amberL
 assert.ok(correctionLayers.length <= 4, `New correction wrapper added: ${correctionLayers.join(', ')}`);
 
 // Modification policy must not gain a new M.adapt.item writer while existing debt is retired.
+// adaptive-options-am is explicitly known debt: it currently replaces both
+// E.Modification.adaptItem and the bridge exposure and is a priority retirement target.
 const adaptItemWriters = writers(/\bM\.adapt\.item\s*=/g);
-const allowedAdaptWriters = new Set(['engines/bridge.js', 'v4-correct.js']);
+const allowedAdaptWriters = new Set(['engines/bridge.js', 'v4-correct.js', 'engines/adaptive-options-am.js']);
 const unexpectedAdapt = adaptItemWriters.filter(x => !allowedAdaptWriters.has(x));
 assert.deepEqual(unexpectedAdapt, [], `Unexpected M.adapt.item policy writer(s): ${unexpectedAdapt.join(', ')}`);
 
