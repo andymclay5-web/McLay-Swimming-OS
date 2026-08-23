@@ -37,77 +37,41 @@ assert.match(authority, /Squad Stimulus Profile/i);
 
 const index = read('index.html');
 const scripts = [...index.matchAll(/<script\s+src="([^"]+)"/g)].map(m => m[1].split('?')[0]);
+const loaded = new Set(scripts);
 const guardianLayers = scripts.filter(x => /(?:^|\/)release-guardian(?:-[a-z]+)?\.js$/i.test(x));
 const amberLayers = scripts.filter(x => /(?:^|\/)amber-(?:ratio|alignment)-[a-z]+\.js$/i.test(x));
 const correctionLayers = scripts.filter(x => /(?:contract-fixes|phone-fixes|adaptive-options)-[a-z]+\.js$/i.test(x));
 
-// Baseline guard: consolidation PRs may reduce these counts but may not increase them.
 assert.ok(guardianLayers.length <= 13, `New Guardian wrapper added: ${guardianLayers.join(', ')}`);
 assert.ok(amberLayers.length <= 4, `New Amber correction wrapper added: ${amberLayers.join(', ')}`);
 assert.ok(correctionLayers.length <= 4, `New correction wrapper added: ${correctionLayers.join(', ')}`);
 
-// Modification policy must not gain a new M.adapt.item writer while existing debt is retired.
-// This is an explicit baseline of the wrapper chain found by the stocktake. Files may be
-// removed from this set as their durable rules move into engines/modification.js; new files
-// must not be added merely to make a later-loaded policy win.
+// M.adapt.item may be bound by the engine bridge. Historical v4-correct and the
+// inactive rainbow file are known source debt, but no loaded late layer may replace
+// modification policy after the bridge has exposed engines/modification.js.
 const adaptItemWriters = writers(/\bM\.adapt\.item\s*=/g);
-const allowedAdaptWriters = new Set([
-  'engines/bridge.js',
-  'v4-correct.js',
-  'engines/contract-fixes-ak.js',
-  'engines/contract-fixes-al.js',
-  'engines/adaptive-options-am.js',
-  'engines/phone-fixes-ao.js',
-  'engines/amber-ratio-ap.js',
-  'engines/amber-alignment-aq.js',
-  'engines/amber-alignment-as.js',
-  'engines/amber-alignment-at.js',
-  'engines/rainbow-rules-au.js'
-]);
-const unexpectedAdapt = adaptItemWriters.filter(x => !allowedAdaptWriters.has(x));
-assert.deepEqual(unexpectedAdapt, [], `Unexpected M.adapt.item policy writer(s): ${unexpectedAdapt.join(', ')}`);
+const allowedAdaptWriters = new Set(['engines/bridge.js','v4-correct.js','engines/rainbow-rules-au.js']);
+assert.deepEqual(adaptItemWriters.filter(x=>!allowedAdaptWriters.has(x)),[],`Unexpected M.adapt.item policy writer(s): ${adaptItemWriters.join(', ')}`);
+const loadedLateAdaptWriters=adaptItemWriters.filter(x=>loaded.has(x)&&x!=='engines/bridge.js');
+assert.deepEqual(loadedLateAdaptWriters,[],`Loaded layer replaces Modification after bridge: ${loadedLateAdaptWriters.join(', ')}`);
 
-// Local state ownership is being consolidated into engines/storage.js. Two current
-// runtime layers still wrap save for presence journalling and Guardian-startup suppression;
-// they are explicit retirement targets, not permission for further save wrappers.
+// No active compatibility layer may replace E.Modification.adaptItem. Rainbow is
+// currently not loaded and remains an explicit later consolidation target.
+const engineAdaptWriters=writers(/\b(?:E|MSOSEngines)\.Modification\.adaptItem\s*=/g);
+const allowedEngineAdaptWriters=new Set(['engines/rainbow-rules-au.js']);
+assert.deepEqual(engineAdaptWriters.filter(x=>!allowedEngineAdaptWriters.has(x)),[],`Unexpected engine Modification writer(s): ${engineAdaptWriters.join(', ')}`);
+assert.deepEqual(engineAdaptWriters.filter(x=>loaded.has(x)),[],`Loaded layer replaces E.Modification.adaptItem: ${engineAdaptWriters.filter(x=>loaded.has(x)).join(', ')}`);
+
 const storeSaveWriters = writers(/\bM\.store\.save\s*=/g);
-const allowedStoreWriters = new Set([
-  'app.js',
-  'engines/storage.js',
-  'engines/presence-persistence-bc.js',
-  'engines/guardian-runtime.js'
-]);
-const unexpectedStore = storeSaveWriters.filter(x => !allowedStoreWriters.has(x));
-assert.deepEqual(unexpectedStore, [], `Unexpected M.store.save writer(s): ${unexpectedStore.join(', ')}`);
+const allowedStoreWriters = new Set(['app.js','engines/storage.js','engines/presence-persistence-bc.js','engines/guardian-runtime.js']);
+assert.deepEqual(storeSaveWriters.filter(x => !allowedStoreWriters.has(x)), [], `Unexpected M.store.save writer(s): ${storeSaveWriters.join(', ')}`);
 
-// Historical Guardian layers currently filter superseded assertions at runtime.
-// Baseline every existing filter so consolidation may only reduce this set; no new
-// Guardian file may begin hiding source failures.
-const guardianFiltering = writers(/\.filter\(\s*t\s*=>\s*!retired\.has\s*\(/g)
-  .filter(x => /release-guardian/i.test(x));
-const allowedGuardianFiltering = new Set([
-  'engines/release-guardian.js',
-  'engines/release-guardian-ao.js',
-  'engines/release-guardian-aq.js',
-  'engines/release-guardian-as.js',
-  'engines/release-guardian-at.js',
-  'engines/release-guardian-av.js',
-  'engines/release-guardian-bc.js',
-  'engines/release-guardian-bd.js',
-  'engines/release-guardian-be.js',
-  'engines/release-guardian-bk.js',
-  'engines/release-guardian-bl.js'
-]);
-const unexpectedFiltering = guardianFiltering.filter(x => !allowedGuardianFiltering.has(x));
-assert.deepEqual(unexpectedFiltering, [], `New runtime Guardian filtering introduced: ${unexpectedFiltering.join(', ')}`);
+const guardianFiltering = writers(/\.filter\(\s*t\s*=>\s*!retired\.has\s*\(/g).filter(x => /release-guardian/i.test(x));
+const allowedGuardianFiltering = new Set(['engines/release-guardian.js','engines/release-guardian-ao.js','engines/release-guardian-aq.js','engines/release-guardian-as.js','engines/release-guardian-at.js','engines/release-guardian-av.js','engines/release-guardian-bc.js','engines/release-guardian-bd.js','engines/release-guardian-be.js','engines/release-guardian-bk.js','engines/release-guardian-bl.js']);
+assert.deepEqual(guardianFiltering.filter(x => !allowedGuardianFiltering.has(x)), [], `New runtime Guardian filtering introduced: ${guardianFiltering.join(', ')}`);
 
 console.log(JSON.stringify({
-  gate: 'MSOS_AUTHORITY_BASELINE',
-  guardianLayers: guardianLayers.length,
-  amberLayers: amberLayers.length,
-  correctionLayers: correctionLayers.length,
-  adaptItemWriters,
-  storeSaveWriters,
-  knownGuardianFiltering: guardianFiltering,
-  rule: 'Counts may fall; no new policy owner/wrapper may be added.'
-}, null, 2));
+  gate:'MSOS_AUTHORITY_BASELINE',guardianLayers:guardianLayers.length,amberLayers:amberLayers.length,correctionLayers:correctionLayers.length,
+  adaptItemWriters,engineAdaptWriters,loadedLateAdaptWriters,storeSaveWriters,knownGuardianFiltering:guardianFiltering,
+  rule:'Modification has one active policy owner; counts may fall and no new wrapper may be added.'
+},null,2));
