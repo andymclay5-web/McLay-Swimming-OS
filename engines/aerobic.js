@@ -1,6 +1,6 @@
 'use strict';
 (function(root,factory){const api=factory(root.MSOSEngines?.Evidence);if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Aerobic=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(E){
-  const VERSION='2.2.1-cc';
+  const VERSION='2.2.2-cc';
   const AEROBIC={50:{10:{Regeneration:1.062,Development:1.033,Overload:1.002,Threshold:.969,Clearance:.941},30:{Regeneration:1.02,Development:.989,Overload:.961,Threshold:.931,Clearance:.91},divisor:8},100:{10:{Regeneration:1.1165,Development:1.08,Overload:1.05,Threshold:1.024,Clearance:1},30:{Regeneration:1.093,Development:1.048,Overload:1.024,Threshold:.995,Clearance:.972},divisor:4},200:{10:{Regeneration:1.1405,Development:1.0945,Overload:1.0687,Threshold:1.0474,Clearance:1.0225},30:{Regeneration:1.1261,Development:1.081,Overload:1.055,Threshold:1.02518,Clearance:1.0087},divisor:2},400:{10:{Regeneration:1.156,Development:1.1142,Overload:1.091,Threshold:1.0686,Clearance:1.04759},30:{Regeneration:1.1515,Development:1.103,Overload:1.0731,Threshold:1.0554,Clearance:1.036},divisor:1}};
   const RUSHTON={Regeneration:{hr:'<140',sr:'<30'},Development:{hr:'<140',sr:'~30'},Overload:{hr:'~150',sr:'31–33'},Threshold:{hr:'160–165',sr:'33–35'},Clearance:{hr:'165–185',sr:'35–45'}};
   const clock=s=>{s=Number(s);if(!Number.isFinite(s))return'—';const m=Math.floor(s/60),x=s-m*60,t=x.toFixed(Math.abs(x-Math.round(x))>.001?1:0);return m?`${m}:${t.padStart(t.includes('.')?4:2,'0')}`:t};
@@ -8,7 +8,7 @@
   function t400(ath,state,stroke='Freestyle'){const rows=E?.t400Rows?.(ath,state,stroke)||[];return rows[0]||null}
   function hasAthleteEvidence(ath,state){if(!ath)return false;for(const st of ['Freestyle','Backstroke','Breaststroke','Butterfly','IM'])if((E?.t400Rows?.(ath,state,st)||[]).length)return true;try{if((E?.pbRows?.(ath,state)||[]).length)return true}catch{}return false;}
   function authoredRest(item,fallback=10){
-    const direct=Number(item?.restSeconds);if(Number.isFinite(direct)&&direct>=0)return direct;
+    const rawDirect=item?.restSeconds;if(rawDirect!==null&&rawDirect!==undefined&&rawDirect!==''){const direct=Number(rawDirect);if(Number.isFinite(direct)&&direct>=0)return direct;}
     const lines=[item?.raw,item?.text,...(item?.cues||[])].map(text).filter(Boolean);
     for(const line of lines){
       let m=line.match(/\bRest\s*(?:·|:|-)?\s*(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b/i);
