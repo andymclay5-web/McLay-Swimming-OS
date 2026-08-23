@@ -82,6 +82,7 @@ jobs:
         run: |
           node tests/engine-acceptance.cjs
           node tests/modification-consolidation-regression.cjs
+          node tests/swimmer-display-regression.cjs
           node tests/board-evidence-regression.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
