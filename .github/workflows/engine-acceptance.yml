@@ -67,6 +67,7 @@ jobs:
           node --check architecture/athlete-report-core.js
           node --check engines/athlete-session-bd.js
           node --check engines/swimmer-training-bd.js
+          node --check engines/swimmer-performance-bm.js
           node --check engines/release-guardian-ao.js
           node --check engines/release-guardian-ap.js
           node --check engines/release-guardian-aq.js
@@ -91,3 +92,4 @@ jobs:
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
+          node tests/swimmer-performance-bm.cjs
