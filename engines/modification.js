@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(E,A){
-  const VERSION='3.0.1-bv';
+  const VERSION='3.0.2-ca';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -44,7 +44,14 @@
 
   const poolLength=s=>/LCM/i.test(text(s?.identity?.course))?50:25;
   const courseOf=s=>/LCM/i.test(text(s?.identity?.course))?'LCM':'SCM';
-  const rawOf=item=>text([item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' '));
+  const rawOf=item=>text([
+    item?.raw,item?.text,
+    ...(item?.cues||[]),
+    ...(item?.pattern||[]).map(x=>x?.text||x?.label||''),
+    ...(item?.repPattern||[]).map(x=>x?.text||x?.label||x?.zone||''),
+    ...(item?.repInstructions||[]).map(x=>x?.label||x?.text||''),
+    item?.repeatBreakdownCue||''
+  ].filter(Boolean).join(' '));
 
   function energyZones(item){
     const out=[];
@@ -319,6 +326,10 @@
           reshapeWithDistance(out,item,evidenceDistance,session);preserveAuthoredTiming(out,item,'Distance adjusted from relative performance evidence so the swimmer can keep common starts');out.adaptationReason=`Relative ${evidence.kind} · ${Math.round(evidence.speedFactor*100)}% squad speed · ${baseDist}→${evidenceDistance} to preserve group rhythm`;out.adaptationConfidence=evidence.confidence;
         }else if((im||hasRaceIntent(item)||quality)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){
           const plan=performancePlan(item,ath,state,session,evidence);applyPerformancePlan(out,item,plan,im?'Modified IM':'Relative quality');
+        }else if(im){
+          const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps)reshapeWithReps(out,item,reps);
+          preserveAuthoredTiming(out,item,'Complete IM units retained; no fair evidence supports inventing a new individual interval');
+          out.adaptationReason='Complete IM units retained · load adjusted by reps';out.adaptationConfidence='low';
         }else if(aerobic&&baseDist>=100){
           const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:Math.min(100,baseDist),maxDistance:baseDist});
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Aerobic work distance adjusted while the target engine recalculates athlete pace/recovery');out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · ${baseDist}→${desired} · authored phases retained`;out.adaptationConfidence=evidence?.confidence||'low';}
