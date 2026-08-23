@@ -36,23 +36,43 @@ A later-loaded file is not allowed to become the new policy merely because it ex
 | Build identity | **consolidation target: one build manifest** | display the manifest | independently invent a build ID |
 | Squad stimulus/readiness | **consolidation target: new squad-stimulus owner** | compare athlete to squad reference | use whoever happens to attend today as the only reference |
 
-## Transitional wrappers to retire
+## Modification consolidation status
 
-These files contain useful behaviour that must be folded into an owner before the wrapper is removed. They are not permission to add more wrappers.
+`engines/modification.js` is now the only **active runtime policy owner** for individual prescription decisions after `engines/bridge.js` binds it to `M.adapt.item`.
 
-- `v4-correct.js` — contains proven compatibility behaviour but also wraps adaptation/target/timing surfaces. Fold durable coaching policy back into authoritative engines.
-- `engines/contract-fixes-ak.js` / `engines/contract-fixes-al.js` — compatibility layers; retire rules into their true owners.
-- `engines/adaptive-options-am.js` — athlete-option projection; currently replaces the Modification owner as well as exposing UI. Fold policy back into `engines/modification.js`, then leave only the editor/projection behaviour.
-- `engines/phone-fixes-ao.js` — phone presentation/interaction fixes only; no domain policy should remain here.
-- `engines/amber-ratio-ap.js`, `engines/amber-alignment-aq.js`, `engines/amber-alignment-as.js`, `engines/amber-alignment-at.js` — athlete-specific correction chain. Durable constraints must migrate to athlete profile/rule data or `engines/modification.js`, then these layers retire.
-- `engines/rainbow-rules-au.js` — currently wraps parser, RacePace and Modification behaviour. Its valid race-distribution/zone-transition rules must be moved into the parser/race/modification owners rather than retained as a late policy layer.
-- `engines/presence-persistence-bc.js` — currently wraps `M.store.save` to journal attendance/presence. Move this to a storage hook/event API so persistence remains the single save owner.
-- `engines/guardian-runtime.js` — currently wraps `M.store.save` to suppress a startup Guardian save. Move Guardian-specific persistence through an explicit storage API rather than replacing global save.
-- `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without test-result replacement/filtering.
+The following loaded files have been reduced to compatibility or projection roles and must not replace either `M.adapt.item` or `E.Modification.adaptItem`:
+
+- `engines/contract-fixes-ak.js`
+- `engines/contract-fixes-al.js`
+- `engines/adaptive-options-am.js`
+- `engines/phone-fixes-ao.js`
+- `engines/amber-ratio-ap.js`
+- `engines/amber-alignment-aq.js`
+- `engines/amber-alignment-as.js`
+- `engines/amber-alignment-at.js`
+
+The authority CI gate checks runtime order so a future late-loaded file cannot quietly become a second Modification owner.
+
+The current core Modification policy now distinguishes:
+- **stimulus** from total-load percentage;
+- **assigned-squad comparison** from whoever happens to attend today;
+- T400 comparison for aerobic work from PB/race evidence for quality work;
+- common-start work where the intended work:rest remains intact;
+- shorter work on the same starts when that better preserves group connection;
+- individual evidence-based send-off/repetition plans when common timing would change the stimulus;
+- low-confidence 1/2 or 2/3 load fallback only when better evidence is unavailable.
+
+## Transitional wrappers still to retire
+
+These files still contain useful behaviour or historical debt outside the completed active Modification ownership pass.
+
+- `v4-correct.js` — loaded before the engine bridge. Its old adaptation wrapper is superseded at runtime but should eventually be removed from source after its remaining compatibility behaviour is relocated.
+- `engines/rainbow-rules-au.js` — currently not loaded by `index.html`, but still contains parser/RacePace/Modification wrapper code. Its valid rules should be folded into the relevant owners before the file is retired.
+- `engines/presence-persistence-bc.js` — currently wraps `M.store.save` to journal attendance/presence. Move this to a storage hook/event API.
+- `engines/guardian-runtime.js` — currently wraps `M.store.save` for Guardian startup behaviour. Move this through an explicit storage API.
+- `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without result replacement/filtering.
 
 ## Modification-specific consolidation rule
-
-The recent modification discussion is the example that proves why this map is required.
 
 The authoritative Modification engine must answer, in order:
 

@@ -7,56 +7,11 @@
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'');
   const clock=v=>U.clock?U.clock(Number(v)):String(v??'—');
-  const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
-  const key=a=>text(a?.full_name).toLowerCase().replace(/[^a-z0-9]/g,'');
   const current=()=>M.currentSession?.()||null;
   const activeOverride=(session,item,ath,state=M.state)=>(state?.adaptationOverrides||[]).find(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false)||null;
   const explicitMode=(session,item,ath,state=M.state)=>text(activeOverride(session,item,ath,state)?.patch?.adaptiveMode);
-  const rawOf=item=>text([item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' '));
-  const amberNeedsUpper=item=>/\b(?:kick|fins?|underwater)\b/i.test(rawOf(item));
-  const amberIndependentSkill=item=>/\b(?:dive|start|turn|finish)\b/i.test(rawOf(item))&&!amberNeedsUpper(item);
-  const cycleText=s=>`${Math.floor(Number(s||0)/60)}:${String(Math.round(Number(s||0)%60)).padStart(2,'0')}`;
-  function rewriteCycleText(out,seconds){
-    if(!Number(seconds))return out;const next=cycleText(seconds),fix=s=>{s=text(s);return /(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i.test(s)?s.replace(/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i,`@ ${next}`):`${s} @ ${next}`};
-    out.cycleSeconds=Number(seconds);out.raw=fix(out.raw||out.text);out.text=out.raw;
-    if(Array.isArray(out.cues))out.cues=out.cues.map(c=>/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i.test(text(c))?text(c).replace(/(?:@|on)\s*\d{1,2}[:.]\d{2}\b/i,`@ ${next}`):c);
-    return out;
-  }
-  function applyExplicitNonAdaptiveOverride(item,ov){
-    const out=clone(item);if(!ov)return out;const patch={...(ov.patch||{})};delete patch.adaptiveMode;
-    if(ov.raw)out.raw=ov.raw;Object.assign(out,patch);out.text=out.raw||out.text;return out;
-  }
-  function genericAmberChoice(item,ath,state,session){
-    const underlying=M.contractFixesAL?.adaptItem||M.contractFixesAK?.adaptItem;
-    let out=underlying?underlying(item,ath,state,session):clone(item);out=clone(out)||clone(item);
-    const modes=M.adaptiveDelivery?.AMBER_MODES||[];
-    out.adaptiveOptions=modes.map(x=>({...x}));
-    out.adaptiveMode='';out.adaptivePending=true;out.adaptiveStrokeChoices=['Freestyle','Backstroke','Breaststroke','Butterfly','IM','Choice'];
-    out.adaptiveRuleStatus='coach-confirmed';out.adaptiveNote='Choose the upper-body option that best fits this set. Scull may need up to 2:00 per 50.';
-    out.stroke='Choice';out.equipment=[...(out.equipment||[])].filter(x=>!/\b(?:fins?|kick|paddles?)\b/i.test(String(x)));
-    out.cues=[...(out.cues||[])].filter(x=>!/^Adaptive options:/i.test(text(x)));
-    const reps=Math.max(1,Number(out.reps)||1),d=Number(out.distance)||0,cycle=Number(out.cycleSeconds)||0;
-    out.raw=`${reps} × ${d} Upper-body choice${cycle?` @ ${clock(cycle)}`:''}`;out.text=out.raw;out.adaptationReason='Amber upper-body choice · option not selected';
-    return out;
-  }
-
-  const priorAdapt=E.Modification.adaptItem.bind(E.Modification);
-  function adapt(item,ath,state=M.state,session=current()){
-    const k=key(ath),ov=activeOverride(session,item,ath,state);
-    if(k==='amberproudfoot'&&item?.kind==='set'&&amberIndependentSkill(item))return applyExplicitNonAdaptiveOverride(item,ov);
-    let out=priorAdapt(item,ath,state,session);
-    if(!out||item?.kind!=='set')return out;
-    if(k==='amberproudfoot'&&amberNeedsUpper(item)){
-      const mode=text(ov?.patch?.adaptiveMode);
-      if(!mode)return genericAmberChoice(item,ath,state,session);
-      out.adaptivePending=false;out.cues=[...(out.cues||[])].filter(x=>!/^Adaptive options:/i.test(text(x)));
-    }
-    if((k==='mckenziedrage'||k==='mackenziedrage')&&Number(item.distance)===50&&/\bkick\b/i.test(rawOf(item))&&Number(item.cycleSeconds)>0&&!Object.prototype.hasOwnProperty.call(ov?.patch||{},'cycleSeconds')){
-      rewriteCycleText(out,Number(item.cycleSeconds));
-    }
-    return out;
-  }
-  E.Modification.adaptItem=adapt;if(M.adapt)M.adapt.item=adapt;if(M.adaptiveDelivery)M.adaptiveDelivery.adaptItem=adapt;P.adaptItem=adapt;
+  const adapt=(item,ath,state=M.state,session=current())=>E.Modification.adaptItem(item,ath,state,session);
+  P.adaptItem=adapt;
 
   function parseCycle(line){const m=text(line).match(/(?:@|\bon\b)\s*(\d{1,2})[.:]([0-5]\d)\b/i);return m?Number(m[1])*60+Number(m[2]):null;}
   function setLead(line){const m=text(line).match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b/i);return m?{reps:Number(m[1]),distance:Number(m[2])}:null;}
@@ -90,9 +45,7 @@
   function boardWho(c){const ids=[...(c?.athlete_ids||[])];if(c?.athlete_id&&!ids.includes(c.athlete_id))ids.push(c.athlete_id);if(!ids.length)return'GROUP';if(ids.length>1)return`${ids.length} swimmers`;const a=(M.state?.athletes||[]).find(x=>x.id===ids[0]);return a?(M.boardEngine?.name?.(a,UI.presentAthletes?.()||[])||text(a.full_name).split(' ')[0]):'Swimmer';}
   function noteLabel(c){const title=text(c?.title||c?.capture_title||c?.label);return[boardWho(c),title||'Note'].filter(Boolean).join(' · ');}
   P.noteLabel=noteLabel;
-  function compactBoardNotes(){
-    document.querySelectorAll('#boardView .msos-evidence-thumb.note[data-msos-capture]').forEach(b=>{const c=(M.state?.captures||[]).find(x=>x.id===b.dataset.msosCapture);const small=b.querySelector('small');if(small)small.textContent=c?noteLabel(c):'Note';b.title='Open note';b.setAttribute('aria-label','Open note capture');});
-  }
+  function compactBoardNotes(){document.querySelectorAll('#boardView .msos-evidence-thumb.note[data-msos-capture]').forEach(b=>{const c=(M.state?.captures||[]).find(x=>x.id===b.dataset.msosCapture);const small=b.querySelector('small');if(small)small.textContent=c?noteLabel(c):'Note';b.title='Open note';b.setAttribute('aria-label','Open note capture');});}
 
   function findItem(session,id){return orderedSets(session).find(x=>x.id===id)?.item||null;}
   function applyFinishState(){
@@ -110,14 +63,10 @@
   function openAdaptive(itemId,athId){
     const session=current(),item=findItem(session,itemId),ath=(M.state?.athletes||[]).find(a=>a.id===athId);if(!session||!item||!ath)return;const actual=adapt(item,ath,M.state,session),opts=actual.adaptiveOptions||M.adaptiveDelivery?.AMBER_MODES||[];if(!opts.length)return;const host=document.querySelector('#modalHost');if(!host)return;const selected=explicitMode(session,item,ath,M.state),strokes=actual.adaptiveStrokeChoices||['Choice'];host.innerHTML=`<div class="modal-backdrop" data-ao-adaptive-close><section class="modal" role="dialog" aria-modal="true"><header><div><small>ADAPTIVE OPTION · THIS SET</small><h2>${esc(ath.full_name)}</h2></div><button data-ao-adaptive-close>×</button></header><div class="modal-body"><div class="context-note">${selected?`<b>Selected:</b> ${esc(selected)}`:'<b>No option selected yet.</b> Choose the most useful upper-body variation for this set.'}${actual.adaptiveNote?`<br>${esc(actual.adaptiveNote)}`:''}</div><label>Option<select id="aoAdaptiveMode"><option value="">Choose option…</option>${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.label)}</option>`).join('')}</select></label><label>Stroke<select id="aoAdaptiveStroke"><option value="AUTO">Automatic / Choice</option>${strokes.filter(x=>x!=='Choice').map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}<option value="Choice">Choice</option></select></label><p class="muted">The Board shows only the option you choose. The squad set stays unchanged.</p></div><footer><button data-ao-adaptive-close>Cancel</button><button class="primary" data-ao-adaptive-save ${selected?'':'disabled'}>Use option</button></footer></section></div>`;const mode=host.querySelector('#aoAdaptiveMode'),save=host.querySelector('[data-ao-adaptive-save]'),close=()=>host.innerHTML='';mode.onchange=()=>save.disabled=!mode.value;host.querySelectorAll('[data-ao-adaptive-close]').forEach(b=>b.onclick=close);save.onclick=()=>{if(saveAdaptive(session,item,ath,mode.value,host.querySelector('#aoAdaptiveStroke').value))close();};
   }
-  function fixAdaptiveButtons(){
-    document.querySelectorAll('#boardView [data-adaptive-option]').forEach(b=>{const token=String(b.dataset.adaptiveOption||'');b.removeAttribute('data-adaptive-option');b.dataset.aoAdaptiveOption=token;const [itemId,athId]=token.split(':'),session=current(),item=findItem(session,itemId),ath=(M.state?.athletes||[]).find(a=>a.id===athId),mode=item&&ath?explicitMode(session,item,ath,M.state):'';b.textContent=mode?'Change option':'Choose option';b.title=mode?`Selected: ${mode}`:'Choose adaptive option';b.onclick=e=>{e.preventDefault();e.stopPropagation();openAdaptive(itemId,athId);};});
-  }
+  function fixAdaptiveButtons(){document.querySelectorAll('#boardView [data-adaptive-option]').forEach(b=>{const token=String(b.dataset.adaptiveOption||'');b.removeAttribute('data-adaptive-option');b.dataset.aoAdaptiveOption=token;const [itemId,athId]=token.split(':'),session=current(),item=findItem(session,itemId),ath=(M.state?.athletes||[]).find(a=>a.id===athId),mode=item&&ath?explicitMode(session,item,ath,M.state):'';b.textContent=mode?'Change option':'Choose option';b.title=mode?`Selected: ${mode}`:'Choose adaptive option';b.onclick=e=>{e.preventDefault();e.stopPropagation();openAdaptive(itemId,athId);};});}
 
   function nextMilestone(ath,course){const events=M.swimmerTabsUI?.pathwayEvents?.(ath,course)||[];for(const event of events){const next=(M.swimmerTabsUI?.realMilestones?.(event)||[]).find(x=>!x.achieved);if(next)return{event,next};}return null;}
-  function performanceSnapshot(ath,course){
-    let profile=null;try{profile=M.performanceEngine?.profile?.(ath,M.state,course)||null}catch{}const best=profile?.bestEvent||null,next=nextMilestone(ath,course);return{best,pbCount:Number(profile?.pbs?.length||0),next,course};
-  }
+  function performanceSnapshot(ath,course){let profile=null;try{profile=M.performanceEngine?.profile?.(ath,M.state,course)||null}catch{}const best=profile?.bestEvent||null,next=nextMilestone(ath,course);return{best,pbCount:Number(profile?.pbs?.length||0),next,course};}
   P.performanceSnapshot=performanceSnapshot;
   function snapshotHtml(ath,course){const x=performanceSnapshot(ath,course),best=x.best,next=x.next,items=[];if(best)items.push(`<span><small>#1 event</small><b>${esc(`${best.distance} ${best.stroke}`)}</b><em>${clock(best.seconds||best.result_seconds)}${Number.isFinite(Number(best.points))?` · ${Math.floor(best.points)} WA`:''}</em></span>`);items.push(`<span><small>PB events</small><b>${x.pbCount}</b><em>${esc(course)}</em></span>`);if(next){const pb=next.event.pb,gap=next.next.gapSeconds;items.push(`<span><small>Next milestone</small><b>${esc(`${pb.distance} ${pb.stroke}`)}</b><em>${esc(next.next._label)} · ${gap.toFixed(2)}s</em></span>`);}return `<section class="ao-performance-snapshot" data-ao-performance-snapshot><h3>Performance snapshot</h3><div>${items.join('')}</div></section>`;}
   function compactAthleteNotes(card){card.querySelectorAll('[data-loop-open-cap]').forEach(b=>{const c=(M.state?.captures||[]).find(x=>x.id===b.dataset.loopOpenCap);if(text(c?.capture_type).toLowerCase()!=='note')return;const strong=b.querySelector('b'),small=b.querySelector('small');if(strong){const label=text(c?.title||c?.capture_title)||'Note';if(text(strong.textContent)!==label)strong.textContent=label;}small?.remove();});}
@@ -134,5 +83,5 @@
   const athHost=document.querySelector('#athletesView');if(athHost)new MutationObserver(queueAthlete).observe(athHost,{childList:true,subtree:true});
   document.addEventListener('DOMContentLoaded',()=>{if(M.state?.settings?.view==='board')requestAnimationFrame(()=>{compactBoardNotes();applyFinishState();fixAdaptiveButtons();});queueAthlete();},{once:true});
 
-  P.checks=()=>({amberStartIndependent:true,amberPendingChoice:true,notesCompact:true,finishedRemainderHidden:true,performanceLinkPolicy:P.performanceLinkPolicy,kickCueCycleRecovery:true});
+  P.checks=()=>({amberStartIndependent:true,amberPendingChoice:true,notesCompact:true,finishedRemainderHidden:true,performanceLinkPolicy:P.performanceLinkPolicy,kickCueCycleRecovery:true,modificationPolicyOwner:E.Modification.VERSION});
 })(globalThis);

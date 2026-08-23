@@ -3,14 +3,10 @@
   const M=g.MSOS4,E=g.MSOSEngines;if(!M)return;
   const F=M.contractFixesAL={build:'v4-contract-fixes-20260821al'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
-  const key=a=>text(a?.full_name).toLowerCase().replace(/[^a-z0-9]/g,'');
-  const ceil5=n=>Math.ceil(Number(n||0)/5)*5;
-  const poolLength=s=>/LCM/i.test(text(s?.identity?.course))?50:25;
   const compact=/\b([2-9]|[12]\d|30)(800|400|200|150|100|75|50|35|25)s\b/gi;
   const expandCompact=s=>String(s??'').replace(compact,'$1 x $2');
 
-  // Parser contract: resolve collapsed dictation before every parser layer, then
-  // restore standalone rest to the immediately-authored parent set.
+  // Parser compatibility remains here. Modification policy no longer does.
   if(M.parser?.parse){
     if(M.parser.normalise){
       const priorNormalise=M.parser.normalise.bind(M.parser);
@@ -35,32 +31,8 @@
     F.expandCompact=expandCompact;F.attachStandaloneRest=attachStandaloneRest;
   }
 
-  // Modification contract: inclusion for short safe quality, but practical
-  // independent handling for 75s and per-athlete distance on mixed aerobic work.
-  if(E?.Modification?.adaptItem){
-    const priorAdapt=E.Modification.adaptItem.bind(E.Modification),priorProfile=E.Modification.profile?.bind(E.Modification);
-    const profile=(ath,state)=>{const p=priorProfile?priorProfile(ath,state):M.adapt?.profile?.(ath,state)||{ratio:1};const row=(state?.adaptationProfiles||state?.athlete_adaptation_profiles||[]).find(x=>x.athlete_id===ath?.id&&x.active!==false);return{...p,returnToStart:row?.return_to_starting_end===true||key(ath)==='charlottemurphy'}};
-    const hasOverride=(item,ath,state,session)=>(state?.adaptationOverrides||[]).some(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===ath?.id&&x.active!==false);
-    const rewriteLead=(out,reps,distance)=>{const raw=text(out?.raw||out?.text),lead=`${Math.max(1,Number(reps)||1)} × ${Number(distance)||0}`;out.reps=Math.max(1,Number(reps)||1);out.distance=Number(distance)||0;if(/^\d+\s*[x×]\s*\d+(?:\.5)?/i.test(raw))out.raw=raw.replace(/^\d+\s*[x×]\s*\d+(?:\.5)?/i,lead);else if(/^\d+(?:\.5)?\b/.test(raw))out.raw=raw.replace(/^\d+(?:\.5)?\b/,lead);else out.raw=`${lead}${raw?` · ${raw}`:''}`;out.text=out.raw;return out};
-    const setCycle=(out,seconds)=>{seconds=ceil5(seconds);const old=Number(out.cycleSeconds)||0;out.cycleSeconds=seconds;if(old&&out.raw){const om=`${Math.floor(old/60)}:${String(Math.round(old%60)).padStart(2,'0')}`,nm=`${Math.floor(seconds/60)}:${String(Math.round(seconds%60)).padStart(2,'0')}`;out.raw=String(out.raw).replace(new RegExp(`(@|on)\\s*${om.replace(':','[:.]')}`,'i'),`@ ${nm}`);out.text=out.raw}return out};
-    const remapRows=(rows,oldReps,newReps)=>{if(!Array.isArray(rows)||!rows.length||oldReps===newReps)return rows?JSON.parse(JSON.stringify(rows)):[];const src=Array.from({length:oldReps},(_,i)=>rows.find(x=>Number(x.rep)===i+1)||rows[Math.min(rows.length-1,i)]||{});return Array.from({length:newReps},(_,i)=>{const idx=Math.min(oldReps-1,Math.floor(((i+.5)*oldReps)/newReps));return{...JSON.parse(JSON.stringify(src[idx]||{})),rep:i+1}})};
-    const even75Reps=(reps,ratio)=>{const target=reps*ratio,c=[];for(let r=2;r<=reps;r+=2)c.push({r,d:Math.abs(r-target)});if(!c.length)return Math.max(1,Math.round(target));c.sort((a,b)=>a.d-b.d||b.r-a.r);return c[0].r};
-    const fixedAdapt=(item,ath,state,session)=>{
-      const out=priorAdapt(item,ath,state,session);if(!out||item?.kind!=='set'||hasOverride(item,ath,state,session))return out;
-      const p=profile(ath,state),ratio=Math.max(.25,Math.min(1,Number(p.ratio)||1)),name=key(ath),raw=text([item.raw,item.text,...(item.cues||[])].filter(Boolean).join(' ')),reps=Math.max(1,Number(item.reps)||1),distance=Number(item.distance)||0;
-      const shortSafe=ratio<.98&&distance<=25&&/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|build|turn|finish)\b/i.test(raw);
-      if(shortSafe){rewriteLead(out,reps,distance);out.cycleSeconds=item.cycleSeconds??out.cycleSeconds;out.repPattern=JSON.parse(JSON.stringify(item.repPattern||[]));out.repInstructions=JSON.parse(JSON.stringify(item.repInstructions||[]));out.adaptationReason=`${out.adaptationReason&&!/profile/i.test(out.adaptationReason)?out.adaptationReason+' · ':''}Same team exposure · safe short quality`;return out;}
-      const mixedAerobic=ratio<.98&&reps<=4&&distance>=200&&Array.isArray(item.repPattern)&&item.repPattern.length>=reps;
-      if(mixedAerobic&&name!=='charlottemurphy'){
-        const pool=poolLength(session),desired=Math.max(pool,Math.min(distance,Math.round((distance*ratio)/pool)*pool));rewriteLead(out,reps,desired);out.repPattern=JSON.parse(JSON.stringify(item.repPattern||[]));out.repInstructions=JSON.parse(JSON.stringify(item.repInstructions||[]));out.adaptationReason=`${Math.round(ratio*100)}% profile · every authored phase retained`;return out;
-      }
-      if(ratio<.98&&distance===75){
-        const desired=even75Reps(reps,ratio);rewriteLead(out,desired,75);out.repPattern=remapRows(item.repPattern||[],reps,desired);out.repInstructions=remapRows(item.repInstructions||[],reps,desired);if(Number(item.cycleSeconds)>0)setCycle(out,Number(item.cycleSeconds)*reps/desired);if(name==='mckenziedrage'&&/\b(?:fast|race|quality|max|sprint)\b/i.test(raw)&&Number(out.cycleSeconds||0)<115)setCycle(out,115);if(/upper-body equivalent/i.test(text(out.raw||out.text)))out.adaptationReason=`Upper-body equivalent · ${Math.round(ratio*100)}% profile`;else out.adaptationReason=`${Math.round(ratio*100)}% profile · return-end practical 75s`;return out;
-      }
-      return out;
-    };
-    E.Modification.adaptItem=fixedAdapt;E.Modification.profile=profile;if(M.adapt){M.adapt.item=fixedAdapt;M.adapt.profile=profile}F.adaptItem=fixedAdapt;
-  }
+  // Compatibility handle only. All athlete/set prescription policy now lives in engines/modification.js.
+  F.adaptItem=(item,ath,state,session)=>E?.Modification?.adaptItem?.(item,ath,state,session);
 
   // Development opportunities require actual PB evidence. Coverage monitoring can
   // still say what is missing, but it must not invent a target event for a blank profile.
