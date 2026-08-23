@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(E,A){
-  const VERSION='3.0.2-ca';
+  const VERSION='3.0.3-ca';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -335,8 +335,8 @@
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Aerobic work distance adjusted while the target engine recalculates athlete pace/recovery');out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · ${baseDist}→${desired} · authored phases retained`;out.adaptationConfidence=evidence?.confidence||'low';}
           else{const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · reps adjusted because distance cannot shorten without losing the aerobic unit`;out.adaptationConfidence=evidence?.confidence||'low';}}
         }else if(baseDist>50&&!preservePattern){
-          const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
-          if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Work distance reduced so the swimmer remains on the squad starts rather than finishing the set early');out.adaptationReason=`${evidence?.referenceSeconds?'Relative performance':'Load fallback'} · ${baseDist}→${desired} · common starts retained`;out.adaptationConfidence=evidence?.confidence||'low';}
+          const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);
+          if(reps!==baseReps){reshapeWithReps(out,item,reps);preserveAuthoredTiming(out,item,'No fair performance evidence requires a shorter repeat; preserve authored distance and adjust total work by reps');out.adaptationReason=`Load fallback · ${baseReps}→${reps} reps · authored ${baseDist}m repeat retained`;out.adaptationConfidence='low';}
         }else if(baseDist<=50&&baseReps*baseDist<=300&&sameTeamExposure(item)){
           out.adaptationReason='Short work retained with squad · load recovered elsewhere';preserveAuthoredTiming(out,item,'Short work remains connected to the squad; global load is not enforced by cutting every small set');
         }else{
