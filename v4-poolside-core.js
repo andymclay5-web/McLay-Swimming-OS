@@ -48,7 +48,7 @@
     const start=Math.max(1,Number(m[1])||1),end=Math.max(start,Math.min(Math.max(1,Number(reps)||1),Number(m[2]||m[1])||start));
     return start>Math.max(1,Number(reps)||1)?null:{start,end,label:txt(m[3])};
   }
-  function zoneValue(v){const k=txt(v).toLowerCase();if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)$/.test(k))return'Overload';if(/^(?:thr|threshold)$/.test(k))return'Threshold';if(/^(?:cl|clearance)$/.test(k))return'Clearance';return'';}
+  function zoneValue(v){const k=txt(v).toLowerCase();if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)/.test(k))return'Overload';if(/^(?:thr|threshold)/.test(k))return'Threshold';if(/^(?:cl|clearance)/.test(k))return'Clearance';return'';}
   function cueZone(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);return m?zoneValue(m[1]):'';}
   function zoneProgression(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b\s*(?:to|→|->)\s*\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(!m)return null;const from=zoneValue(m[1]),to=zoneValue(m[2]);return from&&to&&from!==to?{from,to,text:txt(line)}:null;}
   function cueStroke(line){
