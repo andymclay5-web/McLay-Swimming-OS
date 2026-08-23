@@ -64,6 +64,7 @@
     const m=txt(line).match(/^@\s*(\d{1,3})(?::([0-5]\d(?:\.\d+)?))?$/);
     if(!m)return null;return m[2]==null?Number(m[1]):Number(m[1])*60+Number(m[2]);
   }
+  function inlineCycle(line){const m=txt(line).match(/(?:@|on)\s*(\d{1,3})(?::|\.)([0-5]\d(?:\.\d+)?)\b/i);return m?Number(m[1])*60+Number(m[2]):null;}
   function sameJson(a,b){return JSON.stringify(a??null)===JSON.stringify(b??null)}
   function enhanceSetTargets(item){
     if(item?.kind!=='set')return 0;
@@ -135,8 +136,13 @@
   }
 
   function strippedWork(set){return txt(set?.raw||set?.text).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')}
+  function promoteExplicitCycleComponent(item){
+    if(item?.kind!=='component')return item;
+    const raw=txt(item.raw||item.text),cycle=inlineCycle(raw);if(!cycle)return item;
+    return {...item,kind:'set',reps:1,stroke:cueStroke(raw),zone:cueZone(raw),restSeconds:null,cycleSeconds:cycle,equipment:[],raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:[],raceIntent:cueRaceIntent(raw),targetSeconds:null,unclassifiedTerms:[]};
+  }
   function compactItems(items){
-    const a=(items||[]).map(x=>{const c=U.clone(x);if(c.kind==='group')c.items=compactItems(c.items||[]);return c});
+    const a=(items||[]).map(x=>{let c=U.clone(x);if(c.kind==='group')c.items=compactItems(c.items||[]);c=promoteExplicitCycleComponent(c);return c});
     for(let i=0;i<a.length;i++){
       const p=a[i];if(p?.kind!=='set'||Number(p.reps)<2)continue;
       let j=i+1,kids=[],sumReps=0;
