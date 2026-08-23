@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M)return;
-  const F=M.contractFixesAL={build:'v4-contract-fixes-20260821al'};
+  const F=M.contractFixesAL={build:'v4-contract-fixes-20260824ch'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const compact=/\b([2-9]|[12]\d|30)(800|400|200|150|100|75|50|35|25)s\b/gi;
   const expandCompact=s=>String(s??'').replace(compact,'$1 x $2');
@@ -33,6 +33,19 @@
 
   // Compatibility handle only. All athlete/set prescription policy now lives in engines/modification.js.
   F.adaptItem=(item,ath,state,session)=>E?.Modification?.adaptItem?.(item,ath,state,session);
+
+  // The AquaGym season/weekly source was repeatedly present in the coaching files
+  // but absent from live v4 state. Load the canonical reference bridge without
+  // changing an existing imported plan. Coach Hub already listens for data-updated.
+  if(!M.planReferenceCH&&typeof document!=='undefined'){
+    const prior=document.querySelector('script[data-msos-plan-reference]');
+    if(!prior){
+      const s=document.createElement('script');s.dataset.msosPlanReference='1';s.src='engines/plan-reference-ch.js?v=20260824ch';
+      s.onload=()=>{try{dispatchEvent(new CustomEvent('msos:data-updated',{detail:{source:'plan-reference-ch'}}))}catch{}};
+      s.onerror=()=>console.warn('[MSOS] canonical plan reference failed to load');
+      document.head.appendChild(s);
+    }
+  }
 
   // Development opportunities require actual PB evidence. Coverage monitoring can
   // still say what is missing, but it must not invent a target event for a blank profile.
