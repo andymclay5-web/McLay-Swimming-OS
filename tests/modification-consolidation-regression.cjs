@@ -5,9 +5,9 @@ const fs=require('node:fs');
 const board=fs.readFileSync(require.resolve('../engines/board.js'),'utf8');
 assert.match(board,/function modGroupKey\(/,'Board must group identical modified prescriptions');
 assert.match(board,/Coordinator\.prescription/,'Board modifications must use the coordinated prescription path');
-assert.match(board,/·REC/,'Board must expose recent-coach stroke provenance');
-assert.match(board,/·PB/,'Board must expose PB-ranked stroke provenance');
-assert.match(board,/·IM/,'Board must expose IM-context stroke provenance');
+assert.match(board,/recent:'REC'/,'Board must expose recent-coach stroke provenance');
+assert.match(board,/pb:'PB'/,'Board must expose PB-ranked stroke provenance');
+assert.match(board,/im:'IM'/,'Board must expose IM-context stroke provenance');
 
 const Evidence=require('../engines/evidence.js');
 global.MSOSEngines={
