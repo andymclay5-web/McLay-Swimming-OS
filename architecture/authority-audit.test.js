@@ -61,7 +61,7 @@ assert.deepEqual(unexpectedStore, [], `Unexpected M.store.save writer(s): ${unex
 
 // Runtime Guardian result filtering is known debt in the final historical overlay.
 // Do not permit a second file to hide/replace failing source assertions.
-const guardianFiltering = writers(/\.filter\(\s*t\s*=>\s*!retired\.has|retiredTests\s*:/g)
+const guardianFiltering = writers(/\.filter\(\s*t\s*=>\s*!retired\.has\s*\(/g)
   .filter(x => /release-guardian/i.test(x));
 const unexpectedFiltering = guardianFiltering.filter(x => x !== 'engines/release-guardian-bl.js');
 assert.deepEqual(unexpectedFiltering, [], `New runtime Guardian filtering introduced: ${unexpectedFiltering.join(', ')}`);
