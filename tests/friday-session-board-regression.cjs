@@ -65,11 +65,13 @@ TOTAL 6200m`;
 
 const M=global.MSOS4;
 const session=M.parser.parse(source,{id:'friday-contract',date:'2026-08-22',dayPart:'AM',course:'SCM',squads:['National','Development']});
+const diagnosticMain=session.blocks.find(b=>b.type==='main_set');
+console.log('FRIDAY_MAIN_ITEMS',diagnosticMain.items.map(x=>`${x.kind}:${x.reps||1}x${x.distance||0}:${x.raw||x.text||''}`).join(' | '));
 assert.deepEqual(session.blocks.map(M.session.blockDistance),[2100,2900,1000,200],'Friday block totals expose exactly where parser lost work');
 assert.equal(M.session.total(session),6200,'exact Friday source must parse to written 6200m');
 assert.equal(Number(session.metadata.explicitTotal),6200);
 
-const main=session.blocks.find(b=>b.type==='main_set');
+const main=diagnosticMain;
 const dev=main.items.find(x=>x.kind==='set'&&x.reps===3&&x.distance===200);
 assert.equal(dev.zone,'Development','3x200 Development lost its authored zone');
 assert.equal(dev.restSeconds,10,'3x200 Development lost authored 10 sec rest');
