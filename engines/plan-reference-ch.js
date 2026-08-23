@@ -47,7 +47,9 @@
     ['Thursday','PM','Skills + Endurance','Underwaters · turns · body position · aerobic skill control','Aerobic Skills'],
     ['Friday','PM','Speed + Race Quality','Short sharp swimming · starts · breakouts · race habits','Speed']
   ];
-  const sessionRows=rows=>rows.map(([day,dayPart,objective,technical_focus,primary_system])=>({day,dayPart,objective,technical_focus,primary_system}));
+  // Keep the season/week direction separate from the normal role of a session.
+  // Coach Hub uses the week for THIS WEEK and the matched row only for TODAY.
+  const sessionRows=rows=>rows.map(([day,dayPart,session_focus,session_technical_focus,primary_system])=>({day,dayPart,session_focus,session_technical_focus,primary_system}));
   const nd=[
     ['2026-05-11','Ruth Woolley Meet','Free','Base Skills','Aerobic Capacity','base'],['2026-05-18','Ruth Woolley Meet','Back','Base Skills','Aerobic Capacity','base'],['2026-05-25','','Fly','Base Skills','Aerobic Capacity','base'],['2026-06-01','','Breast','Base Skills','Aerobic Capacity','base'],
     ['2026-06-08','Vikings Meet','Free','Under Water','Aerobic Power','underwater'],['2026-06-15','','Back','Under Water','Aerobic Power','underwater'],['2026-06-22','','Breast','Under Water','Aerobic Power','underwater'],['2026-06-29','Canterbury SC Champs','Fly','Under Water','Aerobic Power','underwater'],
