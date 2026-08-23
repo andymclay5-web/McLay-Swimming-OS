@@ -292,8 +292,11 @@
       if(skill){out.adaptationReason='Same team exposure · independent skill quality';preserveAuthoredTiming(out,item,'Independent skill quality remains a common-start squad activity');}
       else if(commonSafe){out=clone(out);out.adaptationReason='Same team exposure · common interval preserves short quality stimulus';preserveAuthoredTiming(out,item,'Work/rest remains a full-recovery quality stimulus for this swimmer');}
       else{
+        if(key==='charlottemurphy'&&baseDist===50&&/\bkick\b/i.test(raw)){
+          const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps)reshapeWithReps(out,item,reps);
+        }
         const evidenceDistance=relativeDistance(item,evidence,session,p);
-        const preservePattern=!!item?.repeatBreakdown||/\bdesc(?:end|ending)?\s+1\s*[-–—]/i.test(raw);
+        const preservePattern=!!item?.repeatBreakdown||/\bdesc(?:end|ending)?(?:\s+stroke\s+count|\s+sc|\s+1\s*[-–—])/i.test(raw);
         if(evidenceDistance){
           reshapeWithDistance(out,item,evidenceDistance,session);preserveAuthoredTiming(out,item,'Distance adjusted from relative performance evidence so the swimmer can keep common starts');out.adaptationReason=`Relative ${evidence.kind} · ${Math.round(evidence.speedFactor*100)}% squad speed · ${baseDist}→${evidenceDistance} to preserve group rhythm`;out.adaptationConfidence=evidence.confidence;
         }else if((im||item?.raceIntent||item?.repInstructions?.some(x=>x?.raceIntent)||quality)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){
@@ -301,6 +304,7 @@
         }else if(aerobic&&baseDist>=100){
           const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:Math.min(100,baseDist),maxDistance:baseDist});
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Aerobic work distance adjusted while the target engine recalculates athlete pace/recovery');out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · ${baseDist}→${desired} · authored phases retained`;out.adaptationConfidence=evidence?.confidence||'low';}
+          else{const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);out.adaptationReason=`${evidence?.referenceSeconds?'Relative T400':'Load fallback'} · reps adjusted because distance cannot shorten without losing the aerobic unit`;out.adaptationConfidence=evidence?.confidence||'low';}}
         }else if(baseDist>50&&!preservePattern){
           const ratio=evidence?.speedFactor||p.ratio,desired=nearestPracticalDistance(baseDist*ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);preserveAuthoredTiming(out,item,'Work distance reduced so the swimmer remains on the squad starts rather than finishing the set early');out.adaptationReason=`${evidence?.referenceSeconds?'Relative performance':'Load fallback'} · ${baseDist}→${desired} · common starts retained`;out.adaptationConfidence=evidence?.confidence||'low';}
