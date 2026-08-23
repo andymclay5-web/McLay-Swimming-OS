@@ -65,13 +65,11 @@ TOTAL 6200m`;
 
 const M=global.MSOS4;
 const session=M.parser.parse(source,{id:'friday-contract',date:'2026-08-22',dayPart:'AM',course:'SCM',squads:['National','Development']});
-const diagnosticMain=session.blocks.find(b=>b.type==='main_set');
-console.log('FRIDAY_MAIN_ITEMS',diagnosticMain.items.map(x=>`${x.kind}:${x.reps||1}x${x.distance||0}:${x.raw||x.text||''}`).join(' | '));
-assert.deepEqual(session.blocks.map(M.session.blockDistance),[2100,2900,1000,200],'Friday block totals expose exactly where parser lost work');
+assert.deepEqual(session.blocks.map(M.session.blockDistance),[2100,2900,1000,200],'Friday blocks must preserve every executable metre');
 assert.equal(M.session.total(session),6200,'exact Friday source must parse to written 6200m');
 assert.equal(Number(session.metadata.explicitTotal),6200);
 
-const main=diagnosticMain;
+const main=session.blocks.find(b=>b.type==='main_set');
 const dev=main.items.find(x=>x.kind==='set'&&x.reps===3&&x.distance===200);
 assert.equal(dev.zone,'Development','3x200 Development lost its authored zone');
 assert.equal(dev.restSeconds,10,'3x200 Development lost authored 10 sec rest');
@@ -108,5 +106,18 @@ assert.equal(B.workLabel(fifties),'3×50 #1 @ 200 Pace');
 assert.match(B.cueText(fifties),/#1 @ 1:00 · #2 @ 1:15 · #3 @ 1:30/);
 assert.equal(B.timingIntent(im),true,'explicit IM interval must expose Times/stroke controls');
 assert.equal(B.timingIntent(dev),true,'aerobic work must expose Times/stroke controls');
+
+// The exact Friday 3x100 IM Desc 1-3 becomes two reps for Charlotte. Two reps are
+// Build/Fast, not a stale two-rep "descent" label. Check the actual Board projection,
+// not just the Modification helper internals.
+const charlotte={id:'athlete-charlotte-murphy',full_name:'Charlotte Murphy',squad:'National'};
+const charlotteState={athletes:[charlotte],adaptationProfiles:[],adaptationOverrides:[],resultsPbBoard:[],resultsEventHistory:[],coachResults:[],trainingTestTypes:[],trainingTestResults:[]};
+const modifiedIm=Modification.adaptItem(im,charlotte,charlotteState,session);
+assert.equal(modifiedIm.reps,2,'Charlotte Friday IM should reduce to two complete IM reps');
+assert.deepEqual((modifiedIm.repInstructions||[]).map(x=>x.label),['Build','Fast'],'two-rep descent must become Build/Fast');
+const modifiedCue=B.cueText(modifiedIm);
+assert.match(modifiedCue,/Build/i,'Board must show Build after descent collapse');
+assert.match(modifiedCue,/Fast/i,'Board must show Fast after descent collapse');
+assert.doesNotMatch(modifiedCue,/Desc(?:end|ending)?\s+1\s*[-–—]\s*3/i,'Board must not show stale Desc 1-3 after rep reduction');
 
 console.log('FRIDAY_SESSION_BOARD_REGRESSION_PASS');
