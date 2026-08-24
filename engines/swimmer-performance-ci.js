@@ -3,7 +3,7 @@
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence;
   if(!M?.state||!M?.pathway||!M?.performanceEngine||!E)return;
 
-  const BUILD='v4-swimmer-performance-integrity-20260824ci';
+  const BUILD='v4-swimmer-performance-integrity-20260824co';
   const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -126,15 +126,10 @@
     return{ok:issues.length===0,issues,model};
   }
 
-  // Preserve the proven morning coach UI. This module owns data/model completion only.
-  // It deliberately does not replace Performance or Pathway DOM.
-  function installBackgroundCompletion(){
-    const base=M.ui?.renderAthletes?.bind(M.ui);if(!base||X._wrapped)return;X._wrapped=true;
-    const queued=new Set();
-    M.ui.renderAthletes=(...args)=>{const out=base(...args);const id=M.state?.settings?.selectedAthleteId,ath=(M.state?.athletes||[]).find(a=>a.id===id),c=currentCourse(),k=`${id}|${c}`;if(ath&&!queued.has(k)){queued.add(k);setTimeout(()=>completeEvidence(ath).then(()=>{if((M.state?.settings?.view||'')==='athletes'&&M.state?.settings?.selectedAthleteId===id)base();}).catch(()=>{}),0);}return out;};
-    if(M.performanceUI)M.performanceUI.render=M.ui.renderAthletes;
-  }
+  // Evidence completion is explicit only. Opening a swimmer must never trigger network,
+  // cloud merge, cache invalidation or a second renderer behind the coach's touch.
+  function installBackgroundCompletion(){X.backgroundCompletionDisabled=true;}
 
-  X.modelFor=buildModel;X.seasonProgress=seasonProgress;X.completeEvidence=completeEvidence;X.prepareAthlete=prepareAthlete;X.readinessFor=readinessFor;X.ageOn=ageOn;X.targetDate=targetDate;X.checks=()=>({build:BUILD,allEvents:true,performanceOrder:true,futureMeetAge:true,pastMeetNotNext:true,uiTakeover:false});
+  X.modelFor=buildModel;X.seasonProgress=seasonProgress;X.completeEvidence=completeEvidence;X.prepareAthlete=prepareAthlete;X.readinessFor=readinessFor;X.ageOn=ageOn;X.targetDate=targetDate;X.checks=()=>({build:BUILD,allEvents:true,performanceOrder:true,futureMeetAge:true,pastMeetNotNext:true,uiTakeover:false,backgroundCompletionDisabled:true});
   if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installBackgroundCompletion,{once:true});else installBackgroundCompletion();}
 })(globalThis);
