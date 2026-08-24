@@ -14,7 +14,7 @@ assert.ok(portal.includes('msos_claim_swimmer_invite'),'one-time invite claim mi
 assert.ok(portal.includes('msos_swimmer_portal_snapshot'),'device-token snapshot missing');
 assert.ok(portal.includes("history.replaceState({},'',location.pathname)"),'invite token is not removed from URL after claim');
 assert.ok(portal.includes('Qualification is a step, not the finish line'),'swimmer portal lost the qualification-to-final pathway model');
-assert.ok(portal.includes('LCM outlook'),'swimmer portal lost the second-course outlook');
+assert.ok(portal.includes("otherCourse=currentCourse==='SCM'?'LCM':'SCM'")&&portal.includes('outlook`,other'),'swimmer portal lost the dynamic second-course outlook');
 assert.ok(coach.includes('Give swimmer access'),'coach access action missing');
 assert.ok(coach.includes('msos_publish_swimmer_payload'),'athlete-specific projection publish missing');
 assert.ok(coach.includes("['shared','swimmer']"),'coach-private captures are not explicitly excluded');
