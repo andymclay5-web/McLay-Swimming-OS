@@ -18,4 +18,5 @@
   function install(){const base=M.ui.renderAthletes?.bind(M.ui);if(base&&!X._wrapped){X._wrapped=true;M.ui.renderAthletes=(...args)=>{const out=base(...args);requestAnimationFrame(installButton);return out;};if(M.performanceUI)M.performanceUI.render=M.ui.renderAthletes;}const h=document.querySelector('#athletesView');if(h&&!X._obs){X._obs=new MutationObserver(()=>requestAnimationFrame(installButton));X._obs.observe(h,{childList:true,subtree:true})}requestAnimationFrame(installButton);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
   X.payloadFor=payloadFor;X.rpc=rpc;X.installButton=installButton;
+  if(typeof document!=='undefined'&&!document.querySelector('script[data-msos-cl]')){const s=document.createElement('script');s.src='engines/swimmer-experience-cl.js?v=20260824cl';s.defer=true;s.dataset.msosCl='1';document.head.appendChild(s);}
 })(globalThis);

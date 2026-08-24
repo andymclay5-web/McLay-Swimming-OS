@@ -2,9 +2,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const cp=require('node:child_process');
 const root=path.resolve(__dirname,'..');
 const text=f=>fs.readFileSync(path.join(root,f),'utf8');
-const html=text('swimmer-portal.html'),portal=text('swimmer-portal.js'),coach=text('engines/swimmer-invite-bn.js'),sql=text('supabase/20260824_secure_swimmer_portal.sql'),index=text('index.html'),sw=text('sw.js');
+const html=text('swimmer-portal.html'),portal=text('swimmer-portal.js'),coach=text('engines/swimmer-invite-bn.js'),context=text('engines/swimmer-experience-cl.js'),sql=text('supabase/20260824_secure_swimmer_portal.sql'),index=text('index.html'),sw=text('sw.js');
 assert.ok(html.includes('swimmer-portal.js'),'secure portal shell is not wired');
 assert.ok(!html.includes('seed.js'),'swimmer portal must never load coach seed/roster data');
 assert.ok(!html.includes('app.js'),'swimmer portal must not load coach application shell');
@@ -18,6 +19,12 @@ assert.ok(coach.includes("['shared','swimmer']"),'coach-private captures are not
 assert.ok(coach.includes('msos_revoke_swimmer_devices'),'coach revoke control missing');
 assert.ok(coach.includes('prepareAthlete'),'QR publish no longer verifies complete athlete evidence');
 assert.ok(coach.includes('readinessFor'),'QR publish no longer has a swimmer-readiness gate');
+assert.ok(coach.includes('swimmer-experience-cl.js?v=20260824cl'),'unified swimmer context is not loaded');
+assert.ok(context.includes('PERFORMANCE + PATHWAY'),'performance and pathway are no longer unified');
+assert.ok(context.includes('Individual test history'),'individual tests no longer preserve swimmer context');
+assert.ok(context.includes("oldTimes.hidden=true"),'global timing button still throws swimmer out of context');
+assert.ok(context.includes('P.rankedEvents='),'duplicate PB-event guard missing');
+cp.execFileSync(process.execPath,['--check',path.join(root,'engines/swimmer-experience-cl.js')],{stdio:'pipe'});
 assert.ok(sql.includes('enable row level security'),'RLS is not enabled');
 assert.ok(sql.includes('revoke all on public.msos_swimmer_payloads from anon, authenticated'),'payload table is directly readable');
 assert.ok(sql.includes('consumed_at is null and expires_at>now()'),'invite is not one-time + expiring');
