@@ -41,6 +41,8 @@ jobs:
           node --check engines/contract-fixes-al.js
           node --check engines/plan-reference-ch.js
           node --check engines/performance.js
+          node --check engines/performance-pathway-ck.js
+          node --check engines/performance-pathway-ui-ck.js
           node --check engines/development.js
           node --check engines/stroke-balance.js
           node --check engines/reporting.js
@@ -94,6 +96,7 @@ jobs:
           node tests/plan-reference-ch.cjs
           node tests/swimmer-display-regression.cjs
           node tests/performance-wps-regression.cjs
+          node tests/performance-pathway-ck.cjs
           node tests/board-evidence-regression.cjs
           node tests/friday-session-board-regression.cjs
           node tests/reference-data-regression.cjs
