@@ -4,7 +4,7 @@
   if(!M||!U||!S||!P?.parse)return;
 
   const baseParse=P.parse.bind(P);
-  const X=M.parserNaturalCW={build:'v4-parser-natural-structure-20260824cw2'};
+  const X=M.parserNaturalCW={build:'v4-parser-natural-structure-20260824cw3'};
 
   const text=v=>String(v??'').replace(/\r/g,'');
   const clean=v=>U.text(v);
@@ -83,6 +83,7 @@
     m=s.match(/\b(?:r|rest)\b\s*(?:[·:=-]\s*)?(\d{1,3})\s*(?:s|sec|seconds?)?\b/i);if(m)return Number(m[1]);
     return null;
   }
+  const missingTime=v=>v==null||v===''||!Number.isFinite(Number(v))||Number(v)<=0;
   const cueText=item=>[item?.raw,item?.text,...(item?.cues||[])].map(clean).filter(Boolean).join(' · ');
   const skillSubdistance=item=>item?.kind==='set'&&Number(item.reps)===1&&Number(item.distance)>0&&Number(item.distance)<=25&&/\b(?:underwater|breakout|streamline|dolphin|skills?)\b/i.test(clean(item.raw||item.text));
 
@@ -95,7 +96,7 @@
       prev.cues=prev.cues||[];
       const wording=clean(cur.raw||cur.text);
       if(wording&&!prev.cues.includes(wording))prev.cues.push(wording);
-      const c=parseCycleAnywhere(wording);if(c!=null&&!Number.isFinite(Number(prev.cycleSeconds)))prev.cycleSeconds=c;
+      const c=parseCycleAnywhere(wording);if(c!=null&&missingTime(prev.cycleSeconds))prev.cycleSeconds=c;
       items.splice(i,1);i--;
     }
   }
@@ -103,8 +104,8 @@
   function repairSet(item){
     if(!item||item.kind!=='set')return;
     const all=cueText(item);
-    if(!Number.isFinite(Number(item.cycleSeconds))){const c=parseCycleAnywhere(all);if(c!=null)item.cycleSeconds=c;}
-    if(!Number.isFinite(Number(item.restSeconds))){const r=parseRestAnywhere(all);if(r!=null)item.restSeconds=r;}
+    if(missingTime(item.cycleSeconds)){const c=parseCycleAnywhere(all);if(c!=null)item.cycleSeconds=c;}
+    if(missingTime(item.restSeconds)){const r=parseRestAnywhere(all);if(r!=null)item.restSeconds=r;}
     const dm=all.match(/\bDesc(?:end(?:ing)?)?\s*1\s*[-–—]\s*(\d{1,2})\b/i);
     if(dm){const to=Number(dm[1]),cue=`Desc 1-${to}`;item.cues=item.cues||[];if(!item.cues.some(x=>new RegExp(`Desc(?:end(?:ing)?)?\\s*1\\s*[-–—]\\s*${to}`,'i').test(clean(x))))item.cues.push(cue);item.descent={from:1,to,repeat:Number(item.reps)>to};}
     item.pattern=item.pattern||[];
