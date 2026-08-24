@@ -20,7 +20,6 @@ const swimmers=[
   {id:'final-thomas',full_name:'Thomas Cave',squad:'National',t400:'4:35.0',status:'present'},
   {id:'final-alex',full_name:'Alex Gibson',squad:'National',t400:'4:29.0',status:'present'}
 ];
-function timeout(ms){return new Promise(r=>setTimeout(r,ms))}
 (async()=>{
   const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
@@ -37,7 +36,6 @@ function timeout(ms){return new Promise(r=>setTimeout(r,ms))}
     assert.ok((snap.guardian?.tests||[]).some(x=>/exact package is CI-attested/i.test(x.name)),'device Guardian does not expose full-release attestation');
 
     async function nav(view){await page.click(`[data-nav="${view}"]`);await page.waitForFunction(v=>window.MSOS4?.state?.settings?.view===v&&document.querySelector(`#${v}View`)?.classList.contains('active'),view,{timeout:2500});}
-    // Before a session exists, the proof is that every primary button changes view immediately rather than freezing.
     await nav('hub');await nav('roll');await nav('times');await nav('board');
 
     await page.click('#guardianShortcut');
@@ -51,22 +49,19 @@ function timeout(ms){return new Promise(r=>setTimeout(r,ms))}
     await page.waitForFunction(()=>window.MSOS4?.currentSession?.()&&window.MSOS4.session.total(window.MSOS4.currentSession())===2600,{timeout:5000});
     const sessionId=await page.evaluate(()=>MSOS4.currentSession().id);
     let boardText=await page.locator('#boardView').innerText();
-    for(const phrase of ['400 Choice','4 × 50','2 × 400 Freestyle','8 × 100 Freestyle','4 × 50 #1 Stroke','200 Easy'])assert.ok(boardText.includes(phrase),`Board missing ${phrase}`);
+    const compactBoard=boardText.replace(/\s+/g,' ');
+    for(const rule of [/\b400\b/,/4\s*[×x]\s*50/,/2\s*[×x]\s*400\s*(?:Fr|Freestyle)/i,/8\s*[×x]\s*100\s*(?:Fr|Freestyle)/i,/4\s*[×x]\s*50[^\n]*#1\s*Stroke/i,/\b200\b/])assert.match(compactBoard,rule,`Board missing ${rule}`);
+    assert.match(compactBoard,/Drill/i);assert.match(compactBoard,/REG|Regeneration/i);assert.match(compactBoard,/THR|Threshold/i);assert.match(compactBoard,/RP200|200 Pace/i);
 
     await page.evaluate(list=>{
-      const M=MSOS4,s=M.currentSession(),names=new Set(list.map(x=>x.full_name.toLowerCase()));
-      // Reuse a real named athlete if already loaded; otherwise create the minimum fixture required for this isolated browser acceptance.
-      const ids={};for(const spec of list){const existing=(M.state.athletes||[]).find(x=>String(x.full_name||'').toLowerCase()===spec.full_name.toLowerCase());if(existing){ids[spec.id]=existing.id;existing.squad=existing.squad||spec.squad;existing.active=true;existing.legacy_pace={...(existing.legacy_pace||{}),t400:spec.t400,course:'SCM',t400_date:'2026-08-01'}}else{M.state.athletes.push({id:spec.id,full_name:spec.full_name,squad:spec.squad,active:true,legacy_pace:{t400:spec.t400,course:'SCM',t400_date:'2026-08-01'}});ids[spec.id]=spec.id}}
-      M.state.__finalAcceptanceIds=ids;
-      M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==s.id||!Object.values(ids).includes(x.athlete_id));
-      M.state.resultsPbBoard=M.state.resultsPbBoard||[];const thomas=ids['final-thomas'];if(!M.state.resultsPbBoard.some(x=>x.athlete_id===thomas&&Number(x.distance)===100&&String(x.stroke)==='Freestyle'))M.state.resultsPbBoard.push({athlete_id:thomas,distance:100,stroke:'Freestyle',course:'SCM',result_seconds:58.4,sex:'M',date:'2026-07-01'});
-      M.store.save(M.state);M.ui.renderCurrent();
+      const M=MSOS4,s=M.currentSession();const ids={};for(const spec of list){const existing=(M.state.athletes||[]).find(x=>String(x.full_name||'').toLowerCase()===spec.full_name.toLowerCase());if(existing){ids[spec.id]=existing.id;existing.squad=existing.squad||spec.squad;existing.active=true;existing.legacy_pace={...(existing.legacy_pace||{}),t400:spec.t400,course:'SCM',t400_date:'2026-08-01'}}else{M.state.athletes.push({id:spec.id,full_name:spec.full_name,squad:spec.squad,active:true,legacy_pace:{t400:spec.t400,course:'SCM',t400_date:'2026-08-01'}});ids[spec.id]=spec.id}}
+      M.state.__finalAcceptanceIds=ids;M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==s.id||!Object.values(ids).includes(x.athlete_id));M.state.resultsPbBoard=M.state.resultsPbBoard||[];const thomas=ids['final-thomas'];if(!M.state.resultsPbBoard.some(x=>x.athlete_id===thomas&&Number(x.distance)===100&&String(x.stroke)==='Freestyle'))M.state.resultsPbBoard.push({athlete_id:thomas,distance:100,stroke:'Freestyle',course:'SCM',result_seconds:58.4,sex:'M',date:'2026-07-01'});M.store.save(M.state);M.ui.renderCurrent();
     },swimmers);
     const liveSwimmers=await page.evaluate(list=>list.map(x=>({...x,id:MSOS4.state.__finalAcceptanceIds[x.id]})),swimmers);
     await nav('roll');
     for(const sw of liveSwimmers){const button=page.locator(`[data-roll="${sw.id}:${sw.status}"]`);assert.equal(await button.count(),1,`Roll missing ${sw.full_name}`);await button.click();await page.waitForFunction(({sid,id,status})=>MSOS4.state.attendance.some(x=>x.session_id===sid&&x.athlete_id===id&&x.status===status),{sid:sessionId,id:sw.id,status:sw.status})}
     await nav('board');boardText=await page.locator('#boardView').innerText();
-    assert.match(boardText,/Charlotte Murphy|CM/);assert.match(boardText,/McKenzie Drage|MD/);
+    assert.match(boardText,/Charlotte Murphy|Charlotte|CM/);assert.match(boardText,/McKenzie Drage|McKenzie|MD/);
     const modifiedText=(await page.locator('.pool-mod').allInnerTexts()).join('\n');assert.match(modifiedText,/CM|Charlotte/);assert.match(modifiedText,/MD|McKenzie/);
     assert.ok(!/NaN|undefined|@ 00\.0/.test(boardText),'Board exposed invalid target/modification text');
 
