@@ -21,6 +21,8 @@ assert.match(nav,/N\.state=state/,'navigation engine must own history state crea
 assert.match(nav,/N\.openLayer=/,'navigation engine must own layer history');
 assert.match(storage,/saveGuardianResult/,'storage owner must expose scoped Guardian-result persistence');
 assert.match(storage,/if\(useIndexed\)[\s\S]*?queueFull\(state\);saveUi\(state\)/,'indexed operational state must bypass synchronous full JSON serialization');
+const saveUi=storage.match(/function saveUi\(state=M\.state\)\{[\s\S]*?\n  function readUi/);assert.ok(saveUi,'saveUi owner not found');assert.doesNotMatch(saveUi[0],/localStorage\.setItem/,'button-path UI persistence must not synchronously write localStorage');assert.match(saveUi[0],/queueMeta\(UI_DB_KEY/,'UI metadata must persist through IndexedDB queue');
+const saveGuardian=storage.match(/function saveGuardianResult\(result\)\{[\s\S]*?\n  function ensurePresence/);assert.ok(saveGuardian,'saveGuardianResult owner not found');assert.doesNotMatch(saveGuardian[0],/localStorage\.setItem/,'Guardian result persistence must not synchronously write localStorage');assert.match(saveGuardian[0],/queueMeta\(GUARDIAN_DB_KEY/,'Guardian metadata must persist through IndexedDB queue');
 const liveGuardian=guardian.match(/G\.runAndRender=\(\)=>\{[\s\S]*?\n\}\)\(globalThis\);/);assert.ok(liveGuardian,'device Guardian runner not found');assert.doesNotMatch(liveGuardian[0],/M\.store\?*\.save|M\.store\.save/,'device Guardian must not full-save operational state');assert.match(liveGuardian[0],/saveGuardianResult/,'device Guardian must persist only diagnostic result metadata');
 assert.match(nav,/Running device checks/,'Guardian view must paint a lightweight state before device checks run');
 console.log('LIVE_GUARDIAN_BOOT_OWNER_PASS');
