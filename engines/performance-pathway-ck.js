@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,P=M?.performanceEngine;
   if(!M?.state||!P||!E)return;
-  const X=P.pathwayCK={build:'v4-performance-pathway-20260824ct'};
+  const X=P.pathwayCK={build:'v4-performance-pathway-20260824cv'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const courseOf=r=>text(E.course?.(r)||r?.course||r?.pool_course).toUpperCase();
@@ -23,8 +23,9 @@
   function kind(r){const k=norm(r?.standard_kind||r?._kind),l=norm(programme(r));if(k==='record'||/record/.test(l))return'record';if(/winner|1st/.test(k+' '+l))return'winner';if(/medal|bronze|silver|gold|3rd/.test(k+' '+l))return'medal';if(/finalist|final|8th/.test(k+' '+l))return'finalist';if(k==='qualifying'||/qualif|division|nzsc|nags|champ/.test(l))return'qualifying';return k||'benchmark';}
   function stageRank(k){return({qualifying:10,finalist:20,medal:30,winner:40,record:50,benchmark:60})[k]||70;}
   function family(label){const n=norm(label);if(/division ii|division 2/.test(n))return'div2';if(/canterbury sc|south island sc/.test(n))return'regional_sc';if(/secondary.*school|nzss/.test(n))return'nzss';if(/national sc|nzsc|new zealand short course/.test(n))return'nzsc';if(/national lc age|nags|age group/.test(n))return'nags';if(/national lc open|nz championships|nz champs|open/.test(n))return'nzopen';if(/world.*short|world sc/.test(n))return'world_sc';if(/world.*long|world lc/.test(n))return'world_lc';if(/olymp/.test(n))return'olympics';return n.replace(/\s+/g,'_');}
-  function trackFor(r){const c=courseOf(r),f=family(programme(r));if(c==='SCM')return'SCM';if(c==='LCM')return'LCM';if(c==='BOTH')return'BOTH';if(['nzsc','div2','regional_sc','nzss','world_sc'].includes(f))return'SCM';if(['nags','nzopen','world_lc','olympics'].includes(f))return'LCM';return c||'BOTH';}
-  function programmePriority(f,track){const scm={div2:10,regional_sc:20,nzss:25,nzsc:30,nags:40,nzopen:50,world_sc:60,world_lc:70,olympics:80};const lcm={regional_sc:10,nags:30,nzopen:40,world_lc:60,olympics:80,nzsc:90};return(track==='LCM'?lcm:scm)[f]??55;}
+  function nativeTrackForFamily(f){if(['nzsc','div2','regional_sc','nzss','world_sc'].includes(f))return'SCM';if(['nags','nzopen','world_lc','olympics'].includes(f))return'LCM';return'';}
+  function trackFor(r){const f=family(programme(r)),native=nativeTrackForFamily(f);if(native)return native;const c=courseOf(r);if(c==='SCM'||c==='LCM'||c==='BOTH')return c;return c||'BOTH';}
+  function programmePriority(f,track){const scm={div2:10,regional_sc:20,nzss:25,nzsc:30,world_sc:60};const lcm={regional_sc:10,nags:30,nzopen:40,world_lc:60,olympics:80};return(track==='LCM'?lcm:scm)[f]??55;}
   function strengthOrder(a,b,track){const as=Number(a?.seconds),bs=Number(b?.seconds);if(Number.isFinite(as)&&Number.isFinite(bs)&&as!==bs)return bs-as;return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||text(a?.label).localeCompare(text(b?.label));}
   function actionOrder(a,b,track){return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||strengthOrder(a,b,track);}
   function addYears(date,years){const d=new Date(`${date}T00:00:00Z`);if(!Number.isFinite(d.getTime()))return'';d.setUTCFullYear(d.getUTCFullYear()+years);return d.toISOString().slice(0,10);}
@@ -42,17 +43,18 @@
   function paraMatch(r,ath){const pc=text(r?.para_class||r?.classification);return!pc&&!P.isPara?.(ath);}
   function rowsByProgramme(event,ath){const map=new Map();for(const r of standardRows()){if(!active(r)||!eventMatch(r,event)||!sexMatch(r,ath)||!paraMatch(r,ath))continue;const f=family(programme(r));if(!f)continue;if(!map.has(f))map.set(f,[]);map.get(f).push(r);}return map;}
   function chooseProgrammeRows(rows,ath,event,viewCourse,now=today()){
-    if(!rows.length)return[];const label=programme(rows[0]),f=family(label),target=futureMeetDate(label,rows,now),age=ageOn(ath?.date_of_birth,target.date),sourceSeason=sourceSeasonFor(rows),targetYr=targetSeason(target.date);
+    if(!rows.length)return[];const label=programme(rows[0]),f=family(label),native=nativeTrackForFamily(f),target=futureMeetDate(label,rows,now),age=ageOn(ath?.date_of_birth,target.date),sourceSeason=sourceSeasonFor(rows),targetYr=targetSeason(target.date);
     const sourceYearRows=sourceSeason?rows.filter(r=>Number(r?.season)===sourceSeason):rows;
     const ageRows=sourceYearRows.filter(r=>ageFits(r,age));
-    const preferred=ageRows.length?ageRows:sourceYearRows.filter(r=>{const{min,max}=ageBounds(r);return min==null&&max==null;});
+    let preferred=ageRows.length?ageRows:sourceYearRows.filter(r=>{const{min,max}=ageBounds(r);return min==null&&max==null;});
+    if(native){const nativeRows=preferred.filter(r=>courseOf(r)===native);if(nativeRows.length)preferred=nativeRows;else return[];}
     const wanted=text(viewCourse).toUpperCase();
-    const dedupe=new Map();for(const r of preferred){const sec=secondsOf(r);if(!Number.isFinite(sec)||sec<=0)continue;const k=`${kind(r)}|${sec.toFixed(2)}|${courseOf(r)}`;if(dedupe.has(k))continue;dedupe.set(k,{raw:r,label:programme(r),family:f,kind:kind(r),seconds:sec,course:courseOf(r)||wanted,officialCourse:trackFor(r)==='LCM'?'LCM':trackFor(r)==='SCM'?'SCM':courseOf(r),targetDate:target.date,targetSeason:targetYr,sourceSeason,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:age,sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
+    const dedupe=new Map();for(const r of preferred){const sec=secondsOf(r);if(!Number.isFinite(sec)||sec<=0)continue;const displayCourse=native||courseOf(r)||wanted,k=`${kind(r)}|${sec.toFixed(2)}|${displayCourse}`;if(dedupe.has(k))continue;dedupe.set(k,{raw:r,label:programme(r),family:f,kind:kind(r),seconds:sec,course:displayCourse,officialCourse:native||trackFor(r)||displayCourse,targetDate:target.date,targetSeason:targetYr,sourceSeason,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:age,sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
     return[...dedupe.values()];
   }
   function staticDeep(event,viewCourse,ath,now=today()){
     const rows=[...(event?.deeper||[])],out=[];
-    for(const r of rows){const sec=Number(r?._seconds??M.pathway?.seconds?.(r));if(!Number.isFinite(sec)||sec<=0)continue;const k=kind(r);if(k==='qualifying')continue;const label=text(r?._label||M.pathway?.standardLabel?.(r)||programme(r)||'Benchmark'),f=family(label),c=courseOf(r)||viewCourse;if(c&&c!=='BOTH'&&viewCourse&&c!==viewCourse)continue;const target=futureMeetDate(label,[r],now),targetYr=targetSeason(target.date);out.push({raw:r,label,family:f,kind:k,seconds:sec,course:c||viewCourse,officialCourse:trackFor({...r,programme:label,course:c})||c||viewCourse,targetDate:target.date,targetSeason:targetYr,sourceSeason:Number(r?.season)||null,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:ageOn(ath?.date_of_birth,target.date),sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
+    for(const r of rows){const sec=Number(r?._seconds??M.pathway?.seconds?.(r));if(!Number.isFinite(sec)||sec<=0)continue;const k=kind(r);if(k==='qualifying')continue;const label=text(r?._label||M.pathway?.standardLabel?.(r)||programme(r)||'Benchmark'),f=family(label),native=nativeTrackForFamily(f),c=native||courseOf(r)||viewCourse;const target=futureMeetDate(label,[r],now),targetYr=targetSeason(target.date);out.push({raw:r,label,family:f,kind:k,seconds:sec,course:c||viewCourse,officialCourse:native||trackFor({...r,programme:label,course:c})||c||viewCourse,targetDate:target.date,targetSeason:targetYr,sourceSeason:Number(r?.season)||null,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:ageOn(ath?.date_of_birth,target.date),sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
     return out;
   }
   function buildEventLadder(ath,event,{course='',now=today()}={}){
@@ -78,5 +80,5 @@
   P.projectedMeetDate=futureMeetDate;
   P.ageAt=ageOn;
   P.pathwayFamily=family;
-  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;X.actionOrder=actionOrder;
+  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;X.actionOrder=actionOrder;X.nativeTrackForFamily=nativeTrackForFamily;
 })(globalThis);
