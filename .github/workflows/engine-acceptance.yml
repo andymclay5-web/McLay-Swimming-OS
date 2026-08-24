@@ -22,6 +22,7 @@ jobs:
       - name: Syntax check active runtime files
         run: |
           node --check v4-poolside-core.js
+          node --check engines/parser-natural-structure-cw.js
           node --check engines/storage.js
           node --check engines/startup-gate.js
           node --check engines/guardian-runtime.js
@@ -81,6 +82,7 @@ jobs:
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
+          node tests/parser-natural-cw.cjs
           node tests/engine-acceptance.cjs
           node tests/modification-consolidation-regression.cjs
           node tests/modification-stimulus-contract.cjs
