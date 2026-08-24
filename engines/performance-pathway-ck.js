@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,P=M?.performanceEngine;
   if(!M?.state||!P||!E)return;
-  const X=P.pathwayCK={build:'v4-performance-pathway-20260824ck'};
+  const X=P.pathwayCK={build:'v4-performance-pathway-20260824ct'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const courseOf=r=>text(E.course?.(r)||r?.course||r?.pool_course).toUpperCase();
@@ -25,6 +25,14 @@
   function family(label){const n=norm(label);if(/division ii|division 2/.test(n))return'div2';if(/canterbury sc|south island sc/.test(n))return'regional_sc';if(/secondary.*school|nzss/.test(n))return'nzss';if(/national sc|nzsc|new zealand short course/.test(n))return'nzsc';if(/national lc age|nags|age group/.test(n))return'nags';if(/national lc open|nz championships|nz champs|open/.test(n))return'nzopen';if(/world.*short|world sc/.test(n))return'world_sc';if(/world.*long|world lc/.test(n))return'world_lc';if(/olymp/.test(n))return'olympics';return n.replace(/\s+/g,'_');}
   function trackFor(r){const c=courseOf(r),f=family(programme(r));if(c==='SCM')return'SCM';if(c==='LCM')return'LCM';if(c==='BOTH')return'BOTH';if(['nzsc','div2','regional_sc','nzss','world_sc'].includes(f))return'SCM';if(['nags','nzopen','world_lc','olympics'].includes(f))return'LCM';return c||'BOTH';}
   function programmePriority(f,track){const scm={div2:10,regional_sc:20,nzss:25,nzsc:30,nags:40,nzopen:50,world_sc:60,world_lc:70,olympics:80};const lcm={regional_sc:10,nags:30,nzopen:40,world_lc:60,olympics:80,nzsc:90};return(track==='LCM'?lcm:scm)[f]??55;}
+  function strengthOrder(a,b,track){
+    // Within one event and one course, elapsed time is the exact monotonic ordering
+    // used by WA/FINA points: slower/easier benchmark first, faster/harder benchmark next.
+    // Labels such as Final/Medal/Win must never override actual performance strength.
+    const as=Number(a?.seconds),bs=Number(b?.seconds);
+    if(Number.isFinite(as)&&Number.isFinite(bs)&&as!==bs)return bs-as;
+    return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||text(a?.label).localeCompare(text(b?.label));
+  }
   function addYears(date,years){const d=new Date(`${date}T00:00:00Z`);if(!Number.isFinite(d.getTime()))return'';d.setUTCFullYear(d.getUTCFullYear()+years);return d.toISOString().slice(0,10);}
   function latestProgrammeDate(rows){return rows.map(dateOf).filter(Boolean).sort().pop()||'';}
   function futureMeetDate(label,rows,now=today()){
@@ -58,9 +66,9 @@
     for(const rows of byProgramme.values())steps.push(...chooseProgrammeRows(rows,ath,event,c,now));
     steps.push(...staticDeep(event,c,ath,now));
     const seen=new Set(),clean=[];for(const s of steps){const key=`${s.family}|${s.kind}|${s.seconds.toFixed(2)}|${s.course}|${s.targetSeason||''}`;if(seen.has(key))continue;seen.add(key);const achieved=Number.isFinite(pbSeconds)?pbSeconds<=s.seconds:false,gapSeconds=Number.isFinite(pbSeconds)?Math.max(0,pbSeconds-s.seconds):null,gapPercentage=Number.isFinite(gapSeconds)&&s.seconds>0?gapSeconds/s.seconds*100:null;clean.push({...s,achieved,gapSeconds,gapPercentage,displayLabel:s.planningProxy?`${s.label} ${s.targetSeason||''} planning`:s.label});}
-    clean.sort((a,b)=>programmePriority(a.family,c)-programmePriority(b.family,c)||stageRank(a.kind)-stageRank(b.kind)||b.seconds-a.seconds);
+    clean.sort((a,b)=>(a.course===c?0:1)-(b.course===c?0:1)||strengthOrder(a,b,c));
     const tracks={SCM:clean.filter(s=>s.course==='SCM'||s.course==='BOTH'),LCM:clean.filter(s=>s.course==='LCM'||s.course==='BOTH')};
-    for(const key of ['SCM','LCM'])tracks[key].sort((a,b)=>programmePriority(a.family,key)-programmePriority(b.family,key)||stageRank(a.kind)-stageRank(b.kind)||b.seconds-a.seconds);
+    for(const key of ['SCM','LCM'])tracks[key].sort((a,b)=>strengthOrder(a,b,key));
     const currentTrack=tracks[c]||clean;
     const next=currentTrack.find(s=>!s.achieved)||null;
     const nextQualifying=currentTrack.find(s=>s.kind==='qualifying'&&!s.achieved)||null;
@@ -76,5 +84,5 @@
   P.projectedMeetDate=futureMeetDate;
   P.ageAt=ageOn;
   P.pathwayFamily=family;
-  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;
+  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;
 })(globalThis);
