@@ -1,12 +1,11 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.state||!M?.access)return;
-  const BUILD='v4-stability-identity-20260822bh',BINDING='bh1';
-  const I=M.stabilityIdentityBH={build:BUILD,bindingVersion:BINDING};
-  const A=M.access;
+  const BUILD='v4-stability-identity-20260825-migration-only',BINDING='bh1';
+  const I=M.stabilityIdentityBH={build:BUILD,bindingVersion:BINDING,migrationOnly:true};
   const saveUi=()=>{try{if(M.storageEngine?.saveUi)M.storageEngine.saveUi(M.state);else M.store?.save?.(M.state)}catch{}};
   const saveFull=()=>{try{M.store?.save?.(M.state)}catch{}};
-  const athlete=id=>(M.state.athletes||[]).find(x=>x.id===id&&x.active!==false)||null;
+  const athlete=id=>(M.state.athletes||[]).find(x=>String(x.id)===String(id)&&x.active!==false)||null;
   const placeholderName=name=>/^swimmer\s+[a-z0-9]+$/i.test(String(name||'').replace(/\s+/g,' ').trim());
   const isPlaceholderAthlete=a=>placeholderName(a?.full_name||a?.name||'');
   const validLinkedAthlete=id=>{const a=athlete(id);return !!a&&!isPlaceholderAthlete(a)};
@@ -31,14 +30,14 @@
     const s=M.state.settings=M.state.settings||{};
     if(ids.has(s.selectedAthleteId))s.selectedAthleteId='';
     if(ids.has(s.selectedSwimmerId))s.selectedSwimmerId='';
-    if(ids.has(s.activeUserAthleteId)){s.activeUserAthleteId='';s.activeRole='owner';s.view='board';}
+    if(ids.has(s.activeUserAthleteId)){s.activeUserAthleteId='';s.activeRole='owner';s.view='board';s.roleBindingVersion=BINDING;s.roleBindingKind='owner';s.roleBindingAthleteId='';s.roleBindingReason='placeholder-link-removed';}
     if(Array.isArray(s.timingRoster))s.timingRoster=s.timingRoster.filter(id=>!ids.has(id));
     M.state.migrations=M.state.migrations||{};
     const stamp=new Date().toISOString();
     M.state.migrations.removedPlaceholderAthletes=[...(M.state.migrations.removedPlaceholderAthletes||[]),...removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||''),removedAt:stamp,reason:'test-placeholder-roster-cleanup'}))].slice(-20);
     M.state.guardian=M.state.guardian||{};
     M.state.guardian.fieldIncidents=M.state.guardian.fieldIncidents||[];
-    M.state.guardian.fieldIncidents.push({id:`placeholder-${Date.now()}`,type:'placeholder_roster_contamination',names:removed.map(a=>String(a.full_name||a.name||'')),detectedAt:stamp,resolvedBy:'automatic local cleanup'});
+    M.state.guardian.fieldIncidents.push({id:`placeholder-${Date.now()}`,type:'placeholder_roster_contamination',names:removed.map(a=>String(a.full_name||a.name||'')),detectedAt:stamp,resolvedBy:'one-time local migration'});
     M.state.guardian.fieldIncidents=M.state.guardian.fieldIncidents.slice(-20);
     if(persist)saveFull();
     return{changed:true,removed:removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||'')}))};
@@ -46,8 +45,7 @@
 
   function resetOwner(reason='identity-reset',persist=true){
     const s=M.state.settings=M.state.settings||{};
-    s.activeRole='owner';s.activeUserAthleteId='';s.assistantId='';
-    s.roleBindingVersion=BINDING;s.roleBindingKind='owner';s.roleBindingAthleteId='';s.roleBindingReason=reason;
+    Object.assign(s,{activeRole:'owner',activeUserAthleteId:'',assistantId:'',roleBindingVersion:BINDING,roleBindingKind:'owner',roleBindingAthleteId:'',roleBindingReason:reason});
     if(['swimmer','athletes'].includes(s.view))s.view='board';
     if(persist)saveUi();
     return'owner';
@@ -57,37 +55,21 @@
     let changed=false,reason='';
     if(s.roleBindingVersion!==BINDING){reason='migrate-pre-bh-role-state';resetOwner(reason,false);changed=true;}
     else if(s.activeRole==='swimmer'){
-      const valid=s.roleBindingKind==='swimmer'&&s.roleBindingAthleteId===s.activeUserAthleteId&&validLinkedAthlete(s.activeUserAthleteId);
+      const valid=s.roleBindingKind==='swimmer'&&String(s.roleBindingAthleteId)===String(s.activeUserAthleteId)&&validLinkedAthlete(s.activeUserAthleteId);
       if(!valid){reason='invalid-swimmer-link';resetOwner(reason,false);changed=true;}
     }else if(s.activeRole==='owner'&&(s.activeUserAthleteId||s.roleBindingKind==='swimmer')){
       s.activeUserAthleteId='';s.roleBindingKind='owner';s.roleBindingAthleteId='';reason='owner-cleared-stale-athlete';changed=true;
     }
     if(changed&&persist)saveUi();
-    return{changed,reason,role:s.activeRole,athleteId:s.activeUserAthleteId||''};
+    return{changed,reason,role:s.activeRole||'owner',athleteId:s.activeUserAthleteId||''};
   }
   I.athlete=athlete;I.placeholderName=placeholderName;I.isPlaceholderAthlete=isPlaceholderAthlete;I.validLinkedAthlete=validLinkedAthlete;I.purgePlaceholders=purgePlaceholders;I.resetOwner=resetOwner;I.normalize=normalize;
 
+  // This module owns migration/cleanup only. Runtime role/capability authority lives in access-authority.js.
+  // Do not wrap M.access methods or UI rendering: a second role authority creates non-atomic role transitions.
   const firstPurge=purgePlaceholders({persist:false}),firstIdentity=normalize({persist:false});
   if(firstPurge.changed)saveFull();else if(firstIdentity.changed)saveUi();
 
-  const oldRole=typeof A.role==='function'?A.role.bind(A):()=>M.state.settings.activeRole||'owner';
-  const oldSetRole=typeof A.setRole==='function'?A.setRole.bind(A):null;
-  A.role=()=>{const role=oldRole();if(role==='swimmer'){const s=M.state.settings||{};if(s.roleBindingVersion!==BINDING||s.roleBindingKind!=='swimmer'||s.roleBindingAthleteId!==s.activeUserAthleteId||!validLinkedAthlete(s.activeUserAthleteId))return resetOwner('runtime-invalid-swimmer-link');}return role;};
-  A.setRole=(role,opts={})=>{
-    if(role==='swimmer'){
-      const id=String(opts.athleteId||'');if(!validLinkedAthlete(id))throw new Error('Choose a real active swimmer before linking a swimmer device');
-      if(oldSetRole)oldSetRole(role,{...opts,athleteId:id});else{M.state.settings.activeRole='swimmer';M.state.settings.activeUserAthleteId=id;}
-      Object.assign(M.state.settings,{roleBindingVersion:BINDING,roleBindingKind:'swimmer',roleBindingAthleteId:id,roleBindingReason:'explicit-swimmer-link'});saveUi();return role;
-    }
-    if(role==='owner'){if(oldSetRole)oldSetRole('owner',opts);else M.state.settings.activeRole='owner';return resetOwner('explicit-owner');}
-    if(oldSetRole)oldSetRole(role,opts);else M.state.settings.activeRole=role;
-    Object.assign(M.state.settings,{roleBindingVersion:BINDING,roleBindingKind:role,roleBindingAthleteId:'',roleBindingReason:`explicit-${role}`});saveUi();return role;
-  };
-
-  if(typeof M.ui?.configureRoleChrome==='function'){
-    const oldConfigure=M.ui.configureRoleChrome.bind(M.ui);
-    M.ui.configureRoleChrome=()=>{purgePlaceholders();normalize();oldConfigure();};
-  }
   const afterHydrate=()=>{const p=purgePlaceholders(),n=normalize();if((p.changed||n.changed)&&M.ui?.renderCurrent)requestAnimationFrame(()=>M.ui.renderCurrent());};
   if(M.storageEngine?.readyPromise?.then)M.storageEngine.readyPromise.then(afterHydrate).catch(()=>{});
 })(globalThis);
