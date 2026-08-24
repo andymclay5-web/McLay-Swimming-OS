@@ -23,5 +23,44 @@
     out.push(test('Authority · swimmer surface remains projection-only contract',()=>{assert(M.swimmerInstantOpenCN?.build,'swimmer surface missing');assert(M.performanceEngine,'performance owner missing');assert(M.trainingHistory||g.MSOSArchitecture?.TrainingHistory,'training owner missing');return'portal consumes engine truth'}));return out;
   }
   function fullRun(){const base=baseRun()||{},tests=[];for(const row of base.tests||[]){const repl=replacement(String(row?.name||''));tests.push(repl||row);}for(const row of authorityTests())tests.push(row);let passed=0;for(const row of tests)if(row?.ok===true)passed++;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'authority-explicit-supersession-20260824',superseded:SUPERSEDED};}
-  const R=M.guardianRuntime={build:BUILD,fullRun,running:false};G.run=fullRun;G.runAndRender=()=>{if(R.running)return{running:true,build:BUILD};R.running=true;const run=()=>{let r;try{r=fullRun()}catch(e){r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD}};M.state.guardian=M.state.guardian||{runs:[]};r.at=new Date().toISOString();M.state.guardian.runs.push(r);M.state.guardian.runs=M.state.guardian.runs.slice(-20);M.store?.save?.(M.state);R.running=false;M.ui?.renderGuardian?.(r);M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);return r};if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);return{running:true,build:BUILD}};
+
+  function pruneGuardianState(){
+    const guardian=M.state?.guardian;if(!guardian)return false;
+    let changed=false;
+    if(Array.isArray(guardian.runs)&&guardian.runs.length>3){guardian.runs=guardian.runs.slice(-3);changed=true;}
+    return changed;
+  }
+
+  const R=M.guardianRuntime={build:BUILD,fullRun,running:false};
+  G.run=fullRun;
+  G.runAndRender=()=>{
+    if(R.running)return{running:true,build:BUILD};
+    R.running=true;
+    M.toast?.('Guardian running…');
+    const run=()=>{
+      let r;
+      try{
+        const suppress=M.storageEngine?.withSuppressedWrites;
+        r=typeof suppress==='function'?suppress(()=>fullRun()):fullRun();
+      }catch(e){
+        r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD};
+      }
+      M.state.guardian=M.state.guardian||{runs:[]};
+      r.at=new Date().toISOString();
+      M.state.guardian.runs.push(r);
+      M.state.guardian.runs=M.state.guardian.runs.slice(-3);
+      try{M.store?.save?.(M.state)}catch(e){console.warn('Guardian result persistence skipped',e)}
+      R.running=false;
+      M.ui?.renderGuardian?.(r);
+      M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);
+      return r;
+    };
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);
+    return{running:true,build:BUILD};
+  };
+
+  pruneGuardianState();
+  Promise.resolve(M.storageEngine?.readyPromise).then(()=>{
+    if(pruneGuardianState())setTimeout(()=>{try{M.store?.save?.(M.state)}catch{}},0);
+  }).catch(()=>{});
 })(globalThis);
