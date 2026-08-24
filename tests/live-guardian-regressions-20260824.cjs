@@ -1,8 +1,11 @@
 'use strict';
 const assert=require('node:assert/strict');
 const Evidence=require('../engines/evidence.js');
+global.MSOSEngines={Evidence};
 const RacePace=require('../engines/race-pace.js');
+global.MSOSEngines.RacePace=RacePace;
 const Modification=require('../engines/modification.js');
+global.MSOSEngines.Modification=Modification;
 
 // Current race-model contracts: the athlete fixture must carry the model inputs the engine actually requires.
 const imAth={id:'im-ath',sex:'F'};
