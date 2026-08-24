@@ -39,26 +39,17 @@
     M.toast?.('Guardian running…');
     const run=()=>{
       let r;
-      const realSave=M.store?.save;
-      const live=M.live,oldSuppress=live?.suppress;
       try{
-        // Guardian is diagnostic. Its fixture/test mutations must never trigger the
-        // production persistence pipeline repeatedly. On a phone that caused dozens
-        // of full-state JSON/IndexedDB writes in one tap and could lock the WebView.
-        if(M.store&&typeof realSave==='function')M.store.save=state=>state;
-        if(live)live.suppress=true;
-        r=fullRun();
+        const suppress=M.storageEngine?.withSuppressedWrites;
+        r=typeof suppress==='function'?suppress(()=>fullRun()):fullRun();
       }catch(e){
         r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD};
-      }finally{
-        if(M.store&&typeof realSave==='function')M.store.save=realSave;
-        if(live)live.suppress=oldSuppress;
       }
       M.state.guardian=M.state.guardian||{runs:[]};
       r.at=new Date().toISOString();
       M.state.guardian.runs.push(r);
       M.state.guardian.runs=M.state.guardian.runs.slice(-3);
-      try{realSave?.(M.state)}catch(e){console.warn('Guardian result persistence skipped',e)}
+      try{M.store?.save?.(M.state)}catch(e){console.warn('Guardian result persistence skipped',e)}
       R.running=false;
       M.ui?.renderGuardian?.(r);
       M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);
@@ -68,9 +59,6 @@
     return{running:true,build:BUILD};
   };
 
-  // Old builds retained up to 20 detailed Guardian runs. Trim that diagnostic
-  // history after the operational store has hydrated so startup and every later
-  // save are not burdened by obsolete test payloads.
   pruneGuardianState();
   Promise.resolve(M.storageEngine?.readyPromise).then(()=>{
     if(pruneGuardianState())setTimeout(()=>{try{M.store?.save?.(M.state)}catch{}},0);
