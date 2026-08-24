@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.run)return;
-  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260824',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260825-device-safe',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
   const SUPERSEDED=Object.freeze({
     '400 IM pace keeps race event separate and refuses a fake leg target':'400 IM pace keeps race event/working stroke separate and uses the verified race model',
     'Odd 200 pace / Even Drill only targets odd reps':'Odd 200 pace / Even Drill targets odd reps from the verified race model',
@@ -24,32 +24,8 @@
   }
   function countPassed(tests){let passed=0;for(const row of tests)if(row?.ok===true)passed++;return passed;}
   function fullRun(){const base=baseRun()||{},tests=[];for(const row of base.tests||[]){const repl=replacement(String(row?.name||''));tests.push(repl||row);}for(const row of authorityTests())tests.push(row);const passed=countPassed(tests);return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'authority-explicit-supersession-20260824',superseded:SUPERSEDED};}
-  function deviceRun(){
-    const scan=M.guardianDeviceStateBJ?.scan?.()||{ok:true,tests:[]};
-    const tests=[...(scan.tests||[])];
-    tests.push(test('Device · storage authority is ready',()=>{assert(M.storageEngine?.ready===true,'storage hydration still pending');return M.storageEngine.build||'storage ready'}));
-    tests.push(test('Device · current Board session resolves without mutation',()=>{const id=M.state?.settings?.selectedSessionId||'',s=M.currentSession?.();assert(!id||s?.id===id,`${id||'none'} → ${s?.id||'missing'}`);return s?.id||'no session selected'}));
-    tests.push(test('Device · Guardian is not running the full regression suite on deck',()=> 'full regression remains available to CI through guardian.run'));
-    const passed=countPassed(tests);
-    return{ok:passed===tests.length,tests,passed,total:tests.length,at:new Date().toISOString(),build:BUILD,contract:'device-health-direct-20260825'};
-  }
+  function deviceRun(){const scan=M.guardianDeviceStateBJ?.scan?.()||{ok:true,tests:[]},tests=[...(scan.tests||[])];tests.push(test('Device · storage authority is ready',()=>{assert(M.storageEngine?.ready===true,'storage hydration still pending');return M.storageEngine.build||'storage ready'}));tests.push(test('Device · current Board session resolves without mutation',()=>{const id=M.state?.settings?.selectedSessionId||'',s=M.currentSession?.();assert(!id||s?.id===id,`${id||'none'} → ${s?.id||'missing'}`);return s?.id||'no session selected'}));tests.push(test('Device · Guardian is not running the full regression suite on deck',()=> 'full regression remains available to CI through guardian.run'));const passed=countPassed(tests);return{ok:passed===tests.length,tests,passed,total:tests.length,at:new Date().toISOString(),build:BUILD,contract:'device-health-direct-20260825'};}
   const R=M.guardianRuntime={build:BUILD,fullRun,deviceRun,running:false};
   G.run=fullRun;
-  G.runAndRender=()=>{
-    if(R.running)return{running:true,build:BUILD};
-    R.running=true;
-    const run=()=>{
-      let r;
-      try{r=deviceRun()}catch(e){r={ok:false,tests:[{name:'Guardian device health',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD,at:new Date().toISOString()}}
-      M.state.guardian=M.state.guardian||{runs:[]};
-      M.state.guardian.runs=[...(M.state.guardian.runs||[]),r].slice(-3);
-      try{M.store?.save?.(M.state)}catch(e){console.warn('Guardian device result persistence skipped',e)}
-      R.running=false;
-      M.ui?.renderGuardian?.(r);
-      M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);
-      return r;
-    };
-    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);
-    return{running:true,build:BUILD};
-  };
+  G.runAndRender=()=>{if(R.running)return{running:true,build:BUILD};R.running=true;const run=()=>{let r;try{r=deviceRun()}catch(e){r={ok:false,tests:[{name:'Guardian device health',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD,at:new Date().toISOString(),contract:'device-health-error'}}try{r=M.storageEngine?.saveGuardianResult?.(r)||r}catch(e){console.warn('Guardian result metadata persistence skipped',e)}R.running=false;M.ui?.renderGuardian?.(r);M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);return r};if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);return{running:true,build:BUILD};};
 })(globalThis);
