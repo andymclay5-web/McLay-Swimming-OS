@@ -25,14 +25,8 @@
   function family(label){const n=norm(label);if(/division ii|division 2/.test(n))return'div2';if(/canterbury sc|south island sc/.test(n))return'regional_sc';if(/secondary.*school|nzss/.test(n))return'nzss';if(/national sc|nzsc|new zealand short course/.test(n))return'nzsc';if(/national lc age|nags|age group/.test(n))return'nags';if(/national lc open|nz championships|nz champs|open/.test(n))return'nzopen';if(/world.*short|world sc/.test(n))return'world_sc';if(/world.*long|world lc/.test(n))return'world_lc';if(/olymp/.test(n))return'olympics';return n.replace(/\s+/g,'_');}
   function trackFor(r){const c=courseOf(r),f=family(programme(r));if(c==='SCM')return'SCM';if(c==='LCM')return'LCM';if(c==='BOTH')return'BOTH';if(['nzsc','div2','regional_sc','nzss','world_sc'].includes(f))return'SCM';if(['nags','nzopen','world_lc','olympics'].includes(f))return'LCM';return c||'BOTH';}
   function programmePriority(f,track){const scm={div2:10,regional_sc:20,nzss:25,nzsc:30,nags:40,nzopen:50,world_sc:60,world_lc:70,olympics:80};const lcm={regional_sc:10,nags:30,nzopen:40,world_lc:60,olympics:80,nzsc:90};return(track==='LCM'?lcm:scm)[f]??55;}
-  function strengthOrder(a,b,track){
-    // Within one event and one course, elapsed time is the exact monotonic ordering
-    // used by WA/FINA points: slower/easier benchmark first, faster/harder benchmark next.
-    // Labels such as Final/Medal/Win must never override actual performance strength.
-    const as=Number(a?.seconds),bs=Number(b?.seconds);
-    if(Number.isFinite(as)&&Number.isFinite(bs)&&as!==bs)return bs-as;
-    return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||text(a?.label).localeCompare(text(b?.label));
-  }
+  function strengthOrder(a,b,track){const as=Number(a?.seconds),bs=Number(b?.seconds);if(Number.isFinite(as)&&Number.isFinite(bs)&&as!==bs)return bs-as;return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||text(a?.label).localeCompare(text(b?.label));}
+  function actionOrder(a,b,track){return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||strengthOrder(a,b,track);}
   function addYears(date,years){const d=new Date(`${date}T00:00:00Z`);if(!Number.isFinite(d.getTime()))return'';d.setUTCFullYear(d.getUTCFullYear()+years);return d.toISOString().slice(0,10);}
   function latestProgrammeDate(rows){return rows.map(dateOf).filter(Boolean).sort().pop()||'';}
   function futureMeetDate(label,rows,now=today()){
@@ -69,11 +63,11 @@
     clean.sort((a,b)=>(a.course===c?0:1)-(b.course===c?0:1)||strengthOrder(a,b,c));
     const tracks={SCM:clean.filter(s=>s.course==='SCM'||s.course==='BOTH'),LCM:clean.filter(s=>s.course==='LCM'||s.course==='BOTH')};
     for(const key of ['SCM','LCM'])tracks[key].sort((a,b)=>strengthOrder(a,b,key));
-    const currentTrack=tracks[c]||clean;
-    const next=currentTrack.find(s=>!s.achieved)||null;
-    const nextQualifying=currentTrack.find(s=>s.kind==='qualifying'&&!s.achieved)||null;
-    const nextFinal=currentTrack.find(s=>s.kind==='finalist'&&!s.achieved)||null;
-    const nextMedal=currentTrack.find(s=>s.kind==='medal'&&!s.achieved)||null;
+    const currentTrack=tracks[c]||clean,actionable=currentTrack.filter(s=>!s.achieved).slice().sort((a,b)=>actionOrder(a,b,c));
+    const next=actionable[0]||null;
+    const nextQualifying=actionable.find(s=>s.kind==='qualifying')||null;
+    const nextFinal=currentTrack.filter(s=>s.kind==='finalist'&&!s.achieved).slice().sort((a,b)=>strengthOrder(a,b,c))[0]||null;
+    const nextMedal=currentTrack.filter(s=>s.kind==='medal'&&!s.achieved).slice().sort((a,b)=>strengthOrder(a,b,c))[0]||null;
     return{course:c,pbSeconds,steps:clean,next,nextQualifying,nextFinal,nextMedal,tracks,athleteAgeNow:ageOn(ath?.date_of_birth,now)};
   }
   function buildAthletePathways(ath,{course='',now=today()}={}){
@@ -84,5 +78,5 @@
   P.projectedMeetDate=futureMeetDate;
   P.ageAt=ageOn;
   P.pathwayFamily=family;
-  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;
+  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;X.actionOrder=actionOrder;
 })(globalThis);
