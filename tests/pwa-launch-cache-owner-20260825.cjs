@@ -1,0 +1,10 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const sw=fs.readFileSync('sw.js','utf8');
+assert.match(sw,/function serveCachedAndRefresh\(/,'service worker must expose the cache-first launch owner');
+assert.match(sw,/const cached=await caches\.match\(key\);if\(cached\)return cached/,'launch owner must return cached shell before waiting on network');
+assert.match(sw,/if\(e\.request\.mode==='navigate'\)[\s\S]*?serveCachedAndRefresh\(e,e\.request,key\)/,'PWA navigation must use cached shell with background refresh');
+assert.match(sw,/if\(\/\\\.\(\?:js\|css\)\$\//,'static JS/CSS route must remain explicit');
+assert.match(sw,/serveCachedAndRefresh\(e,e\.request\)/,'JS/CSS startup assets must use cached response with background refresh');
+assert.doesNotMatch(sw,/if\(e\.request\.mode==='navigate'\)[\s\S]*?respondWith\(networkFirst/,'PWA navigation must never block splash on network-first fetch');
+console.log('PWA_LAUNCH_CACHE_OWNER_PASS');
