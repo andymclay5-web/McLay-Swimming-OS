@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.run)return;
-  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260824b',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260824',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
   const SUPERSEDED=Object.freeze({
     '400 IM pace keeps race event separate and refuses a fake leg target':'400 IM pace keeps race event/working stroke separate and uses the verified race model',
     'Odd 200 pace / Even Drill only targets odd reps':'Odd 200 pace / Even Drill targets odd reps from the verified race model',
