@@ -45,12 +45,13 @@
   N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=views.has(M.state?.settings?.view)?M.state.settings.view:'board';active(initial);try{history.replaceState(state(initial,{exitGuard:true}),'',`#${initial}`);history.pushState(state(initial),'',`#${initial}`)}catch{}addEventListener('popstate',e=>{if(e.state?.exitGuard){if(rootBackArmed){history.back();return}rootBackArmed=true;M.toast?.('Press back again to exit');try{history.pushState(state(M.state.settings.view),'',`#${M.state.settings.view}`)}catch{}setTimeout(()=>rootBackArmed=false,1800);return}if(e.state?.msos)N.applyHistory(e.state)});addEventListener('pagehide',()=>{rememberScroll();saveUi()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){rememberScroll();saveUi()}else if(document.visibilityState==='visible')restoreScroll(M.state.settings.view)});renderExtra(initial)};
   function openAthlete(id){if(!id)return;M.state.settings.selectedAthleteId=id;M.state.settings.selectedSwimmerId=id;go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false})}
   document.addEventListener('click',e=>{
-    const report=e.target.closest?.('#reportsShortcut,[data-msos-reports]');if(report){e.preventDefault();go('reports',{restore:false});return}
-    const data=e.target.closest?.('[data-msos-data]');if(data){e.preventDefault();go('data',{restore:false});return}
-    const roll=e.target.closest?.('[data-msos-roll]');if(roll){e.preventDefault();go('roll',{restore:false});return}
-    const times=e.target.closest?.('[data-msos-t400]');if(times){e.preventDefault();go('times',{restore:false});return}
-    const swimmers=e.target.closest?.('[data-msos-swimmers]');if(swimmers){e.preventDefault();go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false});return}
-    const ath=e.target.closest?.('[data-msos-ath]');if(ath){e.preventDefault();openAthlete(ath.dataset.msosAth);return}
-    const timeRow=e.target.closest?.('#timesView .time-row,#timesView .timing-evidence-row');if(timeRow&&!e.target.closest?.('button,input,select,label')){const n=timeRow.querySelector('strong')?.textContent?.trim(),a=(M.state.athletes||[]).find(x=>String(x.full_name||'').trim()===n);if(a){e.preventDefault();openAthlete(a.id)}}
-  });
+    const nav=e.target.closest?.('.bottom-nav [data-nav]');if(nav){e.preventDefault();e.stopPropagation();go(nav.dataset.nav,{restore:true});return}
+    const report=e.target.closest?.('#reportsShortcut,[data-msos-reports]');if(report){e.preventDefault();e.stopPropagation();go('reports',{restore:false});return}
+    const data=e.target.closest?.('[data-msos-data]');if(data){e.preventDefault();e.stopPropagation();go('data',{restore:false});return}
+    const roll=e.target.closest?.('[data-msos-roll]');if(roll){e.preventDefault();e.stopPropagation();go('roll',{restore:false});return}
+    const times=e.target.closest?.('[data-msos-t400]');if(times){e.preventDefault();e.stopPropagation();go('times',{restore:false});return}
+    const swimmers=e.target.closest?.('[data-msos-swimmers]');if(swimmers){e.preventDefault();e.stopPropagation();go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false});return}
+    const ath=e.target.closest?.('[data-msos-ath]');if(ath){e.preventDefault();e.stopPropagation();openAthlete(ath.dataset.msosAth);return}
+    const timeRow=e.target.closest?.('#timesView .time-row,#timesView .timing-evidence-row');if(timeRow&&!e.target.closest?.('button,input,select,label')){const n=timeRow.querySelector('strong')?.textContent?.trim(),a=(M.state.athletes||[]).find(x=>String(x.full_name||'').trim()===n);if(a){e.preventDefault();e.stopPropagation();openAthlete(a.id)}}
+  },true);
 })(globalThis);
