@@ -27,5 +27,7 @@ assert.match(instant,/projectionFor/,'training must use current individual proje
 assert.match(instant,/Energy systems/);
 assert.match(instant,/Stroke mix/);
 assert.match(instant,/Focus \/ makeup/);
-assert.doesNotMatch(pwa,/controllerchange[^]*location\.reload\(\)/,'background service-worker controller change must not reload the app');
+const controller=(pwa.match(/addEventListener\('controllerchange',[^\n]+/)||[])[0]||'';
+assert.match(controller,/P\.notify/,'service-worker controller change must notify rather than silently do nothing');
+assert.doesNotMatch(controller,/location\.reload|P\.apply/,'background controller change must not reload/apply while the coach is working');
 console.log('MATTHEW_READY_CV_PASS');
