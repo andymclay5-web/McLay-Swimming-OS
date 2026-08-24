@@ -1,9 +1,14 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs');
 const app=fs.readFileSync('app.js','utf8');
+const nav=fs.readFileSync('engines/navigation.js','utf8');
 assert.doesNotMatch(app,/setTimeout\(\(\)=>\{const r=M\.guardian\.run\(\)/,'live boot must never execute full Guardian');
 const render=app.match(/UI\.renderGuardian=r=>\{[\s\S]*?\}\);\n\}\)\(globalThis\);/);
 assert.ok(render,'Guardian renderer not found');
 assert.doesNotMatch(render[0],/\|\|M\.guardian\.run\(\)/,'opening Guardian must never fall through to full regression');
 assert.match(app,/document\.body\.dataset\.guardian=lastGuardian\?\.ok\?'pass':'pending'/,'boot should only reflect prior Guardian metadata');
+assert.match(nav,/if\(view==='guardian'\)[\s\S]*?M\.guardian\?\.runAndRender/,'Guardian navigation must delegate to the device Guardian owner');
+assert.doesNotMatch(nav,/UI\.renderBoard\s*=/,'navigation must not late-wrap renderBoard');
+assert.doesNotMatch(nav,/UI\.renderTV\s*=/,'navigation must not late-wrap renderTV');
+assert.match(nav,/Running device checks/,'Guardian view must paint a lightweight state before device checks run');
 console.log('LIVE_GUARDIAN_BOOT_OWNER_PASS');
