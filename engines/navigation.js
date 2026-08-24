@@ -37,20 +37,21 @@
     const doRestore=restoreOpt===undefined?restore:restoreOpt;
     if(doRestore)restoreScroll(view);else requestAnimationFrame(()=>window.scrollTo(0,0));
   }
-  N.views=[...views];N.state=state;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.show=go;N.activateView=active;
+  V.go=go;
+  N.views=[...views];N.state=state;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.show=V.go;N.activateView=active;
   N.openLayer=(type,id='')=>{const layer={type,id:String(id||'')};if(history.state?.layer?.type===layer.type&&history.state?.layer?.id===layer.id)return;try{history.pushState(state(M.state?.settings?.view||'board',{layer}),'',`#${M.state?.settings?.view||'board'}`)}catch{}};
   N.dismissLayer=()=>{const layer=history.state?.layer;if(layer){closeTransient();saveUi();history.back();return true}closeTransient();M.boardStateEngine?.cancelWork?.();renderView(M.state?.settings?.view||'board');renderExtra(M.state?.settings?.view||'board');saveUi();return false};
   N.applyHistory=s=>{M.boardStateEngine?.cancelWork?.();const view=views.has(s?.msosView)?s.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;if(s?.sessionId&&M.state.canonicalSessions?.[s.sessionId])M.state.settings.selectedSessionId=s.sessionId;if(!s?.layer)closeTransient();else if(s.layer.type==='item')M.state.settings.expandedItemId=s.layer.id;active(view);renderView(view);renderExtra(view);saveUi();restoreScroll(view)};
   let rootBackArmed=false;
   N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=views.has(M.state?.settings?.view)?M.state.settings.view:'board';active(initial);try{history.replaceState(state(initial,{exitGuard:true}),'',`#${initial}`);history.pushState(state(initial),'',`#${initial}`)}catch{}addEventListener('popstate',e=>{if(e.state?.exitGuard){if(rootBackArmed){history.back();return}rootBackArmed=true;M.toast?.('Press back again to exit');try{history.pushState(state(M.state.settings.view),'',`#${M.state.settings.view}`)}catch{}setTimeout(()=>rootBackArmed=false,1800);return}if(e.state?.msos)N.applyHistory(e.state)});addEventListener('pagehide',()=>{rememberScroll();saveUi()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){rememberScroll();saveUi()}else if(document.visibilityState==='visible')restoreScroll(M.state.settings.view)});renderExtra(initial)};
-  function openAthlete(id){if(!id)return;M.state.settings.selectedAthleteId=id;M.state.settings.selectedSwimmerId=id;go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false})}
+  function openAthlete(id){if(!id)return;M.state.settings.selectedAthleteId=id;M.state.settings.selectedSwimmerId=id;V.go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false})}
   document.addEventListener('click',e=>{
-    const nav=e.target.closest?.('.bottom-nav [data-nav]');if(nav){e.preventDefault();e.stopPropagation();go(nav.dataset.nav,{restore:true});return}
-    const report=e.target.closest?.('#reportsShortcut,[data-msos-reports]');if(report){e.preventDefault();e.stopPropagation();go('reports',{restore:false});return}
-    const data=e.target.closest?.('[data-msos-data]');if(data){e.preventDefault();e.stopPropagation();go('data',{restore:false});return}
-    const roll=e.target.closest?.('[data-msos-roll]');if(roll){e.preventDefault();e.stopPropagation();go('roll',{restore:false});return}
-    const times=e.target.closest?.('[data-msos-t400]');if(times){e.preventDefault();e.stopPropagation();go('times',{restore:false});return}
-    const swimmers=e.target.closest?.('[data-msos-swimmers]');if(swimmers){e.preventDefault();e.stopPropagation();go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false});return}
+    const nav=e.target.closest?.('.bottom-nav [data-nav]');if(nav){e.preventDefault();e.stopPropagation();V.go(nav.dataset.nav,{restore:true});return}
+    const report=e.target.closest?.('#reportsShortcut,[data-msos-reports]');if(report){e.preventDefault();e.stopPropagation();V.go('reports',{restore:false});return}
+    const data=e.target.closest?.('[data-msos-data]');if(data){e.preventDefault();e.stopPropagation();V.go('data',{restore:false});return}
+    const roll=e.target.closest?.('[data-msos-roll]');if(roll){e.preventDefault();e.stopPropagation();V.go('roll',{restore:false});return}
+    const times=e.target.closest?.('[data-msos-t400]');if(times){e.preventDefault();e.stopPropagation();V.go('times',{restore:false});return}
+    const swimmers=e.target.closest?.('[data-msos-swimmers]');if(swimmers){e.preventDefault();e.stopPropagation();V.go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false});return}
     const ath=e.target.closest?.('[data-msos-ath]');if(ath){e.preventDefault();e.stopPropagation();openAthlete(ath.dataset.msosAth);return}
     const timeRow=e.target.closest?.('#timesView .time-row,#timesView .timing-evidence-row');if(timeRow&&!e.target.closest?.('button,input,select,label')){const n=timeRow.querySelector('strong')?.textContent?.trim(),a=(M.state.athletes||[]).find(x=>String(x.full_name||'').trim()===n);if(a){e.preventDefault();e.stopPropagation();openAthlete(a.id)}}
   },true);
