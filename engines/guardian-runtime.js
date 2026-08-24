@@ -22,34 +22,28 @@
     if(E?.Modification)out.push(test('Authority · reduced IM stays performance-relative and group-connected',()=>{const ath={id:'guardian-md',full_name:'McKenzie Drage',sex:'F'},session={id:'guardian-im',identity:{course:'SCM'}},g1={id:'g1'},g2={id:'g2'},g3={id:'g3'},state={athletes:[ath,g1,g2,g3],adaptationProfiles:[],adaptationOverrides:[],resultsPbBoard:[{athlete_id:'g1',distance:100,stroke:'IM',course:'SCM',result_seconds:68},{athlete_id:'g2',distance:100,stroke:'IM',course:'SCM',result_seconds:70},{athlete_id:'g3',distance:100,stroke:'IM',course:'SCM',result_seconds:72},{athlete_id:ath.id,distance:100,stroke:'IM',course:'SCM',result_seconds:112}],resultsEventHistory:[],coachResults:[]},item={id:'guardian-im-item',kind:'set',reps:5,distance:100,stroke:'IM',raw:'5 x 100 IM @ 1:45',text:'5 x 100 IM @ 1:45',cues:[],pattern:[],repPattern:[],repInstructions:[],raceIntent:null,zone:'',restSeconds:10,cycleSeconds:105,equipment:[],composition:[]},x=E.Modification.adaptItem(item,ath,state,session);assert(x.reps===3&&x.distance===100,JSON.stringify(x));assert(x.imPerformancePlan?.groupWindowSeconds===525,JSON.stringify(x.imPerformancePlan));return`${x.reps}x${x.distance} · ${x.imPerformancePlan.groupWindowSeconds}s window`}));
     out.push(test('Authority · swimmer surface remains projection-only contract',()=>{assert(M.swimmerInstantOpenCN?.build,'swimmer surface missing');assert(M.performanceEngine,'performance owner missing');assert(M.trainingHistory||g.MSOSArchitecture?.TrainingHistory,'training owner missing');return'portal consumes engine truth'}));return out;
   }
-  function fullRun(){const base=baseRun()||{},tests=[];for(const row of base.tests||[]){const repl=replacement(String(row?.name||''));tests.push(repl||row);}for(const row of authorityTests())tests.push(row);let passed=0;for(const row of tests)if(row?.ok===true)passed++;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'authority-explicit-supersession-20260824',superseded:SUPERSEDED};}
-
-  function pruneGuardianState(){
-    const guardian=M.state?.guardian;if(!guardian)return false;
-    let changed=false;
-    if(Array.isArray(guardian.runs)&&guardian.runs.length>3){guardian.runs=guardian.runs.slice(-3);changed=true;}
-    return changed;
+  function countPassed(tests){let passed=0;for(const row of tests)if(row?.ok===true)passed++;return passed;}
+  function fullRun(){const base=baseRun()||{},tests=[];for(const row of base.tests||[]){const repl=replacement(String(row?.name||''));tests.push(repl||row);}for(const row of authorityTests())tests.push(row);const passed=countPassed(tests);return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'authority-explicit-supersession-20260824',superseded:SUPERSEDED};}
+  function deviceRun(){
+    const scan=M.guardianDeviceStateBJ?.scan?.()||{ok:true,tests:[]};
+    const tests=[...(scan.tests||[])];
+    tests.push(test('Device · storage authority is ready',()=>{assert(M.storageEngine?.ready===true,'storage hydration still pending');return M.storageEngine.build||'storage ready'}));
+    tests.push(test('Device · current Board session resolves without mutation',()=>{const id=M.state?.settings?.selectedSessionId||'',s=M.currentSession?.();assert(!id||s?.id===id,`${id||'none'} → ${s?.id||'missing'}`);return s?.id||'no session selected'}));
+    tests.push(test('Device · Guardian is not running the full regression suite on deck',()=> 'full regression remains available to CI through guardian.run'));
+    const passed=countPassed(tests);
+    return{ok:passed===tests.length,tests,passed,total:tests.length,at:new Date().toISOString(),build:BUILD,contract:'device-health-direct-20260825'};
   }
-
-  const R=M.guardianRuntime={build:BUILD,fullRun,running:false};
+  const R=M.guardianRuntime={build:BUILD,fullRun,deviceRun,running:false};
   G.run=fullRun;
   G.runAndRender=()=>{
     if(R.running)return{running:true,build:BUILD};
     R.running=true;
-    M.toast?.('Guardian running…');
     const run=()=>{
       let r;
-      try{
-        const suppress=M.storageEngine?.withSuppressedWrites;
-        r=typeof suppress==='function'?suppress(()=>fullRun()):fullRun();
-      }catch(e){
-        r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD};
-      }
+      try{r=deviceRun()}catch(e){r={ok:false,tests:[{name:'Guardian device health',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD,at:new Date().toISOString()}}
       M.state.guardian=M.state.guardian||{runs:[]};
-      r.at=new Date().toISOString();
-      M.state.guardian.runs.push(r);
-      M.state.guardian.runs=M.state.guardian.runs.slice(-3);
-      try{M.store?.save?.(M.state)}catch(e){console.warn('Guardian result persistence skipped',e)}
+      M.state.guardian.runs=[...(M.state.guardian.runs||[]),r].slice(-3);
+      try{M.store?.save?.(M.state)}catch(e){console.warn('Guardian device result persistence skipped',e)}
       R.running=false;
       M.ui?.renderGuardian?.(r);
       M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);
@@ -58,9 +52,4 @@
     if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);
     return{running:true,build:BUILD};
   };
-
-  pruneGuardianState();
-  Promise.resolve(M.storageEngine?.readyPromise).then(()=>{
-    if(pruneGuardianState())setTimeout(()=>{try{M.store?.save?.(M.state)}catch{}},0);
-  }).catch(()=>{});
 })(globalThis);
