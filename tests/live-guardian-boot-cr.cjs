@@ -14,7 +14,7 @@ assert.doesNotMatch(nav,/UI\.renderBoard\s*=/,'navigation must not late-wrap ren
 assert.doesNotMatch(nav,/UI\.renderTV\s*=/,'navigation must not late-wrap renderTV');
 assert.doesNotMatch(nav,/stopImmediatePropagation/,'navigation must never use stopImmediatePropagation');
 assert.match(nav,/\.bottom-nav \[data-nav\]/,'navigation must own bottom-nav dispatch');
-assert.match(nav,/e\.stopPropagation\(\);go\(nav\.dataset\.nav/,'bottom-nav dispatch must prevent the stale element handler from firing a second navigation');
+assert.match(nav,/e\.stopPropagation\(\);V\.go\(nav\.dataset\.nav/,'bottom-nav dispatch must prevent the stale element handler from firing a second navigation');
 const remember=nav.match(/const rememberScroll=\(\)=>\{[\s\S]*?\};/);assert.ok(remember,'rememberScroll not found');assert.doesNotMatch(remember[0],/saveUi/,'rememberScroll must not block the first tap on persistence');
 assert.match(nav,/M\.state\.settings\.view=view;\s*active\(view\);[\s\S]*?renderView\(view\);[\s\S]*?saveUi\(\)/,'view must paint before UI persistence');
 assert.match(nav,/N\.state=state/,'navigation engine must own history state creation');
