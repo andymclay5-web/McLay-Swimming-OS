@@ -48,6 +48,7 @@ jobs:
           node --check engines/reporting.js
           node --check engines/board.js
           node --check engines/board-state.js
+          node --check engines/morning-session-contract-cu.js
           node --check engines/modification-edit.js
           node --check engines/navigation.js
           node --check engines/attendance-roster.js
@@ -75,18 +76,8 @@ jobs:
           node --check engines/swimmer-performance-ci.js
           node --check engines/swimmer-experience-cl.js
           node --check engines/swimmer-invite-bn.js
+          node --check engines/swimmer-feedback-cu.js
           node --check swimmer-portal.js
-          node --check engines/release-guardian-ao.js
-          node --check engines/release-guardian-ap.js
-          node --check engines/release-guardian-aq.js
-          node --check engines/release-guardian-ar.js
-          node --check engines/release-guardian-as.js
-          node --check engines/release-guardian-at.js
-          node --check engines/release-guardian-bc.js
-          node --check engines/release-guardian-bd.js
-          node --check engines/release-guardian-be.js
-          node --check engines/release-guardian-bg.js
-          node --check engines/stability-identity-bh.js
           node --check sw.js
       - name: Run engine coaching regression fixtures
         run: |
@@ -107,3 +98,4 @@ jobs:
           node tests/swimmer-performance-ci.cjs
           node tests/swimmer-experience-cl.cjs
           node tests/swimmer-secure-onboarding-bn.cjs
+          node tests/matthew-session-cu.cjs
