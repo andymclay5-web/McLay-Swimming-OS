@@ -43,8 +43,8 @@
     if(!rows.length)return[];const label=programme(rows[0]),f=family(label),target=futureMeetDate(label,rows,now),age=ageOn(ath?.date_of_birth,target.date),sourceSeason=sourceSeasonFor(rows),targetYr=targetSeason(target.date);
     const sourceYearRows=sourceSeason?rows.filter(r=>Number(r?.season)===sourceSeason):rows;
     const ageRows=sourceYearRows.filter(r=>ageFits(r,age));
-    const candidates=ageRows.length?ageRows:sourceYearRows.filter(r=>{const{min,max}=ageBounds(r);return min==null&&max==null;});
-    const wanted=text(viewCourse).toUpperCase(),native=candidates.filter(r=>courseOf(r)===wanted||courseOf(r)==='BOTH'),preferred=native.length?native:candidates;
+    const preferred=ageRows.length?ageRows:sourceYearRows.filter(r=>{const{min,max}=ageBounds(r);return min==null&&max==null;});
+    const wanted=text(viewCourse).toUpperCase();
     const dedupe=new Map();for(const r of preferred){const sec=secondsOf(r);if(!Number.isFinite(sec)||sec<=0)continue;const k=`${kind(r)}|${sec.toFixed(2)}|${courseOf(r)}`;if(dedupe.has(k))continue;dedupe.set(k,{raw:r,label:programme(r),family:f,kind:kind(r),seconds:sec,course:courseOf(r)||wanted,officialCourse:trackFor(r)==='LCM'?'LCM':trackFor(r)==='SCM'?'SCM':courseOf(r),targetDate:target.date,targetSeason:targetYr,sourceSeason,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:age,sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
     return[...dedupe.values()];
   }
@@ -60,10 +60,12 @@
     const seen=new Set(),clean=[];for(const s of steps){const key=`${s.family}|${s.kind}|${s.seconds.toFixed(2)}|${s.course}|${s.targetSeason||''}`;if(seen.has(key))continue;seen.add(key);const achieved=Number.isFinite(pbSeconds)?pbSeconds<=s.seconds:false,gapSeconds=Number.isFinite(pbSeconds)?Math.max(0,pbSeconds-s.seconds):null,gapPercentage=Number.isFinite(gapSeconds)&&s.seconds>0?gapSeconds/s.seconds*100:null;clean.push({...s,achieved,gapSeconds,gapPercentage,displayLabel:s.planningProxy?`${s.label} ${s.targetSeason||''} planning`:s.label});}
     clean.sort((a,b)=>programmePriority(a.family,c)-programmePriority(b.family,c)||stageRank(a.kind)-stageRank(b.kind)||b.seconds-a.seconds);
     const tracks={SCM:clean.filter(s=>s.course==='SCM'||s.course==='BOTH'),LCM:clean.filter(s=>s.course==='LCM'||s.course==='BOTH')};
-    const next=clean.find(s=>!s.achieved)||null;
-    const nextQualifying=clean.find(s=>s.kind==='qualifying'&&!s.achieved)||null;
-    const nextFinal=clean.find(s=>s.kind==='finalist'&&!s.achieved)||null;
-    const nextMedal=clean.find(s=>s.kind==='medal'&&!s.achieved)||null;
+    for(const key of ['SCM','LCM'])tracks[key].sort((a,b)=>programmePriority(a.family,key)-programmePriority(b.family,key)||stageRank(a.kind)-stageRank(b.kind)||b.seconds-a.seconds);
+    const currentTrack=tracks[c]||clean;
+    const next=currentTrack.find(s=>!s.achieved)||null;
+    const nextQualifying=currentTrack.find(s=>s.kind==='qualifying'&&!s.achieved)||null;
+    const nextFinal=currentTrack.find(s=>s.kind==='finalist'&&!s.achieved)||null;
+    const nextMedal=currentTrack.find(s=>s.kind==='medal'&&!s.achieved)||null;
     return{course:c,pbSeconds,steps:clean,next,nextQualifying,nextFinal,nextMedal,tracks,athleteAgeNow:ageOn(ath?.date_of_birth,now)};
   }
   function buildAthletePathways(ath,{course='',now=today()}={}){
