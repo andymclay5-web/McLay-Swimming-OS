@@ -4,7 +4,7 @@
   if(!M||!U||!S||!P?.parse)return;
 
   const baseParse=P.parse.bind(P);
-  const X=M.parserNaturalCW={build:'v4-parser-natural-structure-20260824cw3'};
+  const X=M.parserNaturalCW={build:'v4-parser-natural-structure-20260824cw4'};
 
   const text=v=>String(v??'').replace(/\r/g,'');
   const clean=v=>U.text(v);
@@ -68,12 +68,12 @@
   }
 
   function parseCycleAnywhere(value){
-    const s=clean(value);
-    let m=s.match(/(?:@|\bon\b)\s*(\d+):(\d{1,2}(?:\.\d+)?)\b/i);
+    const s=clean(value),lead='(?:@|\\bon(?=\\s*\\d))';
+    let m=s.match(new RegExp(`${lead}\\s*(\\d+):(\\d{1,2}(?:\\.\\d+)?)\\b`,'i'));
     if(m)return Number(m[1])*60+Number(m[2]);
-    m=s.match(/(?:@|\bon\b)\s*(\d{1,2})[.](\d{2})\b/i);
+    m=s.match(new RegExp(`${lead}\\s*(\\d{1,2})[.](\\d{2})\\b`,'i'));
     if(m&&Number(m[2])<60)return Number(m[1])*60+Number(m[2]);
-    m=s.match(/(?:@|\bon\b)\s*(\d{2,3})\b(?!\s*(?:m|metres?|pace)\b)/i);
+    m=s.match(new RegExp(`${lead}\\s*(\\d{2,3})\\b(?!\\s*(?:m|metres?|pace)\\b)`,'i'));
     if(m){const n=Number(m[1]);if(n>=20&&n<=300)return n;}
     return null;
   }
