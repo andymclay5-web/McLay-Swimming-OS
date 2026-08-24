@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.run)return;
-  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260824',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  const baseRun=G.run.bind(G),BUILD='v4-guardian-authority-20260825-freeze-guard',assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')},test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
   const SUPERSEDED=Object.freeze({
     '400 IM pace keeps race event separate and refuses a fake leg target':'400 IM pace keeps race event/working stroke separate and uses the verified race model',
     'Odd 200 pace / Even Drill only targets odd reps':'Odd 200 pace / Even Drill targets odd reps from the verified race model',
@@ -23,5 +23,56 @@
     out.push(test('Authority · swimmer surface remains projection-only contract',()=>{assert(M.swimmerInstantOpenCN?.build,'swimmer surface missing');assert(M.performanceEngine,'performance owner missing');assert(M.trainingHistory||g.MSOSArchitecture?.TrainingHistory,'training owner missing');return'portal consumes engine truth'}));return out;
   }
   function fullRun(){const base=baseRun()||{},tests=[];for(const row of base.tests||[]){const repl=replacement(String(row?.name||''));tests.push(repl||row);}for(const row of authorityTests())tests.push(row);let passed=0;for(const row of tests)if(row?.ok===true)passed++;return{...base,build:BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'authority-explicit-supersession-20260824',superseded:SUPERSEDED};}
-  const R=M.guardianRuntime={build:BUILD,fullRun,running:false};G.run=fullRun;G.runAndRender=()=>{if(R.running)return{running:true,build:BUILD};R.running=true;const run=()=>{let r;try{r=fullRun()}catch(e){r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD}};M.state.guardian=M.state.guardian||{runs:[]};r.at=new Date().toISOString();M.state.guardian.runs.push(r);M.state.guardian.runs=M.state.guardian.runs.slice(-20);M.store?.save?.(M.state);R.running=false;M.ui?.renderGuardian?.(r);M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);return r};if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);return{running:true,build:BUILD}};
+
+  function pruneGuardianState(){
+    const guardian=M.state?.guardian;if(!guardian)return false;
+    let changed=false;
+    if(Array.isArray(guardian.runs)&&guardian.runs.length>3){guardian.runs=guardian.runs.slice(-3);changed=true;}
+    return changed;
+  }
+
+  const R=M.guardianRuntime={build:BUILD,fullRun,running:false};
+  G.run=fullRun;
+  G.runAndRender=()=>{
+    if(R.running)return{running:true,build:BUILD};
+    R.running=true;
+    M.toast?.('Guardian running…');
+    const run=()=>{
+      let r;
+      const realSave=M.store?.save;
+      const live=M.live,oldSuppress=live?.suppress;
+      try{
+        // Guardian is diagnostic. Its fixture/test mutations must never trigger the
+        // production persistence pipeline repeatedly. On a phone that caused dozens
+        // of full-state JSON/IndexedDB writes in one tap and could lock the WebView.
+        if(M.store&&typeof realSave==='function')M.store.save=state=>state;
+        if(live)live.suppress=true;
+        r=fullRun();
+      }catch(e){
+        r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,build:BUILD};
+      }finally{
+        if(M.store&&typeof realSave==='function')M.store.save=realSave;
+        if(live)live.suppress=oldSuppress;
+      }
+      M.state.guardian=M.state.guardian||{runs:[]};
+      r.at=new Date().toISOString();
+      M.state.guardian.runs.push(r);
+      M.state.guardian.runs=M.state.guardian.runs.slice(-3);
+      try{realSave?.(M.state)}catch(e){console.warn('Guardian result persistence skipped',e)}
+      R.running=false;
+      M.ui?.renderGuardian?.(r);
+      M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);
+      return r;
+    };
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);
+    return{running:true,build:BUILD};
+  };
+
+  // Old builds retained up to 20 detailed Guardian runs. Trim that diagnostic
+  // history after the operational store has hydrated so startup and every later
+  // save are not burdened by obsolete test payloads.
+  pruneGuardianState();
+  Promise.resolve(M.storageEngine?.readyPromise).then(()=>{
+    if(pruneGuardianState())setTimeout(()=>{try{M.store?.save?.(M.state)}catch{}},0);
+  }).catch(()=>{});
 })(globalThis);
