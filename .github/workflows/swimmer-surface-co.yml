@@ -1,0 +1,27 @@
+name: Swimmer Surface Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  swimmer-surface:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check engines/evidence.js
+          node --check engines/swimmer-performance-ci.js
+          node --check engines/swimmer-experience-cl.js
+          node --check engines/swimmer-performance-compact-cm.js
+          node --check engines/swimmer-invite-bn.js
+          node --check engines/swimmer-instant-open-cn.js
+          node --check swimmer-portal.js
+      - name: Swimmer surface contract
+        run: node tests/swimmer-surface-co.cjs
