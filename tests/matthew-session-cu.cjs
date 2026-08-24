@@ -13,10 +13,14 @@ assert.match(portal,/Completed as planned/,'finish questionnaire completion miss
 assert.match(portal,/RPE/,'finish questionnaire RPE missing');
 assert.match(portal,/Best part/,'finish questionnaire best-work prompt missing');
 assert.match(portal,/Hardest \/ needs work/,'finish questionnaire difficulty prompt missing');
+assert.match(portal,/Session logged with Andy/,'finished swimmer session must visibly confirm coach logging');
 assert.match(portal,/msos_swimmer_submit_session_action/,'secure swimmer action RPC missing');
 assert.match(invite,/schema:'msos-swimmer-portal-v5'/,'v5 athlete/session payload missing');
 assert.match(invite,/session:safeSession\(a\)/,'current individual session not published');
 assert.match(invite,/projectionFor/,'session must come from athlete projection');
+assert.match(invite,/i\.id\|\|i\.canonicalItemId/,'published session items must retain canonical item identity for edit/challenge logging');
+assert.match(invite,/verifySessionInteractionLayer/,'QR must verify Challenge/Edit/Finish infrastructure before publishing access');
+assert.match(invite,/session Challenge \/ Edit \/ Finish logging is not ready/,'QR interaction failure must be explicit');
 assert.match(sql,/action_type in \('challenge','edit_request','finish'\)/,'server action allow-list missing');
 assert.match(sql,/Device access invalid or revoked/,'device-token server validation missing');
 assert.match(index,/morning-session-contract-cu\.js\?v=20260824cu/,'morning stroke contract not loaded');

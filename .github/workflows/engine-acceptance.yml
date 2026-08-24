@@ -99,3 +99,4 @@ jobs:
           node tests/swimmer-experience-cl.cjs
           node tests/swimmer-secure-onboarding-bn.cjs
           node tests/matthew-session-cu.cjs
+          node tests/matthew-ready-cv.cjs
