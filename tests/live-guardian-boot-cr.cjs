@@ -12,14 +12,15 @@ assert.match(app,/document\.body\.dataset\.guardian=lastGuardian\?\.ok\?'pass':'
 assert.match(nav,/if\(view==='guardian'\)[\s\S]*?M\.guardian\?\.runAndRender/,'Guardian navigation must delegate to the device Guardian owner');
 assert.doesNotMatch(nav,/UI\.renderBoard\s*=/,'navigation must not late-wrap renderBoard');
 assert.doesNotMatch(nav,/UI\.renderTV\s*=/,'navigation must not late-wrap renderTV');
-assert.doesNotMatch(nav,/stopImmediatePropagation/,'navigation must not seize clicks through capture-phase stopImmediatePropagation');
-assert.doesNotMatch(nav,/\.bottom-nav \[data-nav\]/,'navigation engine must not duplicate the bottom-nav click owner');
+assert.doesNotMatch(nav,/stopImmediatePropagation/,'navigation must never use stopImmediatePropagation');
+assert.match(nav,/\.bottom-nav \[data-nav\]/,'navigation must own bottom-nav dispatch');
+assert.match(nav,/e\.stopPropagation\(\);go\(nav\.dataset\.nav/,'bottom-nav dispatch must prevent the stale element handler from firing a second navigation');
 const remember=nav.match(/const rememberScroll=\(\)=>\{[\s\S]*?\};/);assert.ok(remember,'rememberScroll not found');assert.doesNotMatch(remember[0],/saveUi/,'rememberScroll must not block the first tap on persistence');
 assert.match(nav,/M\.state\.settings\.view=view;\s*active\(view\);[\s\S]*?renderView\(view\);[\s\S]*?saveUi\(\)/,'view must paint before UI persistence');
 assert.match(nav,/N\.state=state/,'navigation engine must own history state creation');
 assert.match(nav,/N\.openLayer=/,'navigation engine must own layer history');
 assert.match(storage,/saveGuardianResult/,'storage owner must expose scoped Guardian-result persistence');
-assert.match(storage,/if\(useIndexed\)[\s\S]*?queueFull\(state\);\s*saveUi\(state\)/,'indexed operational state must bypass synchronous full JSON serialization');
+assert.match(storage,/if\(useIndexed\)[\s\S]*?queueFull\(state\);saveUi\(state\)/,'indexed operational state must bypass synchronous full JSON serialization');
 const liveGuardian=guardian.match(/G\.runAndRender=\(\)=>\{[\s\S]*?\n\}\)\(globalThis\);/);assert.ok(liveGuardian,'device Guardian runner not found');assert.doesNotMatch(liveGuardian[0],/M\.store\?*\.save|M\.store\.save/,'device Guardian must not full-save operational state');assert.match(liveGuardian[0],/saveGuardianResult/,'device Guardian must persist only diagnostic result metadata');
 assert.match(nav,/Running device checks/,'Guardian view must paint a lightweight state before device checks run');
 console.log('LIVE_GUARDIAN_BOOT_OWNER_PASS');
