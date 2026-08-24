@@ -14,7 +14,9 @@ const standards=[
 const legacyEvent={pb:{course:'SCM',distance:400,stroke:'IM',result_seconds:313.58},qualifying:[],deeper:[
   {_label:'National SC age finalist benchmark',_kind:'finalist',_seconds:289.11,course:'SCM'},
   {_label:'National SC age medal benchmark',_kind:'medal',_seconds:274.45,course:'SCM'},
-  {_label:'National SC age winner benchmark',_kind:'winner',_seconds:266.82,course:'SCM'}
+  {_label:'National SC open finalist benchmark',_kind:'finalist',_seconds:269.11,course:'SCM'},
+  {_label:'National SC age winner benchmark',_kind:'winner',_seconds:266.82,course:'SCM'},
+  {_label:'National SC open medal benchmark',_kind:'medal',_seconds:257.48,course:'SCM'}
 ]};
 const Evidence={course:r=>String(r?.course||'').toUpperCase(),distance:r=>Number(r?.distance),rowStroke:r=>String(r?.stroke||''),stroke:v=>String(v||''),seconds:r=>Number(r?.qualifying_seconds??r?._seconds??r?.result_seconds)};
 global.MSOSEngines={Evidence};
@@ -45,8 +47,16 @@ const nzscFinal=ladder.steps.find(s=>s.family==='nzsc'&&s.kind==='finalist');
 const nzscMedal=ladder.steps.find(s=>s.family==='nzsc'&&s.kind==='medal');
 assert.ok(nzscFinal&&nzscMedal,'qualification must continue to final and medal benchmarks');
 assert.equal(ladder.next.label,'NZSC','SC pathway must make current NZSC the next unachieved step before future NAGS planning');
+const scm=ladder.tracks.SCM;
+for(let i=1;i<scm.length;i++)assert.ok(scm[i-1].seconds>=scm[i].seconds,`SCM pathway must strengthen monotonically: ${scm[i-1].label} ${scm[i-1].seconds} before ${scm[i].label} ${scm[i].seconds}`);
+const ageMedal=scm.findIndex(s=>s.label==='National SC age medal benchmark');
+const openFinal=scm.findIndex(s=>s.label==='National SC open finalist benchmark');
+assert.ok(ageMedal>=0&&openFinal>=0&&ageMedal<openFinal,'slower age medal benchmark must appear before faster open finalist benchmark');
+const openMedal=scm.findIndex(s=>s.label==='National SC open medal benchmark');
+const ageWinner=scm.findIndex(s=>s.label==='National SC age winner benchmark');
+assert.ok(ageWinner>=0&&openMedal>=0&&ageWinner<openMedal,'age winner must appear before the faster open medal benchmark');
 const athletePath=P.pathwaysForAthlete(athlete,{course:'SCM',now:'2026-08-24'});
 assert.equal(athletePath.events.length,1);
 assert.ok(athletePath.events[0].ladder.tracks.SCM.length,'SCM track required');
 assert.ok(athletePath.events[0].ladder.tracks.LCM.length,'LCM outlook required');
-console.log('PERFORMANCE_PATHWAY_CK_PASS',ladder.next.label,'| NAGS SCM',q('NAGS').targetSeason,'age',q('NAGS').ageAtTarget,'| NZSC final+medal loaded');
+console.log('PERFORMANCE_PATHWAY_CK_PASS',ladder.next.label,'| strength order',scm.map(s=>`${s.label}:${s.seconds}`).join(' > '));
