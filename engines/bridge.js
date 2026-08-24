@@ -6,11 +6,18 @@
   const org=()=>M.cloud?.org?.()||M.state?.settings?.organisationId||'';
   const initialMeta=readMeta(),metaCurrent=initialMeta?.complete===true&&String(initialMeta.organisationId||'')===String(org()||'');
   const B={build:'v4-engine-silos-board-20260821ah',hydrated:false,hydrating:null,pathwayPbCache:new Map(),athleteEvidencePulls:new Map(),pbRosterSync:metaCurrent?{status:'done',rows:Number(initialMeta.rows)||0,error:'',at:initialMeta.at||'',cached:true}:{status:'idle',rows:0,error:''}};M.engineBridge=B;M.BUILD=B.build;M.CORE='20260821-engine-silos-ah';
+  const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const zoneIntent=item=>/\b(?:Regeneration|Development|Overload|Threshold|Clearance|Aerobic|VO2)\b/i.test(clean([item?.raw,item?.text,...(item?.cues||[])].join(' ')));
+  function preserveRepeatingDescent(item,out){
+    if(!item||!out)return out;const base=Math.max(1,Number(item.reps)||1),rows=[...(item.cues||[]),item.raw,item.text].filter(Boolean),keep=[];
+    for(const row of rows){const m=clean(row).match(/\bDesc(?:end|ending)?\s+1\s*[-–—]\s*(\d+)\b/i);if(!m)continue;const n=Number(m[1]);if(n>1&&n<base&&base%n===0)keep.push(clean(row));}
+    if(!keep.length)return out;const delivered=Math.max(1,Number(out.reps)||1),generated=new RegExp(`\\bDesc(?:end|ending)?\\s+1\\s*[-–—]\\s*${delivered}\\b`,'i');out.cues=[...(out.cues||[])].filter(c=>!generated.test(clean(c)));for(const cue of [...new Set(keep)])if(!out.cues.some(c=>clean(c)===cue))out.cues.push(cue);if(generated.test(clean(out.raw||out.text))){const authored=keep[0].match(/Desc(?:end|ending)?\s+1\s*[-–—]\s*\d+/i)?.[0]||'Desc 1-3';out.raw=clean(out.raw||out.text).replace(generated,authored);out.text=out.raw;}out.authoredPatternPreserved=true;return out;
+  }
   M.targets.t400=(ath,state=M.state,_course='',stroke='Freestyle')=>E.Aerobic.t400(ath,state,stroke);
   M.targets.pb=(ath,state=M.state,spec={})=>E.RacePace.pb(ath,state,spec);
-  M.targets.forItem=(session,item,ath,state=M.state)=>E.Coordinator.targetForItem(session,item,ath,state);
+  M.targets.forItem=(session,item,ath,state=M.state)=>{if(zoneIntent(item)&&!item?.targetSeconds&&!item?.raceIntent){const stroke=E.Evidence.stroke?.(item?.stroke)||item?.stroke||'Freestyle',wanted=/^(?:Freestyle|Backstroke|Breaststroke|Butterfly|IM)$/i.test(clean(stroke))?stroke:'Freestyle',anchor=E.Aerobic.t400(ath,state,wanted);if(!anchor)return{status:'missing',message:`No ${wanted} T400 target loaded`};}return E.Coordinator.targetForItem(session,item,ath,state);};
   M.adapt.profile=(ath,state=M.state)=>E.Modification.profile(ath,state);
-  M.adapt.item=(item,ath,state=M.state,session=null)=>E.Modification.adaptItem(item,ath,state,session);
+  M.adapt.item=(item,ath,state=M.state,session=null)=>preserveRepeatingDescent(item,E.Modification.adaptItem(item,ath,state,session));
   M.adapt.samePrescription=(a,b)=>E.Modification.samePrescription(a,b);
   M.performanceBridge={ask:(kind,p={})=>kind==='t400'?E.Aerobic.t400(p.athlete,p.state||M.state,p.stroke):kind==='pb'?E.RacePace.pb(p.athlete,p.state||M.state,p):kind==='bestStroke'?(M.performanceEngine?.bestStroke?.(p.athlete,p.state||M.state,p.course||'',!!p.nonFree)?.stroke||E.RacePace.bestStroke(p.athlete,p.state||M.state,p.course||'',!!p.nonFree)):kind==='bestEvent'?M.performanceEngine?.bestEvent?.(p.athlete,p.state||M.state,p.course||''):kind==='bestFormStroke'?M.performanceEngine?.bestFormStroke?.(p.athlete,p.state||M.state,p.course||''):null};
   const writeMeta=rows=>{const m={complete:true,organisationId:org(),rows:Number(rows)||0,at:new Date().toISOString(),build:B.build};try{localStorage.setItem(PB_META_KEY,JSON.stringify(m))}catch{}return m;};
