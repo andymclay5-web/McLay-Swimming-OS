@@ -38,10 +38,10 @@ assert.ok(sql.includes('revoke all on public.msos_swimmer_payloads from anon, au
 assert.ok(sql.includes('consumed_at is null and expires_at>now()'),'invite is not one-time + expiring');
 assert.ok(sql.includes('revoked_at is null'),'revoked device protection missing');
 assert.ok(sql.includes("encode(digest(raw_device,'sha256'),'hex')"),'raw device token is stored server-side');
-assert.ok(/engines\/swimmer-invite-bn\.js\?v=20260824(?:bn|ci)/.test(index),'coach QR engine not loaded');
+assert.ok(/engines\/swimmer-invite-bn\.js\?v=20260824(?:bn|ci|cp)/.test(index),'coach QR engine not loaded');
 assert.ok(index.includes('engines/swimmer-performance-ci.js?v=20260824ci'),'swimmer integrity model not loaded');
-assert.ok(index.includes('engines/swimmer-experience-cl.js?v=20260824cl'),'retired swimmer compatibility shim is not loaded safely');
-assert.ok(index.includes('engines/swimmer-instant-open-cn.js?v=20260824cn'),'unified swimmer surface is not loaded');
+assert.ok(index.includes('engines/swimmer-experience-cl.js?v=20260824cp'),'retired swimmer compatibility shim is not loaded safely');
+assert.ok(index.includes('engines/swimmer-instant-open-cn.js?v=20260824cp'),'unified swimmer surface is not loaded');
 assert.ok(!index.includes('engines/swimmer-performance-bm.js?v=20260824bm'),'regressed DOM takeover is still active');
 assert.ok(sw.includes("u.pathname.endsWith('/swimmer-portal.html')"),'service worker would route swimmer portal into coach app');
 assert.ok(sw.includes("'./swimmer-portal.html'"),'secure portal is not available through installed PWA cache');
