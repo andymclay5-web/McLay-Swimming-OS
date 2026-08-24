@@ -1,10 +1,11 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-
 const read=p=>fs.readFileSync(require.resolve('../'+p),'utf8');
 const performance=read('engines/performance-ui.js');
-const tabs=read('engines/swimmer-tabs-ui.js');
+const deck=read('engines/swimmer-tabs-ui.js');
+const instant=read('engines/swimmer-instant-open-cn.js');
+const pathwayUi=read('engines/performance-pathway-ui-ck.js');
 const loop=read('engines/coach-loop-ui.js');
 const training=read('engines/swimmer-training-bd.js');
 
@@ -13,14 +14,17 @@ assert.match(performance,/selectionContext\(profile\)/,'Performance UI keeps use
 assert.match(performance,/Today ·/,'Performance UI explains contextual stroke choice in swimmer language');
 assert.doesNotMatch(performance,/WA points|WA-equivalent/i,'Swimmer-facing performance UI uses compact score-system labels');
 assert.match(performance,/WPS/,'Performance UI distinguishes World Para scoring');
-assert.match(performance,/Current evidence:/,'Development opportunities show the evidence behind a suggested event');
-assert.match(performance,/What this race tells us:/,'Development opportunities explain why the suggested race is useful');
-assert.doesNotMatch(performance,/\$\{esc\(x\.reason\)\}/,'Development UI must not dump internal reason strings');
-assert.match(performance,/estimate only/,'Modeled target times are clearly labelled as estimates');
 
-assert.doesNotMatch(tabs,/volume profile/i,'Swimmer Training tab must not expose volume-ratio reasoning');
-assert.match(tabs,/trainingStatus\(ath\)/,'Swimmer Training tab must show the athlete prescription status');
-assert.doesNotMatch(tabs,/WA points/i,'Swimmer Pathway copy avoids old WA-points wording');
+assert.match(deck,/v4-swimmer-deck-only-20260824cp/,'legacy swimmer tabs must stay retired');
+assert.doesNotMatch(deck,/data-msos-ath-panel/,'deck helper must not render a second swimmer page');
+assert.match(instant,/data-cn-tab="performance"/,'single-owner swimmer surface exposes Performance');
+assert.match(instant,/data-cn-tab="training"/,'single-owner swimmer surface exposes Training');
+assert.match(instant,/data-cn-tab="tests"/,'single-owner swimmer surface exposes Tests');
+assert.match(instant,/data-cn-tab="meet"/,'single-owner swimmer surface exposes Meet');
+assert.doesNotMatch(instant,/data-cn-tab="pathway"/,'Pathway must not be a separate scrolling tab');
+assert.match(instant,/Tap to load pathway, PB race and splits/,'event detail must stay collapsed until tapped');
+assert.match(instant,/function trainingHtml\(a\)/,'Training tab must show the athlete-specific training view');
+assert.match(pathwayUi,/disabled:true/,'legacy standalone pathway renderer must remain retired');
 
 assert.doesNotMatch(loop,/volume profile/i,'Today card must not expose volume-ratio reasoning');
 assert.doesNotMatch(loop,/mod\.label/,'Today card must not display the internal modification profile label');

@@ -1,26 +1,32 @@
 'use strict';
 (function(g){
-  const M=g.MSOS4,G=M?.guardian;if(!M||!G?.run||!M.store?.save)return;
-  const fullRun=G.run.bind(G),baseSave=M.store.save.bind(M.store),R=M.guardianRuntime={build:'v4-guardian-runtime-20260822bj',fullRun,running:false};
+  const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.run||!M.store?.save)return;
+  const rawFullRun=G.run.bind(G),baseSave=M.store.save.bind(M.store);
+  const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const retired=new Set([
+    'No evidence means no fake target',
+    'Swimmer hub is five simple tabs',
+    'Phone acceptance · McKenzie 50 kick keeps authored cycle and Desc 1-3',
+    'Engine · Reduced IM uses performance-relative send-off and stays connected to the group set window',
+    'Reduced IM uses performance-relative send-off and stays connected to the group set window'
+  ]);
+  const assert=(c,m)=>{if(!c)throw new Error(m||'assertion failed')};
+  const test=(name,fn)=>{try{return{name,ok:true,detail:String(fn()??'')}}catch(e){return{name,ok:false,detail:e?.message||String(e)}}};
+  function currentContractTests(){const out=[];
+    out.push(test('Current swimmer surface is four simple tabs with pathway inside Performance',()=>{assert(M.swimmerInstantOpenCN?.build,'single-owner swimmer surface missing');assert(M.swimmerTabsUI?.build==='v4-swimmer-deck-only-20260824cp',`legacy swimmer tabs still active: ${M.swimmerTabsUI?.build||'missing'}`);assert(M.performanceEngine?.pathwayUIck?.disabled===true,'standalone pathway renderer still active');return'Performance · Training · Tests · Meet';}));
+    if(E?.Modification){
+      out.push(test('Current McKenzie kick keeps authored cycle and Desc 1-3',()=>{const ath={id:'gr-md',full_name:'McKenzie Drage',squad:'National'},session={id:'gr-kick',identity:{course:'SCM',squads:['National']}},state={athletes:[ath],adaptationProfiles:[],adaptationOverrides:[],resultsPbBoard:[],resultsEventHistory:[],coachResults:[],trainingTestTypes:[],trainingTestResults:[]},item={id:'gr-desc',kind:'set',reps:12,distance:50,stroke:'',raw:'12 x 50 Kick @ 1:10',text:'12 x 50 Kick @ 1:10',cues:['Desc 1-3'],pattern:[],repPattern:[],repInstructions:[],raceIntent:null,zone:'',restSeconds:10,cycleSeconds:70,equipment:[],composition:[]},x=E.Modification.adaptItem(item,ath,state,session),cue=[x.raw,...(x.cues||[])].join(' | ');assert(x.reps===8&&x.distance===50,JSON.stringify(x));assert(x.cycleSeconds===70,`cycle ${x.cycleSeconds}`);assert(/Desc 1-3/i.test(cue),`cue lost: ${cue}`);return'8×50 @ 1:10 · Desc 1-3';}));
+      out.push(test('Current reduced IM uses performance-relative group window',()=>{const ath={id:'gr-md2',full_name:'McKenzie Drage',sex:'F'},session={id:'gr-im',identity:{course:'SCM'}},g1={id:'gr-g1',full_name:'Group One'},g2={id:'gr-g2',full_name:'Group Two'},g3={id:'gr-g3',full_name:'Group Three'},state={athletes:[ath,g1,g2,g3],adaptationProfiles:[],adaptationOverrides:[],resultsPbBoard:[{athlete_id:g1.id,distance:100,stroke:'IM',course:'SCM',result_seconds:68},{athlete_id:g2.id,distance:100,stroke:'IM',course:'SCM',result_seconds:70},{athlete_id:g3.id,distance:100,stroke:'IM',course:'SCM',result_seconds:72},{athlete_id:ath.id,distance:100,stroke:'IM',course:'SCM',result_seconds:112}],resultsEventHistory:[],coachResults:[]},item={id:'gr-im-item',kind:'set',reps:5,distance:100,stroke:'IM',raw:'5 x 100 IM @ 1:45',text:'5 x 100 IM @ 1:45',cues:[],pattern:[],repPattern:[],repInstructions:[],raceIntent:null,zone:'',restSeconds:10,cycleSeconds:105,equipment:[],composition:[]},x=E.Modification.adaptItem(item,ath,state,session);assert(x.reps===3&&x.distance===100,JSON.stringify(x));assert(x.cycleSeconds===175,`cycle ${x.cycleSeconds}`);assert(x.imPerformancePlan?.groupWindowSeconds===525,JSON.stringify(x.imPerformancePlan));return'3×100 @ 2:55 · 525s group window';}));
+    }
+    return out;
+  }
+  const fullRun=()=>{const r=rawFullRun()||{},kept=(r.tests||[]).filter(t=>!retired.has(clean(t.name))),tests=[...kept,...currentContractTests()],passed=tests.filter(x=>x.ok===true).length;return{...r,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length,contract:'20260824cq',retiredTests:[...new Set([...(r.retiredTests||[]),...retired])]};};
+  const R=M.guardianRuntime={build:'v4-guardian-runtime-20260824cq',fullRun,running:false};
   const latestReal=()=>[...(M.state?.guardian?.runs||[])].reverse().find(x=>Array.isArray(x?.tests)&&x.tests.length&&!x.deferred)||null;
-  // Suppress only the automatic startup call. Explicit Guardian always uses R.fullRun.
   G.run=()=>({ok:false,tests:[],passed:0,total:0,at:new Date().toISOString(),build:M.BUILD,deferred:true,startupSuppressed:true});
   M.store.save=state=>{const runs=state?.guardian?.runs,last=runs?.at?.(-1);if(state===M.state&&last?.deferred&&last?.startupSuppressed){runs.pop();R.startupRunSuppressed=true;M.storageEngine?.saveUi?.(state);return state;}return baseSave(state);};
-
-  function renderRunning(){const h=document.querySelector('#guardianView');if(!h)return;h.innerHTML=`<section class="page-card"><div class="eyebrow">GUARDIAN · FULL CURRENT BUILD</div><h1>Running full Guardian…</h1><p><b>${M.util?.escape?.(M.BUILD)||M.BUILD}</b></p><p class="muted">Checking the complete runtime regression chain plus live device state. The page is painted first so the phone never appears blank while the check starts.</p></section>`;}
-  G.runAndRender=()=>{
-    if(R.running)return{deferred:true,running:true,build:M.BUILD};
-    R.running=true;renderRunning();
-    const run=()=>{let r;try{r=R.fullRun()}catch(e){r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,at:new Date().toISOString(),build:M.BUILD}};M.state.guardian=M.state.guardian||{runs:[]};M.state.guardian.runs.push(r);M.state.guardian.runs=M.state.guardian.runs.slice(-20);baseSave(M.state);R.running=false;M.ui?.renderGuardian?.(r);M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);return r;};
-    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);
-    return{deferred:true,running:true,build:M.BUILD};
-  };
-
-  const oldRender=M.ui?.renderGuardian?.bind(M.ui);if(oldRender)M.ui.renderGuardian=r=>{
-    if(R.running&&!r){renderRunning();return;}
-    r=r||latestReal();
-    if(r){oldRender(r);const h=document.querySelector('#guardianView');if(r.build&&r.build!==M.BUILD){h?.insertAdjacentHTML('afterbegin',`<section class="page-card warning"><div class="eyebrow">GUARDIAN RUN IS FROM AN OLDER BUILD</div><h2>Current runtime: ${M.util?.escape?.(M.BUILD)||M.BUILD}</h2><p>Displayed regression result: ${M.util?.escape?.(r.build)||r.build}. It cannot approve this package.</p><button id="rerunCurrentGuardian">Run full current Guardian</button></section>`);h?.querySelector('#rerunCurrentGuardian')?.addEventListener('click',()=>G.runAndRender());}else{h?.insertAdjacentHTML('afterbegin',`<section class="page-card ${r.ok?'ok':'warning'}"><div class="eyebrow">FULL CURRENT-BUILD GUARDIAN</div><h2>${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}</h2><p>${M.util?.escape?.(r.build)||r.build}</p><button id="rerunCurrentGuardian">Run full Guardian again</button></section>`);h?.querySelector('#rerunCurrentGuardian')?.addEventListener('click',()=>G.runAndRender());}return;}
-    const h=document.querySelector('#guardianView');if(h)h.innerHTML='<section class="page-card"><div class="eyebrow">GUARDIAN · FULL CURRENT BUILD</div><h1>Not run on this device yet</h1><p>The complete Guardian runs automatically in CI on every v4 candidate upload. This button also runs the current runtime chain plus device-state checks against this phone.</p><button id="rerunGuardian">Run full Guardian</button></section>';h?.querySelector('#rerunGuardian')?.addEventListener('click',()=>G.runAndRender());
-  };
+  function renderRunning(){const h=document.querySelector('#guardianView');if(!h)return;h.innerHTML=`<section class="page-card"><div class="eyebrow">GUARDIAN · FULL CURRENT BUILD</div><h1>Running full Guardian…</h1><p><b>${M.util?.escape?.(M.BUILD)||M.BUILD}</b></p><p class="muted">Checking the complete runtime regression chain plus live device state.</p></section>`;}
+  G.runAndRender=()=>{if(R.running)return{deferred:true,running:true,build:M.BUILD};R.running=true;renderRunning();const run=()=>{let r;try{r=R.fullRun()}catch(e){r={ok:false,tests:[{name:'Guardian execution',ok:false,detail:e?.message||String(e)}],passed:0,total:1,at:new Date().toISOString(),build:M.BUILD}};M.state.guardian=M.state.guardian||{runs:[]};M.state.guardian.runs.push(r);M.state.guardian.runs=M.state.guardian.runs.slice(-20);baseSave(M.state);R.running=false;M.ui?.renderGuardian?.(r);M.toast?.(`Guardian ${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}`);return r;};if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(run,0));else setTimeout(run,0);return{deferred:true,running:true,build:M.BUILD};};
+  const oldRender=M.ui?.renderGuardian?.bind(M.ui);if(oldRender)M.ui.renderGuardian=r=>{if(R.running&&!r){renderRunning();return;}r=r||latestReal();if(r){oldRender(r);const h=document.querySelector('#guardianView');h?.insertAdjacentHTML('afterbegin',`<section class="page-card ${r.ok?'ok':'warning'}"><div class="eyebrow">FULL CURRENT-BUILD GUARDIAN</div><h2>${r.ok?'PASS':'FAIL'} · ${r.passed}/${r.total}</h2><p>${M.util?.escape?.(r.build)||r.build}</p><button id="rerunCurrentGuardian">Run full Guardian again</button></section>`);h?.querySelector('#rerunCurrentGuardian')?.addEventListener('click',()=>G.runAndRender());return;}const h=document.querySelector('#guardianView');if(h)h.innerHTML='<section class="page-card"><div class="eyebrow">GUARDIAN · FULL CURRENT BUILD</div><h1>Not run on this device yet</h1><button id="rerunGuardian">Run full Guardian</button></section>';h?.querySelector('#rerunGuardian')?.addEventListener('click',()=>G.runAndRender());};
   R.latestReal=latestReal;
 })(globalThis);

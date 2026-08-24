@@ -17,9 +17,10 @@ assert.match(instant,/Performance<\/button>/,'unified surface must own Performan
 assert.match(instant,/Training<\/button>/,'unified surface must own Training');
 assert.match(instant,/Tests<\/button>/,'unified surface must own individual Tests');
 assert.match(instant,/Meet<\/button>/,'unified surface must own Meet');
+assert.doesNotMatch(instant,/Pathway<\/button>/,'Pathway must expand inside Performance, not exist as another tab');
 assert.match(instant,/quickRanked/,'unified surface must dedupe event rows for display');
 assert.match(instant,/Tap to load pathway, PB race and splits/,'event detail must stay behind a tap');
 assert.match(evidence,/sameAthleteWithIdentity/,'evidence matching must reuse one athlete identity per scan');
-assert.match(index,/engines\/swimmer-experience-cl\.js\?v=20260824cl/,'retired compatibility shim remains load-safe');
-assert.match(index,/engines\/swimmer-instant-open-cn\.js\?v=20260824cn/,'unified swimmer surface must be active');
+assert.match(index,/engines\/swimmer-experience-cl\.js\?v=20260824cp/,'retired compatibility shim remains load-safe and cache-busted');
+assert.match(index,/engines\/swimmer-instant-open-cn\.js\?v=20260824cp/,'unified swimmer surface must be current and cache-busted');
 console.log('SWIMMER_EXPERIENCE_CL_PASS');
