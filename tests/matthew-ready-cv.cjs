@@ -10,7 +10,7 @@ const morning=read('engines/morning-session-contract-cu.js');
 const pathway=read('engines/performance-pathway-ck.js');
 const instant=read('engines/swimmer-instant-open-cn.js');
 const pwa=read('engines/pwa-update.js');
-assert.match(portal,/Today’s session|Today's session|TODAY’S SESSION/i,'swimmer session must be a first-class surface');
+assert.match(portal,/YOUR SESSION/,'swimmer session must be a first-class surface');
 assert.match(portal,/Challenge this set/);
 assert.match(portal,/Edit your version/);
 assert.match(portal,/Finish session with Andy/);
