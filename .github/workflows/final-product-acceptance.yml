@@ -15,8 +15,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Syntax check all-inclusive runtime
+        run: |
+          node --check engines/dosage.js
+          node --check engines/dosage-ui.js
+          node --check tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
+      - name: Release package integrity
+        run: node tests/release-package.test.js
       - name: Install browser acceptance runtime
         run: |
           npm init -y >/dev/null 2>&1
@@ -27,8 +34,8 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-final-http.log 2>&1 &
           echo $! > /tmp/msos-final-http.pid
           sleep 1
-      - name: Final coach journey at Android phone shape
-        run: node tests/final-product-acceptance-20260825.cjs
+      - name: All-inclusive coach journey at Android phone shape
+        run: node tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/msos-final-http.log || true
