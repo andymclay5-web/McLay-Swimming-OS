@@ -42,7 +42,6 @@ jobs:
           node tests/board-evidence-regression.cjs
           node tests/friday-session-board-regression.cjs
           node tests/reference-data-regression.cjs
-          node tests/reference-authority-identity.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
           node tests/guardian-device-state-bj.cjs

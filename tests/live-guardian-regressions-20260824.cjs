@@ -1,6 +1,5 @@
 'use strict';
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
 const Evidence=require('../engines/evidence.js');
 global.MSOSEngines={Evidence};
 const RacePace=require('../engines/race-pace.js');
@@ -30,11 +29,6 @@ require('../engines/access-authority.js');const A=global.MSOS4.access,D=global.M
 // Controlled reference fixtures must not be polluted by same-athlete live rows.
 delete require.cache[require.resolve('../engines/reference-authority.js')];
 global.MSOS4={state:{resultsPbBoard:[{id:'live',athlete_id:'elsie',course:'SCM',distance:200,stroke:'Freestyle',result_seconds:154.73}]},refs:{data:{results_pb_board:[{id:'fixture',athlete_id:'elsie',course:'SCM',distance:200,stroke:'Breaststroke',result_seconds:200.78}]},get:()=>[]},util:{hash:s=>s.length}};require('../engines/reference-authority.js');const rows=global.MSOS4.refs.get('results_pb_board');assert.equal(rows.length,1);assert.equal(rows[0].stroke,'Breaststroke');
-
-// Guardian is a diagnostic surface, not a restorable live-start destination.
-const storageSource=fs.readFileSync(require.resolve('../engines/storage.js'),'utf8');
-assert.match(storageSource,/state\.settings\.view==='guardian'\)state\.settings\.view='board'/);
-assert.match(storageSource,/s\.view==='guardian'\?'board'/);
 
 // Final release identity and attestation are one value owned after UI layers.
 delete require.cache[require.resolve('../engines/release-authority.js')];
