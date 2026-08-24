@@ -48,6 +48,7 @@ jobs:
           node tests/guardian-current-runtime-bk.cjs
           node tests/guardian-current-runtime-bl.cjs
           node tests/guardian-runtime-order-bl.cjs
+          node tests/live-guardian-regressions-20260824.cjs
       - name: Architecture regression
         run: |
           node architecture/architecture.test.js
