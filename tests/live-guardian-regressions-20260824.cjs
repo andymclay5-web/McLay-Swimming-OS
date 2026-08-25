@@ -32,5 +32,5 @@ global.MSOS4={state:{resultsPbBoard:[{id:'live',athlete_id:'elsie',course:'SCM',
 
 // Final release identity and attestation are one value owned after UI layers.
 delete require.cache[require.resolve('../engines/release-authority.js')];
-global.MSOS4={BUILD:'v4-coach-loop-20260821ai',CORE:'old',release:{}};require('../engines/release-authority.js');assert.equal(global.MSOS4.BUILD,'v4-final-acceptance-20260825a');assert.equal(global.MSOS4.RELEASE_ATTESTATION.build,global.MSOS4.BUILD);assert.equal(global.MSOS4.RELEASE_ATTESTATION.softwareReady,true);
+global.MSOS4={BUILD:'v4-coach-loop-20260821ai',CORE:'old',release:{}};require('../engines/release-authority.js');assert.equal(global.MSOS4.BUILD,'v4-engine-authority-20260824');assert.equal(global.MSOS4.RELEASE_ATTESTATION.build,global.MSOS4.BUILD);assert.equal(global.MSOS4.RELEASE_ATTESTATION.softwareReady,true);
 console.log('LIVE_GUARDIAN_77_REGRESSIONS_PASS');
