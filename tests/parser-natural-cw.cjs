@@ -23,4 +23,17 @@ Makeup: 50 Drill / 25 Swim · Rest · 10 sec
 const s=global.MSOS4.parser.parse(source,{id:'morning-natural',course:'SCM',squads:['National']});assert.equal(S.total(s),4700);assert.deepEqual(s.blocks.map(b=>b.type),['warm_up','main_set','post_set','warm_down']);assert.deepEqual(s.blocks.map(S.blockDistance),[1200,2400,900,200]);assert.equal(s.originalPlan.text,source);assert.equal(s.currentSource.text,source);assert.equal(s.metadata.parserStructure,'natural');
 const sets=[];for(const b of s.blocks)for(const i of b.items||[])if(i.kind==='set')sets.push(i);const find=re=>sets.find(i=>re.test(i.raw||i.text||''));const kick100=find(/^12 x 100 Kick/i);assert.ok(kick100);assert.equal(kick100.cycleSeconds,130);assert.match(kick100.cues.join(' '),/Desc 1-3/i);assert.deepEqual(kick100.descent,{from:1,to:3,repeat:true});assert.equal(kick100.stroke,'');const uw25=find(/^8 x 25$/i);assert.ok(uw25);assert.equal(uw25.cycleSeconds,45);assert.match(uw25.cues.join(' '),/15m Underwater MAX on45/i);assert.equal(sets.some(i=>Number(i.distance)===15),false);const fins=find(/^4 x 200 Kick with Fins/i);assert.equal(fins.cycleSeconds,210);assert.match(fins.cues.join(' '),/Desc 1-4/i);const kick25=find(/^8 x 25 Kick MAX/i);assert.equal(kick25.cycleSeconds,60);const post=find(/^12 x 75 #1/i);assert.ok(post);assert.equal(post.restSeconds,10);assert.deepEqual(post.composition.map(x=>x.distance),[50,25]);assert.match(post.cues.join(' '),/Makeup: 50 Drill \/ 25 Swim/i);const im=find(/^3 x 200 IM/i);assert.ok(im);assert.deepEqual(im.pattern.map(x=>[x.count,x.text]),[[1,'Build'],[1,'Fast']]);
 const explicit=`WARM-UP\n400 Choice\nMAIN SET\n4 x 100 Freestyle @ 1:30\nMystery cue: hips through the turn\nWARM-DOWN\n200 Easy`,e=global.MSOS4.parser.parse(explicit,{id:'explicit'});assert.equal(e.metadata.parserStructure,'explicit');assert.equal(S.total(e),1000);assert.match(e.blocks[1].items.find(i=>i.kind==='set').cues.join(' '),/Mystery cue: hips through the turn/);
+const roundVariants=[
+`MAIN SET\n3 Rounds\n5 x 100 Freestyle Threshold\n200 Easy`,
+`MAIN SET\n3 rounds\n5×100 Freestyle Threshold\n200 Easy`,
+`MAIN SET\n3 Rounds\n5 x 100 Threshold\n\n200 Easy`
+];
+for(const [i,roundSource] of roundVariants.entries()){
+ const rs=global.MSOS4.parser.parse(roundSource,{id:`round-scope-${i}`,course:'SCM',squads:['National']});
+ assert.equal(S.total(rs),2100,`authored 3-round scope variant ${i+1} must remain 2,100m`);
+ const main=rs.blocks.find(b=>b.type==='main_set')||rs.blocks[0];
+ const group=(main.items||[]).find(x=>x.kind==='group'&&Number(x.rounds)===3);
+ assert.ok(group,`authored 3-round scope variant ${i+1} must remain one canonical repeated group`);
+ assert.equal(S.itemDistance(group),2100,`canonical repeated group variant ${i+1} must own all 2,100m`);
+}
 assert.equal(global.MSOS4.parserSemantics.cycle('8 x 25 on45'),45);assert.equal(global.MSOS4.parserSemantics.cycle('4 x 200 on 3.45'),225);assert.equal(global.MSOS4.parserSemantics.rest('Makeup: 50 Drill / 25 Swim · Rest · 10 sec'),10);console.log('PARSER_SEMANTICS_PASS');
