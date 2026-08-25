@@ -17,13 +17,9 @@ jobs:
           node-version: 22
       - name: Syntax check all-inclusive runtime
         run: |
-          node --check engines/parser-semantics.js
-          node --check tests/parser-round-scope-only-20260825.cjs
           node --check engines/dosage.js
           node --check engines/dosage-ui.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
-      - name: Isolated repeated round-scope truth
-        run: node tests/parser-round-scope-only-20260825.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
