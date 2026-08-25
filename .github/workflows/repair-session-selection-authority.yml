@@ -1,0 +1,62 @@
+name: Repair session selection authority
+on:
+  push:
+    branches: [repair/session-selection-authority-20260826]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/session-selection-authority-20260826
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repair hydration and header selection truth
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('engines/storage.js')
+          s=p.read_text()
+          old="if(ui)for(const[k,v]of Object.entries(ui)){if(k==='savedAt'||v===undefined)continue;if(k==='selectedSessionId'&&opSavedAt>uiSavedAt)continue;state.settings[k]=v}state.settings.view='board';"
+          new="if(ui)for(const[k,v]of Object.entries(ui)){if(k==='savedAt'||v===undefined)continue;if(k==='selectedSessionId'){if(opSavedAt>uiSavedAt)continue;if(v&&!state.canonicalSessions?.[v])continue}state.settings[k]=v}if(state.settings.selectedSessionId&&!state.canonicalSessions?.[state.settings.selectedSessionId])state.settings.selectedSessionId='';if(!state.settings.selectedSessionId){const first=Object.values(state.canonicalSessions||{}).sort((a,b)=>`${b.identity?.date||''}-${b.identity?.dayPart||''}`.localeCompare(`${a.identity?.date||''}-${a.identity?.dayPart||''}`))[0];if(first)state.settings.selectedSessionId=first.id}state.settings.view='board';"
+          if s.count(old)!=1:
+              raise SystemExit(f'storage authority source mismatch: {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('app.js')
+          s=p.read_text()
+          old="let s=M.currentSession();if(s&&!M.access.sessionAllowed(s)){s=allowed[0]||null;if(s)M.state.settings.selectedSessionId=s.id}const pick=document.querySelector('#sessionSelect');"
+          new="let s=M.currentSession();if(!s){s=allowed[0]||null;if(s)M.state.settings.selectedSessionId=s.id}else if(!M.access.sessionAllowed(s)){s=allowed[0]||null;M.state.settings.selectedSessionId=s?.id||''}const pick=document.querySelector('#sessionSelect');"
+          if s.count(old)!=1:
+              raise SystemExit(f'header authority source mismatch: {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+
+          t=Path('tests/session-selection-authority.cjs')
+          t.write_text(r'''\
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const app=fs.readFileSync('app.js','utf8'),storage=fs.readFileSync('engines/storage.js','utf8');
+assert.match(storage,/if\(v&&!state\.canonicalSessions\?\.\[v\]\)continue/,'hydration must reject stale selectedSessionId');
+assert.match(storage,/if\(state\.settings\.selectedSessionId&&!state\.canonicalSessions\?\.\[state\.settings\.selectedSessionId\]\)state\.settings\.selectedSessionId=''/,'invalid hydrated selection must be cleared');
+assert.match(storage,/if\(!state\.settings\.selectedSessionId\)\{const first=Object\.values\(state\.canonicalSessions\|\|\{\}\)/,'hydration must recover a valid canonical session');
+assert.match(app,/let s=M\.currentSession\(\);if\(!s\)\{s=allowed\[0\]\|\|null;if\(s\)M\.state\.settings\.selectedSessionId=s\.id\}/,'header must repair missing current session');
+console.log('SESSION_SELECTION_AUTHORITY_PASS');
+''')
+          PY
+          node --check app.js
+          node --check engines/storage.js
+          node tests/session-selection-authority.cjs
+          node tests/engine-acceptance.cjs
+          git diff --check
+      - name: Commit repair
+        run: |
+          git config user.name "MSOS session authority repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add app.js engines/storage.js tests/session-selection-authority.cjs
+          git commit -m "Repair canonical session selection after hydration"
+          git push origin HEAD:repair/session-selection-authority-20260826
