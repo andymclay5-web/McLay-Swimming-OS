@@ -62,7 +62,7 @@ const specs=[
   await page.click('#tvModeBtn');await page.waitForFunction(()=>MSOS4.state.settings.view==='tv'&&document.querySelector('#tvView.active'));const tv=await page.locator('#tvView').innerText();assert.equal(await page.locator('#tvView.msos-tv-board-engine.active').count(),1,'Dedicated TV Board engine is not the active projection');assert.match(tv,/2,600m|2600m/);assert.match(tv,/Charlotte|McKenzie|Matt/);assert.equal(await page.locator('#tvView input,#tvView textarea').count(),0,'TV exposed editing controls');await page.click('#tvModeBtn');await page.waitForFunction(()=>MSOS4.state.settings.view==='board');
 
   // Training/performance/pathway surface is connected to swimmer data.
-  const swimmersBtn=page.locator('[data-pool-swimmers]').first();assert.ok(await swimmersBtn.count());await swimmersBtn.click();await page.waitForFunction(()=>MSOS4.state.settings.view==='athletes'&&document.querySelector('#athletesView.active'));
+  const swimmersBtn=page.locator('[data-msos-swimmers]').first();assert.ok(await swimmersBtn.count());await swimmersBtn.click();await page.waitForFunction(()=>MSOS4.state.settings.view==='athletes'&&document.querySelector('#athletesView.active'));
   const thomas=live.find(x=>x.key==='thomas');await page.selectOption('#pathAthlete',thomas.id);await page.waitForFunction(()=>document.querySelector('#athletesView')?.innerText.includes('Thomas Cave'));let athleteText=await page.locator('#athletesView').innerText();assert.match(athleteText,/SWIMMER PERFORMANCE/);assert.match(athleteText,/PB|PATHWAY|QUALIFIER/i);
 
   // Matthew: real individual session/performance payload and self-only device view.
