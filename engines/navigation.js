@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
-  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-owner-final-20260825d-deterministic-history'};
+  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-owner-final-20260826-coherent-layers'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const active=view=>{if(!views.has(view))view='board';document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===`${view}View`));document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
@@ -27,6 +27,14 @@
   V.rememberScroll=rememberScroll;V.restoreScroll=restoreScroll;V.clearTransient=closeTransient;V.activateView=active;V.normaliseCurrentHistory=normaliseCurrentHistory;
 
   N.show=V.go;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.activateView=active;
+  N.openLayer=(type,id='')=>{
+    const view=views.has(M.state?.settings?.view)?M.state.settings.view:'board';
+    const layer=type&&typeof type==='object'?{...type}:{type:String(type||'modal'),id:String(id||'')};
+    if(layer.type==='item'&&layer.id&&M.state?.settings)M.state.settings.expandedItemId=layer.id;
+    try{normaliseCurrentHistory(view);history.pushState({...stateFor(view),layer},'',location.hash||`#${view}`)}catch{}
+    saveUi();
+    return layer;
+  };
   N.dismissLayer=()=>{const layer=history.state?.layer;if(layer){closeTransient();history.back();return true}closeTransient();M.boardStateEngine?.cancelWork?.();paint(M.state?.settings?.view||'board');saveUi();return false;};
   N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=views.has(state?.msosView)?state.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;if(state?.sessionId&&M.state.canonicalSessions?.[state.sessionId])M.state.settings.selectedSessionId=state.sessionId;if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
 
