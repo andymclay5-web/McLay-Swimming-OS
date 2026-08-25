@@ -11,7 +11,8 @@
   const closeTransient=()=>{const h=document.querySelector('#modalHost');if(h)h.innerHTML='';if(M.state?.settings)M.state.settings.expandedItemId='';};
   const renderExtra=view=>{if(view==='reports')M.reportingUI?.render?.();if(view==='data')M.dataAdminUI?.render?.();M.dataAdminUI?.ensureShortcut?.(view);};
   const paint=view=>{active(view);if(view==='reports'||view==='data'){UI.renderHeader?.();renderExtra(view);active(view);return}UI.renderCurrent?.();active(view);};
-  const stateFor=view=>N.state?.(view)||{msos:true,msosView:view,sessionId:M.state?.settings?.selectedSessionId||''};
+  N.state=(view=M.state?.settings?.view||'board',extra={})=>({msos:true,msosView:views.has(view)?view:'board',sessionId:M.state?.settings?.selectedSessionId||'',...(extra&&typeof extra==='object'?extra:{})});
+  const stateFor=view=>N.state(view);
   const normaliseCurrentHistory=view=>{try{const current=history.state;if(current?.exitGuard){history.pushState(stateFor(view),'',`#${view}`);return}if(!current?.msos||current.msosView!==view)history.replaceState(stateFor(view),'',`#${view}`)}catch{}};
 
   V.go=(view,{push=true,restore=true,restoreScroll:restoreOpt}={})=>{
@@ -39,7 +40,7 @@
   N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=views.has(state?.msosView)?state.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;if(state?.sessionId&&M.state.canonicalSessions?.[state.sessionId])M.state.settings.selectedSessionId=state.sessionId;if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
 
   let rootBackArmed=false;
-  N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=views.has(M.state?.settings?.view)?M.state.settings.view:'board';active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(stateFor(initial),'',`#${initial}`)}catch{}
+  N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=views.has(M.state?.settings?.view)?M.state.settings.view:'board';active(initial);try{history.replaceState(N.state(initial,{exitGuard:true}),'',`#${initial}`);history.pushState(stateFor(initial),'',`#${initial}`)}catch{}
     addEventListener('popstate',e=>{if(e.state?.exitGuard){if(rootBackArmed){history.back();return}rootBackArmed=true;M.toast?.('Press back again to exit');try{history.pushState(stateFor(M.state.settings.view),'',`#${M.state.settings.view}`)}catch{}setTimeout(()=>rootBackArmed=false,1800);return}if(e.state?.msos)N.applyHistory(e.state)});
     addEventListener('pagehide',rememberScroll);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')rememberScroll();else if(document.visibilityState==='visible')restoreScroll(M.state.settings.view)});renderExtra(initial);
   };
