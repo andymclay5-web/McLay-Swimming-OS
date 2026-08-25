@@ -1,0 +1,35 @@
+name: Fix Board Layout and Parser Plus
+on:
+  push:
+    branches: [fix/board-branch-layout-20260825]
+    paths:
+      - 'tools/fix-parser-round-plus-20260825.cjs'
+      - '.github/workflows/fix-board-layout-parser-plus.yml'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/board-branch-layout-20260825
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply literal plus-sign parser repair
+        run: node tools/fix-parser-round-plus-20260825.cjs
+      - name: Prove literal plus-sign 2100m case
+        run: |
+          node --check engines/parser-semantics.js
+          node --check tests/parser-round-scope-only-20260825.cjs
+          node tests/parser-round-scope-only-20260825.cjs
+          grep -Fq "3 x (5 x 100 Threshold + 200 Easy)" tests/parser-round-scope-only-20260825.cjs
+      - name: Commit repaired parser and exact regression
+        run: |
+          git config user.name 'MSOS parser repair'
+          git config user.email 'actions@users.noreply.github.com'
+          git add engines/parser-semantics.js tests/parser-round-scope-only-20260825.cjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Parse literal plus-sign repeated round scope correctly'
+          git push origin HEAD:fix/board-branch-layout-20260825
