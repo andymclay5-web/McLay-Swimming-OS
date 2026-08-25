@@ -1,0 +1,16 @@
+name: Trigger coherent core reconstruction
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch core reconstruction
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run rebuild-core-owners.yml --repo ${{ github.repository }} --ref rebuild/msos-coherent-product-20260826
