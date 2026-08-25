@@ -26,7 +26,9 @@ require('../engines/parser-semantics.js');
 require('../v4-correct.js');
 require('../v4-poolside-core.js');
 
-const result=global.MSOS4.guardian.run();
+// app.js owns the immutable 82-test foundation. guardian-runtime.js later owns
+// the release/device composition and replaces guardian.run in the real runtime.
+const result=global.MSOS4.guardian.foundationRun();
 const failures=result.tests.filter(test=>!test.ok);
 
 if(failures.length){
@@ -35,8 +37,8 @@ if(failures.length){
 }
 
 if(result.passed!==82||result.total!==82){
-  console.error(`Expected the complete 82-test Guardian; received ${result.passed}/${result.total}`);
+  console.error(`Expected the complete 82-test Guardian foundation; received ${result.passed}/${result.total}`);
   process.exit(1);
 }
 
-console.log(`V4 Guardian PASS ${result.passed}/${result.total} · ${result.build}`);
+console.log(`V4 Guardian foundation PASS ${result.passed}/${result.total} · ${result.build}`);
