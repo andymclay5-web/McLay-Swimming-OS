@@ -123,7 +123,7 @@ s=s[:a]+direct+s[b:]
 a=s.find('  // Keep selected session/view/swimmer as local truth during live updates.'); b=s.find('\n\n\n  // ---------- Guardian:',a)
 if a<0 or b<0: raise SystemExit('v4-correct live wrapper region missing')
 s=s[:a]+"  // Live replication ownership remains in its dedicated runtime.\n"+s[b:]
-a=s.find('  // ---------- Guardian: retire only superseded expectations'); b=s.find('\n\n  // ---------- Boot',a)
+a=s.find('  // ---------- Guardian: retire only superseded expectations'); b=s.find('\n\n  // Guarantee correction settings/roster are present before the base boot handler runs.',a)
 if a<0 or b<0: raise SystemExit('v4-correct Guardian wrapper region missing')
 s=s[:a]+"  // Guardian execution ownership is engines/guardian-runtime.js.\n"+s[b:]
 s=s.replace("if(M.state.settings.v4TimingMode==='general'&&C.baseRenderTimes){\n      C.baseRenderTimes();","if(M.state.settings.v4TimingMode==='general'&&M.generalTimingUI?.render){\n      M.generalTimingUI.render();")

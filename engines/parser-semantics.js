@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,U=M?.util,S=M?.session,P=M?.parser;if(!M||!U||!S||!P?.parse)return;
-  const primitive=P.parse.bind(P),X=M.parserSemantics={build:'v4-parser-semantics-final-20260825b-authored-structure'};
+  const primitive=P.primitiveParse.bind(P),X=M.parserSemantics={build:'v4-parser-semantics-final-20260825b-authored-structure'};
   const text=v=>String(v??'').replace(/\r/g,''),clean=v=>U.text(v),DISTINCT_QUALITY=/\b(?:parachute|resisted|cords?|dive|start|fins?|bands?|tether|power\s*rack)\b/i;
   const headingType=line=>{const t=clean(line).replace(/^\d+[.)]\s*/,'');if(/^(?:warm.?up)\b/i.test(t))return'warm_up';if(/^(?:pre.?set)\b/i.test(t))return'pre_set';if(/^(?:main(?:\s+set)?)\b/i.test(t))return'main_set';if(/^(?:post.?set|reinforcement)\b/i.test(t))return'post_set';if(/^(?:warm.?down|cool.?down)\b/i.test(t))return'warm_down';if(/^test\b/i.test(t))return'test';return''};
   const runnable=line=>/^\s*(?:(?:\d{1,2})\s*(?:x|×|✕)\s*\d{1,4}(?:\.5)?\b|\d{2,4}(?:\.5)?\b|\d{1,2}\s+Rounds?\b)/i.test(String(line||''));

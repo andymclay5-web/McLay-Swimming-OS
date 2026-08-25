@@ -13,7 +13,6 @@
     suiteDigest:'v4-contract-20260819f-targettruth',
     packageDigest:'SHA256SUMS.txt'
   });
-  const BASE_PARSE=M.parser.parse.bind(M.parser);
   const DRAFT_KEY='mclay_swimming_os_v4_poolside_draft_e';
   const txt=v=>U.text(v), esc=v=>U.escape(v);
   const nzToday=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});
@@ -232,7 +231,6 @@
     return repaired;
   }
 
-  M.parser.parse=(source,identity={})=>compactSession(BASE_PARSE(normaliseText(source),identity));
   M.poolsideCore={BUILD,normaliseText,compactSession,enhanceTargetSemantics,repairKnownSessionTruth,repairKnownSavedSessions,renderNode,targetDetails,quickActions};
 
   function attendanceTime(row){return Date.parse(row?.updated_at||row?.updatedAt||row?.created_at||row?.createdAt||0)||0}
@@ -299,18 +297,7 @@
     return `<button data-pool-roll>Roll · ${here} here</button><button data-pool-times>T400 / Times</button>${swimmers}`;
   }
 
-  UI.renderBoard=()=>{
-    const h=document.querySelector('#boardView'),s=M.currentSession();if(!h)return;
-    if(!s){h.innerHTML='<section class="empty-card"><h2>No session selected</h2></section>';return}
-    const here=UI.presentAthletes().length,total=S.total(s);
-    h.innerHTML=`<section class="session-summary pool-summary"><div><span>WHOLE SESSION · ${esc(s.identity.date)} ${esc(s.identity.dayPart)}</span><h1>${esc(s.identity.title||'Session')}</h1><div class="pool-quick">${quickActions(here)}</div></div><strong>${total.toLocaleString()}m</strong></section>${(s.blocks||[]).map((b,i)=>`<section class="block-card pool-block" data-block-id="${esc(b.id)}"><header><div><small>${i+1}. ${esc(b.title.toUpperCase())}</small><h2>${esc(b.title)}</h2></div><strong>${S.blockDistance(b).toLocaleString()}m</strong></header><div class="block-items">${(b.items||[]).map(x=>renderNode(s,b,x)).join('')}</div>${M.access?.can?.('session.finish')?`<footer><button class="finish-here" data-pool-finish="${esc(b.id)}">Finish here — after ${esc(b.title)}</button></footer>`:''}</section>`).join('')}`;
-    h.querySelector('[data-pool-roll]')?.addEventListener('click',()=>M.nav.show('roll',{restoreScroll:false}));
-    h.querySelector('[data-pool-times]')?.addEventListener('click',()=>M.nav.show('times',{restoreScroll:false}));
-    h.querySelector('[data-pool-swimmers]')?.addEventListener('click',()=>M.nav.show('athletes',{restoreScroll:false}));
-    bindTargetDetails(h,s);
-    h.querySelectorAll('[data-pool-edit]').forEach(x=>x.onclick=()=>M.actions.openEdit(x.dataset.poolEdit));
-    h.querySelectorAll('[data-pool-finish]').forEach(x=>x.onclick=()=>M.actions.finishBlock(x.dataset.poolFinish));
-  };
+  // Board rendering is owned exclusively by engines/board.js.
 
   function structuredSession(tr,identity){
     if(!Array.isArray(tr?.structuredBlocks)||!tr.structuredBlocks.length)return null;

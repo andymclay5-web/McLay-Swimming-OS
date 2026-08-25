@@ -230,46 +230,11 @@
     return changed;
   };
 
-  // Run roster enforcement every time state is established, not only on first boot.
-  if(M.ensureState){
-    const baseEnsureState=M.ensureState;
-    M.ensureState=function(){
-      const out=baseEnsureState.apply(this,arguments);
-      C.ensureSettings();
-      C.hydratePlanning();
-      const changed=C.hydrateT400Evidence()+Number(C.enforceRoster());
-      if(changed) try{M.store?.save?.(M.state)}catch{}
-      return out;
-    };
-  }
+  // Roster/state policy is owned by engines/roster-policy.js and storage hydration.
 
   // ---------- Athlete modification parity ----------
-  if(M.adapt){
-    M.adapt.profile=(athlete,state=M.state)=>{
-      const rows=state?.adaptationProfiles||state?.athlete_adaptation_profiles||[];
-      const p=rows.find(x=>x.athlete_id===athlete.id&&x.active!==false);
-      let ratio=Number(p?.default_volume_ratio);
-      if(!Number.isFinite(ratio)||ratio<=0) ratio=1;
-      const key=athleteKey(athlete);
-      const fallbacks={
-        charlottemurphy:.50,
-        conorfischer:.50,
-        mckenziedrage:2/3,
-        amberproudfoot:2/3,
-        matthewkofoed:2/3,
-        rubystace:2/3
-      };
-      if(ratio===1&&fallbacks[key]) ratio=fallbacks[key];
-      // Sophie is intentionally absent: history may remain, but no active programme rule.
-      const returnToStart=p?.return_to_starting_end===true||key==='charlottemurphy';
-      return{
-        ratio:Math.max(.25,Math.min(1,ratio)),
-        label:p?.profile_label||athlete.modifications||'',
-        key,
-        returnToStart
-      };
-    };
-  }
+  // Public adaptation truth is owned by engines/modification.js through engines/bridge.js.
+
 
 
   C.ACTIVE_MODIFICATION_DEFAULTS=Object.freeze({
@@ -1171,8 +1136,8 @@
     if(!s){h.innerHTML='<section class="empty-card"><h2>No session selected</h2></section>';return;}
     C.ensureSettings();
 
-    if(M.state.settings.v4TimingMode==='general'&&C.baseRenderTimes){
-      C.baseRenderTimes();
+    if(M.state.settings.v4TimingMode==='general'&&M.generalTimingUI?.render){
+      M.generalTimingUI.render();
       [...h.querySelectorAll('section.page-card')].forEach(sec=>{if(sec.querySelector('h2')?.textContent?.trim()==='Save T400')sec.remove();});
       const back=document.createElement('button');back.className='v4-back-t400';back.textContent='← T400 / Tests';
       back.onclick=()=>{M.state.settings.v4TimingMode='t400';M.store.save(M.state);renderTimes();};
@@ -1417,208 +1382,21 @@
     el.innerHTML=`<strong>VERSION 4 BASE MISMATCH — DO NOT COACH FROM THIS BUILD</strong><span>Loaded ${esc(C.baseBuild.loaded||'unknown')} · expected ${esc(C.baseBuild.expected)}</span>`;
   };
 
-  // ---------- Install UI wrappers ----------
+  // ---------- Dedicated Coach Hub / Times presentation owners ----------
   if(M.ui){
-    const UI=M.ui;
-    C.baseRenderTimes=UI.renderTimes?.bind(UI);
-    C.baseRenderAthletes=UI.renderAthletes?.bind(UI);
-    C.baseRenderBoard=UI.renderBoard?.bind(UI);
-    C.baseRenderRoll=UI.renderRoll?.bind(UI);
-    C.baseRenderTV=UI.renderTV?.bind(UI);
-    C.baseRenderSwimmer=UI.renderSwimmer?.bind(UI);
-    C.baseRenderCurrent=UI.renderCurrent?.bind(UI);
-
-    UI.renderHub=renderCoachHub;
-    UI.renderTimes=renderTimes;
-    UI.renderAthletes=()=>{
-      C.enforceRoster();
-      C.baseRenderAthletes?.();
-      enhanceSwimmerHub();
-    };
-    UI.renderBoard=()=>{
-      C.enforceRoster();
-      C.baseRenderBoard?.();
-      enhanceBoard();
-    };
-    UI.renderRoll=()=>{C.enforceRoster();C.baseRenderRoll?.();};
-    UI.renderTV=()=>{C.enforceRoster();C.baseRenderTV?.();};
-    UI.renderSwimmer=()=>{C.enforceRoster();C.baseRenderSwimmer?.();enhanceIndividualDevice();};
-    UI.renderCurrent=()=>{
-      C.ensureSettings();
-      const changed=C.enforceRoster();
-      if(changed)try{M.store.save(M.state)}catch{}
-      C.baseRenderCurrent?.();
-      const badge=document.querySelector('#buildBadge');if(badge)badge.textContent='v4';
-      C.renderBaseMismatch();
-    };
-  }
-
-  // Keep selected session/view/swimmer as local truth during live updates.
-  if(M.live?.apply){
-    const baseLiveApply=M.live.apply.bind(M.live);
-    M.live.apply=msg=>{
-      const before=M.state?{
-        view:M.state.settings.view,
-        sid:M.state.settings.selectedSessionId,
-        athlete:M.state.settings.selectedAthleteId,
-        expanded:M.state.settings.expandedItemId,
-        scrollY:window.scrollY
-      }:null;
-      const out=baseLiveApply(msg);
-      if(before&&M.state){
-        // TV/individual display may intentionally follow coach publish; coach/board never does.
-        if(!['tv','swimmer'].includes(before.view)){
-          M.state.settings.view=before.view;
-          M.state.settings.selectedSessionId=before.sid;
-          M.state.settings.selectedAthleteId=before.athlete;
-          M.state.settings.expandedItemId=before.expanded;
-        }
-        C.enforceRoster();
-        M.store.save(M.state);
-      }
-      return out;
-    };
+    C.renderCoachHub=renderCoachHub;
+    C.renderTimes=renderTimes;
+    M.ui.renderHub=renderCoachHub;
+    M.ui.renderTimes=renderTimes;
   }
 
 
-  // ---------- Guardian: retire only superseded expectations, add current v4 contract ----------
-  // The base v4.0.1 Guardian contains a handful of assertions from the shadow
-  // prototype (60% Charlotte volume, raw target+rest cycles, etc.). Those rules
-  // were deliberately replaced by the accepted Version 4 deck contract. Keep
-  // every other base Guardian assertion and replace only the named superseded
-  // expectations with current behaviour tests.
-  if(M.guardian?.run){
-    const baseGuardianRun=M.guardian.run.bind(M.guardian);
-    const supersededGuardianNames=new Set([
-      'Charlotte profile derives from canonical work',
-      'Charlotte single long swim scales by work volume',
-      'T400 Reg/Dev pattern gives distinct targets with actual rest',
-      'Genuine Clearance produces a T400 target',
-      'Genuine Clearance without HR Gauge still receives supported target',
-      'TV Board splits modified work into swimmer-specific cards'
-    ]);
-    const gtest=(name,ok,detail='')=>({name,ok:!!ok,detail:text(detail)});
-    C.guardianContractTests=()=>{
-      const tests=[];
-      tests.push(gtest('Correct v4 is running on the validated base build',C.baseBuild.match,`loaded ${C.baseBuild.loaded} · expected ${C.baseBuild.expected}`));
-      try{
-        const att=M.release?.attestation?.()||M.RELEASE_ATTESTATION||{};
-        tests.push(gtest('Final shipping build owns the software attestation',att.softwareReady===true&&att.build===M.BUILD,`shipping ${M.BUILD} · attested ${att.build||'none'}`));
-      }catch(e){tests.push(gtest('Final shipping build owns the software attestation',false,e.message));}
-      try{
-        const blank={adaptationProfiles:[]};
-        const expected={
-          'Charlotte Murphy':.50,'Conor Fischer':.50,'McKenzie Drage':2/3,
-          'Amber Proudfoot':2/3,'Matthew Kofoed':2/3,'Ruby Stace':2/3
-        };
-        const good=Object.entries(expected).every(([full_name,ratio])=>Math.abs(M.adapt.profile({id:full_name,full_name},blank).ratio-ratio)<1e-9);
-        tests.push(gtest('Correct v4 active modification defaults',good,'Charlotte/Conor 1/2; McKenzie/Amber/Matthew/Ruby 2/3'));
-        tests.push(gtest('Sophie stays outside active modification defaults',M.adapt.profile({id:'sophie',full_name:'Sophie Newlove'},blank).ratio===1,'Historical Sophie data may remain; active fallback must not return.'));
-        const mck=M.adapt.item({id:'g-mck75',kind:'set',distance:75,reps:4,raw:'4 x 75 #1 Fast',cycleSeconds:90},{id:'mck',full_name:'McKenzie Drage'},{adaptationProfiles:[],adaptationOverrides:[]},{id:'gs',identity:{course:'SCM',squads:['National']}});
-        tests.push(gtest('McKenzie fast 75 protects independent practical rest',Number(mck.cycleSeconds)>=115,`cycle ${clock(mck.cycleSeconds)} · 1:55 minimum`));
-        tests.push(gtest('Charlotte retains return-to-start-end rule',M.adapt.profile({id:'charlotte',full_name:'Charlotte Murphy'},blank).returnToStart===true));
-        const conor=M.adapt.item({id:'g-conor',kind:'set',reps:4,distance:50,stroke:'Breaststroke',raw:'4 x 50 Breaststroke with Fins'},{id:'conor',full_name:'Conor Fischer'},{adaptationProfiles:[],adaptationOverrides:[]},{id:'gs',identity:{course:'SCM',squads:['National']}});
-        tests.push(gtest('Conor breaststroke-with-fins constraint remains active',conor.stroke==='Choice'&&/no Breaststroke kick with fins/i.test(text(conor.adaptationReason||conor.raw))));
-        const amber=M.adapt.item({id:'g-amber',kind:'set',reps:4,distance:25,raw:'4 x 25 Underwater with Fins'},{id:'amber',full_name:'Amber Proudfoot'},{adaptationProfiles:[],adaptationOverrides:[]},{id:'gs',identity:{course:'SCM',squads:['National']}});
-        tests.push(gtest('Amber underwater/kick constraint remains upper-body equivalent',/upper-body equivalent/i.test(text(amber.raw||amber.text||amber.adaptationReason))));
-        const inclusive=M.adapt.item({id:'g-inc',kind:'set',reps:8,distance:25,raw:'8 x 25 MAX @ 1:00'},{id:'charlotte',full_name:'Charlotte Murphy'},{adaptationProfiles:[],adaptationOverrides:[]},{id:'gs',identity:{course:'SCM',squads:['National']}});
-        tests.push(gtest('Short safe quality work keeps modified swimmer with team',Number(inclusive.reps)===8&&/same team exposure/i.test(text(inclusive.adaptationReason))));
-      }catch(e){tests.push(gtest('Correct v4 active modification defaults',false,e.message));}
-      try{
-        tests.push(gtest('T400 practical deck cycle rounds upward to 5s',practicalSendOff(72.63,10)===85&&practicalSendOff(140.88,10)===150&&practicalSendOff(281.80,10)===295,'Henry 4:29 model examples'));
-      }catch(e){tests.push(gtest('T400 practical deck cycle rounds upward to 5s',false,e.message));}
-      try{
-        const st={
-          trainingTestTypes:[
-            {id:'gf',test_key:'t400_freestyle'},{id:'gb',test_key:'t400_backstroke'}
-          ],
-          trainingTestResults:[
-            {athlete_id:'g',test_type_id:'gf',result_seconds:270,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-06-01'},
-            {athlete_id:'g',test_type_id:'gf',result_seconds:269,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-08-01'},
-            {athlete_id:'g',test_type_id:'gb',result_seconds:300,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-08-01'}
-          ]
-        };
-        const ath={id:'g',full_name:'Guardian Swimmer'};
-        tests.push(gtest('T400 uses fastest valid exact-stroke anchor',resultSeconds(M.targets.t400(ath,st,'SCM','Freestyle'))===269&&resultSeconds(M.targets.t400(ath,st,'SCM','Backstroke'))===300));
-        tests.push(gtest('Named-stroke T400 never silently falls back to Freestyle',M.targets.t400(ath,st,'SCM','Butterfly')===null));
-        const dev=M.targets.aerobic(269,100,'Development',10);
-        tests.push(gtest('T400 Development target keeps authored rest model and practical cycle',Math.abs(dev.seconds-72.63)<.02&&dev.sendOff===85));
-      }catch(e){tests.push(gtest('T400 exact-stroke contract',false,e.message));}
-      try{
-        const st={trainingTestTypes:[],trainingTestResults:[]},legacy={
-          training_test_types:[{id:'legacy-t400-type',name:'T400 Freestyle'}],
-          training_test_results:[{id:'legacy-t400-result',athlete_id:'legacy-ath',test_type_id:'legacy-t400-type',result_seconds:301.2,result_date:'2026-07-01',valid_for_anchor:true}]
-        };
-        C.hydrateT400Evidence(st,legacy);
-        const anchor=M.targets.t400({id:'legacy-ath'},st,'SCM','Freestyle');
-        tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',anchor?.id==='legacy-t400-result'&&anchor.pool_course==='SCM',anchor?`${clock(resultSeconds(anchor))} · ${anchor.pool_course}`:'missing'));
-      }catch(e){tests.push(gtest('Existing legacy T400 evidence resolves immediately as SCM',false,e.message));}
-      try{
-        const ath={id:'legacy-pace-ath',full_name:'Legacy Pace Swimmer',legacy_pace:{t400:'4:31.2'}},st={athletes:[ath],trainingTestTypes:[],trainingTestResults:[]};
-        C.hydrateT400Evidence(st,null);const anchor=M.targets.t400(ath,st,'SCM','Freestyle');
-        tests.push(gtest('Saved swimmer legacy pace becomes an immediate Freestyle T400 anchor',Math.abs(resultSeconds(anchor)-271.2)<.001&&anchor?.metadata?.migrated_from==='athlete.legacy_pace',anchor?`${clock(resultSeconds(anchor))} · ${anchor.pool_course}`:'missing'));
-      }catch(e){tests.push(gtest('Saved swimmer legacy pace becomes an immediate Freestyle T400 anchor',false,e.message));}
-      try{
-        const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,nextNational:{row:{_label:'NZSC',_seconds:55.5},gap:{seconds:4.5,percentage:8.1}},qualifying:[{_label:'Step one',_seconds:58.8},{_label:'Step two',_seconds:57.2}]};
-        const answer=C.poolsidePathwayAnswer(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training':session},attendance:[{session_id:'poolside-training',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]};
-        const area=C.trainingArea(ath,pb,{state,days:42});
-        tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',answer?.steps.length===2&&Math.abs(answer.next.gapSeconds-1.2)<.001&&area?.sessions===1&&area.metres===500&&area.racePaceExposures===1,`${answer?.steps.length||0} steps · ${area?.metres||0}m`));
-      }catch(e){tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',false,e.message));}
-      try{
-        const state={
-          athletes:[{id:'here',full_name:'Here Swimmer',active:true,squad:'National'},{id:'other',full_name:'Other Squad',active:true,squad:'Intermediate'},{id:'soph',full_name:'Sophie Newlove',active:true,squad:'National'}],
-          attendance:[{session_id:'gs',athlete_id:'here',status:'present'},{session_id:'gs',athlete_id:'soph',status:'present'}],
-          settings:{timingRoster:[],t400RosterBySession:{}},trainingTestTypes:[],trainingTestResults:[]
-        };
-        const session={id:'gs',identity:{course:'SCM',squads:['National']}};
-        const before=M.timing.t400RosterIds(state,session);
-        M.timing.add('other',state,session);
-        const after=M.timing.t400RosterIds(state,session);
-        tests.push(gtest('T400 roster starts from Here/Modified and cross-squad add appends',before.includes('here')&&!before.includes('soph')&&after.includes('here')&&after.includes('other')));
-      }catch(e){tests.push(gtest('T400 roster starts from Here/Modified and cross-squad add appends',false,e.message));}
-      try{
-        const suppressed=['Choice','Kick','Drill','Easy','5HR Reset','HR Gauge'].every(raw=>!!M.targets.suppressPace?.({raw,stroke:raw}));
-        tests.push(gtest('Non-target work stays free of fake pace numbers',suppressed));
-      }catch(e){tests.push(gtest('Non-target work stays free of fake pace numbers',false,e.message));}
-      try{
-        if(M.parser?.parse&&M.teamDisplay?.groups){
-          const sess=M.parser.parse('MAIN SET\n10 x 100 Freestyle Threshold 10s Rest',{id:'v4-tv-mod',squads:['National'],course:'SCM'});
-          const st={athletes:[{id:'std',full_name:'Standard Swimmer',squad:'National',active:true},{id:'cm',full_name:'Charlotte Murphy',squad:'National',active:true}],attendance:[{session_id:'v4-tv-mod',athlete_id:'std',status:'present'},{session_id:'v4-tv-mod',athlete_id:'cm',status:'modified'}],adaptationProfiles:[],adaptationOverrides:[],trainingTestTypes:[],trainingTestResults:[],coachResults:[]};
-          const groups=M.teamDisplay.groups(sess,sess.blocks[0].items[0],st),works=groups.map(x=>x.work).join(' | ');
-          tests.push(gtest('TV Board splits current modified work without old 60% assumption',groups.length===2&&/10\s*[×x]\s*100/.test(works)&&/5\s*[×x]\s*100/.test(works),works));
-        }
-      }catch(e){tests.push(gtest('TV Board splits current modified work without old 60% assumption',false,e.message));}
-      try{
-        if(M.teamDisplay?.presentAthletes){
-          const laneState={
-            athletes:[{id:'la',full_name:'Lane A',active:true,squad:'National'},{id:'lb',full_name:'Lane B',active:true,squad:'National'},{id:'lc',full_name:'Lane C',active:true,squad:'National'}],
-            attendance:[{session_id:'gl',athlete_id:'la',status:'present'},{session_id:'gl',athlete_id:'lb',status:'present'},{session_id:'gl',athlete_id:'lc',status:'present'}],
-            trainingTestTypes:[{id:'ltf',test_key:'t400_freestyle'}],
-            trainingTestResults:[
-              {id:'la-t',test_type_id:'ltf',athlete_id:'la',result_seconds:280,pool_course:'SCM',valid_for_anchor:true},
-              {id:'lb-t',test_type_id:'ltf',athlete_id:'lb',result_seconds:280,pool_course:'SCM',valid_for_anchor:true},
-              {id:'lc-t',test_type_id:'ltf',athlete_id:'lc',result_seconds:320,pool_course:'SCM',valid_for_anchor:true}
-            ],adaptationProfiles:[],adaptationOverrides:[],settings:{}
-          };
-          const groups=C.targetLaneGroups({id:'gl',identity:{course:'SCM',squads:['National']}},{id:'gl-item',kind:'set',reps:4,distance:100,stroke:'Freestyle',zone:'Development',restSeconds:10,raw:'4 x 100 Freestyle Development 10s Rest'},laneState);
-          tests.push(gtest('Target-ranked lane grouping keeps equal targets together',groups.length===2&&groups[0].athletes.length===2&&groups[0].athletes.every(a=>['la','lb'].includes(a.id))&&groups[1].athletes[0]?.id==='lc'));
-        }
-      }catch(e){tests.push(gtest('Target-ranked lane grouping keeps equal targets together',false,e.message));}
-      try{
-        const completed=['PARITY-33','PARITY-34','PARITY-35','PARITY-36'].every(id=>M.PARITY_REQUIREMENTS?.find(x=>x.id===id)?.status==='implemented');
-        tests.push(gtest('TV / Individual / Assistant / Meet are first-class Version 4 parity',completed));
-      }catch(e){tests.push(gtest('TV / Individual / Assistant / Meet are first-class Version 4 parity',false,e.message));}
-      return tests;
-    };
-    M.guardian.run=()=>{
-      const base=baseGuardianRun()||{};
-      const retained=(base.tests||[]).filter(t=>!supersededGuardianNames.has(text(t.name)));
-      const current=C.guardianContractTests();
-      const tests=[...retained,...current];
-      const passed=tests.filter(t=>t.ok===true).length;
-      return {...base,build:M.BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
-    };
-  }
+  // Live replication ownership remains in its dedicated runtime.
+
+
+
+  // Guardian execution ownership is engines/guardian-runtime.js.
+
 
   // Guarantee correction settings/roster are present before the base boot handler runs.
   if(M.state){C.ensureSettings();C.hydratePlanning();C.hydrateT400Evidence();C.enforceRoster();}
