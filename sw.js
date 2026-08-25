@@ -1,6 +1,6 @@
 'use strict';
 const BUILD='v4-final-acceptance-20260825a';
-const CACHE='mclay-swimming-os-v4-coherent-20260826-r1';
+const CACHE='mclay-swimming-os-v4-coherent-20260826-r2';
 const STATIC=[
   './','./index.html','./swimmer-portal.html','./swimmer-portal.css?v=20260824bn','./swimmer-portal.js?v=20260824cu',
   './manifest.webmanifest','./config.js','./seed.js','./icon-192.png','./icon-512.png','./monthly_calendar.json',
