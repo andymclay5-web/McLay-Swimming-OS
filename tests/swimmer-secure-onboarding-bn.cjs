@@ -48,7 +48,7 @@ assert.ok(interactionSql.includes("action_type in ('challenge','edit_request','f
 assert.ok(/engines\/swimmer-invite-bn\.js\?v=20260824(?:bn|ci|cp|cu)/.test(index),'coach QR engine not loaded');
 assert.ok(index.includes('engines/swimmer-performance-ci.js?v=20260824ci'),'swimmer integrity model not loaded');
 assert.ok(index.includes('engines/swimmer-experience-cl.js?v=20260824cp'),'retired swimmer compatibility shim is not loaded safely');
-assert.ok(index.includes('engines/swimmer-instant-open-cn.js?v=20260825-owner'),'current unified swimmer surface is not loaded with its exact owner asset identity');
+assert.ok(index.includes('engines/swimmer-instant-open-cn.js?v=20260826-coherent-r1'),'current unified swimmer surface is not loaded with the coherent owner asset identity');
 assert.ok(!index.includes('engines/swimmer-performance-bm.js?v=20260824bm'),'regressed DOM takeover is still active');
 assert.ok(sw.includes("u.pathname.endsWith('/swimmer-portal.html')"),'service worker would route swimmer portal into coach app');
 assert.ok(sw.includes("'./swimmer-portal.html'"),'secure portal is not available through installed PWA cache');
