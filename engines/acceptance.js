@@ -28,5 +28,5 @@
   const cmA=E.Aerobic.forItem(session,c400,cm,state),sumA=M.boardEngine.targetSummary(cmA);assert('Aerobic target is one compact phase summary',/REG/.test(sumA)&&/DEV/.test(sumA)&&!/(REG.*REG|DEV.*DEV)/.test(sumA),sumA);
   const rp=E.RacePace.forItem(session,quality,cm,state,''),sumR=M.boardEngine.targetSummary(rp);assert('#1 resolves from PB evidence',rp.stroke==='Backstroke'||(rp.rows||[]).some(x=>x.stroke==='Backstroke'),JSON.stringify(rp));assert('Race targets collapse repeated reps',!/#2.*#3.*#4.*#5.*#6/.test(sumR),sumR);
   const hr=E.Aerobic.forItem(session,a100,cf,state),sumH=M.boardEngine.targetSummary(hr);assert('No matching Free T400 falls back to HR/SR',/HR/.test(sumH),sumH);
-  M.engineAcceptance={build:'20260821af',ok:results.every(x=>x.ok),results,ranAt:new Date().toISOString()};if(!M.engineAcceptance.ok)console.error('[MSOS acceptance FAIL]',results.filter(x=>!x.ok));else console.info('[MSOS acceptance PASS]',results.length,'checks');
+  M.engineAcceptance={build:'20260821af',ok:results.every(x=>x.ok),results,ranAt:new Date().toISOString()};if(!M.engineAcceptance.ok)console.error('[MSOS acceptance FAIL]',JSON.stringify(results.filter(x=>!x.ok)));else console.info('[MSOS acceptance PASS]',results.length,'checks');
 })(globalThis);
