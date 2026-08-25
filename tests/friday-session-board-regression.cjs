@@ -12,6 +12,7 @@ global.addEventListener=()=>{};
 global.removeEventListener=()=>{};
 
 require('../app.js');
+require('../engines/parser-semantics.js');
 require('../v4-correct.js');
 require('../v4-poolside-core.js');
 
