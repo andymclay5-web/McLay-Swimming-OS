@@ -2,6 +2,7 @@
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
+const EXPECTED_CACHE='mclay-swimming-os-v4-coherent-20260826-r1';
 const SOURCE=`WARM-UP
 400 Choice
 4 x 50 as 25 Drill / 25 Swim
@@ -68,7 +69,9 @@ WARM-DOWN
 
   await nav('roll');await page.goBack();await page.waitForFunction(()=>MSOS4.state.settings.view==='board',{timeout:3000});
   const worker=await page.evaluate(async()=>{const reg=await navigator.serviceWorker.ready;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('worker build timeout')),3000),fn=e=>{if(e.data?.type!=='MSOS_BUILD')return;clearTimeout(timer);navigator.serviceWorker.removeEventListener('message',fn);resolve(e.data)};navigator.serviceWorker.addEventListener('message',fn);(navigator.serviceWorker.controller||reg.active)?.postMessage({type:'MSOS_BUILD'})})});
-  assert.ok(worker?.build,'service worker did not report a build');
+  assert.ok(worker?.build,'service worker did not report a build');assert.equal(worker.cache,EXPECTED_CACHE,'wrong PWA cache identity');
+  const cacheAudit=await page.evaluate(async expected=>{const keys=await caches.keys(),active=[...document.querySelectorAll('script[src],link[rel="stylesheet"][href]')].map(x=>new URL(x.src||x.href,location.href).href),missing=[];for(const url of active)if(!(await caches.match(url)))missing.push(url);return{keys,activeCount:active.length,missing}},EXPECTED_CACHE);
+  assert.ok(cacheAudit.keys.includes(EXPECTED_CACHE),`coherent cache missing: ${cacheAudit.keys.join(', ')}`);assert.ok(cacheAudit.activeCount>20,'active runtime asset audit was unexpectedly small');assert.deepEqual(cacheAudit.missing,[],`active runtime assets not precached: ${cacheAudit.missing.join('\n')}`);
   await context.setOffline(true);await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});assert.equal(await page.evaluate(()=>MSOS4.state.settings.view),'board');
 
   assert.deepEqual(pageErrors,[],`page errors: ${pageErrors.join('\n')}`);
