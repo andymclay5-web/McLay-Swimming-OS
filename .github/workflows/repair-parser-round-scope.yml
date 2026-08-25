@@ -1,0 +1,66 @@
+name: Repair parser round scope
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/parser-round-scope-20260826
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repair parser source and add regression proof
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app.js')
+          s=p.read_text()
+          old="const original=rawLines[li],line=U.text(original),indent=lineIndent(original);if(!line){currentGroup=null;current=null;groupIndented=false;continue}"
+          new="const original=rawLines[li],line=U.text(original),indent=lineIndent(original);if(!line){current=null;continue}"
+          if old not in s:
+              raise SystemExit('parser blank-line scope source not found exactly')
+          if s.count(old)!=1:
+              raise SystemExit(f'expected one parser blank-line scope owner, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+
+          t=Path('tests/parser-natural-cw.cjs')
+          x=t.read_text()
+          anchor="assert.equal(global.MSOS4.parserSemantics.rest('Makeup: 50 Drill / 25 Swim · Rest · 10 sec'),10);"
+          proof="""
+const roundForms=[
+`MAIN SET\n3 Rounds\n5 x 100 Freestyle Threshold\n10s rest\n\n200 Easy`,
+`MAIN SET\n3 Rounds:\n  5 x 100 Freestyle Threshold\n  10s rest\n\n  200 Easy`,
+`MAIN SET\n3 Rounds\n\n5 x 100 Freestyle Threshold\n10s rest\n200 Easy`,
+`MAIN SET\n3 Rounds\n5 × 100 Freestyle Threshold\n10 sec rest\n\n1 × 200 Easy`
+];
+for(const [i,src] of roundForms.entries()){
+ const q=global.MSOS4.parser.parse(src,{id:`round-scope-${i}`,course:'SCM'});
+ assert.equal(S.total(q),2100,`round form ${i} must be 2100m`);
+ const b=q.blocks.find(z=>z.type==='main_set');assert.ok(b);
+ assert.equal(b.items.length,1,`round form ${i} must remain one parent group`);
+ const g=b.items[0];assert.equal(g.kind,'group');assert.equal(g.rounds,3);assert.equal(g.items.filter(z=>z.kind==='set').length,2);
+ assert.deepEqual(g.items.filter(z=>z.kind==='set').map(z=>[Number(z.reps),Number(z.distance)]),[[5,100],[1,200]]);
+}
+"""
+          if anchor not in x:
+              raise SystemExit('test anchor not found')
+          if 'roundForms=[' not in x:
+              x=x.replace(anchor,proof+'\n'+anchor)
+          t.write_text(x)
+          PY
+          node --check app.js
+          node tests/parser-natural-cw.cjs
+          node tests/engine-acceptance.cjs
+          node tests/friday-session-board-regression.cjs
+          git diff --check
+      - name: Commit source repair
+        run: |
+          git config user.name "MSOS parser repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add app.js tests/parser-natural-cw.cjs
+          git commit -m "Keep authored round scope across blank lines"
+          git push origin HEAD:repair/parser-round-scope-20260826
