@@ -73,6 +73,10 @@ jobs:
             sys.exit(1)
           print('STRUCTURAL_OWNER_AUDIT_PASS',len(active),'active scripts')
           PY
+      - name: Release checksum snapshot
+        shell: bash
+        run: |
+          sha256sum index.html app.js v4-correct.js v4-poolside-core.js sw.js
       - name: Run current non-browser contract tests
         shell: bash
         run: |
@@ -87,6 +91,7 @@ jobs:
             tests/guardian-current-runtime-bl.cjs
             tests/guardian-device-state-bj.cjs
             tests/guardian-full-upload-contract-bj.cjs
+            tests/release-package.test.js
           )
           failed=0
           for t in "${tests[@]}"; do
