@@ -19,6 +19,10 @@ global.addEventListener=()=>{};
 global.removeEventListener=()=>{};
 
 require('../app.js');
+// Browser runtime ownership is parser-semantics -> poolside core. Keep the Node
+// Guardian harness on the same authority/load order instead of relying on the
+// retired parser implementation that used to live in app.js.
+require('../engines/parser-semantics.js');
 require('../v4-correct.js');
 require('../v4-poolside-core.js');
 
