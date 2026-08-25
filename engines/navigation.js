@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
-  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-owner-final-20260825'};
+  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-owner-final-20260825b-single-dispatch'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const active=view=>{if(!views.has(view))view='board';document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===`${view}View`));document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
@@ -16,7 +16,6 @@
     if(!views.has(view))view='board';
     M.boardStateEngine?.cancelWork?.();rememberScroll();closeTransient();
     M.state.settings=M.state.settings||{};M.state.settings.view=view;
-    // Paint first. Persistence is metadata-only and asynchronous through the storage owner.
     paint(view);
     if(push){try{history.pushState(N.state?.(view)||{msos:true,msosView:view,sessionId:M.state.settings.selectedSessionId||''},'',`#${view}`)}catch{}}
     saveUi();
@@ -24,7 +23,6 @@
   };
   V.rememberScroll=rememberScroll;V.restoreScroll=restoreScroll;V.clearTransient=closeTransient;V.activateView=active;
 
-  // This module is loaded before boot and is the only active navigation generation. It does not capture or wrap the historical bootstrap methods.
   N.show=V.go;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.activateView=active;
   N.dismissLayer=()=>{const layer=history.state?.layer;if(layer){closeTransient();history.back();return true}closeTransient();M.boardStateEngine?.cancelWork?.();paint(M.state?.settings?.view||'board');saveUi();return false;};
   N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=views.has(state?.msosView)?state.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;if(state?.sessionId&&M.state.canonicalSessions?.[state.sessionId])M.state.settings.selectedSessionId=state.sessionId;if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
@@ -36,8 +34,9 @@
   };
 
   function openAthlete(id){if(!id)return;M.state.settings.selectedAthleteId=id;M.state.settings.selectedSwimmerId=id;saveUi();V.go((M.access?.role?.()||'owner')==='swimmer'?'swimmer':'athletes',{restore:false});}
+  // Bottom-nav buttons are bound by the chrome renderer to N.show, which is this owner.
+  // Do not also delegate those clicks here: two dispatches create duplicate history entries.
   document.addEventListener('click',e=>{
-    const nav=e.target.closest?.('.bottom-nav [data-nav]');if(nav){e.preventDefault();V.go(nav.dataset.nav,{restore:true});return}
     const report=e.target.closest?.('#reportsShortcut,[data-msos-reports]');if(report){e.preventDefault();V.go('reports',{restore:false});return}
     const data=e.target.closest?.('[data-msos-data]');if(data){e.preventDefault();V.go('data',{restore:false});return}
     const roll=e.target.closest?.('[data-msos-roll]');if(roll){e.preventDefault();V.go('roll',{restore:false});return}
