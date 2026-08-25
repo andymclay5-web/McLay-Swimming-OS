@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,P=M?.performanceEngine;if(!M||!E||!P)return;
-  const D=M.developmentEngine={build:'v4-development-20260823bx'};
+  const D=M.developmentEngine={build:'v4-development-20260825-evidence-first'};
   const PURE=['Freestyle','Backstroke','Breaststroke','Butterfly'];
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const dateOfBirth=a=>a?.date_of_birth||a?.dob||a?.birth_date||a?.dateOfBirth||'';
@@ -26,7 +26,12 @@
       {id:'form_200',label:'200 form stroke',complete:!!form200,evidence:form200?`${form200.distance} ${form200.stroke}`:''},
       {id:'breadth',label:'Fourth-event breadth',complete:breadth,evidence:breadth?`${byKey.size} distinct PB events`:''}
     ];
-    if(xlr8Eligible){if(!distanceFree)add(400,'Freestyle','XLR8 · add distance Free','Junior event breadth is missing a distance-Freestyle result',{priority:1,category:'xlr8',support:[get('Freestyle',200)||get('Freestyle',100)].filter(Boolean),why:'A distance Freestyle race fills an important gap in your junior race experience.',whatItShows:'It gives us a longer Freestyle benchmark and completes more of your race profile.'});if(!im)add(course==='SCM'?100:200,'IM','XLR8 · add IM','Junior event breadth is missing an IM result',{priority:1,category:'xlr8',support:PURE.map(st=>byStroke[st].length?get(st,byStroke[st][0]):null).filter(Boolean).slice(0,3),why:'An IM race joins your separate stroke results into one complete race.',whatItShows:'It shows how well you connect all four strokes and fills an important race-experience gap.'});if(!form200){const bestForm=P.bestFormStroke?.(ath,state,course)?.stroke||'Backstroke';add(200,bestForm,`XLR8 · try 200 ${bestForm}`,'Junior event breadth is missing a 200 form-stroke result',{priority:1,category:'xlr8',support:[get(bestForm,100)].filter(Boolean),why:`You have ${bestForm} evidence already; a 200 adds the longer version of that stroke.`,whatItShows:`It shows how well you can carry ${bestForm} over a longer race.`});}}
+    if(xlr8Eligible){
+      const freeSupport=get('Freestyle',200)||get('Freestyle',100);
+      if(!distanceFree&&freeSupport)add(400,'Freestyle','XLR8 · add distance Free','Junior event breadth is missing a distance-Freestyle result',{priority:1,category:'xlr8',support:[freeSupport],why:'A distance Freestyle race fills an important gap in your junior race experience.',whatItShows:'It gives us a longer Freestyle benchmark and completes more of your race profile.'});
+      if(!im&&represented>=3){const support=PURE.map(st=>byStroke[st].length?get(st,byStroke[st][0]):null).filter(Boolean).slice(0,3);if(support.length>=3)add(course==='SCM'?100:200,'IM','XLR8 · add IM','Junior event breadth is missing an IM result',{priority:1,category:'xlr8',support,why:'An IM race joins your separate stroke results into one complete race.',whatItShows:'It shows how well you connect all four strokes and fills an important race-experience gap.'});}
+      if(!form200){const bestForm=P.bestFormStroke?.(ath,state,course)?.stroke||'',support=bestForm?get(bestForm,100):null;if(bestForm&&support)add(200,bestForm,`XLR8 · try 200 ${bestForm}`,'Junior event breadth is missing a 200 form-stroke result',{priority:1,category:'xlr8',support:[support],why:`You have ${bestForm} evidence already; a 200 adds the longer version of that stroke.`,whatItShows:`It shows how well you can carry ${bestForm} over a longer race.`});}
+    }
     opps.sort((a,b)=>a.priority-b.priority||a.label.localeCompare(b.label));
     const missingXlr8=categories.filter(x=>!x.complete),xlr8={monitored:xlr8Eligible,eligible:age!=null?age<=12:null,age,ageKnown:age!=null,juniorHint,categories,complete:xlr8Eligible&&!missingXlr8.length,missing:missingXlr8.map(x=>x.id),status:!xlr8Eligible?'not_monitored':missingXlr8.length?'development':'coverage_ready',pointsStatus:'coverage_only',note:'XLR8 coverage monitor only; annual official scoring/base tables must be loaded before points are calculated.'};
     return{athlete:ath,course,pbEvents:byKey.size,byStroke,representedStrokes:represented,opportunities:opps,xlr8,scoreSystem:P.scoreSystem?.(ath)||'WA'};
