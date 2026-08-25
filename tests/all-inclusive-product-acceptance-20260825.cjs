@@ -63,7 +63,7 @@ const specs=[
 
   // Training/performance/pathway surface is connected to swimmer data.
   const swimmersBtn=page.locator('[data-msos-swimmers]').first();assert.ok(await swimmersBtn.count());await swimmersBtn.click();await page.waitForFunction(()=>MSOS4.state.settings.view==='athletes'&&document.querySelector('#athletesView.active'));
-  const thomas=live.find(x=>x.key==='thomas');await page.selectOption('#pathAthlete',thomas.id);await page.waitForFunction(()=>document.querySelector('#athletesView')?.innerText.includes('Thomas Cave'));let athleteText=await page.locator('#athletesView').innerText();assert.match(athleteText,/SWIMMER PERFORMANCE/);assert.match(athleteText,/PB|PATHWAY|QUALIFIER/i);
+  const thomas=live.find(x=>x.key==='thomas');await page.selectOption('#perfAthlete',thomas.id);await page.waitForFunction(()=>document.querySelector('#athletesView')?.innerText.includes('Thomas Cave'));let athleteText=await page.locator('#athletesView').innerText();assert.match(athleteText,/SWIMMER PERFORMANCE/);assert.match(athleteText,/PB|PATHWAY|QUALIFIER/i);
 
   // Matthew: real individual session/performance payload and self-only device view.
   const matt=live.find(x=>x.key==='matthew');const matthewProof=await page.evaluate(id=>{const M=MSOS4,a=M.state.athletes.find(x=>x.id===id),p=M.swimmerInviteBN?.payloadFor?.(a);return{payload:!!p,athlete:p?.athlete?.full_name,blocks:p?.session?.blocks?.length||0,events:p?.performance?.events?.length||0,feedback:typeof M.swimmerInviteBN?.verifySessionInteractionLayer==='function'}},matt.id);assert.equal(matthewProof.payload,true);assert.equal(matthewProof.athlete,'Matthew Kofoed');assert.ok(matthewProof.blocks>0);assert.ok(matthewProof.events>0);assert.equal(matthewProof.feedback,true);
