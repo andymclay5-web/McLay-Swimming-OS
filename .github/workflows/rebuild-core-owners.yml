@@ -1,0 +1,243 @@
+name: Rebuild coherent core owners
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+          fetch-depth: 0
+      - name: Reconstruct active owners from source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+
+          def show(ref,path):
+              return subprocess.check_output(['git','show',f'{ref}:{path}'],text=True)
+          # Start the two contaminated files from the proven physical Board-owner cleanup.
+          Path('app.js').write_text(show('2d5b278470cf65c252e6a2f15453864b8a26006f','app.js'))
+          Path('v4-poolside-core.js').write_text(show('2d5b278470cf65c252e6a2f15453864b8a26006f','v4-poolside-core.js'))
+
+          p=Path('app.js'); s=p.read_text()
+          # Primitive parser is internal only; parser-semantics becomes the sole public parser owner.
+          old=' P.parse=(source,identity={})=>{'
+          if s.count(old)!=1: raise SystemExit(f'primitive parser owner count {s.count(old)}')
+          s=s.replace(old,' P.primitiveParse=(source,identity={})=>{',1)
+          # Blank lines are formatting, not a semantic end to an authored Rounds scope.
+          old="const original=rawLines[li],line=U.text(original),indent=lineIndent(original);if(!line){currentGroup=null;current=null;groupIndented=false;continue}"
+          if s.count(old)!=1: raise SystemExit(f'round blank-line source count {s.count(old)}')
+          s=s.replace(old,"const original=rawLines[li],line=U.text(original),indent=lineIndent(original);if(!line){current=null;continue}",1)
+          # Bootstrap storage is not the operational save owner.
+          if s.count(' Store.save=s=>')!=1: raise SystemExit('bootstrap store save source mismatch')
+          s=s.replace(' Store.save=s=>',' Store.bootstrapSave=s=>',1)
+          # Keep method call sites working until storage.js loads by aliasing only during script construction.
+          marker=" Store.session=(state,id=state.settings.selectedSessionId)=>state.canonicalSessions?.[id]||null;"
+          if marker not in s: raise SystemExit('store marker missing')
+          s=s.replace(marker," Store.save=Store.bootstrapSave;\n"+marker,1)
+          # Base adaptation logic becomes non-public reference only; bridge.js owns public adaptation API.
+          for old,new in [(' A.profile=(athlete,state)=>',' A.legacyProfile=(athlete,state)=>'),(' A.item=(item,athlete,state,session=null)=>',' A.legacyItem=(item,athlete,state,session=null)=>'),(' A.session=(session,athlete,state)=>',' A.legacySession=(session,athlete,state)=>')]:
+              if s.count(old)!=1: raise SystemExit(f'adaptation source mismatch {old}: {s.count(old)}')
+              s=s.replace(old,new,1)
+          s=s.replace('A.item(y,athlete,state,session)','A.legacyItem(y,athlete,state,session)')
+          s=s.replace('const profile=A.profile(athlete,state)','const profile=A.legacyProfile(athlete,state)')
+          s=s.replace('A.item(i,athlete,state,session)','A.legacyItem(i,athlete,state,session)')
+          # Foundation Guardian is a test library. guardian-runtime.js is sole public run owner.
+          if s.count(' G.run=()=>{')!=1: raise SystemExit('foundation guardian source mismatch')
+          s=s.replace(' G.run=()=>{',' G.foundationRun=()=>{',1)
+          # Remove old Athlete, Times and Coach Hub presentation owners; dedicated final surfaces own them.
+          for name in ['renderAthletes','renderTimes','renderHub']:
+              pat=re.compile(rf'\n UI\.{name}=\(\)=>\{{.*?\n \}};(?=\n|$)',re.S)
+              m=pat.search(s)
+              if not m:
+                  # minified assignments often terminate on one physical line
+                  pat=re.compile(rf'\n UI\.{name}=\(\)=>\{{.*?\}};(?=\n \w|\n\}}\)\(globalThis\);)',re.S)
+                  m=pat.search(s)
+              if not m: raise SystemExit(f'legacy {name} owner not found')
+              s=s[:m.start()]+f'\n // {name} presentation is owned by its dedicated runtime engine.'+s[m.end():]
+          # Base navigation implementation is retired. navigation.js owns routing/history.
+          nav_start=s.find("(function(g){\n const M=g.MSOS4,UI=M.ui;\n const N=M.nav={};")
+          if nav_start<0: raise SystemExit('legacy navigation owner not found')
+          nav_end=s.find('})(globalThis);',nav_start)
+          if nav_end<0: raise SystemExit('legacy navigation end not found')
+          nav_end+=len('})(globalThis);')
+          s=s[:nav_start]+"(function(g){g.MSOS4.nav=g.MSOS4.nav||{};})(globalThis);"+s[nav_end:]
+          # Header must repair stale/missing selected-session identity to real canonical truth.
+          old="let s=M.currentSession();if(s&&!M.access.sessionAllowed(s)){s=allowed[0]||null;if(s)M.state.settings.selectedSessionId=s.id}const pick=document.querySelector('#sessionSelect');"
+          new="let s=M.currentSession();if(!s){s=allowed[0]||null;M.state.settings.selectedSessionId=s?.id||''}else if(!M.access.sessionAllowed(s)){s=allowed[0]||null;M.state.settings.selectedSessionId=s?.id||''}const pick=document.querySelector('#sessionSelect');"
+          if s.count(old)!=1: raise SystemExit(f'header session repair anchor count {s.count(old)}')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          # parser-semantics now calls the private primitive parser directly.
+          p=Path('engines/parser-semantics.js'); s=p.read_text()
+          old='const primitive=P.parse.bind(P)'
+          if s.count(old)!=1: raise SystemExit('parser semantics primitive anchor missing')
+          p.write_text(s.replace(old,'const primitive=P.primitiveParse.bind(P)',1))
+
+          # poolside-core is helper-only: it may repair data but never own parser/Board/TV.
+          p=Path('v4-poolside-core.js'); s=p.read_text()
+          pat=re.compile(r'\n  const BASE_PARSE=M\.parser\.parse\.bind\(M\.parser\);')
+          s,n=pat.subn('',s,1)
+          if n!=1: raise SystemExit('poolside BASE_PARSE anchor missing')
+          pat=re.compile(r'\n  M\.parser\.parse=\(source,identity=\{\}\)=>compactSession\(BASE_PARSE\(normaliseText\(source\),identity\)\);')
+          s,n=pat.subn('',s,1)
+          if n!=1: raise SystemExit('poolside parser owner anchor missing')
+          p.write_text(s)
+
+          # Storage hydration may never restore an invalid selectedSessionId.
+          p=Path('engines/storage.js'); s=p.read_text()
+          old="if(ui)for(const[k,v]of Object.entries(ui)){if(k==='savedAt'||v===undefined)continue;if(k==='selectedSessionId'&&opSavedAt>uiSavedAt)continue;state.settings[k]=v}state.settings.view='board';"
+          new="if(ui)for(const[k,v]of Object.entries(ui)){if(k==='savedAt'||v===undefined)continue;if(k==='selectedSessionId'){if(opSavedAt>uiSavedAt)continue;if(v&&!state.canonicalSessions?.[v])continue}state.settings[k]=v}if(state.settings.selectedSessionId&&!state.canonicalSessions?.[state.settings.selectedSessionId])state.settings.selectedSessionId='';if(!state.settings.selectedSessionId){const first=Object.values(state.canonicalSessions||{}).sort((a,b)=>`${b.identity?.date||''}-${b.identity?.dayPart||''}`.localeCompare(`${a.identity?.date||''}-${a.identity?.dayPart||''}`))[0];if(first)state.settings.selectedSessionId=first.id}M.rosterPolicy?.apply?.(state);state.settings.view='board';"
+          if s.count(old)!=1: raise SystemExit('storage UI hydration anchor missing')
+          p.write_text(s.replace(old,new,1))
+
+          # v4-correct retains useful pure helpers/T400/Coach Hub code, but no longer wraps core owners.
+          p=Path('v4-correct.js'); s=p.read_text()
+          # ensureState wrapper block
+          a=s.find('  // Run roster enforcement every time state is established, not only on first boot.')
+          b=s.find('  // ---------- Athlete modification parity ----------',a)
+          if a<0 or b<0: raise SystemExit('v4-correct ensure wrapper region missing')
+          s=s[:a]+"  // Roster/state policy is owned by engines/roster-policy.js and storage hydration.\n\n"+s[b:]
+          # remove M.adapt profile override region only
+          a=s.find('  if(M.adapt){',s.find('// ---------- Athlete modification parity ----------'))
+          b=s.find('\n\n\n  C.ACTIVE_MODIFICATION_DEFAULTS',a)
+          if a<0 or b<0: raise SystemExit('v4-correct adapt override region missing')
+          s=s[:a]+"  // Public adaptation truth is owned by engines/modification.js through engines/bridge.js.\n"+s[b:]
+          # install only Hub and T400-first Times directly; no render wrapping
+          a=s.find('  // ---------- Install UI wrappers ----------')
+          b=s.find('\n\n  // Keep selected session/view/swimmer as local truth during live updates.',a)
+          if a<0 or b<0: raise SystemExit('v4-correct UI wrapper region missing')
+          direct="""  // ---------- Dedicated Coach Hub / Times presentation owners ----------
+  if(M.ui){
+    const UI=M.ui;
+    C.renderCoachHub=renderCoachHub;
+    C.renderTimes=renderTimes;
+    UI.renderHub=renderCoachHub;
+    UI.renderTimes=renderTimes;
+  }
+"""
+          s=s[:a]+direct+s[b:]
+          # remove live apply wrapper entirely; base live owner already preserves coach identity
+          a=s.find('  // Keep selected session/view/swimmer as local truth during live updates.')
+          b=s.find('\n\n\n  // ---------- Guardian:',a)
+          if a<0 or b<0: raise SystemExit('v4-correct live wrapper region missing')
+          s=s[:a]+"  // Live replication ownership remains in app/live engine; no late wrapper.\n"+s[b:]
+          # remove Guardian public wrapper region; guardian-runtime owns public run and can consume foundationRun.
+          a=s.find('  // ---------- Guardian: retire only superseded expectations')
+          b=s.find('\n\n  // ---------- Boot',a)
+          if a<0 or b<0: raise SystemExit('v4-correct guardian wrapper region missing')
+          s=s[:a]+"  // Guardian execution ownership is engines/guardian-runtime.js.\n"+s[b:]
+          # General timing fallback calls explicit generalTimingUI bridge, never captured renderer.
+          s=s.replace("if(M.state.settings.v4TimingMode==='general'&&C.baseRenderTimes){\n      C.baseRenderTimes();","if(M.state.settings.v4TimingMode==='general'&&M.generalTimingUI?.render){\n      M.generalTimingUI.render();")
+          p.write_text(s)
+
+          # guardian-runtime consumes explicit foundation test API instead of capturing public run.
+          p=Path('engines/guardian-runtime.js'); s=p.read_text()
+          old="const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.run)return;\n  const inheritedRun=G.run.bind(G),BUILD="
+          new="const M=g.MSOS4,G=M?.guardian,E=g.MSOSEngines;if(!M||!G?.foundationRun)return;\n  const inheritedRun=G.foundationRun.bind(G),BUILD="
+          if s.count(old)!=1: raise SystemExit('guardian runtime inheritance anchor missing')
+          p.write_text(s.replace(old,new,1))
+
+          # t400 capture owns public saveT400 explicitly; app exposes a named primitive, not competing public owner.
+          p=Path('app.js'); s=p.read_text()
+          if s.count(' X.saveT400=(athleteId,value,session=M.currentSession(),state=M.state,date=new Date().toISOString().slice(0,10))=>')!=1: raise SystemExit('base saveT400 anchor missing')
+          s=s.replace(' X.saveT400=(athleteId,value,session=M.currentSession(),state=M.state,date=new Date().toISOString().slice(0,10))=>',' X.coreSaveT400=(athleteId,value,session=M.currentSession(),state=M.state,date=new Date().toISOString().slice(0,10))=>',1)
+          p.write_text(s)
+          p=Path('engines/t400-capture.js'); s=p.read_text()
+          s=s.replace("if(!M?.timing?.saveT400||!E?.Aerobic||!E?.Evidence)return;const C=M.t400Capture={build:'v4-t400-capture-20260820r'};const base=M.timing.saveT400.bind(M.timing)","if(!M?.timing?.coreSaveT400||!E?.Aerobic||!E?.Evidence)return;const C=M.t400Capture={build:'v4-t400-capture-20260826-coherent'};const core=M.timing.coreSaveT400.bind(M.timing)")
+          s=s.replace('row=base(athleteId,value,session,state,date,st,meta)','row=core(athleteId,value,session,state,date,st,meta)')
+          p.write_text(s)
+          PY
+
+          cat > engines/roster-policy.js <<'EOF'
+          'use strict';
+          (function(g){
+            const M=g.MSOS4;if(!M)return;
+            const key=a=>String(a?.full_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+            const isHistorical=a=>key(a)==='sophienewlove';
+            const isFixture=a=>/^meet[ab]$/.test(key(a))&&!a?.date_of_birth&&!a?.dob;
+            const P=M.rosterPolicy={build:'v4-roster-policy-20260826'};
+            P.visible=a=>!!a&&a.active!==false&&!isHistorical(a)&&!isFixture(a);
+            P.apply=(state=M.state)=>{if(!state)return false;let changed=false;const blocked=new Set();for(const a of state.athletes||[]){if(isHistorical(a)||isFixture(a)){blocked.add(a.id);if(a.active!==false){a.active=false;changed=true}}}const s=state.settings||{};for(const name of ['timingRoster'])if(Array.isArray(s[name])){const n=s[name].filter(id=>!blocked.has(id));if(n.length!==s[name].length){s[name]=n;changed=true}}if(blocked.has(s.selectedAthleteId)){s.selectedAthleteId='';changed=true}if(blocked.has(s.selectedSwimmerId)){s.selectedSwimmerId='';changed=true}return changed};
+            P.isHistorical=isHistorical;P.isFixture=isFixture;
+            P.apply(M.state);
+          })(globalThis);
+          EOF
+
+          # Build a standalone general stopwatch owner from the old app timing renderer.
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          old=subprocess.check_output(['git','show','2d5b278470cf65c252e6a2f15453864b8a26006f:app.js'],text=True)
+          marker=' let ticker=null;'
+          pos=old.find(marker)
+          if pos<0: raise SystemExit('general timing marker missing')
+          start=old.rfind('(function(g){',0,pos)
+          end=old.find('})(globalThis);',pos)
+          if start<0 or end<0: raise SystemExit('general timing IIFE boundaries missing')
+          end+=len('})(globalThis);')
+          chunk=old[start:end]
+          chunk=chunk.replace(" const M=g.MSOS4,U=M.util,UI=M.ui,X=M.timing;"," const M=g.MSOS4,U=M.util,UI=M.ui,X=M.timing,G=M.generalTimingUI={build:'v4-general-timing-ui-20260826'};")
+          chunk=chunk.replace(' UI.renderTimes=()=>{',' G.render=()=>{',1)
+          # recursive repaint calls inside the extracted owner must stay local
+          chunk=chunk.replace('UI.renderTimes()','G.render()')
+          Path('engines/general-timing-ui.js').write_text("'use strict';\n"+chunk+'\n')
+          PY
+
+          # Remove old app timing IIFE now that the standalone owner exists.
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('app.js').read_text(); marker=' let ticker=null;'; pos=s.find(marker)
+          if pos>=0:
+            start=s.rfind('(function(g){',0,pos); end=s.find('})(globalThis);',pos)
+            if start<0 or end<0: raise SystemExit('app general timing IIFE boundary missing')
+            s=s[:start]+"// General stopwatch UI is owned by engines/general-timing-ui.js.\n"+s[end+len('})(globalThis);'):]
+          Path('app.js').write_text(s)
+          PY
+
+          # Remove old app athlete IIFE if still present; unified swimmer owner is sole surface.
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('app.js').read_text(); marker=' UI.renderAthletes=()=>'; pos=s.find(marker)
+          if pos>=0:
+            start=s.rfind('(function(g){',0,pos); end=s.find('})(globalThis);',pos)
+            if start<0 or end<0: raise SystemExit('athlete IIFE boundary missing')
+            s=s[:start]+"// Swimmer performance UI is owned by engines/swimmer-instant-open-cn.js.\n"+s[end+len('})(globalThis);'):]
+          Path('app.js').write_text(s)
+          PY
+
+          # Insert explicit runtime owners and retire the intermediate performance UI assignment.
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html'); s=p.read_text()
+          s=s.replace('<script src="engines/storage.js?v=20260825-latest-ack" defer></script>','<script src="engines/roster-policy.js?v=20260826-coherent" defer></script><script src="engines/storage.js?v=20260826-coherent" defer></script>')
+          s=s.replace('<script src="engines/performance-ui.js?v=20260824cg" defer></script>','')
+          s=s.replace('<script src="engines/t400-capture.js?v=20260820r" defer></script>','<script src="engines/general-timing-ui.js?v=20260826-coherent" defer></script><script src="engines/t400-capture.js?v=20260826-coherent" defer></script>')
+          # one coherent immutable runtime generation for files changed in this reconstruction
+          for old in ['app.js?v=20260821ak-cache','engines/parser-semantics.js?v=20260824-authority','v4-correct.js?v=20260821ak-cache','v4-poolside-core.js?v=20260819f-targettruth','engines/board.js?v=20260825tv','engines/navigation.js?v=20260825finala','engines/guardian-runtime.js?v=20260825finala','engines/swimmer-instant-open-cn.js?v=20260825-owner']:
+            s=s.replace(old,old.split('?')[0]+'?v=20260826-coherent-r1')
+          p.write_text(s)
+          PY
+
+          node --check app.js
+          node --check v4-correct.js
+          node --check v4-poolside-core.js
+          node --check engines/parser-semantics.js
+          node --check engines/storage.js
+          node --check engines/roster-policy.js
+          node --check engines/general-timing-ui.js
+          node --check engines/t400-capture.js
+          node --check engines/guardian-runtime.js
+          git diff --check
+      - name: Commit coherent owner reconstruction
+        run: |
+          git config user.name 'MSOS coherent rebuild'
+          git config user.email 'actions@users.noreply.github.com'
+          git add app.js v4-correct.js v4-poolside-core.js index.html engines/parser-semantics.js engines/storage.js engines/roster-policy.js engines/general-timing-ui.js engines/t400-capture.js engines/guardian-runtime.js
+          git commit -m 'Reconstruct core runtime around single engine owners'
+          git push origin HEAD:rebuild/msos-coherent-product-20260826
