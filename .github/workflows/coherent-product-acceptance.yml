@@ -11,8 +11,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: rebuild/msos-coherent-product-20260826
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -28,40 +26,52 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re, sys
-          files=[p for p in Path('.').glob('**/*.js') if 'node_modules' not in p.parts]
-          text={str(p):p.read_text(errors='ignore') for p in files}
+          html=Path('index.html').read_text()
+          active=[]
+          for src in re.findall(r'<script[^>]+src="([^"]+\.js)(?:\?[^\"]*)?"',html):
+            path=src.split('?',1)[0]
+            if Path(path).exists(): active.append(path)
+          text={f:Path(f).read_text(errors='ignore') for f in active}
           checks={
-            'public parser owner': r'\bM\.parser\.parse\s*=',
-            'public board renderer owner': r'\b(?:M\.ui|UI)\.renderBoard\s*=',
-            'public TV renderer owner': r'\b(?:M\.ui|UI)\.renderTV\s*=',
-            'public navigation go owner': r'\b(?:M\.navigationEngine|N)\.go\s*=',
-            'public adaptation item owner': r'\bM\.adapt\.item\s*=',
-            'public Guardian run owner': r'\bM\.guardian\.run\s*=',
+            'parser':(r'\b(?:M\.parser|P)\.parse\s*=',{'engines/parser-semantics.js'}),
+            'board':(r'\b(?:M\.ui|UI)\.renderBoard\s*=',{'engines/board.js'}),
+            'tv':(r'\b(?:M\.ui|UI)\.renderTV\s*=',{'engines/board.js'}),
+            'navigation':(r'\b(?:M\.navigationEngine|V)\.go\s*=',{'engines/navigation.js'}),
+            'adaptation':(r'\b(?:M\.adapt|A)\.item\s*=',{'engines/bridge.js'}),
+            'guardian':(r'\b(?:M\.guardian|G)\.run\s*=',{'engines/guardian-runtime.js'}),
+            'athletes':(r'\b(?:M\.ui|UI)\.renderAthletes\s*=',{'engines/swimmer-instant-open-cn.js'}),
+            'coach hub':(r'\b(?:M\.ui|UI)\.renderHub\s*=',{'engines/coach-loop-ui.js'}),
           }
           failed=[]
-          for label,pat in checks.items():
-            hits=[]
-            rx=re.compile(pat)
-            for f,s in text.items():
-              for m in rx.finditer(s): hits.append((f,s.count('\n',0,m.start())+1))
-            print(label, hits)
-            if len(hits)!=1: failed.append((label,hits))
-          # Wrapper/capture anti-patterns that caused the layered runtime failures.
-          bad=[]
+          for label,(pat,expected) in checks.items():
+            hits=[];rx=re.compile(pat)
+            for f,t in text.items():
+              for m in rx.finditer(t): hits.append((f,t.count('\n',0,m.start())+1))
+            owners={f for f,_ in hits}
+            print(label,hits)
+            if owners!=expected: failed.append((label,hits,sorted(expected)))
           forbidden=[
             r'baseRenderBoard\s*=\s*(?:M\.ui|UI)\.renderBoard',
             r'baseRenderTV\s*=\s*(?:M\.ui|UI)\.renderTV',
             r'BASE_PARSE\s*=\s*M\.parser\.parse',
             r'baseGuardianRun\s*=\s*M\.guardian\.run',
+            r'baseBoard\s*=\s*UI\.renderBoard',
+            r'baseAthletes\s*=\s*UI\.renderAthletes',
+            r'baseSwimmer\s*=\s*UI\.renderSwimmer',
+            r'baseMeet\s*=\s*UI\.renderMeet',
+            r'baseOpenCapture\s*=\s*M\.actions\.openCapture',
           ]
-          for f,s in text.items():
+          bad=[]
+          for f,t in text.items():
             for pat in forbidden:
-              if re.search(pat,s): bad.append((f,pat))
-          if bad: failed.append(('forbidden wrapper captures',bad))
+              if re.search(pat,t): bad.append((f,pat))
+          if bad: failed.append(('captured owner wrappers',bad,[]))
+          if 'engines/surface-bridge.js' not in active:
+            failed.append(('surface bridge not active',[],['engines/surface-bridge.js']))
           if failed:
-            print('STRUCTURAL_OWNER_AUDIT_FAIL', failed)
+            print('STRUCTURAL_OWNER_AUDIT_FAIL',failed)
             sys.exit(1)
-          print('STRUCTURAL_OWNER_AUDIT_PASS')
+          print('STRUCTURAL_OWNER_AUDIT_PASS',len(active),'active scripts')
           PY
       - name: Run current non-browser contract tests
         shell: bash
