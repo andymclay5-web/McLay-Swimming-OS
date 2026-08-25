@@ -1,0 +1,114 @@
+name: Coherent MSOS product acceptance
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check all runtime JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do node --check "$f"; done < <(find . -maxdepth 2 -type f -name '*.js' ! -path './node_modules/*' | sort)
+      - name: Structural single-owner audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, sys
+          files=[p for p in Path('.').glob('**/*.js') if 'node_modules' not in p.parts]
+          text={str(p):p.read_text(errors='ignore') for p in files}
+          checks={
+            'public parser owner': r'\bM\.parser\.parse\s*=',
+            'public board renderer owner': r'\b(?:M\.ui|UI)\.renderBoard\s*=',
+            'public TV renderer owner': r'\b(?:M\.ui|UI)\.renderTV\s*=',
+            'public navigation go owner': r'\b(?:M\.navigationEngine|N)\.go\s*=',
+            'public adaptation item owner': r'\bM\.adapt\.item\s*=',
+            'public Guardian run owner': r'\bM\.guardian\.run\s*=',
+          }
+          failed=[]
+          for label,pat in checks.items():
+            hits=[]
+            rx=re.compile(pat)
+            for f,s in text.items():
+              for m in rx.finditer(s): hits.append((f,s.count('\n',0,m.start())+1))
+            print(label, hits)
+            if len(hits)!=1: failed.append((label,hits))
+          # Wrapper/capture anti-patterns that caused the layered runtime failures.
+          bad=[]
+          forbidden=[
+            r'baseRenderBoard\s*=\s*(?:M\.ui|UI)\.renderBoard',
+            r'baseRenderTV\s*=\s*(?:M\.ui|UI)\.renderTV',
+            r'BASE_PARSE\s*=\s*M\.parser\.parse',
+            r'baseGuardianRun\s*=\s*M\.guardian\.run',
+          ]
+          for f,s in text.items():
+            for pat in forbidden:
+              if re.search(pat,s): bad.append((f,pat))
+          if bad: failed.append(('forbidden wrapper captures',bad))
+          if failed:
+            print('STRUCTURAL_OWNER_AUDIT_FAIL', failed)
+            sys.exit(1)
+          print('STRUCTURAL_OWNER_AUDIT_PASS')
+          PY
+      - name: Run current non-browser contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(
+            tests/parser-natural-cw.cjs
+            tests/engine-acceptance.cjs
+            tests/attendance-roster-static.cjs
+            tests/board-evidence-regression.cjs
+            tests/friday-session-board-regression.cjs
+            tests/guardian-current-runtime-bk.cjs
+            tests/guardian-current-runtime-bl.cjs
+            tests/guardian-device-state-bj.cjs
+            tests/guardian-full-upload-contract-bj.cjs
+          )
+          failed=0
+          for t in "${tests[@]}"; do
+            if [[ -f "$t" ]]; then
+              echo "===== $t ====="
+              node "$t" || failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Install browser acceptance dependency
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Run product in local-first browser fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 >/tmp/msos-http.log 2>&1 &
+          server=$!
+          trap 'kill $server || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 0.25; done
+          tests=(
+            tests/final-product-acceptance-20260825.cjs
+            tests/all-inclusive-product-acceptance-20260825.cjs
+          )
+          failed=0
+          for t in "${tests[@]}"; do
+            if [[ -f "$t" ]]; then
+              echo "===== $t ====="
+              MSOS4_TEST_URL=http://127.0.0.1:8765/ node "$t" || failed=1
+            fi
+          done
+          exit "$failed"
