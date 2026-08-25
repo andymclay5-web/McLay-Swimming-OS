@@ -1,10 +1,12 @@
 name: Repair parser round scope
 on:
-  workflow_dispatch:
+  push:
+    branches: [repair/parser-round-scope-20260826]
 permissions:
   contents: write
 jobs:
   repair:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +37,8 @@ const roundForms=[
 `MAIN SET\n3 Rounds\n5 x 100 Freestyle Threshold\n10s rest\n\n200 Easy`,
 `MAIN SET\n3 Rounds:\n  5 x 100 Freestyle Threshold\n  10s rest\n\n  200 Easy`,
 `MAIN SET\n3 Rounds\n\n5 x 100 Freestyle Threshold\n10s rest\n200 Easy`,
-`MAIN SET\n3 Rounds\n5 × 100 Freestyle Threshold\n10 sec rest\n\n1 × 200 Easy`
+`MAIN SET\n3 Rounds\n5 × 100 Freestyle Threshold\n10 sec rest\n\n1 × 200 Easy`,
+`MAIN SET\n3 rounds of\n5 x 100 Freestyle Threshold\n10s rest\n200 Easy`
 ];
 for(const [i,src] of roundForms.entries()){
  const q=global.MSOS4.parser.parse(src,{id:`round-scope-${i}`,course:'SCM'});
