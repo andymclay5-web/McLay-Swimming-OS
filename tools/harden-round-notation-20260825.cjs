@@ -9,6 +9,10 @@ const oldSplitter="  function splitRoundBody(body){const out=[];let buf='',depth
 const newSplitter="  function roundChildStart(value){return /^\\s*(?:\\d{1,2}\\s*(?:x|×|✕|\\*)\\s*\\d{1,4}(?:\\.5)?\\b|\\d{2,4}(?:\\.5)?\\b)/i.test(String(value||''))}\n  function splitRoundBody(body){const src=String(body||''),out=[];let buf='',depth=0;const flush=()=>{const v=clean(buf);if(v)out.push(v);buf=''};for(let i=0;i<src.length;i++){const ch=src[i];if(ch==='('){depth++;buf+=ch;continue}if(ch===')'){depth=Math.max(0,depth-1);buf+=ch;continue}if(depth===0){const after=src.slice(i+1),simple=ch===','||ch===';'||ch==='+'||ch==='&'||ch==='\\n';if(simple&&roundChildStart(after)){flush();continue}if(ch==='/'&&roundChildStart(after)){const hit=clean(after).match(/^(?:(\\d{1,2})\\s*(?:x|×|✕|\\*)\\s*)?(\\d{2,4}(?:\\.5)?)/i);if(hit&&(hit[1]||Number(hit[2])>=100)){flush();continue}}const word=src.slice(i).match(/^\\s+(?:and|then|plus)\\s+/i);if(word&&roundChildStart(src.slice(i+word[0].length))){flush();i+=word[0].length-1;continue}}buf+=ch}flush();return out}\n";
 if(!parser.includes(oldSplitter))throw new Error('expected round splitter not found');
 parser=parser.replace(oldSplitter,newSplitter);
+const oldNormal="  function normaliseRoundChild(value){return clean(value).replace(/^(\\d{2,4}(?:\\.5)?)(?=[A-Za-z])/,'$1 ')}\n";
+const newNormal="  function normaliseRoundChild(value){return clean(value).replace(/(\\d)\\s*\\*\\s*(\\d)/g,'$1 x $2').replace(/^(\\d{2,4}(?:\\.5)?)(?=[A-Za-z])/,'$1 ')}\n";
+if(!parser.includes(oldNormal))throw new Error('expected child normaliser not found');
+parser=parser.replace(oldNormal,newNormal);
 const oldOuter="const raw=lines[i],m=raw.match(/^(\\s*)(\\d{1,2})\\s*(?:x|×|✕)\\s*\\(\\s*(.*)$/i);";
 const newOuter="const raw=lines[i],m=raw.match(/^(\\s*)(\\d{1,2})\\s*(?:(?:x|×|✕|\\*)\\s*|rounds?\\s*(?:of\\s*)?)\\(\\s*(.*)$/i);";
 if(!parser.includes(oldOuter))throw new Error('expected outer repeat matcher not found');
