@@ -1,0 +1,67 @@
+name: Coherent parser regression repair
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'actions'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+      - name: Harden parser load order and authored round-scope regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Poolside self-test is diagnostic only. It must never become a boot-time
+          # dependency or steal parser ownership if a non-browser harness loads it early.
+          p=Path('v4-poolside-core.js');s=p.read_text()
+          old="const test=M.poolsideCore.selfTest();if(!test.ok)console.error('[MSOS poolside core] FAIL',test);else console.info('[MSOS poolside core] PASS',test);"
+          new="if(typeof M.parser?.parse==='function'){const test=M.poolsideCore.selfTest();if(!test.ok)console.error('[MSOS poolside core] FAIL',test);else console.info('[MSOS poolside core] PASS',test);}"
+          if old not in s: raise SystemExit('poolside self-test marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          # The Friday regression must use the same parser load order as production.
+          p=Path('tests/friday-session-board-regression.cjs');s=p.read_text()
+          old="require('../app.js');\nrequire('../v4-correct.js');"
+          new="require('../app.js');\nrequire('../engines/parser-semantics.js');\nrequire('../v4-correct.js');"
+          if old not in s: raise SystemExit('Friday parser load marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          # Lock the exact authored-round failure that produced the 2,100m bug.
+          p=Path('tests/parser-natural-cw.cjs');s=p.read_text()
+          marker="assert.equal(global.MSOS4.parserSemantics.cycle('8 x 25 on45'),45);"
+          block="""const roundVariants=[
+`MAIN SET\n3 Rounds\n5 x 100 Freestyle Threshold\n200 Easy`,
+`MAIN SET\n3 rounds\n5×100 Freestyle Threshold\n200 Easy`,
+`MAIN SET\n3 Rounds\n5 x 100 Threshold\n\n200 Easy`
+];
+for(const [i,roundSource] of roundVariants.entries()){
+ const rs=global.MSOS4.parser.parse(roundSource,{id:`round-scope-${i}`,course:'SCM',squads:['National']});
+ assert.equal(S.total(rs),2100,`authored 3-round scope variant ${i+1} must remain 2,100m`);
+ const main=rs.blocks.find(b=>b.type==='main_set')||rs.blocks[0];
+ const group=(main.items||[]).find(x=>x.kind==='group'&&Number(x.rounds)===3);
+ assert.ok(group,`authored 3-round scope variant ${i+1} must remain one canonical repeated group`);
+ assert.equal(S.itemDistance(group),2100,`canonical repeated group variant ${i+1} must own all 2,100m`);
+}
+"""
+          if marker not in s: raise SystemExit('parser test insertion marker missing')
+          p.write_text(s.replace(marker,block+marker,1))
+          PY
+          node --check v4-poolside-core.js
+          node tests/parser-natural-cw.cjs
+          node tests/friday-session-board-regression.cjs
+      - name: Commit parser regression repair
+        shell: bash
+        run: |
+          git config user.name 'MSOS coherent rebuild'
+          git config user.email 'actions@users.noreply.github.com'
+          git add v4-poolside-core.js tests/parser-natural-cw.cjs tests/friday-session-board-regression.cjs
+          git commit -m 'Harden parser load contract and 2100m round scope'
+          git push origin HEAD:rebuild/msos-coherent-product-20260826
