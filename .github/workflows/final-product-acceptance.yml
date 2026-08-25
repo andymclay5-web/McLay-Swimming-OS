@@ -1,0 +1,41 @@
+name: Final Product Acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  final-product-acceptance:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check all-inclusive runtime
+        run: |
+          node --check engines/dosage.js
+          node --check engines/dosage-ui.js
+          node --check tests/all-inclusive-product-acceptance-20260825.cjs
+      - name: Matthew swimmer and pathway contract
+        run: node tests/matthew-ready-cv.cjs
+      - name: Release package integrity
+        run: node tests/release-package.test.js
+      - name: Install browser acceptance runtime
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Start exact candidate package
+        run: |
+          python3 -m http.server 8765 >/tmp/msos-final-http.log 2>&1 &
+          echo $! > /tmp/msos-final-http.pid
+          sleep 1
+      - name: All-inclusive coach journey at Android phone shape
+        run: node tests/all-inclusive-product-acceptance-20260825.cjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/msos-final-http.log || true
