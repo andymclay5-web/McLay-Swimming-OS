@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const app=fs.readFileSync('app.js','utf8'),sw=fs.readFileSync('sw.js','utf8'),index=fs.readFileSync('index.html','utf8');
+assert.doesNotMatch(app,/function renderAdapt\(/,'legacy initials-card Board renderer still exists in app.js');
+assert.doesNotMatch(app,/UI\.renderBoard\s*=\s*\(\)\s*=>/,'app.js still owns Board rendering');
+assert.match(sw,/v4-coherent-runtime-20260825d/,'new coherent cache identity missing');
+assert.match(sw,/async function networkFirst/,'network-first runtime strategy missing');
+assert.doesNotMatch(sw,/immediateCached/,'stale-while-revalidate runtime strategy still present');
+assert.match(sw,/if\(e\.request\.mode==='navigate'\)[\s\S]*networkFirst/,'navigations are not network-first');
+assert.match(sw,/\.\(\?:js\|css\)\$[\s\S]*networkFirst/,'runtime JS/CSS are not network-first');
+assert.ok(index.indexOf('app.js')<index.indexOf('engines/board.js'),'dedicated Board engine must load after base app');
+console.log('COHERENT_RUNTIME_RELEASE_PASS');
