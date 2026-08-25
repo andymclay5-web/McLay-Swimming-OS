@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'..');
-const build='v4-final-acceptance-20260825a',cache='mclay-swimming-os-v4-coherent-20260826-r1';
+const build='v4-final-acceptance-20260825a',cache='mclay-swimming-os-v4-coherent-20260826-r2';
 const read=file=>fs.readFileSync(path.join(root,file)),text=file=>read(file).toString('utf8');
 const checksumRows=text('SHA256SUMS.txt').trim().split('\n').map(line=>{const m=line.match(/^([a-f0-9]{64})  (.+)$/);assert.ok(m,`Malformed checksum row: ${line}`);return{expected:m[1],file:m[2]}});
 const mutable=new Set(['index.html','sw.js','VERSION.txt','engines/storage.js','engines/navigation.js','engines/release-authority.js','engines/guardian-runtime.js']);
