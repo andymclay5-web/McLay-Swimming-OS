@@ -269,31 +269,7 @@
     out.text=out.raw;
   }
 
-  if(M.adapt?.item){
-    const baseAdaptItem=M.adapt.item.bind(M.adapt);
-    M.adapt.item=(item,athlete,state=M.state,session=null)=>{
-      const out=baseAdaptItem(item,athlete,state,session);
-      const key=athleteKey(athlete),raw=text(out?.raw||out?.text||item?.raw||item?.text),profile=M.adapt.profile(athlete,state);
-      const hasExplicit=(state?.adaptationOverrides||[]).some(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===athlete?.id&&x.active!==false);
-      const phases=[...new Set((item?.repPattern||[]).map(x=>text(x.zone)).filter(Boolean))];
-      if(!hasExplicit&&profile.ratio<.98&&phases.length>1&&Number(out?.reps)<phases.length&&Number(item?.distance)>=100){
-        out.reps=Math.max(1,Number(item.reps)||1);
-        out.distance=profileDistance(item.distance,profile.ratio,session,profile.returnToStart);
-        out.repPattern=(item.repPattern||[]).slice(0,out.reps).map((x,i)=>({...U.clone(x),rep:i+1}));
-        rewriteAdaptedShape(out,out.reps,out.distance);
-        out.adaptationReason=[`${Math.round(profile.ratio*100)}% current profile`,'every authored aerobic phase retained',profile.returnToStart?'return to start end':''].filter(Boolean).join(' · ');
-      }else if(!hasExplicit&&item?.repPattern?.length&&Number(out?.reps)<Number(item?.reps)){
-        out.repPattern=condensedRepPattern(item.repPattern,out.reps);
-        out.adaptationReason=[out.adaptationReason,'every authored aerobic phase retained'].filter(Boolean).join(' · ');
-      }
-      if(!hasExplicit&&key==='mckenziedrage'&&Number(out?.distance)===75&&/\b(?:fast|max|race|quality|pace)\b/i.test(raw)){
-        const current=Number(out.cycleSeconds)||0;
-        if(current<115) out.cycleSeconds=115;
-        out.adaptationReason=[out.adaptationReason,'McKenzie fast 75 · independent practical rest · 1:55 minimum'].filter(Boolean).join(' · ');
-      }
-      return out;
-    };
-  }
+  // Public adaptation truth is owned by engines/modification.js through engines/bridge.js.
 
   // ---------- T400 / aerobic target truth ----------
   if(M.targets){
@@ -1386,7 +1362,6 @@
   if(M.ui){
     C.renderCoachHub=renderCoachHub;
     C.renderTimes=renderTimes;
-    M.ui.renderHub=renderCoachHub;
     M.ui.renderTimes=renderTimes;
   }
 

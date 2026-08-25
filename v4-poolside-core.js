@@ -354,43 +354,6 @@
     return{ok:S.total(a)===600&&S.total(b)===4650&&Number(b.metadata.explicitTotal)===4650,pattern:S.total(a),live:S.total(b),liveWritten:b.metadata.explicitTotal};
   };
   const test=M.poolsideCore.selfTest();if(!test.ok)console.error('[MSOS poolside core] FAIL',test);else console.info('[MSOS poolside core] PASS',test);
-  const priorGuardianRun=M.guardian?.run?.bind(M.guardian);
-  if(priorGuardianRun){
-    M.guardian.run=()=>{
-      const result=priorGuardianRun(),tests=[...(result.tests||[])];
-      const check=(name,fn)=>{try{const detail=fn();tests.push({name,ok:true,detail:detail==null?'':String(detail)})}catch(e){tests.push({name,ok:false,detail:e.message||String(e)})}};
-      check('Standalone rest lines never add phantom metres',()=>{const s=M.parser.parse('MAIN SET\n10s rest\n8 x 100 Freestyle\n30s rest\n4 x 50 Choice',{id:'rest-gate'});if(S.total(s)!==1000)throw new Error(`got ${S.total(s)}`);return '800 + 200 · rest 0m'});
-      check('Board targets stay inside a compact parent-set dropdown',()=>{const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development',{id:'target-dropdown',course:'SCM'}),item=s.blocks[0].items[0],html=renderNode(s,s.blocks[0],item);if(!/<details class="pool-targets"><summary>Targets/.test(html)||!/2 × 400 Freestyle/.test(html)||/pool-target-title/.test(html))throw new Error('target detail is not parent-set dropdown markup');return 'set remains visible · targets collapsed'});
-      check('Saturday range cues expose aerobic and race-pace target dropdowns',()=>{
-        const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development\n#3 Development\n6 x 25\n@ 45\n#1 Build\n#2-6 @ 100m Race Pace\n8 x 100 Freestyle\n#1-4 Overload\n#5-8 Threshold\n1 x 100\nTarget: Second 100 of 200 Race',{id:'sat-target-cues',course:'SCM'}),items=s.blocks[0].items,pace25=items.find(x=>Number(x.reps)===6),aerobic100=items.find(x=>Number(x.reps)===8),second100=items.at(-1),html=items.map(x=>renderNode(s,s.blocks[0],x)).join('');
-        if(items[0].repPattern.map(x=>x.zone).join(',')!=='Regeneration,Development')throw new Error('2 x 400 authored phases were not normalized');
-        if(pace25.cycleSeconds!==45||pace25.repInstructions.filter(x=>x.raceIntent).length!==5)throw new Error('25 race-pace range was not resolved');
-        if(aerobic100.repPattern.length!==8||aerobic100.repPattern[0].zone!=='Overload'||aerobic100.repPattern[7].zone!=='Threshold')throw new Error('8 x 100 zones were not resolved');
-        if(second100.raceIntent?.distance!==200||!/pool-targets/.test(html))throw new Error('race target-needed dropdown is absent');
-        if(enhanceTargetSemantics(s)!==0||pace25.raceIntent)throw new Error('target enrichment is not stable or leaked a rep range onto the whole set');
-        return '2 aerobic phases · #2–6 race pace · #1–4/#5–8 zones · second 100 target check';
-      });
-      check('Modified mixed-zone aerobic work retains every phase with individual distances',()=>{
-        const s=M.parser.parse('MAIN SET\n2 x 400 Freestyle\n#1 Regeneration\n#2 Development',{id:'modified-phases',course:'SCM'}),item=s.blocks[0].items[0],cm={id:'cm-phase',full_name:'Charlotte Murphy'},md={id:'md-phase',full_name:'McKenzie Drage'},state={adaptationProfiles:[],adaptationOverrides:[],trainingTestTypes:[{id:'phase-t400',test_key:'t400_freestyle'}],trainingTestResults:[{athlete_id:'cm-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true},{athlete_id:'md-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true}]},a=M.adapt.item(item,cm,state,s),b=M.adapt.item(item,md,state,s),ta=T.forItem(s,a,cm,state),tb=T.forItem(s,b,md,state);
-        if(a.reps!==2||a.distance!==200||b.reps!==2||b.distance!==275)throw new Error(`modified shapes ${a.reps}x${a.distance} / ${b.reps}x${b.distance}`);
-        if(ta.status!=='pattern'||tb.status!=='pattern'||ta.rows.length!==2||tb.rows.length!==2)throw new Error('individual phase targets were not retained');
-        return `CM ${a.reps} × ${a.distance} · MD ${b.reps} × ${b.distance} · Reg + Dev retained`;
-      });
-      check('Board exposes direct Swimmers and Performance Pathway access',()=>{const html=quickActions(1);if(!/data-pool-swimmers/.test(html)||!/Swimmers \/ Pathway/.test(html))throw new Error('direct poolside swimmer route missing');return 'Board → Swimmers / Pathway'});
-      check('Saved Saturday 6,090m corruption repairs non-destructively to 5,450m',()=>{
-        const s=M.parser.parse(M.guardian.SATURDAY_SOURCE,{id:'saved-sat',date:'2026-08-15',dayPart:'AM',squads:['National','Development','Fitness']});
-        const warm=s.blocks[0],parent=warm.items.find(x=>x.kind==='set'&&Number(x.reps)===12&&Number(x.distance)===50);
-        warm.items.splice(warm.items.indexOf(parent)+1,0,{id:'phantom-breakdown',kind:'group',rounds:4,text:'4 ROUNDS',items:[{id:'p1',kind:'set',reps:1,distance:50,raw:'1 x 50 Scull'},{id:'p2',kind:'set',reps:1,distance:50,raw:'1 x 50 Drill'},{id:'p3',kind:'set',reps:1,distance:50,raw:'1 x 50 Swim Perfect Technique'}]});
-        const main=s.blocks[2];main.items.splice(1,0,{id:'phantom-rest-10',kind:'set',reps:1,distance:10,raw:'10s rest',text:'10s rest'});main.items.push({id:'phantom-rest-30',kind:'set',reps:1,distance:30,raw:'30s rest',text:'30s rest'});
-        if(S.total(s)!==6090||s.blocks.map(S.blockDistance).join(',')!==KNOWN_SATURDAY_BEFORE)throw new Error('fixture did not reproduce phone state');
-        s.capturesSentinel='preserve';const repaired=repairKnownSessionTruth(s);
-        if(!repaired||S.total(repaired)!==5450||repaired.blocks.map(S.blockDistance).join(',')!==KNOWN_SATURDAY_AFTER)throw new Error('known corruption was not repaired');
-        if(repaired.capturesSentinel!=='preserve'||S.total(s)!==6090)throw new Error('repair mutated original/evidence');
-        return KNOWN_SATURDAY_AFTER;
-      });
-      const passed=tests.filter(x=>x.ok===true).length;
-      return {...result,build:M.BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
-    };
-  }
+  // Poolside self-test remains local; guardian-runtime owns public execution.
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const known=repairKnownSavedSessions(),repaired=repairSelected();if(known||repaired||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
 })(globalThis);

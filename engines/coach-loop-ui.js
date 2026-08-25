@@ -207,16 +207,14 @@
     status.querySelector('[data-loop-view-meet-source]')?.addEventListener('click',()=>showStoredMeetSource(row));}
   function installMeetIntake(){const h=document.querySelector('#meetView');if(!h||h.querySelector('[data-loop-meet-intake]'))return;const role=M.access?.role?.()||'owner';if(role!=='owner')return;const card=document.createElement('section');card.dataset.loopMeetIntake='1';card.className='page-card loop-meet-intake';card.innerHTML=`<div class="eyebrow">MEET INTAKE</div><h2>Add programme / entries</h2><p class="muted">PDF, photo, text or CSV. Source first → review → commit. Unknown content is never guessed.</p><div class="loop-quick"><button data-loop-meet-file>Choose file</button><button data-loop-meet-paste-btn>Paste text</button></div><input data-loop-meet-file-input type="file" accept="application/pdf,.pdf,image/*,.txt,.csv,text/plain,text/csv" hidden><div data-loop-meet-source-status></div>`;h.prepend(card);const input=card.querySelector('[data-loop-meet-file-input]');card.querySelector('[data-loop-meet-file]').onclick=()=>input.click();input.onchange=()=>handleMeetFile(input.files?.[0],card);card.querySelector('[data-loop-meet-paste-btn]').onclick=()=>{const target=card.querySelector('[data-loop-meet-source-status]');target.innerHTML='<label>Paste programme / entry text<textarea data-loop-meet-paste rows="8" placeholder="Paste meet programme or swimmer entries here"></textarea></label><button data-loop-meet-save-text>Save source text</button>';target.querySelector('[data-loop-meet-save-text]').onclick=()=>{const value=text(target.querySelector('[data-loop-meet-paste]')?.value);if(!value)return M.toast?.('Paste some meet text first');const row={id:U.uid?U.uid('meet-source'):`meet-source-${Date.now()}`,meet_id:M.meet?.current?.()?.id||'',name:'Pasted meet text',mime:'text/plain',size:value.length,status:'review_text',created_at:now(),text:value};ensureMeetImports().push(row);saveUi();M.toast?.('Meet source text saved for review');};};}
 
-  // Install wrappers after all existing v4 engines so we extend rather than
-  // replace the proven Board/pathway/capture foundations.
-  const baseBoard=UI.renderBoard?.bind(UI),baseAthletes=UI.renderAthletes?.bind(UI),baseSwimmer=UI.renderSwimmer?.bind(UI),baseMeet=UI.renderMeet?.bind(UI),baseOpenCapture=M.actions.openCapture?.bind(M.actions);
-  UI.renderHub=renderCoachHub;
-  if(baseBoard)UI.renderBoard=()=>{baseBoard();installBoardAthletes();};
-  if(baseAthletes)UI.renderAthletes=()=>{baseAthletes();enhanceAthleteToday();observeAthletes();};
-  if(M.performanceUI)M.performanceUI.render=UI.renderAthletes;
-  if(baseSwimmer)UI.renderSwimmer=()=>{baseSwimmer();enhanceSwimmerDevice();};
-  if(baseMeet)UI.renderMeet=()=>{baseMeet();installMeetIntake();};
-  if(baseOpenCapture)M.actions.openCapture=ctx=>{const r=baseOpenCapture(ctx);queueMicrotask(()=>upgradeCaptureModal(document.querySelector('#modalHost .modal')));return r;};
+  // Cross-surface enhancements are explicit bridge consumers, never owner wrappers.
+UI.renderHub=renderCoachHub;
+const surfaceBridge=M.surfaceBridge;
+surfaceBridge?.register?.('board','coach-loop-board-athletes',()=>installBoardAthletes());
+surfaceBridge?.register?.('athletes','coach-loop-athlete-today',()=>{enhanceAthleteToday();observeAthletes();});
+surfaceBridge?.register?.('swimmer','coach-loop-swimmer-feedback',()=>enhanceSwimmerDevice());
+surfaceBridge?.register?.('meet','coach-loop-meet-intake',()=>installMeetIntake());
+surfaceBridge?.register?.('modal','coach-loop-capture-upgrade',({host}={})=>{const modal=host||document.querySelector('#modalHost .modal');if(modal?.querySelector('#captureStatus,[data-save-note],[data-capture-athlete]'))upgradeCaptureModal(modal);});
 
   addEventListener('msos:evidence-ready',()=>{if(M.state?.settings?.view==='athletes')queueMicrotask(enhanceAthleteToday)});
   addEventListener('msos:data-updated',()=>{if(M.state?.settings?.view==='hub')queueMicrotask(renderCoachHub)});
