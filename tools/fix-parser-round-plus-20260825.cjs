@@ -1,17 +1,2 @@
 'use strict';
-const fs=require('node:fs'),path=require('node:path');
-const root=path.resolve(__dirname,'..');
-const parserFile=path.join(root,'engines','parser-semantics.js');
-const testFile=path.join(root,'tests','parser-round-scope-only-20260825.cjs');
-let parser=fs.readFileSync(parserFile,'utf8');
-const from="if(depth===0&&(ch===','||ch===';'||ch==='\\n')){flush();continue}";
-const to="if(depth===0&&(ch===','||ch===';'||ch==='+'||ch==='\\n')){flush();continue}";
-if(!parser.includes(from))throw new Error('round-body separator marker not found');
-parser=parser.replace(from,to).replace("v4-parser-semantics-final-20260825c-round-scope","v4-parser-semantics-final-20260825d-round-plus-scope");
-fs.writeFileSync(parserFile,parser);
-let test=fs.readFileSync(testFile,'utf8');
-const marker="verify(`MAIN SET\\n3 x (5 x 100 Threshold, 200 Easy)`,'single-line');";
-if(!test.includes(marker))throw new Error('single-line round regression marker not found');
-test=test.replace(marker,"verify(`MAIN SET\\n3 x (5 x 100 Threshold + 200 Easy)`,'literal-plus-sign');\n"+marker);
-fs.writeFileSync(testFile,test);
-console.log('Added top-level + round separator and literal 2100m regression');
+require('./harden-round-notation-20260825.cjs');
