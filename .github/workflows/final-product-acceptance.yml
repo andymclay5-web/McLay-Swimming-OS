@@ -17,11 +17,8 @@ jobs:
           node-version: 22
       - name: Syntax check all-inclusive runtime
         run: |
-          node --check engines/parser-semantics.js
-          node --check engines/coordinator.js
           node --check engines/dosage.js
           node --check engines/dosage-ui.js
-          node --check tests/parser-round-scope-stroke-dosage-20260825.cjs
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
@@ -37,8 +34,6 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-final-http.log 2>&1 &
           echo $! > /tmp/msos-final-http.pid
           sleep 1
-      - name: Repeated sub-set scope and dosage truth
-        run: node tests/parser-round-scope-stroke-dosage-20260825.cjs
       - name: All-inclusive coach journey at Android phone shape
         run: node tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Show server log on failure

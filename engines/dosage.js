@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20260825b-coordinator-stroke'};
+  const D=M.dosageEngine={build:'v4-dosage-20260825a'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -73,7 +73,7 @@
     return systemFrom('',item);
   }
   function actualItem(session,item,athlete,state){
-    if(!athlete){try{const p=E.Coordinator?.resolvePrescriptionContext?.(session,item,null,state);if(p)return p}catch{}return item;}
+    if(!athlete)return item;
     try{const p=E.Coordinator?.prescription?.(session,item,athlete,state);if(p?.item)return p.item;}catch{}
     try{const a=E.Modification?.adaptItem?.(item,athlete,state,session);if(a)return a;}catch{}
     return item;
