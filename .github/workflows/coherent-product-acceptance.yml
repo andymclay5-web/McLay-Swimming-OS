@@ -110,17 +110,14 @@ jobs:
           server=$!
           trap 'kill $server || true' EXIT
           for i in {1..20}; do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 0.25; done
-          echo "===== tests/coherent-intake-smoke.cjs ====="
-          MSOS4_TEST_URL=http://127.0.0.1:8765/ node tests/coherent-intake-smoke.cjs
           tests=(
-            tests/final-product-acceptance-20260825.cjs
+            tests/coherent-intake-smoke.cjs
+            tests/coherent-release-regression.cjs
             tests/all-inclusive-product-acceptance-20260825.cjs
           )
           failed=0
           for t in "${tests[@]}"; do
-            if [[ -f "$t" ]]; then
-              echo "===== $t ====="
-              MSOS4_TEST_URL=http://127.0.0.1:8765/ node "$t" || failed=1
-            fi
+            echo "===== $t ====="
+            MSOS4_TEST_URL=http://127.0.0.1:8765/ node "$t" || failed=1
           done
           exit "$failed"
