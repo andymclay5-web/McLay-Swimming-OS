@@ -1,0 +1,50 @@
+name: Resume coherent reconstruction
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Correct reconstruction boundary and run
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/rebuild_coherent_runtime.py')
+          s=p.read_text()
+          old="b=s.find('\\n\\n  // ---------- Boot',a)"
+          new="b=s.find('\\n\\n  // Guarantee correction settings/roster are present before the base boot handler runs.',a)"
+          if old not in s:
+              raise SystemExit('Guardian boundary anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          python tools/rebuild_coherent_runtime.py
+      - name: Syntax reconstructed active sources
+        run: |
+          node --check app.js
+          node --check v4-correct.js
+          node --check v4-poolside-core.js
+          node --check engines/parser-semantics.js
+          node --check engines/storage.js
+          node --check engines/roster-policy.js
+          node --check engines/general-timing-ui.js
+          node --check engines/t400-capture.js
+          node --check engines/guardian-runtime.js
+          git diff --check
+      - name: Commit reconstruction
+        run: |
+          git config user.name 'MSOS coherent rebuild'
+          git config user.email 'actions@users.noreply.github.com'
+          git add tools/rebuild_coherent_runtime.py app.js v4-correct.js v4-poolside-core.js index.html engines/parser-semantics.js engines/storage.js engines/roster-policy.js engines/general-timing-ui.js engines/t400-capture.js engines/guardian-runtime.js
+          git commit -m 'Reconstruct coherent runtime around single owners'
+          git push origin HEAD:rebuild/msos-coherent-product-20260826
