@@ -24,7 +24,7 @@
     h.querySelector('#runReport').onclick=run;h.querySelector('#reportBackPerformance').onclick=()=>{const id=role==='swimmer'?own:(h.querySelector('#reportAthlete').value||athId);if(id)M.state.settings.selectedAthleteId=id;go('athletes');};h.querySelector('#reportTimes').onclick=()=>go('times');run();M.dataAdminUI?.ensureShortcut?.('reports');
   }
   UI.render=render;M.renderReports=render;
-  const baseHub=M.ui?.renderHub?.bind(M.ui);if(baseHub)M.ui.renderHub=(...a)=>{const out=baseHub(...a),host=document.querySelector('#hubView');if(host&&!host.querySelector('[data-msos-reports]'))host.insertAdjacentHTML('afterbegin','<section class="page-card"><div class="eyebrow">REPORTING</div><div class="hub-actions"><button data-msos-reports>Reports · squad / swimmer / evidence</button></div></section>');M.dataAdminUI?.ensureShortcut?.('hub');return out;};
+  M.surfaceBridge?.register?.('hub','reporting-shortcut',()=>{const host=document.querySelector('#hubView');if(host&&!host.querySelector('[data-msos-reports]'))host.insertAdjacentHTML('afterbegin','<section class="page-card"><div class="eyebrow">REPORTING</div><div class="hub-actions"><button data-msos-reports>Reports · squad / swimmer / evidence</button></div></section>');M.dataAdminUI?.ensureShortcut?.('hub');});
   const boot=()=>{if(M.state?.settings?.view==='reports'){render();M.nav?.activateView?.('reports');}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   addEventListener('msos:data-updated',()=>{if((M.state?.settings?.view||'')==='reports')render();});
 })(globalThis);

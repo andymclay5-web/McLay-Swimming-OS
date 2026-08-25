@@ -61,7 +61,7 @@
   function decorate(){
     const ath=(M.state?.athletes||[]).find(a=>a.id===M.state?.settings?.selectedAthleteId);if(!ath||!P.isPara?.(ath))return;const panel=document.querySelector('#athletesView [data-msos-ath-panel="pathway"]');if(!panel)return;const head=panel.querySelector('.msos-pathway-head');if(!head||head.dataset.paraAr)return;head.dataset.paraAr='1';const p=head.querySelector('p.muted');if(p)p.innerHTML='<b>Para pathway:</b> official International MET/MQS, then 5% MQS development bands and loaded international final/podium benchmarks in actual performance order. Derived bands are coaching markers, not qualifying standards. MQS/MET are LCM; an SCM PB comparison is tracking context only.';const h=head.querySelector('h2');if(h)h.textContent='International performance pathway';
   }
-  const priorRender=UI.renderAthletes?.bind(UI);if(priorRender)UI.renderAthletes=()=>{priorRender();queueMicrotask(decorate);requestAnimationFrame(decorate);};if(M.performanceUI)M.performanceUI.render=UI.renderAthletes;
+  M.surfaceBridge?.register?.('athletes','para-pathway-ar',()=>{queueMicrotask(decorate);requestAnimationFrame(decorate);});
   const host=document.querySelector('#athletesView');if(host)new MutationObserver(()=>requestAnimationFrame(decorate)).observe(host,{childList:true,subtree:true});
 
   Q.OFFICIAL=OFFICIAL;Q.CAM=CAM;Q.official=official;Q.bandPercents=bandPercents;Q.derivedRows=derivedRows;Q.camRows=camRows;
