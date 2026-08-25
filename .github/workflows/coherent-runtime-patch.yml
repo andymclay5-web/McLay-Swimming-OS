@@ -1,0 +1,88 @@
+name: Coherent runtime ownership patch
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'actions'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+          fetch-depth: 0
+      - name: Remove captured owners and connect feature hooks through bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Coach-loop: preserve useful feature helpers but stop wrapping final surface owners.
+          p=Path('engines/coach-loop-ui.js'); s=p.read_text()
+          start=s.find('  // Install wrappers after all existing v4 engines so we extend rather than')
+          end=s.find("  addEventListener('msos:evidence-ready'",start)
+          if start < 0 or end < 0:
+              raise SystemExit(f'coach-loop wrapper boundary missing: {start}, {end}')
+          replacement="""  // Cross-surface enhancements are explicit bridge consumers, never owner wrappers.
+          UI.renderHub=renderCoachHub;
+          const surfaceBridge=M.surfaceBridge;
+          surfaceBridge?.register?.('board','coach-loop-board-athletes',()=>installBoardAthletes());
+          surfaceBridge?.register?.('athletes','coach-loop-athlete-today',()=>{enhanceAthleteToday();observeAthletes();});
+          surfaceBridge?.register?.('swimmer','coach-loop-swimmer-feedback',()=>enhanceSwimmerDevice());
+          surfaceBridge?.register?.('meet','coach-loop-meet-intake',()=>installMeetIntake());
+          surfaceBridge?.register?.('modal','coach-loop-capture-upgrade',({host}={})=>{const modal=host||document.querySelector('#modalHost .modal');if(modal?.querySelector('#captureStatus,[data-save-note],[data-capture-athlete]'))upgradeCaptureModal(modal);});
+
+          """
+          p.write_text(s[:start]+replacement+s[end:])
+
+          # app.js: retain G.foundationRun, remove obsolete public Guardian wrapper generation.
+          p=Path('app.js'); s=p.read_text(); pos=s.find(' const priorRun=M.guardian.run;')
+          if pos >= 0:
+              a=s.rfind('(function(g){',0,pos); b=s.find('})(globalThis);',pos)
+              if a < 0 or b < 0: raise SystemExit('app Guardian wrapper boundary missing')
+              s=s[:a]+'// Legacy Guardian wrapper retired; guardian-runtime owns public execution.\n'+s[b+len('})(globalThis);'):]
+          p.write_text(s)
+
+          # poolside: retain self-test, remove dead public Guardian wrapper.
+          p=Path('v4-poolside-core.js'); s=p.read_text(); a=s.find('  const priorGuardianRun=M.guardian?.run?.bind(M.guardian);')
+          if a >= 0:
+              b=s.find("  document.addEventListener('DOMContentLoaded'",a)
+              if b < 0: raise SystemExit('poolside Guardian wrapper end missing')
+              s=s[:a]+'  // Poolside self-test remains local; guardian-runtime owns public execution.\n'+s[b:]
+          p.write_text(s)
+
+          # v4-correct: adaptation wrapper was a dead intermediate generation; final truth is modification+bridge.
+          p=Path('v4-correct.js'); s=p.read_text(); a=s.find('  if(M.adapt?.item){')
+          if a >= 0:
+              b=s.find('  // ---------- T400 / aerobic target truth ----------',a)
+              if b < 0: raise SystemExit('v4-correct adaptation wrapper end missing')
+              s=s[:a]+'  // Public adaptation truth is owned by engines/modification.js through engines/bridge.js.\n\n'+s[b:]
+          s=s.replace('    M.ui.renderHub=renderCoachHub;\n','').replace('    UI.renderHub=renderCoachHub;\n','')
+          p.write_text(s)
+
+          # Final swimmer renderer aliases legacy performance entry point without wrapping it.
+          p=Path('engines/swimmer-instant-open-cn.js'); s=p.read_text()
+          old="function install(){if(X.installed)return;X.installed=true;M.ui.renderAthletes=()=>{X._start=performance.now();return renderFast();};}"
+          new="function install(){if(X.installed)return;X.installed=true;M.ui.renderAthletes=()=>{X._start=performance.now();return renderFast();};if(M.performanceUI)M.performanceUI.render=M.ui.renderAthletes;}"
+          if old not in s: raise SystemExit('swimmer final owner marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          node --check app.js
+          node --check v4-correct.js
+          node --check v4-poolside-core.js
+          node --check engines/surface-bridge.js
+          node --check engines/coach-loop-ui.js
+          node --check engines/swimmer-instant-open-cn.js
+      - name: Commit runtime ownership patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'MSOS coherent rebuild'
+          git config user.email 'actions@users.noreply.github.com'
+          git add app.js v4-correct.js v4-poolside-core.js engines/coach-loop-ui.js engines/swimmer-instant-open-cn.js
+          git commit -m 'Remove captured runtime owners and use explicit bridge hooks'
+          git push origin HEAD:rebuild/msos-coherent-product-20260826
