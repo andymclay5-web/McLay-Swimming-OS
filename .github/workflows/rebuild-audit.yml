@@ -1,0 +1,34 @@
+name: Rebuild audit
+on:
+  push:
+    branches: [rebuild/msos-coherent-product-20260826]
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/msos-coherent-product-20260826
+          fetch-depth: 0
+      - name: Produce authority and runtime audit
+        run: |
+          {
+            echo '=== HEAD ==='; git rev-parse HEAD
+            echo '=== ACTIVE SCRIPT ORDER ==='; grep -o '<script[^>]*src="[^"]*"' index.html | sed 's/.*src="//'
+            echo '=== AUTHORITATIVE ASSIGNMENTS ==='
+            grep -RInE 'UI\.render(Board|TV|Athletes|Roll|Times|Hub)[[:space:]]*=|M\.parser\.parse[[:space:]]*=|M\.adapt\.profile[[:space:]]*=|M\.ensureState[[:space:]]*=|M\.nav[[:space:]]*=|M\.store\.save[[:space:]]*=|M\.currentSession[[:space:]]*=|M\.selectSession[[:space:]]*=' --include='*.js' . || true
+            echo '=== WRAPPER / OVERRIDE SIGNALS ==='
+            grep -RInE 'base[A-Z_]|BASE_[A-Z_]|\.bind\(.*\)|apply\(this,arguments\)|override|wrapper|compatib|recovery layer|patch' --include='*.js' engines architecture app.js v4-correct.js v4-poolside-core.js 2>/dev/null | head -500 || true
+            echo '=== BOARD LEGACY FINGERPRINTS ==='
+            grep -RInE 'mod-chip|pool-block|pool-summary|msos-work-row|msos-mod-cell' --include='*.js' . || true
+            echo '=== TEST FILES ==='; find tests -maxdepth 1 -type f -printf '%f\n' | sort
+          } > REBUILD_AUDIT.txt
+      - name: Commit audit
+        run: |
+          git config user.name 'MSOS rebuild audit'
+          git config user.email 'actions@users.noreply.github.com'
+          git add REBUILD_AUDIT.txt
+          git diff --cached --quiet || git commit -m 'Audit active MSOS runtime ownership before coherent rebuild'
+          git push origin HEAD:rebuild/msos-coherent-product-20260826
