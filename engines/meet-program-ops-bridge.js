@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827b3';
+  const BUILD='v4-meet-program-ops-bridge-20260827b4';
   let retainedOps=null,syncTimer=null,observer=null,mountQueued=false,browseMode=false;
 
   const meetHost=()=>document.querySelector('#meetView');
@@ -164,49 +164,40 @@
     queueMicrotask(mount);
   }
 
-  function scrollWorkingCard(){
-    requestAnimationFrame(()=>workingCard()?.scrollIntoView?.({block:'start',behavior:'smooth'}));
-  }
-
   function cardMatches(key){
     const ops=workingCard(),primary=ops?.querySelector('.mo-card.primary');
     return !!primary&&primary.dataset.moCard===key;
   }
 
-  function syncSelected({scroll=false}={}){
+  function syncSelected(){
     enableWorkingControls();
     const key=M.state?.meetProgramBA?.selectedKey||M.state?.meetOps?.selectedRaceKey||'';
     if(!key){mount();return false}
-    const finish=()=>{
-      mount();
-      if(scroll)scrollWorkingCard();
-    };
     if(cardMatches(key)){
-      finish();
+      mount();
       return true;
     }
-    // The programme selection already wrote the exact meetOps race key. Refresh the
-    // exported Meet projection only when the rendered card is stale; do not select
-    // the same race a second time through meetOps' local renderer.
-    if(M.meetOpsEngine?.render){
-      M.meetOpsEngine.render();
-      setTimeout(finish,0);
+    // meet-program already writes the exact selected key. selectKey uses meet-ops'
+    // private operational renderer, so only the small race card is refreshed.
+    if(M.meetOpsEngine?.selectKey){
+      M.meetOpsEngine.selectKey(key,{scroll:false});
+      queueMicrotask(mount);
       return true;
     }
-    finish();
+    mount();
     return false;
   }
 
-  function scheduleSync(scroll=false){
+  function scheduleSync(){
     clearTimeout(syncTimer);
-    syncTimer=setTimeout(()=>syncSelected({scroll}),0);
+    syncTimer=setTimeout(syncSelected,0);
   }
 
   function onProgrammeClick(e){
     if(!e.target?.closest)return;
     if(e.target.closest('[data-ba-row].aqua,[data-ba-jump-race],[data-ba-athlete]')){
       browseMode=false;
-      scheduleSync(true);
+      scheduleSync();
       return;
     }
     if(e.target.closest('[data-ba-event],[data-ba-source],[data-ba-prev],[data-ba-next],[data-ba-add-session],[data-ba-jump-now]')){
@@ -226,7 +217,7 @@
     observe();
     setTimeout(()=>{
       mount();
-      if(M.state?.meetProgramBA?.selectedKey&&hasExplicitRace())syncSelected({scroll:false});
+      if(M.state?.meetProgramBA?.selectedKey&&hasExplicitRace())syncSelected();
     },0);
   }
 
