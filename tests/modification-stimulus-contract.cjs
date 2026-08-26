@@ -86,6 +86,14 @@ assert.ok(amberMetres>=350&&amberMetres<=450,JSON.stringify(x));
 assert.equal(amberMetres%50,0,'Amber modified work must return to the starting end in SCM');
 assert.match(x.raw,/Upper-body/i);
 
+const amberHandsBySide=set('amber-hands-by-side',4,50,{stroke:'IM',raw:'4 x 50 Medley Order',cues:['Hands by Side']});
+x=Modification.adaptItem(amberHandsBySide,ap,baseState,session);
+assert.equal(x.functionalConstraint,'no-functional-leg-use','Amber must carry the locked functional constraint');
+assert.equal(x.constraintApplied,'amber-upper-body','Hands-by-side must route through the core Modification authority');
+assert.match(x.raw,/Upper-body/i,'Amber must receive an upper-body equivalent');
+assert.doesNotMatch([x.raw,x.text,...(x.cues||[])].join(' '),/Hands by Side/i,'Amber must never be prescribed hands-by-side propulsion');
+assert.ok(Array.isArray(x.adaptiveOptions)&&x.adaptiveOptions.some(o=>['Pull','Swim','Paddles','Body alignment'].includes(o.id)),'Amber must retain practical upper-body options');
+
 const mixed=set('mixed',2,400,{stroke:'Freestyle',raw:'2 x 400 Freestyle',repPattern:[{rep:1,zone:'Regeneration'},{rep:2,zone:'Development'}]});
 x=Modification.adaptItem(mixed,cm,baseState,session);
 assert.equal(x.repPattern.length,2);
