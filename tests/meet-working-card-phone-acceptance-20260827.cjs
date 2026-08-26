@@ -65,8 +65,27 @@ Heat 2 of 2 Finals Starts at 07:40 PM
 
   // Type a coach time directly from the working card.
   await page.fill('[data-mo-manual]','59.91');
+  const manualBefore=await page.evaluate(k=>({
+   selected:MSOS4.state.meetOps?.selectedRaceKey||'',
+   programmeSelected:MSOS4.state.meetProgramBA?.selectedKey||'',
+   input:document.querySelector('[data-mo-manual]')?.value||'',
+   buttonKey:document.querySelector('[data-mo-save-time]')?.dataset.moSaveTime||'',
+   recordKeys:Object.keys(MSOS4.state.meetOps?.races||{}),
+   selectedRecord:MSOS4.state.meetOps?.races?.[k]||null
+  }),selectedKey);
   await page.click('[data-mo-save-time]');
-  await page.waitForFunction(k=>Math.abs(Number(MSOS4.state.meetOps?.races?.[k]?.draft_time_seconds)-59.91)<0.001,selectedKey,{timeout:3000});
+  await page.waitForTimeout(250);
+  const manualAfter=await page.evaluate(k=>({
+   selected:MSOS4.state.meetOps?.selectedRaceKey||'',
+   programmeSelected:MSOS4.state.meetProgramBA?.selectedKey||'',
+   input:document.querySelector('[data-mo-manual]')?.value||'',
+   buttonKey:document.querySelector('[data-mo-save-time]')?.dataset.moSaveTime||'',
+   recordKeys:Object.keys(MSOS4.state.meetOps?.races||{}),
+   records:Object.fromEntries(Object.entries(MSOS4.state.meetOps?.races||{}).map(([key,x])=>[key,{draft_time_seconds:x?.draft_time_seconds,status:x?.status}])),
+   selectedRecord:MSOS4.state.meetOps?.races?.[k]||null
+  }),selectedKey);
+  console.log('MEET_WORKING_CARD_MANUAL_DEBUG',JSON.stringify({selectedKey,manualBefore,manualAfter}));
+  assert.ok(Math.abs(Number(manualAfter.selectedRecord?.draft_time_seconds)-59.91)<0.001,'typed coach time must save to the exact selected race');
 
   // Type an observation in place while watching the race.
   const quick=page.locator('[data-mo-quick-note]');
