@@ -19,7 +19,7 @@ global.MSOS4={
     trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],adaptationOverrides:[],
     meetFieldDeck:{source_id:'meet-source-1',title:'South Island Champs',races:[{event_number:1,heat:1,lane:3,athlete_id:'a1'}]},
     meetImports:[{id:'meet-source-1',name:'Session 1',size:1234,text:'SESSION ONE RAW',parsed:{large:'derived-copy'}}],
-    meetOps:{races:{'meet-source-1|1|1|3|a1':{status:'draft',draft_time_seconds:32.1}},evidence:[{id:'ev1',text_content:'clean turn'}]},
+    meetOps:{races:{'meet-source-1|1|1|3|a1':{status:'draft',draft_time_seconds:32.1}},evidence:[{id:'ev1',text_content:'clean turn'}],selectedRaceKey:'meet-source-1|1|1|3|a1',selectedAthleteId:'a1'},
     meetProgramBA:{
       sources:[
         {source_id:'meet-source-1',added_at:'2026-08-26T00:00:00Z',raw:'SESSION ONE RAW',parsed:{events:[1]}},
@@ -54,12 +54,25 @@ assert.equal(compact.meetRaces[0].id,'race1');
 assert.equal(compact.meetEvidence[0].id,'me1');
 
 const sig1=S.meetDurableSignature(global.MSOS4.state);
+global.MSOS4.state.meetProgramBA.nowKey='meet-source-2|9|1';
+global.MSOS4.state.meetProgramBA.selectedEventNumber=9;
+const navSig=S.meetDurableSignature(global.MSOS4.state);
+assert.notEqual(sig1,navSig,'moving live Meet NOW/event must trigger a compact recovery checkpoint');
+
+global.MSOS4.state.meetOps.races['meet-source-1|1|1|3|a1'].draft_time_seconds=31.55;
+const resultSig=S.meetDurableSignature(global.MSOS4.state);
+assert.notEqual(navSig,resultSig,'changing a Meet race result/timer record must trigger compact recovery');
+
+global.MSOS4.state.meetOps.evidence.push({id:'ev2',created_at:'2026-08-26T02:00:00Z',text_content:'better breakout'});
+const evidenceSig=S.meetDurableSignature(global.MSOS4.state);
+assert.notEqual(resultSig,evidenceSig,'adding Meet evidence must trigger compact recovery');
+
 global.MSOS4.state.meetProgramBA.sources.push({source_id:'meet-source-3',raw:'FINALS RAW'});
-const sig2=S.meetDurableSignature(global.MSOS4.state);
-assert.notEqual(sig1,sig2,'adding a programme source must trigger a new durable Meet signature');
+const sourceSig=S.meetDurableSignature(global.MSOS4.state);
+assert.notEqual(evidenceSig,sourceSig,'adding a programme source must trigger a new durable Meet signature');
 
 global.MSOS4.state.meetFieldDeck=null;
-const sig3=S.meetDurableSignature(global.MSOS4.state);
-assert.notEqual(sig2,sig3,'clearing the active field deck must trigger a durable recovery checkpoint');
+const clearSig=S.meetDurableSignature(global.MSOS4.state);
+assert.notEqual(sourceSig,clearSig,'clearing the active field deck must trigger a durable recovery checkpoint');
 
-console.log('MEET_STORAGE_DURABLE_PASS sources=2 selected=E8 ops=retained');
+console.log('MEET_STORAGE_DURABLE_PASS sources=2 selected=E8 nav=tracked ops=tracked evidence=tracked');
