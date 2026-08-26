@@ -29,18 +29,24 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       return{sessionId:s.id,itemId:item?.id||'',boardStateBuild:M.boardStateEngine?.build||''};
     });
     assert.ok(setup.itemId,'Target test item missing');
-    assert.match(setup.boardStateBuild,/phone-stable-d$/,'Phone-stable Board state owner is not loaded');
+    assert.match(setup.boardStateBuild,/phone-stable-e$/,'Stable-job Board state owner is not loaded');
     const selector=`#boardView [data-item="${setup.itemId}"]`,row=page.locator(selector);assert.equal(await row.count(),1,'Target row missing');
     await row.scrollIntoViewIfNeeded();await page.evaluate(()=>scrollBy(0,-180));
     const beforeOpen=await row.evaluate(el=>el.getBoundingClientRect().top);assert.ok(Math.abs(beforeOpen)>20,'Target row did not move into a useful deck position');
     await page.evaluate(()=>{window.__targetCounts=[];const host=document.querySelector('#boardView');window.__targetObserver=new MutationObserver(()=>{const box=host.querySelector('[data-msos-target-matrix]');if(!box)return;const n=box.querySelectorAll('.msos-target-card').length;if(n>0&&window.__targetCounts.at(-1)!==n)window.__targetCounts.push(n);});window.__targetObserver.observe(host,{subtree:true,childList:true});});
     await row.locator('[data-msos-times]').click();
-    await page.waitForFunction(()=>document.querySelectorAll('[data-msos-target-matrix] .msos-target-card').length===8,{timeout:5000});
+    const noisyStart=Date.now();
+    await page.evaluate(()=>{window.__targetNoise=setInterval(()=>dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'phone-refresh-noise'}})),5);});
+    await page.waitForFunction(()=>document.querySelectorAll('[data-msos-target-matrix] .msos-target-card').length===8,{timeout:750});
+    const noisyElapsed=Date.now()-noisyStart;
+    const timing=await page.evaluate(()=>{clearInterval(window.__targetNoise);window.__targetNoise=null;return MSOS4.boardStateEngine?.lastTargetTiming||null;});
+    assert.ok(noisyElapsed<750,`Target panel did not complete through refresh noise: ${noisyElapsed}ms`);
+    assert.equal(timing?.status,'done',`Stable target job did not finish: ${JSON.stringify(timing)}`);
+    assert.equal(timing?.cards,8,`Stable target job finished with wrong card count: ${JSON.stringify(timing)}`);
+    assert.ok(Number(timing?.reattachments||0)>0,`Refresh-noise regression did not actually reattach to the in-flight target job: ${JSON.stringify(timing)}`);
     const counts=await page.evaluate(()=>{window.__targetObserver?.disconnect();return window.__targetCounts.slice();});
     assert.deepEqual(counts,[8],`Target panel painted partial groups: ${JSON.stringify(counts)}`);
 
-    // Put the first stroke pill at a genuinely tappable deck position before measuring stability.
-    // This avoids Playwright auto-scrolling an otherwise partially occluded control under fixed phone chrome.
     const stroke=page.locator('[data-msos-target-matrix] [data-msos-fast-stroke]').first();assert.equal(await stroke.count(),1,'Stroke control missing from target matrix');
     let sb=await stroke.boundingBox();assert.ok(sb,'Stroke pill has no phone geometry');
     await page.evaluate(y=>scrollBy(0,y-360),sb.y+sb.height/2);
@@ -57,6 +63,6 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     const afterStroke=await page.locator(selector).evaluate(el=>el.getBoundingClientRect().top),afterScroll=await page.evaluate(()=>scrollY);
     assert.ok(Math.abs(afterStroke-beforeStroke)<=4,`Visible stroke change moved Board row ${beforeStroke.toFixed(1)} -> ${afterStroke.toFixed(1)}`);
     assert.equal(afterScroll,beforeScroll,`Visible stroke change changed scrollY ${beforeScroll} -> ${afterScroll}`);
-    console.log('PHONE_TARGET_STABILITY_PASS');
+    console.log(`PHONE_TARGET_STABILITY_PASS noisy=${noisyElapsed}ms reattachments=${timing.reattachments}`);
   }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
