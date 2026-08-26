@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827b2';
+  const BUILD='v4-meet-program-ops-bridge-20260827b3';
   let retainedOps=null,syncTimer=null,observer=null,mountQueued=false,browseMode=false;
 
   const meetHost=()=>document.querySelector('#meetView');
@@ -168,20 +168,32 @@
     requestAnimationFrame(()=>workingCard()?.scrollIntoView?.({block:'start',behavior:'smooth'}));
   }
 
+  function cardMatches(key){
+    const ops=workingCard(),primary=ops?.querySelector('.mo-card.primary');
+    return !!primary&&primary.dataset.moCard===key;
+  }
+
   function syncSelected({scroll=false}={}){
     enableWorkingControls();
     const key=M.state?.meetProgramBA?.selectedKey||M.state?.meetOps?.selectedRaceKey||'';
     if(!key){mount();return false}
-    if(M.meetOpsEngine?.selectKey){
-      M.meetOpsEngine.selectKey(key,{scroll:false});
-      queueMicrotask(()=>{
-        mount();
-        if(scroll)scrollWorkingCard();
-      });
+    const finish=()=>{
+      mount();
+      if(scroll)scrollWorkingCard();
+    };
+    if(cardMatches(key)){
+      finish();
       return true;
     }
-    mount();
-    if(scroll)scrollWorkingCard();
+    // The programme selection already wrote the exact meetOps race key. Refresh the
+    // exported Meet projection only when the rendered card is stale; do not select
+    // the same race a second time through meetOps' local renderer.
+    if(M.meetOpsEngine?.render){
+      M.meetOpsEngine.render();
+      setTimeout(finish,0);
+      return true;
+    }
+    finish();
     return false;
   }
 
