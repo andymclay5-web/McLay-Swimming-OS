@@ -63,48 +63,40 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   assert.ok(selectedKey,'programme row must select an exact meet-ops race key');
   assert.equal(await page.evaluate(()=>MSOS4.state.meetProgramBA?.selectedKey||''),selectedKey,'programme and meet-ops must agree on selected race');
 
-  // Type a coach time directly from the working card.
   await page.fill('[data-mo-manual]','59.91');
-  const manualBefore=await page.evaluate(k=>({
-   selected:MSOS4.state.meetOps?.selectedRaceKey||'',
-   programmeSelected:MSOS4.state.meetProgramBA?.selectedKey||'',
-   input:document.querySelector('[data-mo-manual]')?.value||'',
-   buttonKey:document.querySelector('[data-mo-save-time]')?.dataset.moSaveTime||'',
-   recordKeys:Object.keys(MSOS4.state.meetOps?.races||{}),
-   selectedRecord:MSOS4.state.meetOps?.races?.[k]||null
-  }),selectedKey);
   await page.click('[data-mo-save-time]');
-  await page.waitForTimeout(250);
-  const manualAfter=await page.evaluate(k=>({
-   selected:MSOS4.state.meetOps?.selectedRaceKey||'',
-   programmeSelected:MSOS4.state.meetProgramBA?.selectedKey||'',
-   input:document.querySelector('[data-mo-manual]')?.value||'',
-   buttonKey:document.querySelector('[data-mo-save-time]')?.dataset.moSaveTime||'',
-   recordKeys:Object.keys(MSOS4.state.meetOps?.races||{}),
-   records:Object.fromEntries(Object.entries(MSOS4.state.meetOps?.races||{}).map(([key,x])=>[key,{draft_time_seconds:x?.draft_time_seconds,status:x?.status}])),
-   selectedRecord:MSOS4.state.meetOps?.races?.[k]||null
-  }),selectedKey);
-  console.log('MEET_WORKING_CARD_MANUAL_DEBUG',JSON.stringify({selectedKey,manualBefore,manualAfter}));
-  assert.ok(Math.abs(Number(manualAfter.selectedRecord?.draft_time_seconds)-59.91)<0.001,'typed coach time must save to the exact selected race');
+  await page.waitForFunction(k=>Math.abs(Number(MSOS4.state.meetOps?.races?.[k]?.draft_time_seconds)-59.91)<0.001,selectedKey,{timeout:3000});
 
-  // Type an observation in place while watching the race.
   const quick=page.locator('[data-mo-quick-note]');
   await quick.fill('Held line well; breakout improved.');
   await page.waitForTimeout(450);
   assert.equal(await page.evaluate(k=>MSOS4.state.meetOps?.races?.[k]?.notes||'',selectedKey),'Held line well; breakout improved.');
 
-  // Capture a race-linked note through the actual Capture surface.
   await page.click('[data-mo-cap]');
   await page.waitForSelector('[data-mo-note]',{timeout:3000});
   await page.fill('[data-mo-note]','Finish timing strong; check stroke count next race.');
   await page.click('[data-mo-save-note]');
   await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&e.capture_type==='note'&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:3000});
+  await page.waitForTimeout(250);
 
-  await page.click('[data-mo-complete]');
+  const visibility=await page.evaluate(()=>{
+    const rect=n=>{const r=n.getBoundingClientRect();return{w:r.width,h:r.height,top:r.top,left:r.left}};
+    const ancestry=n=>{const out=[];for(let x=n;x&&out.length<8;x=x.parentElement){const cs=getComputedStyle(x);out.push({tag:x.tagName,id:x.id||'',cls:x.className||'',hidden:!!x.hidden,display:cs.display,visibility:cs.visibility,rect:rect(x)})}return out};
+    return{
+      bodyClass:document.body.className,
+      programmeCount:document.querySelectorAll('[data-meet-program-ba]').length,
+      ops:[...document.querySelectorAll('[data-meet-ops-av]')].map((n,i)=>({i,hidden:n.hidden,working:n.dataset.meetProgramWorkingCard||'',connected:n.isConnected,inProgramme:!!n.closest('[data-meet-program-ba]'),display:getComputedStyle(n).display,visibility:getComputedStyle(n).visibility,rect:rect(n),ancestry:ancestry(n),complete:[...n.querySelectorAll('[data-mo-complete]')].map(b=>({hidden:b.hidden,disabled:b.disabled,display:getComputedStyle(b).display,visibility:getComputedStyle(b).visibility,rect:rect(b),ancestry:ancestry(b)}))})),
+      allComplete:[...document.querySelectorAll('[data-mo-complete]')].map((b,i)=>({i,text:b.textContent,hidden:b.hidden,disabled:b.disabled,display:getComputedStyle(b).display,visibility:getComputedStyle(b).visibility,rect:rect(b),insideWorking:!!b.closest('[data-meet-program-working-card="1"]'),insideProgramme:!!b.closest('[data-meet-program-ba]')}))
+    };
+  });
+  console.log('MEET_WORKING_CARD_VISIBILITY_DEBUG',JSON.stringify(visibility));
+  const visibleCompletes=visibility.allComplete.filter(x=>!x.hidden&&!x.disabled&&x.display!=='none'&&x.visibility!=='hidden'&&x.rect.w>0&&x.rect.h>0);
+  assert.equal(visibleCompletes.length,1,'exactly one visible Complete race action must remain after Capture');
+
+  await page.locator('[data-meet-program-working-card="1"] [data-mo-complete]').click({timeout:3000});
   await page.waitForFunction(k=>MSOS4.state.meetOps?.races?.[k]?.status==='complete',selectedKey,{timeout:3000});
-  assert.match(await working.innerText(),/Race complete/);
+  assert.match(await page.locator('[data-meet-program-working-card="1"]').innerText(),/Race complete/);
 
-  // Persist the exact race data before the cold reload.
   const rev=await page.evaluate(()=>{MSOS4.store.save(MSOS4.state);return Number(MSOS4.state.settings.storageRevision)||0});
   await page.evaluate(async r=>{await MSOS4.storageEngine.whenPersisted(r)},rev);
   await page.waitForFunction(()=>Number(MSOS4.storageEngine.lastCompactPersistedAt||0)>0,{timeout:6000});
