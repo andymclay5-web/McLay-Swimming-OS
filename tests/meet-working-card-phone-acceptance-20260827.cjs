@@ -41,23 +41,43 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.waitForSelector('[data-mfa-use]',{timeout:3000});
   await page.click('[data-mfa-use]');
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
-  await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('20260827a'),{timeout:3000});
+  await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('20260827b'),{timeout:3000});
 
   const row=page.locator('.ba-row.aqua').first();
   assert.equal(await row.count(),1,'AquaGym programme row must be visible');
   const programmeText=await page.locator('.ba-event').innerText();
-  assert.match(programmeText,/Aqua One/);assert.match(programmeText,/1:00\.44/,'entry/seed time must remain visible in whole programme');
+  assert.match(programmeText,/Rival One[\s\S]*1:02\.20/,'competitor entry time must be visible');
+  assert.match(programmeText,/Aqua One[\s\S]*1:00\.44/,'AquaGym entry time must be visible');
+  assert.match(programmeText,/Rival Two[\s\S]*59\.88/,'all competitor entry times must remain visible');
 
   await row.click();
   await page.waitForFunction(()=>{
    const p=document.querySelector('[data-meet-program-ba]'),w=document.querySelector('[data-meet-program-working-card="1"]');
    return !!p&&!!w&&!w.hidden&&p.contains(w)&&/Aqua One/.test(w.textContent||'');
   },{timeout:5000});
+  await page.waitForSelector('[data-meet-program-working-card="1"] [data-meet-priority-actions]',{timeout:3000});
 
   const working=page.locator('[data-meet-program-working-card="1"]');
   const workText=await working.innerText();
   assert.match(workText,/Aqua One/);assert.match(workText,/Seed\s*1:00\.44/,'working card must expose entry time');
-  assert.match(workText,/Start timer/);assert.match(workText,/Manual coach time/);assert.match(workText,/Capture/);assert.match(workText,/Race data/);assert.match(workText,/Complete race/);
+  assert.match(workText,/Type race time/,'typed race time must be a primary deck action');
+  assert.match(workText,/Live commentary/,'heat commentary must be surfaced as a primary deck action');
+  assert.match(workText,/Video/,'video capture must be surfaced as a primary deck action');
+  assert.match(workText,/Photo \/ more/,'other capture remains available without crowding the card');
+  assert.match(workText,/Backup stopwatch/,'stopwatch must remain available as a secondary tool');
+  assert.match(workText,/Race data/);assert.match(workText,/Complete race/);
+
+  const priority=await page.evaluate(()=>{
+   const card=document.querySelector('[data-meet-program-working-card="1"] .mo-card.primary');
+   const timer=card?.querySelector('[data-meet-backup-timer]');
+   const manual=card?.querySelector('.mo-manual');
+   const actions=card?.querySelector('[data-meet-priority-actions]');
+   return{timerOpen:!!timer?.open,manualBeforeTimer:!!(manual&&timer&&(manual.compareDocumentPosition(timer)&Node.DOCUMENT_POSITION_FOLLOWING)),actionsBeforeTimer:!!(actions&&timer&&(actions.compareDocumentPosition(timer)&Node.DOCUMENT_POSITION_FOLLOWING)),heatTimerHidden:!!document.querySelector('[data-meet-program-working-card="1"] .mo-heat-head')?.hidden};
+  });
+  assert.equal(priority.timerOpen,false,'backup stopwatch must be collapsed by default');
+  assert.equal(priority.manualBeforeTimer,true,'typed race time must appear before backup stopwatch');
+  assert.equal(priority.actionsBeforeTimer,true,'commentary/video actions must appear before backup stopwatch');
+  assert.equal(priority.heatTimerHidden,true,'same-heat stopwatch launcher must not crowd the integrated programme');
 
   const selectedKey=await page.evaluate(()=>MSOS4.state.meetOps?.selectedRaceKey||'');
   assert.ok(selectedKey,'programme row must select an exact meet-ops race key');
@@ -77,21 +97,10 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.fill('[data-mo-note]','Finish timing strong; check stroke count next race.');
   await page.click('[data-mo-save-note]');
   await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&e.capture_type==='note'&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:3000});
-  await page.waitForTimeout(250);
-
-  const visibility=await page.evaluate(()=>{
-    const rect=n=>{const r=n.getBoundingClientRect();return{w:r.width,h:r.height,top:r.top,left:r.left}};
-    const ancestry=n=>{const out=[];for(let x=n;x&&out.length<8;x=x.parentElement){const cs=getComputedStyle(x);out.push({tag:x.tagName,id:x.id||'',cls:x.className||'',hidden:!!x.hidden,display:cs.display,visibility:cs.visibility,rect:rect(x)})}return out};
-    return{
-      bodyClass:document.body.className,
-      programmeCount:document.querySelectorAll('[data-meet-program-ba]').length,
-      ops:[...document.querySelectorAll('[data-meet-ops-av]')].map((n,i)=>({i,hidden:n.hidden,working:n.dataset.meetProgramWorkingCard||'',connected:n.isConnected,inProgramme:!!n.closest('[data-meet-program-ba]'),display:getComputedStyle(n).display,visibility:getComputedStyle(n).visibility,rect:rect(n),ancestry:ancestry(n),complete:[...n.querySelectorAll('[data-mo-complete]')].map(b=>({hidden:b.hidden,disabled:b.disabled,display:getComputedStyle(b).display,visibility:getComputedStyle(b).visibility,rect:rect(b),ancestry:ancestry(b)}))})),
-      allComplete:[...document.querySelectorAll('[data-mo-complete]')].map((b,i)=>({i,text:b.textContent,hidden:b.hidden,disabled:b.disabled,display:getComputedStyle(b).display,visibility:getComputedStyle(b).visibility,rect:rect(b),insideWorking:!!b.closest('[data-meet-program-working-card="1"]'),insideProgramme:!!b.closest('[data-meet-program-ba]')}))
-    };
-  });
-  console.log('MEET_WORKING_CARD_VISIBILITY_DEBUG',JSON.stringify(visibility));
-  const visibleCompletes=visibility.allComplete.filter(x=>!x.hidden&&!x.disabled&&x.display!=='none'&&x.visibility!=='hidden'&&x.rect.w>0&&x.rect.h>0);
-  assert.equal(visibleCompletes.length,1,'exactly one visible Complete race action must remain after Capture');
+  await page.waitForFunction(()=>{
+   const w=document.querySelector('[data-meet-program-working-card="1"]'),b=w?.querySelector('[data-mo-complete]'),r=b?.getBoundingClientRect();
+   return !!w&&!w.hidden&&!!b&&!b.disabled&&getComputedStyle(b).display!=='none'&&r.width>0&&r.height>0&&!!w.querySelector('[data-meet-backup-timer]')&&!w.querySelector('[data-meet-backup-timer]').open;
+  },{timeout:3000});
 
   await page.locator('[data-meet-program-working-card="1"] [data-mo-complete]').click({timeout:3000});
   await page.waitForFunction(k=>MSOS4.state.meetOps?.races?.[k]?.status==='complete',selectedKey,{timeout:3000});
@@ -110,10 +119,10 @@ Heat 2 of 2 Finals Starts at 07:40 PM
    const x=MSOS4.state.meetOps?.races?.[k];
    return x?.status==='complete'&&Math.abs(Number(x.draft_time_seconds)-59.91)<0.001&&/Held line well/.test(x.notes||'')&&(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&/Finish timing strong/.test(e.text_content||''));
   },selectedKey,{timeout:5000});
-  await page.waitForFunction(()=>{const w=document.querySelector('[data-meet-program-working-card="1"]');return !!w&&!w.hidden&&/Aqua One/.test(w.textContent||'')},{timeout:5000});
+  await page.waitForFunction(()=>{const w=document.querySelector('[data-meet-program-working-card="1"]');return !!w&&!w.hidden&&/Aqua One/.test(w.textContent||'')&&!!w.querySelector('[data-meet-priority-actions]')},{timeout:5000});
 
   assert.deepEqual(pageErrors,[],'page errors during Meet working-card journey');
   assert.deepEqual(consoleErrors,[],'console errors during Meet working-card journey');
-  console.log('MEET_WORKING_CARD_PHONE_ACCEPTANCE_PASS seed=1:00.44 typed=59.91 note=retained capture=retained complete=retained reload=restored');
+  console.log('MEET_WORKING_CARD_PHONE_ACCEPTANCE_PASS competitors=3 seeds=3 typed=59.91 commentary=primary video=primary stopwatch=secondary note=retained capture=retained complete=retained reload=restored');
  }finally{await browser.close()}
 })().catch(err=>{console.error(err?.stack||err);process.exit(1)});
