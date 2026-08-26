@@ -68,8 +68,8 @@ const im=set('im',5,100,{stroke:'IM',raw:'5 x 100 IM @ 1:45',cycleSeconds:105});
 x=Modification.adaptItem(im,cm,baseState,session);
 assert.equal(x.distance,100);
 assert.equal(x.reps,3);
-assert.equal(x.cycleSeconds,105);
-assert.match(x.adaptationReason||'',/complete IM units/i);
+assert.equal(x.cycleSeconds,175);
+assert.match(x.adaptationReason||'',/complete IM units.*squad set window/i);
 
 const fast75=set('fast75',4,75,{raw:'4 x 75 #1 Fast @ 1:30',cycleSeconds:90});
 x=Modification.adaptItem(fast75,md,baseState,session);
