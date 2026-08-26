@@ -101,6 +101,7 @@ jobs:
           node tests/bridge-operational-fast-start-20260826.cjs
           node tests/deck-large-evidence-latency-20260826.cjs
           node tests/deck-times-full-path-latency-20260826.cjs
+          node tests/evidence-index-hydration-churn-20260826.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
