@@ -1,0 +1,10 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const src=fs.readFileSync(path.resolve(__dirname,'../engines/bridge.js'),'utf8');
+assert.match(src,/localPbReferenceCount=\(\)=>\{[\s\S]*resultsPbBoard[\s\S]*Math\.max\(refs,stateRows\)/,'race evidence must count operational-state PB rows as local evidence');
+const ready=src.match(/B\.whenRaceEvidenceReady=async\(\)=>\{([^\n]+)\};/);
+assert.ok(ready,'whenRaceEvidenceReady contract missing');
+assert.match(ready[1],/const local=B\.localPbReferenceCount\(\);if\(local>0\)return true/,'existing local PB evidence must satisfy race evidence immediately');
+assert.doesNotMatch(ready[1],/await B\.refreshPbRoster\(/,'opening race-pace targets must not synchronously wait for a full cloud PB-roster pull');
+assert.match(ready[1],/B\.refreshPbRoster\(\)\.catch/,'when no local PB evidence exists, cloud recovery should run in the background');
+console.log('RACE_PACE_LOCAL_FIRST_PASS');

@@ -94,6 +94,8 @@ jobs:
           node tests/board-evidence-regression.cjs
           node tests/friday-session-board-regression.cjs
           node tests/persisted-round-repair-20260826.cjs
+          node tests/recovered-richer-local-round-repair-20260826.cjs
+          node tests/race-pace-local-first-20260826.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
