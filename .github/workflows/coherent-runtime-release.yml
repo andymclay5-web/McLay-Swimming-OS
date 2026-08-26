@@ -1,0 +1,26 @@
+name: Coherent Runtime Release
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  coherent-runtime:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check app.js
+          node --check engines/parser-semantics.js
+          node --check sw.js
+      - name: Runtime generation contract
+        run: node tests/coherent-runtime-release-20260825.cjs
+      - name: Repeated-round parser truth
+        run: node tests/parser-round-scope-only-20260825.cjs

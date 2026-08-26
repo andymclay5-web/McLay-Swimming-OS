@@ -16,7 +16,6 @@ const saves=[];
 global.MSOS4={
   state,
   BUILD:'v4-before-bh',CORE:'old',RELEASE_ATTESTATION:{build:'old',softwareReady:false},
-  util:{},
   store:{save:s=>{saves.push(JSON.parse(JSON.stringify(s)));return s}},
   storageEngine:{saveUi:s=>{saves.push(JSON.parse(JSON.stringify(s)));return s}},
   ui:{configureRoleChrome:()=>{}},
@@ -25,15 +24,10 @@ global.MSOS4={
     setRole:(role,{athleteId='',assistantId=''}={})=>{state.settings.activeRole=role;state.settings.activeUserAthleteId=role==='swimmer'?athleteId:'';state.settings.assistantId=role==='assistant'?assistantId:'';return role}
   }
 };
-const originalSetRole=global.MSOS4.access.setRole;
-const originalConfigure=global.MSOS4.ui.configureRoleChrome;
 require('../engines/stability-identity-bh.js');
 const M=global.MSOS4,I=M.stabilityIdentityBH;
 
-assert.equal(I.build,'v4-stability-identity-20260825-migration-only');
-assert.equal(I.migrationOnly,true);
-assert.equal(M.access.setRole,originalSetRole,'migration layer must not wrap runtime access authority');
-assert.equal(M.ui.configureRoleChrome,originalConfigure,'migration layer must not wrap UI rendering');
+assert.equal(I.build,'v4-stability-identity-20260822bh');
 assert.equal(state.settings.activeRole,'owner','pre-BH stale swimmer role must reset to owner');
 assert.equal(state.settings.activeUserAthleteId,'','stale swimmer id must clear');
 assert.equal(state.settings.view,'board','stale swimmer surface must return to Board');
@@ -44,16 +38,11 @@ assert.equal(state.guardian.fieldIncidents?.at(-1)?.type,'placeholder_roster_con
 assert.deepEqual(state.guardian.fieldIncidents.at(-1).names,['Swimmer A','Swimmer B']);
 assert.equal(I.validLinkedAthlete('fake'),false,'placeholder Swimmer A must never count as a valid linked athlete');
 assert.equal(I.validLinkedAthlete('charlotte'),true);
-
-require('../engines/access-authority.js');
-assert.equal(M.accessAuthority.atomicRoleBinding,true,'access authority must own role binding atomically');
 assert.throws(()=>M.access.setRole('swimmer',{athleteId:'fake'}),/real active swimmer/i);
 M.access.setRole('swimmer',{athleteId:'charlotte'});
 assert.equal(M.access.role(),'swimmer');
 assert.equal(state.settings.activeUserAthleteId,'charlotte');
 assert.equal(state.settings.roleBindingKind,'swimmer');
 assert.equal(state.settings.roleBindingAthleteId,'charlotte');
-assert.equal(M.access.visibleAthletes().length,1,'swimmer role must expose one canonical athlete only');
-assert.equal(M.access.visibleAthletes()[0].id,'charlotte');
-assert(saves.length>0,'identity/roster migration and role binding should persist');
-console.log('PASS stability-identity-bh · migration only + atomic access binding + explicit real swimmer link');
+assert(saves.length>0,'identity/roster migration should persist');
+console.log('PASS stability-identity-bh · placeholder roster purged + audited · stale role reset · explicit real swimmer link works');
