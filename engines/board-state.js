@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M?.ui||!E?.Coordinator||!E?.Modification||!E?.Evidence)return;
-  const S=M.boardStateEngine={build:'v4-board-state-20260826-instant-times-a'},U=M.util;
+  const S=M.boardStateEngine={build:'v4-board-state-20260826-instant-times-b'},U=M.util;
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
   const saveData=()=>{try{M.store?.save?.(M.state)}catch{}};
   const esc=v=>U?.escape?U.escape(String(v??'')):String(v??''),short=v=>String(v??'').replace('Freestyle','Fr').replace('Backstroke','Bk').replace('Breaststroke','Br').replace('Butterfly','Fly');
@@ -69,7 +69,7 @@
     if(complete)S.prewarmStatus={...S.prewarmStatus,status:'done',ready,total:items.length,finishedAt:performance?.now?.()??Date.now()};
     return{ready,total:items.length,complete};
   }
-  function schedulePrewarm(delay=0){if(prewarmTimer)clearTimeout(prewarmTimer);prewarmTimer=setTimeout(()=>{prewarmTimer=0;prewarmSessionTargets().catch(()=>{});},Math.max(0,delay));}
+  function schedulePrewarm(_delay=0){if(prewarmTimer){clearTimeout(prewarmTimer);prewarmTimer=0;}S.prewarmStatus={...(S.prewarmStatus||{}),status:'auto-disabled'};}
   function evidenceContentChanged(ev){const reason=String(ev?.detail?.reason||'').toLowerCase();return /pb-roster-sync|athlete-pb-direct|deep-evidence-hydrate|result-import|pb-update|evidence-change/.test(reason)&&!/error/.test(reason);}
   function panelHtml(_session,item){return panelShell(item);}
   function setButtons(openId=''){document.querySelectorAll('#boardView [data-msos-times],#tvView [data-msos-times]').forEach(b=>b.textContent=b.dataset.msosTimes===openId?'Close':'Times');}
@@ -85,6 +85,6 @@
   document.addEventListener('click',e=>{const times=e.target.closest?.('#boardView [data-msos-times],#tvView [data-msos-times]');if(times){e.preventDefault();e.stopImmediatePropagation();M.state.settings=M.state.settings||{};openPanel(times);return;}const stroke=e.target.closest?.('#boardView [data-msos-fast-stroke],#boardView [data-msos-stroke],#tvView [data-msos-fast-stroke],#tvView [data-msos-stroke]');if(stroke){e.preventDefault();e.stopImmediatePropagation();strokeMenu(stroke);return;}const mode=e.target.closest?.('#boardView [data-msos-mode]');if(mode){e.preventDefault();e.stopImmediatePropagation();M.state.settings=M.state.settings||{};M.state.settings.boardFocusMode=M.state.settings.boardFocusMode===false;M.state.settings.boardExpandedTargetId='';saveUi();render();return;}const block=e.target.closest?.('#boardView [data-msos-block]');if(block){e.preventDefault();e.stopImmediatePropagation();const session=M.currentSession?.();if(!session)return;M.state.settings=M.state.settings||{};M.state.settings.boardFocusMode=true;M.state.settings.boardExpandedTargetId='';M.state.settings.boardBlockBySession=M.state.settings.boardBlockBySession||{};M.state.settings.boardBlockBySession[session.id]=block.dataset.msosBlock;saveUi();render();return;}},true);
   addEventListener('msos:data-updated',()=>{if(activeDeckView()){requestAnimationFrame(hydrateVisibleModTargets);schedulePrewarm(20);}});
   addEventListener('msos:evidence-ready',ev=>{if(!activeDeckView())return;const contentChanged=evidenceContentChanged(ev);if(contentChanged){targetJobs.clear();prewarmToken++;}requestAnimationFrame(hydrateVisibleModTargets);if(M.state?.settings?.boardExpandedTargetId){const s=M.currentSession?.(),item=findItem(s,M.state.settings.boardExpandedTargetId);if(s&&item){if(contentChanged)refreshPanel(s,item);else hydrateExpandedPanel();}}schedulePrewarm(contentChanged?0:30);});
-  const boot=()=>{if(activeDeckView())requestAnimationFrame(()=>{hydrateExpandedPanel();hydrateVisibleModTargets();schedulePrewarm(0);});};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,80),{once:true});else setTimeout(boot,80);
+  const boot=()=>{if(!activeDeckView())return;M.state.settings=M.state.settings||{};if(M.state.settings.boardExpandedTargetId){M.state.settings.boardExpandedTargetId='';saveUi();closePanels();setButtons('');}requestAnimationFrame(()=>{hydrateVisibleModTargets();schedulePrewarm(0);});};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,80),{once:true});else setTimeout(boot,80);
   S.saveUi=saveUi;S.openPanel=openPanel;S.panelHtml=panelHtml;S.fillPanel=fillPanel;S.hydrateVisibleModTargets=hydrateVisibleModTargets;S.cancelWork=cancelWork;S.prewarm=prewarmSessionTargets;S.targetJobs=targetJobs;
 })(globalThis);
