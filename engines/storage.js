@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.store)return;
-  const S=M.storageEngine={build:'v4-storage-owner-final-20260826b-meet-durable'};
+  const S=M.storageEngine={build:'v4-storage-owner-final-20260826c-meet-live-recovery'};
   const DB='mclay_swimming_v4_operational_state',STORE='state',KEY='latest',UI_KEY='mclay_swimming_os_v4_ui',GUARDIAN_KEY='guardian';
   let ready=false,hydrateDone=false,writeTimer=0,writeRunning=false,writeAgain=false,compactAfterPending=false,metaTimer=0,uiCache=null,knownAttendance=new Map(),persistWaiters=[],meetCompactSignature='';
   const now=()=>M.util?.now?.()||new Date().toISOString();
@@ -24,9 +24,21 @@
 
   function compactMeetImports(rows){return(rows||[]).slice(-12).map(row=>{const x=safeClone(row)||{};delete x.parsed;return x})}
   function compactMeetProgram(program){if(!program||typeof program!=='object')return null;const x=safeClone(program)||{};x.sources=(program.sources||[]).slice(-12).map(src=>({source_id:src?.source_id||'',added_at:src?.added_at||'',raw:String(src?.raw||'')}));return x}
-  function meetDurableSignature(state){const d=state?.meetFieldDeck||{},imports=state?.meetImports||[],p=state?.meetProgramBA||{},sources=p.sources||[],last=imports.at?.(-1)||imports[imports.length-1]||{};return JSON.stringify([d.source_id||'',d.created_at||'',d.updated_at||'',(d.races||[]).length,imports.length,last.id||'',Number(last.size)||0,sources.length,sources.map(src=>[src?.source_id||'',String(src?.raw||'').length])])}
+  function meetDurableSignature(state){
+    const d=state?.meetFieldDeck||{},imports=state?.meetImports||[],p=state?.meetProgramBA||{},sources=p.sources||[],last=imports.at?.(-1)||imports[imports.length-1]||{},ops=state?.meetOps||{},raceMap=ops.races&&typeof ops.races==='object'?ops.races:{},raceKeys=Object.keys(raceMap).sort(),evidence=Array.isArray(ops.evidence)?ops.evidence:[],lastEvidence=evidence.at?.(-1)||evidence[evidence.length-1]||{},commentaries=Array.isArray(p.commentaries)?p.commentaries:[],lastCommentary=commentaries.at?.(-1)||commentaries[commentaries.length-1]||{};
+    return JSON.stringify([
+      d.source_id||'',d.created_at||'',d.updated_at||'',(d.races||[]).length,
+      imports.length,last.id||'',Number(last.size)||0,
+      sources.length,sources.map(src=>[src?.source_id||'',String(src?.raw||'').length]),
+      p.nowKey||'',p.selectedSourceId||'',Number(p.selectedEventNumber)||0,p.selectedKey||'',p.selectedAthleteId||'',p.expandedKey||'',
+      commentaries.length,lastCommentary.id||'',lastCommentary.created_at||'',
+      ops.selectedRaceKey||'',ops.selectedAthleteId||'',
+      raceKeys.length,raceKeys.map(k=>{const r=raceMap[k]||{};return[k,r.status||'',Number(r.draft_time_seconds??r.draftTimeSeconds)||0,Number(r.official_result_seconds??r.officialResultSeconds)||0,r.timer_running===true?1:0,r.timer_started_at||r.started_at||'',r.updated_at||'']}),
+      evidence.length,lastEvidence.id||'',lastEvidence.created_at||''
+    ])
+  }
   function compact(state){const sid=state?.settings?.selectedSessionId||'',sessions={};if(sid&&state?.canonicalSessions?.[sid])sessions[sid]=state.canonicalSessions[sid];return{schema:4,build:M.BUILD,canonicalSessions:sessions,athletes:state?.athletes||[],attendance:(state?.attendance||[]).filter(x=>!sid||(x.session_id||x.sessionId)===sid).slice(-300),trainingTestTypes:state?.trainingTestTypes||state?.training_test_types||[],trainingTestResults:(state?.trainingTestResults||state?.training_test_results||[]).slice(-120),adaptationProfiles:state?.adaptationProfiles||state?.athlete_adaptation_profiles||[],adaptationOverrides:(state?.adaptationOverrides||[]).filter(x=>x?.active!==false&&(!sid||!x.sessionId||x.sessionId===sid)).slice(-200),meetFieldDeck:safeClone(state?.meetFieldDeck||null),meetImports:compactMeetImports(state?.meetImports),meetOps:safeClone(state?.meetOps||null),meetProgramBA:compactMeetProgram(state?.meetProgramBA),meets:(state?.meets||[]).slice(-12),meetEntries:(state?.meetEntries||[]).slice(-600),meetRaces:(state?.meetRaces||[]).slice(-600),meetEvidence:(state?.meetEvidence||[]).slice(-600),settings:{...(state?.settings||{}),storageMode:'indexeddb',storageCompacted:true},guardian:{runs:(state?.guardian?.runs||[]).slice(-1)}}}
-  function scheduleCompactRecovery(state){const run=()=>{try{localStorage.setItem(M.STORAGE_KEY,JSON.stringify(compact(state)));S.lastCompactPersistedAt=Date.now()}catch(e){S.lastCompactError=String(e?.message||e)}};if(typeof requestIdleCallback==='function')requestIdleCallback(run,{timeout:4000});else setTimeout(run,1800)}
+  function scheduleCompactRecovery(state){const snapshot=compact(state),run=()=>{try{localStorage.setItem(M.STORAGE_KEY,JSON.stringify(snapshot));S.lastCompactPersistedAt=Date.now()}catch(e){S.lastCompactError=String(e?.message||e)}};if(typeof requestIdleCallback==='function')requestIdleCallback(run,{timeout:4000});else setTimeout(run,1800)}
   function publish(state){try{M.live?.publishState?.(state)}catch{}}
   function acknowledgeRevision(revision){const r=Number(revision)||0;S.lastPersistedRevision=Math.max(Number(S.lastPersistedRevision)||0,r);if(r>=Number(M.state?.settings?.storageRevision||0))S.lastPersistedAt=Date.now();const keep=[];for(const w of persistWaiters){if(r>=w.revision)w.resolve(r);else keep.push(w)}persistWaiters=keep;}
   function whenPersisted(revision){const r=Number(revision)||0;if((Number(S.lastPersistedRevision)||0)>=r)return Promise.resolve(Number(S.lastPersistedRevision)||0);return new Promise((resolve,reject)=>persistWaiters.push({revision:r,resolve,reject}));}
