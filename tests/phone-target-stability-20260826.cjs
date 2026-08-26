@@ -38,12 +38,20 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForFunction(()=>document.querySelectorAll('[data-msos-target-matrix] .msos-target-card').length===8,{timeout:5000});
     const counts=await page.evaluate(()=>{window.__targetObserver?.disconnect();return window.__targetCounts.slice();});
     assert.deepEqual(counts,[8],`Target panel painted partial groups: ${JSON.stringify(counts)}`);
+
+    // Put the first stroke pill at a genuinely tappable deck position before measuring stability.
+    // This avoids Playwright auto-scrolling an otherwise partially occluded control under fixed phone chrome.
+    const stroke=page.locator('[data-msos-target-matrix] [data-msos-fast-stroke]').first();assert.equal(await stroke.count(),1,'Stroke control missing from target matrix');
+    let sb=await stroke.boundingBox();assert.ok(sb,'Stroke pill has no phone geometry');
+    await page.evaluate(y=>scrollBy(0,y-360),sb.y+sb.height/2);
+    await page.waitForTimeout(40);sb=await stroke.boundingBox();assert.ok(sb&&sb.y>=0&&sb.y+sb.height<=760,`Stroke pill is not in a tappable phone deck position: ${JSON.stringify(sb)}`);
+    const hit=await page.evaluate(({x,y})=>{const stack=document.elementsFromPoint(x,y).slice(0,6).map(el=>({tag:el.tagName,id:el.id||'',cls:String(el.className||''),text:String(el.textContent||'').trim().slice(0,50),stroke:!!el.closest?.('[data-msos-fast-stroke]')}));return{ok:!!document.elementFromPoint(x,y)?.closest?.('[data-msos-fast-stroke]'),stack};},{x:sb.x+sb.width/2,y:sb.y+sb.height/2});
+    assert.equal(hit.ok,true,`Stroke pill is occluded at the chosen deck position: ${JSON.stringify(hit.stack)}`);
     const beforeStroke=await row.evaluate(el=>el.getBoundingClientRect().top),beforeScroll=await page.evaluate(()=>scrollY);
-    const stroke=page.locator('[data-msos-target-matrix] [data-msos-fast-stroke]').first();assert.equal(await stroke.count(),1,'Stroke control missing from target matrix');const sb=await stroke.boundingBox();assert.ok(sb&&sb.y>=0&&sb.y+sb.height<=844,`Stroke pill is not phone-visible: ${JSON.stringify(sb)}`);
-    await page.evaluate(({x,y})=>{const el=document.elementFromPoint(x,y);if(!el?.closest?.('[data-msos-fast-stroke]'))throw new Error('Visible stroke control is not the hit target');el.closest('[data-msos-fast-stroke]').click();},{x:sb.x+sb.width/2,y:sb.y+sb.height/2});
+    await page.evaluate(({x,y})=>document.elementFromPoint(x,y).closest('[data-msos-fast-stroke]').click(),{x:sb.x+sb.width/2,y:sb.y+sb.height/2});
     await page.waitForSelector('.msos-stroke-menu',{timeout:3000});assert.equal(await page.evaluate(()=>scrollY),beforeScroll,'Opening the visible stroke chooser scrolled the Board');
     const bk=page.locator('.msos-stroke-menu button',{hasText:'Bk'});assert.equal(await bk.count(),1,'Backstroke choice missing');const bb=await bk.boundingBox();assert.ok(bb&&bb.y>=0&&bb.y+bb.height<=844,`Backstroke choice is not phone-visible: ${JSON.stringify(bb)}`);
-    await page.evaluate(({x,y})=>{const el=document.elementFromPoint(x,y);if(!el||el.tagName!=='BUTTON'||el.textContent.trim()!=='Bk')throw new Error('Visible Backstroke choice is not the hit target');el.click();},{x:bb.x+bb.width/2,y:bb.y+bb.height/2});
+    await page.evaluate(()=>{const b=[...document.querySelectorAll('.msos-stroke-menu button')].find(x=>x.textContent.trim()==='Bk');if(!b)throw new Error('Backstroke choice missing from open menu');b.click();});
     await page.waitForFunction(id=>{const s=MSOS4.currentSession(),o=(MSOS4.state.adaptationOverrides||[]).find(x=>x.sessionId===s.id&&x.itemId===id&&x.active!==false);return o?.patch?.stroke==='Backstroke';},setup.itemId,{timeout:3000});
     await page.waitForFunction(()=>document.querySelectorAll('[data-msos-target-matrix] .msos-target-card').length===8,{timeout:3000});await page.waitForTimeout(120);
     const afterStroke=await page.locator(selector).evaluate(el=>el.getBoundingClientRect().top),afterScroll=await page.evaluate(()=>scrollY);
