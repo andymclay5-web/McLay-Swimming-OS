@@ -96,9 +96,10 @@ Heat 1 of 1 Finals Starts at 01:15 PM
   assert.equal(await session1Button.count(),1,'Session 1 tab must remain available');
   assert.equal(await session2Button.count(),1,'Session 2 tab must be available');
   await session1Button.click();
-  await page.waitForFunction(()=>MSOS4.state.meetProgramBA?.selectedEventNumber===1,{timeout:3000});
+  await page.waitForFunction(()=>MSOS4.state.meetProgramBA?.selectedEventNumber===2,{timeout:3000});
+  assert.match(await page.locator('[data-ba-source].active').innerText(),/Session 1/,'explicit Session 1 tab must activate Session 1');
   assert.equal(await page.locator('[data-ba-event]').count(),2,'Session 1 must still retain E1 and E2 after adding Session 2');
-  await page.click('[data-ba-event="2"]');
+  active=await page.locator('[data-ba-event].active').innerText();assert.match(active,/E2/,'Session 1 should reopen on its current NOW event');
   eventText=await page.locator('.ba-event').innerText();
   for(const value of ['Rival Three','Aqua Two','Rival Four','41.33','39.22','38.77'])assert.match(eventText,new RegExp(value.replace('.','\\.')));
 
