@@ -1,13 +1,14 @@
 'use strict';
 (function(g){
   const E=g.MSOSEngines?.Evidence;if(!E)return;
-  const X=g.MSOSEvidenceIndex={build:'v4-evidence-index-20260820s'};
+  const X=g.MSOSEvidenceIndex={build:'v4-evidence-index-20260826a'};
   const cache=new WeakMap(),key=v=>E.key?.(v)||String(v??'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+  let buildCount=0;
   const arr=(o,...names)=>{for(const n of names){if(Array.isArray(o?.[n]))return o[n];}return[];};
   const rowName=r=>E.rowName?.(r)||r?.full_name||r?.athlete_name||r?.swimmer_name||r?.match_name||r?.source_swimmer_name||r?.name||'';
   const add=(map,k,row)=>{if(!k)return;let a=map.get(k);if(!a)map.set(k,a=[]);a.push(row);};
-  function signature(state){const refs=state?._refs||{};const groups=[arr(state,'resultsPbBoard','results_pb_board'),arr(state,'resultsEventHistory','results_event_history'),arr(state,'coachResults','coach_results'),arr(refs,'results_pb_board'),arr(refs,'results_event_history'),arr(refs,'coach_results'),arr(state,'trainingTestResults','training_test_results'),arr(refs,'training_test_results'),arr(state,'trainingTestTypes','training_test_types'),arr(refs,'training_test_types'),arr(state,'athletes')];return groups.map(a=>`${a.length}:${a===groups[0]?'a':'x'}`).join('|')+`|${state?._evidenceBridge?.hydratedAt||''}`;}
-  function build(state){const sig=signature(state),old=cache.get(state);if(old?.sig===sig)return old;
+  function signature(state){const refs=state?._refs||{};const groups=[arr(state,'resultsPbBoard','results_pb_board'),arr(state,'resultsEventHistory','results_event_history'),arr(state,'coachResults','coach_results'),arr(refs,'results_pb_board'),arr(refs,'results_event_history'),arr(refs,'coach_results'),arr(state,'trainingTestResults','training_test_results'),arr(refs,'training_test_results'),arr(state,'trainingTestTypes','training_test_types'),arr(refs,'training_test_types'),arr(state,'athletes')];return groups.map(a=>`${a.length}:${a===groups[0]?'a':'x'}`).join('|')+`|rev:${Number(state?._evidenceBridge?.contentRevision)||0}`;}
+  function build(state){const sig=signature(state),old=cache.get(state);if(old?.sig===sig)return old;buildCount++;
     const pbById=new Map(),pbByName=new Map(),testById=new Map(),testByName=new Map(),nameToIds=new Map(),seenPb=new Set(),seenTest=new Set();
     for(const a of state?.athletes||[]){const n=key(a?.full_name);if(!n)continue;let ids=nameToIds.get(n);if(!ids)nameToIds.set(n,ids=new Set());for(const v of [a?.id,a?.athlete_id,a?.legacy_id,a?.legacy_athlete_id,a?.source_id])if(v)ids.add(String(v));}
     const refs=state?._refs||{},pbRows=[...arr(state,'resultsPbBoard','results_pb_board'),...arr(state,'resultsEventHistory','results_event_history'),...arr(state,'coachResults','coach_results'),...arr(refs,'results_pb_board'),...arr(refs,'results_event_history'),...arr(refs,'coach_results')];
@@ -20,5 +21,5 @@
   const originalPb=E.pbRows.bind(E),originalT400=E.t400Rows.bind(E);
   E.pbRows=(ath,state)=>{try{return rowsFor(ath,state,'pb')}catch{return originalPb(ath,state)}};
   E.t400Rows=(ath,state,wantedStroke='Freestyle')=>{try{const wanted=E.stroke(wantedStroke);return rowsFor(ath,state,'test').filter(r=>E.isT400(state,r)&&E.t400Stroke(state,r)===wanted&&r.valid_for_anchor!==false).sort((a,b)=>E.seconds(a)-E.seconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))}catch{return originalT400(ath,state,wantedStroke)}};
-  X.build=build;X.invalidate=state=>{if(state)cache.delete(state)};
+  X.build=build;X.invalidate=state=>{if(state)cache.delete(state)};X.stats=()=>({buildCount});
 })(globalThis);
