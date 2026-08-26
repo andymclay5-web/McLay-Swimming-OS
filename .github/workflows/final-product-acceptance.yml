@@ -20,6 +20,7 @@ jobs:
           node --check engines/dosage.js
           node --check engines/dosage-ui.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
+          node --check tests/phone-target-stability-20260826.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
@@ -36,6 +37,8 @@ jobs:
           sleep 1
       - name: All-inclusive coach journey at Android phone shape
         run: node tests/all-inclusive-product-acceptance-20260825.cjs
+      - name: Phone target loading and stroke scroll stability
+        run: node tests/phone-target-stability-20260826.cjs
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/msos-final-http.log || true
