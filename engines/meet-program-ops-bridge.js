@@ -2,8 +2,8 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827b1';
-  let retainedOps=null,syncTimer=null,observer=null,mountQueued=false;
+  const BUILD='v4-meet-program-ops-bridge-20260827b2';
+  let retainedOps=null,syncTimer=null,observer=null,mountQueued=false,browseMode=false;
 
   const meetHost=()=>document.querySelector('#meetView');
   const programme=()=>meetHost()?.querySelector('[data-meet-program-ba]')||null;
@@ -28,9 +28,8 @@
     if(expanded?.dataset.baHeatKey)return expanded.dataset.baHeatKey;
     const r=selectedRace(),heats=M.meetProgramBA?.allHeats?.()||[],sid=M.state?.meetProgramBA?.selectedSourceId||'';
     if(!r)return M.state?.meetProgramBA?.nowKey||'';
-    return (heats.find(h=>String(h.session_id||'')===String(sid)&&Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat))||heats.find(h=>Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat)))?.session_id
-      ? [((heats.find(h=>String(h.session_id||'')===String(sid)&&Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat))||heats.find(h=>Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat))).session_id),r.event_number||0,r.heat||0].join('|')
-      : (M.state?.meetProgramBA?.nowKey||'');
+    const hit=heats.find(h=>String(h.session_id||'')===String(sid)&&Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat))||heats.find(h=>Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat));
+    return hit?[hit.session_id,r.event_number||0,r.heat||0].join('|'):(M.state?.meetProgramBA?.nowKey||'');
   }
 
   function openCaptureFor(r){
@@ -128,13 +127,24 @@
     primaryActions(ops);
     const running=Object.values(M.state?.meetOps?.races||{}).some(x=>x?.timer_running);
     const heatHead=ops.querySelector('.mo-heat-head');
-    if(heatHead)heatHead.hidden=!running;
+    if(heatHead&&heatHead.hidden===running)heatHead.hidden=!running;
+  }
+
+  function hasExplicitRace(p=programme()){
+    return !!p?.querySelector('.ba-row.expanded');
+  }
+
+  function hideWorking(){
+    const ops=workingCard();
+    if(ops?.isConnected&&!ops.hidden)ops.hidden=true;
+    return false;
   }
 
   function mount(){
     mountQueued=false;
     const h=meetHost(),p=programme();
     if(!h||!p||M.state?.settings?.view!=='meet')return false;
+    if(browseMode||!hasExplicitRace(p))return hideWorking();
     enableWorkingControls();
     const ops=h.querySelector('[data-meet-ops-av]')||retainedOps;
     if(!ops)return false;
@@ -160,7 +170,7 @@
 
   function syncSelected({scroll=false}={}){
     enableWorkingControls();
-    const key=M.state?.meetOps?.selectedRaceKey||M.state?.meetProgramBA?.selectedKey||'';
+    const key=M.state?.meetProgramBA?.selectedKey||M.state?.meetOps?.selectedRaceKey||'';
     if(!key){mount();return false}
     if(M.meetOpsEngine?.selectKey){
       M.meetOpsEngine.selectKey(key,{scroll:false});
@@ -182,7 +192,15 @@
 
   function onProgrammeClick(e){
     if(!e.target?.closest)return;
-    if(e.target.closest('[data-ba-row].aqua,[data-ba-jump-race],[data-ba-athlete]'))scheduleSync(true);
+    if(e.target.closest('[data-ba-row].aqua,[data-ba-jump-race],[data-ba-athlete]')){
+      browseMode=false;
+      scheduleSync(true);
+      return;
+    }
+    if(e.target.closest('[data-ba-event],[data-ba-source],[data-ba-prev],[data-ba-next],[data-ba-add-session],[data-ba-jump-now]')){
+      browseMode=true;
+      setTimeout(hideWorking,0);
+    }
   }
 
   function observe(){
@@ -196,8 +214,7 @@
     observe();
     setTimeout(()=>{
       mount();
-      const selected=M.state?.meetOps?.selectedRaceKey||M.state?.meetProgramBA?.selectedKey||'';
-      if(selected)syncSelected({scroll:false});
+      if(M.state?.meetProgramBA?.selectedKey&&hasExplicitRace())syncSelected({scroll:false});
     },0);
   }
 
