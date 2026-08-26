@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827a2';
+  const BUILD='v4-meet-program-ops-bridge-20260827a3';
   let retainedOps=null,syncTimer=null,observer=null,mountQueued=false;
 
   const meetHost=()=>document.querySelector('#meetView');
@@ -13,15 +13,23 @@
     return h?.querySelector('[data-meet-ops-av]')||retainedOps||null;
   }
 
+  function enableWorkingControls(){
+    M.state.meetOps=M.state.meetOps||{};
+    M.state.meetOps.showRaceControls=true;
+  }
+
   function mount(){
     mountQueued=false;
     const h=meetHost(),p=programme();
     if(!h||!p||M.state?.settings?.view!=='meet')return false;
+    enableWorkingControls();
     const ops=h.querySelector('[data-meet-ops-av]')||retainedOps;
     if(!ops)return false;
     retainedOps=ops;
     if(ops.hidden)ops.hidden=false;
     ops.dataset.meetProgramWorkingCard='1';
+    for(const card of ops.querySelectorAll('.mo-card'))if(card.hidden)card.hidden=false;
+    const heatHead=ops.querySelector('.mo-heat-head');if(heatHead?.hidden)heatHead.hidden=false;
     const sticky=p.querySelector('.ba-sticky');
     if(sticky&&ops.previousElementSibling!==sticky)sticky.after(ops);
     return true;
@@ -38,6 +46,7 @@
   }
 
   function syncSelected({scroll=false}={}){
+    enableWorkingControls();
     const key=M.state?.meetOps?.selectedRaceKey||M.state?.meetProgramBA?.selectedKey||'';
     if(!key){mount();return false}
     if(M.meetOpsEngine?.selectKey){
