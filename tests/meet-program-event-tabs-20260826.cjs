@@ -32,7 +32,6 @@ global.document={
 global.MutationObserver=class{observe(){}};
 global.requestAnimationFrame=fn=>{if(typeof fn==='function')fn()};
 global.CSS={escape:v=>String(v)};
-global.navigator={};
 
 global.MSOS4={
   util:{
