@@ -59,6 +59,9 @@ jobs:
           node --check engines/capture-ui.js
           node --check engines/t400-capture.js
           node --check engines/acceptance.js
+          node --check engines/meet-field-au.js
+          node --check engines/meet-ops-av.js
+          node --check engines/meet-program-ba.js
           node --check engines/phone-fixes-ao.js
           node --check engines/amber-ratio-ap.js
           node --check engines/amber-alignment-aq.js
@@ -103,6 +106,8 @@ jobs:
           node tests/deck-large-evidence-latency-20260826.cjs
           node tests/deck-times-full-path-latency-20260826.cjs
           node tests/evidence-index-hydration-churn-20260826.cjs
+          node tests/meet-storage-durable-20260826.cjs
+          node tests/meet-program-event-tabs-20260826.cjs
           node tests/reference-data-regression.cjs
           node tests/attendance-roster-static.cjs
           node tests/stability-identity-bh.cjs
