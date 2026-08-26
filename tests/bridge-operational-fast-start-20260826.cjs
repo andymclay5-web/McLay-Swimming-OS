@@ -5,8 +5,8 @@ const fastStart=src.slice(src.indexOf("B.hydrate=async"),src.indexOf("B.deepHydr
 const deep=src.slice(src.indexOf("B.deepHydrate=async"),src.indexOf("const boot="));
 assert.ok(fastStart.includes('operational-fast-start'),'normal bridge hydrate must identify the operational fast-start path');
 assert.doesNotMatch(fastStart,/E\.Evidence\.hydrate\s*\(/,'normal Board startup must not deep-hydrate evidence/reference databases');
-assert.doesNotMatch(fastStart,/M\.refs\?\.boot\s*\(/,'normal Board startup must not boot and merge the reference cache');
+assert.doesNotMatch(fastStart,/M\.refs\?\.boot\?\.\s*\(/,'normal Board startup must not boot and merge the reference cache');
 assert.match(deep,/E\.Evidence\.hydrate\s*\(/,'deep evidence hydration must remain available outside the deck-critical start path');
-assert.match(deep,/M\.refs\?\.boot\s*\(/,'deep reference hydration must remain available outside the deck-critical start path');
+assert.match(deep,/M\.refs\?\.boot\?\.\s*\(/,'deep reference hydration must remain available outside the deck-critical start path');
 assert.match(src,/const boot=\(\)=>\{B\.hydrated=false;B\.hydrate\(\{force:true\}\)\}/,'boot must use the operational fast-start path only');
 console.log('BRIDGE_OPERATIONAL_FAST_START_PASS');
