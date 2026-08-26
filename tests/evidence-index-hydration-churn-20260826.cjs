@@ -17,8 +17,8 @@ globalThis.MSOSEngines={Evidence:{
 }};
 require(path.join('..','engines','evidence-index.js'));
 const X=globalThis.MSOSEvidenceIndex;
-assert.ok(X?.build,'Evidence index did not load');
-assert.match(X.build,/20260826a$/,'Hydration-stable evidence index is not loaded');
+assert.equal(typeof X?.build,'function','Evidence index did not load');
+assert.equal(typeof X?.stats,'function','Evidence index build counter is unavailable');
 const athletes=Array.from({length:17},(_,i)=>({id:`ath-${i+1}`,full_name:`Athlete ${i+1}`}));
 const resultsPbBoard=Array.from({length:8580},(_,i)=>({
   id:`pb-${i}`,
