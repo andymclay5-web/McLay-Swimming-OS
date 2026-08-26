@@ -97,6 +97,7 @@ jobs:
           node tests/recovered-richer-local-round-repair-20260826.cjs
           node tests/race-pace-local-first-20260826.cjs
           node tests/race-pace-existing-pb-no-deep-pathway-20260826.cjs
+          node tests/race-pace-deck-no-deep-recovery-20260826.cjs
           node tests/deck-fast-stroke-resolution-20260826.cjs
           node tests/bridge-operational-fast-start-20260826.cjs
           node tests/deck-large-evidence-latency-20260826.cjs
