@@ -2,8 +2,8 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827a';
-  let retainedOps=null,syncTimer=null,observer=null;
+  const BUILD='v4-meet-program-ops-bridge-20260827a2';
+  let retainedOps=null,syncTimer=null,observer=null,mountQueued=false;
 
   const meetHost=()=>document.querySelector('#meetView');
   const programme=()=>meetHost()?.querySelector('[data-meet-program-ba]')||null;
@@ -14,16 +14,23 @@
   }
 
   function mount(){
+    mountQueued=false;
     const h=meetHost(),p=programme();
     if(!h||!p||M.state?.settings?.view!=='meet')return false;
-    let ops=h.querySelector('[data-meet-ops-av]')||retainedOps;
+    const ops=h.querySelector('[data-meet-ops-av]')||retainedOps;
     if(!ops)return false;
     retainedOps=ops;
-    ops.hidden=false;
+    if(ops.hidden)ops.hidden=false;
     ops.dataset.meetProgramWorkingCard='1';
     const sticky=p.querySelector('.ba-sticky');
     if(sticky&&ops.previousElementSibling!==sticky)sticky.after(ops);
     return true;
+  }
+
+  function queueMount(){
+    if(mountQueued)return;
+    mountQueued=true;
+    queueMicrotask(mount);
   }
 
   function scrollWorkingCard(){
@@ -59,8 +66,8 @@
   function observe(){
     const h=meetHost();
     if(!h||observer)return;
-    observer=new MutationObserver(()=>queueMicrotask(mount));
-    observer.observe(h,{childList:true,subtree:true});
+    observer=new MutationObserver(queueMount);
+    observer.observe(h,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
   }
 
   function boot(){
