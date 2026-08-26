@@ -8,7 +8,7 @@ assert.match(index,/parser-semantics\.js\?v=20260825-round-scope-e/,'repaired pa
 assert.doesNotMatch(index,/app\.js\?v=20260821ak-cache/,'retired app.js asset identity is still active');
 assert.match(sw,/app\.js\?v=20260825-board-authority-e/,'offline package does not pin repaired app.js identity');
 assert.match(sw,/parser-semantics\.js\?v=20260825-round-scope-e/,'offline package does not pin repaired parser identity');
-assert.match(sw,/v4-coherent-runtime-20260825e/,'new coherent cache identity missing');
+assert.match(sw,/v4-coherent-runtime-20260826a/,'new coherent cache identity missing');
 assert.match(sw,/async function networkFirst/,'network-first runtime strategy missing');
 assert.doesNotMatch(sw,/immediateCached/,'stale-while-revalidate runtime strategy still present');
 assert.match(sw,/if\(e\.request\.mode==='navigate'\)[\s\S]*networkFirst/,'navigations are not network-first');
