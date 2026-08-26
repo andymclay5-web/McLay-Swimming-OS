@@ -1,11 +1,8 @@
 'use strict';
 const assert=require('node:assert/strict'),path=require('node:path'),root=path.resolve(__dirname,'..');
-global.window=global;global.localStorage={getItem(){return null},setItem(){}};global.requestAnimationFrame=fn=>fn();global.addEventListener=()=>{};global.dispatchEvent=()=>{};
-global.MSOS4={state:{settings:{},athletes:[],resultsPbBoard:[]},cloud:{},util:{stableId:(p,...v)=>`${p}-${v.join('-')}`},pathway:{pbRows(){throw new Error('deep pathway should not run when local PB exists');}}};
-global.MSOSEngines={};
-require(path.join(root,'engines/evidence.js'));
-const E=global.MSOSEngines.Evidence;
-global.MSOSEngines.Aerobic={t400(){}};global.MSOSEngines.RacePace={pb(){}};global.MSOSEngines.Modification={profile(){return{}},adaptItem(x){return x},samePrescription(){return true}};global.MSOSEngines.Coordinator={suppress(){return''},targetForItem(){return{}}};
+global.window=global;global.localStorage={getItem(){return null},setItem(){}};global.requestAnimationFrame=fn=>fn();global.addEventListener=()=>{};global.dispatchEvent=()=>{};global.document={readyState:'loading',addEventListener(){}};
+global.MSOS4={state:{settings:{},athletes:[],resultsPbBoard:[]},cloud:{},targets:{},adapt:{},util:{stableId:(p,...v)=>`${p}-${v.join('-')}`},pathway:{pbRows(){throw new Error('deep pathway should not run when local PB exists');}}};
+global.MSOSEngines={Evidence:require(path.join(root,'engines/evidence.js')),Aerobic:{t400(){}},RacePace:{pb(){}},Modification:{profile(){return{}},adaptItem(x){return x},samePrescription(){return true}},Coordinator:{suppress(){return''},targetForItem(){return{}}}};
 global.MSOS4.state.athletes=[{id:'a1',full_name:'Deck Swimmer'}];global.MSOS4.state.resultsPbBoard=[{id:'pb1',athlete_id:'a1',distance:100,stroke:'Freestyle',pool_course:'SCM',result_seconds:60}];
 require(path.join(root,'engines/bridge.js'));
 let calls=0;global.MSOS4.pathway.pbRows=()=>{calls++;return[]};
