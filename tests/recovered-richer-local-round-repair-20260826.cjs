@@ -17,7 +17,7 @@ M.state.canonicalSessions[malformed.id]=malformed;M.state.settings.selectedSessi
 M.storageEngine={readyPromise:Promise.resolve(),hydratedFromIndexedDb:false,recoveredRicherLocalState:true};
 assert.equal(S.total(M.state.canonicalSessions[malformed.id]),1700,'fixture must reproduce richer-local phone bug');
 assert.equal(R.shouldRepairHydratedState(),true,'richer local persisted recovery must qualify for migration');
-assert.equal(R.repairStored({all:false}),1,'selected richer-local persisted session must repair');
+assert.equal(R.repairOne(malformed.id,M.state.canonicalSessions[malformed.id],{render:false}),true,'selected richer-local persisted session must repair');
 assert.equal(S.total(M.state.canonicalSessions[malformed.id]),2100,'richer-local persisted truth must repair to 2100m');
 M.storageEngine={readyPromise:Promise.resolve(),hydratedFromIndexedDb:false,recoveredRicherLocalState:false};
 assert.equal(R.shouldRepairHydratedState(),false,'brand-new clean state must not be treated as persisted recovery');
