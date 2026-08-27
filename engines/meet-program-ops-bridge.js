@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-phone-priority-20260827c3';
+  const BUILD='v4-meet-program-phone-priority-20260827c4';
   let queued=false,noteTimer=null,bound=false,active=false;
 
   const host=()=>document.querySelector('#meetView');
@@ -134,9 +134,9 @@
     });
     document.addEventListener('click',e=>{
       if(!active||M.state?.settings?.view!=='meet')return;
-      const h=host();
-      if(h?.contains(e.target))queue();
-    });
+      const path=e.composedPath?.()||[];
+      if(path.some(n=>n?.id==='meetView'||n?.matches?.('[data-meet-program-ba]')))queue();
+    },true);
   }
 
   function activate(){
