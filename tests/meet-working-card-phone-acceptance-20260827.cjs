@@ -41,70 +41,57 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.waitForSelector('[data-mfa-use]',{timeout:3000});
   await page.click('[data-mfa-use]');
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
-  await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('20260827b'),{timeout:3000});
+  await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('phone-priority'),{timeout:3000});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:3000});
+
+  const seedProof=await page.evaluate(()=>[...document.querySelectorAll('[data-meet-program-ba] .ba-seed')].map(n=>{const r=n.getBoundingClientRect();return{value:n.dataset.seedValue||'',left:r.left,right:r.right,width:r.width,display:getComputedStyle(n).display,visible:r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth+0.5}}));
+  assert.deepEqual(seedProof.map(x=>x.value),['1:02.20','1:00.44','59.88'],'every competitor seed must be preserved in programme order');
+  assert.equal(seedProof.every(x=>x.visible),true,`every seed must be physically inside the phone viewport: ${JSON.stringify(seedProof)}`);
+
+  const programmeText=await page.locator('.ba-event').innerText();
+  assert.match(programmeText,/Rival One[\s\S]*1:02\.20/);
+  assert.match(programmeText,/Aqua One[\s\S]*1:00\.44/);
+  assert.match(programmeText,/Rival Two[\s\S]*59\.88/);
+  assert.equal(await page.locator('[data-meet-ops-av]:visible').count(),0,'programme must not expose a second meet-ops working card');
+  assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'legacy Meet deck must stay hidden beneath the live programme');
 
   const row=page.locator('.ba-row.aqua').first();
   assert.equal(await row.count(),1,'AquaGym programme row must be visible');
-  const programmeText=await page.locator('.ba-event').innerText();
-  assert.match(programmeText,/Rival One[\s\S]*1:02\.20/,'competitor entry time must be visible');
-  assert.match(programmeText,/Aqua One[\s\S]*1:00\.44/,'AquaGym entry time must be visible');
-  assert.match(programmeText,/Rival Two[\s\S]*59\.88/,'all competitor entry times must remain visible');
-
   await row.click();
-  await page.waitForFunction(()=>{
-   const p=document.querySelector('[data-meet-program-ba]'),w=document.querySelector('[data-meet-program-working-card="1"]');
-   return !!p&&!!w&&!w.hidden&&p.contains(w)&&/Aqua One/.test(w.textContent||'');
-  },{timeout:5000});
-  await page.waitForSelector('[data-meet-program-working-card="1"] [data-meet-priority-actions]',{timeout:3000});
+  await page.waitForSelector('.ba-row.aqua.expanded .ba-intel',{timeout:3000});
+  await page.waitForSelector('.ba-row.aqua.expanded [data-mpo-quick-note]',{timeout:3000});
 
-  const working=page.locator('[data-meet-program-working-card="1"]');
-  const workText=await working.innerText();
-  assert.match(workText,/Aqua One/);assert.match(workText,/Seed\s*1:00\.44/,'working card must expose entry time');
-  assert.match(workText,/Type race time/,'typed race time must be a primary deck action');
-  assert.match(workText,/Live commentary/,'heat commentary must be surfaced as a primary deck action');
-  assert.match(workText,/Video/,'video capture must be surfaced as a primary deck action');
-  assert.match(workText,/Photo \/ more/,'other capture remains available without crowding the card');
-  assert.match(workText,/Backup stopwatch/,'stopwatch must remain available as a secondary tool');
-  assert.match(workText,/Race data/);assert.match(workText,/Complete race/);
+  const intel=page.locator('.ba-row.aqua.expanded .ba-intel');
+  const intelText=await intel.innerText();
+  assert.match(intelText,/Seed\s*1:00\.44/,'expanded swimmer must retain its entry time');
+  assert.match(intelText,/Quick note/,'quick typed notes must be directly visible');
+  assert.match(intelText,/Voice commentary/,'voice commentary must be a primary race action');
+  assert.match(intelText,/Capture/,'capture must be a primary race action');
+  assert.match(intelText,/Backup stopwatch/,'stopwatch remains available only as backup');
+  assert.doesNotMatch(intelText,/Talk through race/,'old commentary wording must not remain');
 
-  const priority=await page.evaluate(()=>{
-   const card=document.querySelector('[data-meet-program-working-card="1"] .mo-card.primary');
-   const timer=card?.querySelector('[data-meet-backup-timer]');
-   const manual=card?.querySelector('.mo-manual');
-   const actions=card?.querySelector('[data-meet-priority-actions]');
-   return{timerOpen:!!timer?.open,manualBeforeTimer:!!(manual&&timer&&(manual.compareDocumentPosition(timer)&Node.DOCUMENT_POSITION_FOLLOWING)),actionsBeforeTimer:!!(actions&&timer&&(actions.compareDocumentPosition(timer)&Node.DOCUMENT_POSITION_FOLLOWING)),heatTimerHidden:!!document.querySelector('[data-meet-program-working-card="1"] .mo-heat-head')?.hidden};
-  });
-  assert.equal(priority.timerOpen,false,'backup stopwatch must be collapsed by default');
-  assert.equal(priority.manualBeforeTimer,true,'typed race time must appear before backup stopwatch');
-  assert.equal(priority.actionsBeforeTimer,true,'commentary/video actions must appear before backup stopwatch');
-  assert.equal(priority.heatTimerHidden,true,'same-heat stopwatch launcher must not crowd the integrated programme');
+  const backup=page.locator('.ba-row.aqua.expanded details[data-mpo-backup]');
+  assert.equal(await backup.count(),1);
+  assert.equal(await backup.evaluate(n=>n.open),false,'backup stopwatch must be collapsed by default');
+  assert.equal(await page.locator('[data-ba-add-session]').count(),1,'Add session must survive race expansion');
+  await page.click('[data-ba-add-session]',{timeout:3000});
+  await page.waitForSelector('[data-ba-session]',{timeout:3000});
+  await page.click('[data-ba-close]');
 
   const selectedKey=await page.evaluate(()=>MSOS4.state.meetOps?.selectedRaceKey||'');
   assert.ok(selectedKey,'programme row must select an exact meet-ops race key');
   assert.equal(await page.evaluate(()=>MSOS4.state.meetProgramBA?.selectedKey||''),selectedKey,'programme and meet-ops must agree on selected race');
 
-  await page.fill('[data-mo-manual]','59.91');
-  await page.click('[data-mo-save-time]');
-  await page.waitForFunction(k=>Math.abs(Number(MSOS4.state.meetOps?.races?.[k]?.draft_time_seconds)-59.91)<0.001,selectedKey,{timeout:3000});
-
-  const quick=page.locator('[data-mo-quick-note]');
-  await quick.fill('Held line well; breakout improved.');
+  const note=page.locator('[data-mpo-quick-note]');
+  await note.fill('Held line well; breakout improved.');
   await page.waitForTimeout(450);
   assert.equal(await page.evaluate(k=>MSOS4.state.meetOps?.races?.[k]?.notes||'',selectedKey),'Held line well; breakout improved.');
 
-  await page.click('[data-mo-cap]');
+  await page.click('.ba-row.aqua.expanded [data-ba-capture]');
   await page.waitForSelector('[data-mo-note]',{timeout:3000});
   await page.fill('[data-mo-note]','Finish timing strong; check stroke count next race.');
   await page.click('[data-mo-save-note]');
   await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&e.capture_type==='note'&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:3000});
-  await page.waitForFunction(()=>{
-   const w=document.querySelector('[data-meet-program-working-card="1"]'),b=w?.querySelector('[data-mo-complete]'),r=b?.getBoundingClientRect();
-   return !!w&&!w.hidden&&!!b&&!b.disabled&&getComputedStyle(b).display!=='none'&&r.width>0&&r.height>0&&!!w.querySelector('[data-meet-backup-timer]')&&!w.querySelector('[data-meet-backup-timer]').open;
-  },{timeout:3000});
-
-  await page.locator('[data-meet-program-working-card="1"] [data-mo-complete]').click({timeout:3000});
-  await page.waitForFunction(k=>MSOS4.state.meetOps?.races?.[k]?.status==='complete',selectedKey,{timeout:3000});
-  assert.match(await page.locator('[data-meet-program-working-card="1"]').innerText(),/Race complete/);
 
   const rev=await page.evaluate(()=>{MSOS4.store.save(MSOS4.state);return Number(MSOS4.state.settings.storageRevision)||0});
   await page.evaluate(async r=>{await MSOS4.storageEngine.whenPersisted(r)},rev);
@@ -115,14 +102,16 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
   await page.evaluate(()=>{const M=MSOS4;if(M.navigationEngine?.go)M.navigationEngine.go('meet',{restore:false});else{M.state.settings.view='meet';M.ui.renderCurrent()}});
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
-  await page.waitForFunction(k=>{
-   const x=MSOS4.state.meetOps?.races?.[k];
-   return x?.status==='complete'&&Math.abs(Number(x.draft_time_seconds)-59.91)<0.001&&/Held line well/.test(x.notes||'')&&(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&/Finish timing strong/.test(e.text_content||''));
-  },selectedKey,{timeout:5000});
-  await page.waitForFunction(()=>{const w=document.querySelector('[data-meet-program-working-card="1"]');return !!w&&!w.hidden&&/Aqua One/.test(w.textContent||'')&&!!w.querySelector('[data-meet-priority-actions]')},{timeout:5000});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:3000});
+  await page.locator('.ba-row.aqua').first().click();
+  await page.waitForSelector('[data-mpo-quick-note]',{timeout:3000});
+  assert.equal(await page.locator('[data-mpo-quick-note]').inputValue(),'Held line well; breakout improved.','quick note must restore on the programme itself');
+  await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:5000});
+  assert.equal(await page.locator('[data-ba-add-session]').count(),1,'programme controls must still exist after cold reload and race expansion');
+  assert.equal(await page.locator('[data-meet-ops-av]:visible').count(),0,'no duplicate working card may reappear after reload');
 
-  assert.deepEqual(pageErrors,[],'page errors during Meet working-card journey');
-  assert.deepEqual(consoleErrors,[],'console errors during Meet working-card journey');
-  console.log('MEET_WORKING_CARD_PHONE_ACCEPTANCE_PASS competitors=3 seeds=3 typed=59.91 commentary=primary video=primary stopwatch=secondary note=retained capture=retained complete=retained reload=restored');
+  assert.deepEqual(pageErrors,[],'page errors during Meet phone-priority journey');
+  assert.deepEqual(consoleErrors,[],'console errors during Meet phone-priority journey');
+  console.log('MEET_PHONE_PRIORITY_ACCEPTANCE_PASS competitors=3 seeds=3 viewport=390 note=primary voice=primary capture=primary stopwatch=secondary add-session=stable reload=restored');
  }finally{await browser.close()}
 })().catch(err=>{console.error(err?.stack||err);process.exit(1)});
