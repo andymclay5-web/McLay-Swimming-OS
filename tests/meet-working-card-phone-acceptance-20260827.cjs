@@ -96,30 +96,32 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   const rev=await page.evaluate(()=>{MSOS4.store.save(MSOS4.state);return Number(MSOS4.state.settings.storageRevision)||0});
   await page.evaluate(async r=>{await MSOS4.storageEngine.whenPersisted(r)},rev);
   await page.waitForFunction(()=>Number(MSOS4.storageEngine.lastCompactPersistedAt||0)>0,{timeout:6000});
-  assert.equal(await page.evaluate(()=>MSOS4.state.settings.view),'meet','Meet view must be persisted before the cold-start proof');
 
+  // Hard reload, then reproduce the missed authority path deliberately: the programme
+  // becomes current through its own render(), not through M.ui.renderMeet/navigation.
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
   await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
-  await page.waitForFunction(()=>MSOS4.state?.settings?.view==='meet',{timeout:10000});
-  await page.waitForSelector('[data-meet-program-ba]',{timeout:10000});
+  await page.waitForFunction(()=>window.MSOS4?.meetProgramBA?.render&&window.MSOS4?.meetProgramOpsBridge,{timeout:5000});
+  await page.evaluate(()=>{MSOS4.state.settings.view='meet';MSOS4.meetProgramBA.render()});
+  await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('cold-start'),{timeout:3000});
   await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:6000});
-  assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'legacy Guardian Meet deck must already be hidden on direct cold restore before any Meet navigation click');
+  assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'legacy Guardian Meet deck must already be hidden when the programme authority renders directly');
   await page.locator('.ba-row.aqua').first().click();
   await page.waitForSelector('[data-mpo-quick-note]',{timeout:3000});
-  assert.equal(await page.locator('[data-mpo-quick-note]').inputValue(),'Held line well; breakout improved.','quick note must restore on the programme itself after direct cold startup');
+  assert.equal(await page.locator('[data-mpo-quick-note]').inputValue(),'Held line well; breakout improved.','quick note must restore on a directly rendered programme');
   const coldIntelText=await page.locator('.ba-row.aqua.expanded .ba-intel').innerText();
-  assert.match(coldIntelText,/Voice commentary/,'cold-restored race card must expose voice commentary without a manual Meet re-navigation');
-  assert.match(coldIntelText,/Capture/,'cold-restored race card must expose Capture without a manual Meet re-navigation');
-  assert.doesNotMatch(coldIntelText,/Talk through race/,'cold-restored race card must not fall back to the old controls');
+  assert.match(coldIntelText,/Voice commentary/,'directly rendered race card must expose voice commentary without M.ui.renderMeet');
+  assert.match(coldIntelText,/Capture/,'directly rendered race card must expose Capture without M.ui.renderMeet');
+  assert.doesNotMatch(coldIntelText,/Talk through race/,'directly rendered race card must not fall back to the old controls');
   await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:5000});
-  assert.equal(await page.locator('[data-ba-add-session]').count(),1,'programme controls must still exist after cold reload and race expansion');
-  assert.equal(await page.locator('[data-meet-ops-av]:visible').count(),0,'no duplicate working card may reappear after reload');
-  assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'no Guardian Meet deck may reappear after reload');
+  assert.equal(await page.locator('[data-ba-add-session]').count(),1,'programme controls must still exist after direct restore and race expansion');
+  assert.equal(await page.locator('[data-meet-ops-av]:visible').count(),0,'no duplicate working card may reappear after direct restore');
+  assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'no Guardian Meet deck may reappear after direct restore');
 
   assert.deepEqual(pageErrors,[],'page errors during Meet phone-priority journey');
   assert.deepEqual(consoleErrors,[],'console errors during Meet phone-priority journey');
-  console.log('MEET_PHONE_PRIORITY_ACCEPTANCE_PASS competitors=3 seeds=3 viewport=390 note=primary voice=primary capture=primary stopwatch=secondary add-session=stable cold-start=direct legacy-deck=hidden reload=restored');
+  console.log('MEET_PHONE_PRIORITY_ACCEPTANCE_PASS competitors=3 seeds=3 viewport=390 note=primary voice=primary capture=primary stopwatch=secondary add-session=stable direct-programme-render=enhanced legacy-deck=hidden reload=restored');
  }finally{await browser.close()}
 })().catch(err=>{console.error(err?.stack||err);process.exit(1)});
