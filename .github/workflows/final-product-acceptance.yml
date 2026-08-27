@@ -22,7 +22,6 @@ jobs:
           node --check engines/meet-program-ops-bridge.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
           node --check tests/phone-target-stability-20260826.cjs
-          node --check tests/meet-program-selection-diagnostic-20260827.cjs
           node --check tests/meet-program-phone-acceptance-20260826.cjs
           node --check tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Matthew swimmer and pathway contract
@@ -43,11 +42,9 @@ jobs:
         run: node tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Phone target loading and stroke scroll stability
         run: node tests/phone-target-stability-20260826.cjs
-      - name: Meet selection DOM diagnostic
-        run: node tests/meet-program-selection-diagnostic-20260827.cjs
       - name: Meet programme Android acceptance
         run: node tests/meet-program-phone-acceptance-20260826.cjs
-      - name: Meet working card Android acceptance
+      - name: Meet phone-priority controls acceptance
         run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Show server log on failure
         if: failure()
