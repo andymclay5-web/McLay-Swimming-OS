@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-phone-priority-20260827c4';
+  const BUILD='v4-meet-program-phone-priority-20260827c5';
   let queued=false,noteTimer=null,bound=false,active=false;
 
   const host=()=>document.querySelector('#meetView');
@@ -32,6 +32,11 @@
     const s=document.createElement('style');
     s.id='meet-program-phone-priority-style';
     s.textContent=`
+      body.meet-program-ba-active #meetView [data-meet-board-ay],
+      body.meet-program-ba-active #meetView [data-meet-board-az],
+      body.meet-program-ba-active #meetView [data-meet-ops-av],
+      body.meet-program-ba-active #meetView [data-meet-field-deck-au],
+      body.meet-program-ba-active #meetView [data-meet-intake-au]{display:none!important}
       [data-meet-program-ba] .ba-row-main .ba-seed{font-variant-numeric:tabular-nums;white-space:nowrap;display:grid;justify-items:end;line-height:1.02}
       [data-meet-program-ba] .ba-row-main .ba-seed::before{content:'Seed';font-size:.58rem;letter-spacing:.03em;text-transform:uppercase;opacity:.68}
       [data-meet-program-ba] .mpo-quick-note{display:grid;gap:.2rem;margin:.15rem 0 .35rem;font-weight:750}
