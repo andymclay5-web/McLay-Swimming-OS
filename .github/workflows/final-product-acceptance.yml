@@ -32,6 +32,7 @@ jobs:
           node --check tests/meet-explicit-selection-authority-20260827.cjs
           node --check tests/meet-aqgcb-alias-20260827.cjs
           node --check tests/meet-sisc-programme-authority-20260827.cjs
+          node --check tests/meet-sisc-swimmer-persist-20260828.cjs
       - name: AQGCB / AquaGym meet alias parsing
         run: node tests/meet-aqgcb-alias-20260827.cjs
       - name: Matthew swimmer and pathway contract
@@ -48,20 +49,28 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-final-http.log 2>&1 &
           echo $! > /tmp/msos-final-http.pid
           sleep 1
-      - name: All-inclusive coach journey at Android phone shape
-        run: node tests/all-inclusive-product-acceptance-20260825.cjs
-      - name: Phone target loading and stroke scroll stability
-        run: node tests/phone-target-stability-20260826.cjs
+      - name: SISC swimmer intel survives delayed refresh
+        run: |
+          set -o pipefail
+          node tests/meet-sisc-swimmer-persist-20260828.cjs 2>&1 | tee /tmp/meet-sisc-swimmer-persist.log
+      - name: SISC full-programme authority after meet switch
+        run: |
+          set -o pipefail
+          node tests/meet-sisc-programme-authority-20260827.cjs 2>&1 | tee /tmp/meet-sisc-authority.log
       - name: Meet programme Android acceptance
         run: node tests/meet-program-phone-acceptance-20260826.cjs
       - name: Meet phone-priority controls acceptance
         run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Add new meet Android acceptance
-        run: node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
+        run: |
+          set -o pipefail
+          node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
       - name: Explicit meet selection authority
         run: node tests/meet-explicit-selection-authority-20260827.cjs
-      - name: SISC full-programme authority after meet switch
-        run: node tests/meet-sisc-programme-authority-20260827.cjs 2>&1 | tee /tmp/meet-sisc-authority.log
+      - name: All-inclusive coach journey at Android phone shape
+        run: node tests/all-inclusive-product-acceptance-20260825.cjs
+      - name: Phone target loading and stroke scroll stability
+        run: node tests/phone-target-stability-20260826.cjs
       - name: Upload Meet workspace failure log
         if: failure()
         uses: actions/upload-artifact@v4
@@ -70,6 +79,7 @@ jobs:
           path: |
             /tmp/meet-new-meet.log
             /tmp/meet-sisc-authority.log
+            /tmp/meet-sisc-swimmer-persist.log
           if-no-files-found: ignore
       - name: Show server log on failure
         if: failure()
