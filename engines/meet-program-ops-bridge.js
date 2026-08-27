@@ -2,8 +2,8 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-phone-priority-20260827c1';
-  let observer=null,queued=false,noteTimer=null;
+  const BUILD='v4-meet-program-phone-priority-20260827c2';
+  let observer=null,queued=false,noteTimer=null,bound=false,active=false;
 
   const host=()=>document.querySelector('#meetView');
   const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
@@ -111,7 +111,7 @@
   function enhance(){
     queued=false;
     const p=programme();
-    if(!p||M.state?.settings?.view!=='meet')return false;
+    if(!active||!p||M.state?.settings?.view!=='meet')return false;
     ensureStyle();
     hideLegacyLayers();
     enhanceSeedRows(p);
@@ -120,12 +120,14 @@
   }
 
   function queue(){
-    if(queued)return;
+    if(queued||!active)return;
     queued=true;
     queueMicrotask(enhance);
   }
 
-  function bind(){
+  function bindInputs(){
+    if(bound)return;
+    bound=true;
     document.addEventListener('input',e=>{
       const area=e.target?.closest?.('[data-mpo-quick-note]');
       if(!area)return;
@@ -139,18 +141,23 @@
     });
   }
 
-  function observe(){
+  function activate(){
+    active=true;
+    bindInputs();
     const h=host();
-    if(!h){setTimeout(observe,60);return}
-    if(observer)return;
-    observer=new MutationObserver(queue);
-    observer.observe(h,{childList:true,subtree:true});
-    enhance();
+    if(h&&!observer){
+      observer=new MutationObserver(queue);
+      observer.observe(h,{childList:true,subtree:true});
+    }
+    queueMicrotask(enhance);
   }
 
-  bind();
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observe,{once:true});else observe();
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')setTimeout(enhance,0)});
+  const priorRenderMeet=M.ui.renderMeet?.bind(M.ui);
+  if(priorRenderMeet)M.ui.renderMeet=()=>{
+    const result=priorRenderMeet();
+    activate();
+    return result;
+  };
 
-  M.meetProgramOpsBridge={build:BUILD,enhance,raceForKey};
+  M.meetProgramOpsBridge={build:BUILD,enhance,activate,raceForKey};
 })(globalThis);
