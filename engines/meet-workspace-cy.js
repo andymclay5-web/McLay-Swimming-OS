@@ -2,9 +2,9 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260827cy';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260827cz';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
-  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const now=()=>U.now?U.now():new Date().toISOString();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -54,14 +54,17 @@
   }
   function adoptLoadedProgramme(){
     const d=M.state?.meetFieldDeck;if(!d?.races?.length)return currentMeet();
-    const title=txt(d.title)||'Swim meet',key=norm(title),rows=meets();
-    let m=rows.find(x=>x.id===d.meet_id&&norm(x.title)===key)||rows.find(x=>norm(x.title)===key&&workspaces()[x.id]);
+    const title=txt(d.title)||'Swim meet',key=norm(title),rows=meets(),ws=workspaces();
+    // If the programme was loaded while a real managed meet was active, its meet_id is authoritative.
+    // Do not create a second meet merely because the HY-TEK title parser returned a generic/different title.
+    let m=rows.find(x=>x.id===d.meet_id&&ws[x.id]);
+    if(!m)m=rows.find(x=>norm(x.title)===key&&ws[x.id]);
     if(!m)m=rows.find(x=>norm(x.title)===key);
     if(!m){
       try{m=M.meet.create({title,date:d.date_range||'',course:d.course||''})}catch{return currentMeet()}
     }else if(currentId()!==m.id){try{M.meet.setCurrent(m.id)}catch{M.state.settings.currentMeetId=m.id}}
     tagActiveMeet(m.id);
-    if(!workspaces()[m.id])snapshotCurrent();
+    if(!ws[m.id])snapshotCurrent();
     return m;
   }
 
