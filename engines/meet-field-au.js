@@ -9,7 +9,9 @@
   const now=()=>new Date().toISOString();
   const save=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}try{M.store?.save?.(M.state)}catch{}};
   const uid=p=>U.uid?U.uid(p):`${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-  const PATCH='v4-meet-field-20260821au';
+  const PATCH='v4-meet-field-20260827aqgcb';
+  const CLUB_ALIASES=new Set(['aquagym','aqua gym','aqgcb','aqua gym canterbury','aquagym canterbury']);
+  const isAquaGymClub=v=>CLUB_ALIASES.has(norm(v));
 
   function ensureMeetImports(){if(!Array.isArray(M.state.meetImports))M.state.meetImports=[];return M.state.meetImports}
   const DB='mclay_swimming_v4_meet_sources',STORE='sources';
@@ -30,18 +32,18 @@
     let title='',sessionLabel='',dateRange='',currentEvent=null,heat=0,startTime='',relayTeam=false,relayLane=null,relaySeed='';
     const races=[],unmatched=[];
     for(const rawLine of lines){const line=rawLine.trim();if(!line)continue;
-      if(!title&&/Ribbon Carnival/i.test(line)){const tm=line.match(/^(.*?Ribbon Carnival)\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}/i);title=text(tm?.[1]||line);}
+      if(!title){const tm=line.match(/^(.*?)\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}(?:\s+to\s+\d{1,2}\/\d{1,2}\/\d{4})?\s*$/i);if(tm&&!/MEET MANAGER|Meet Program/i.test(tm[1]))title=text(tm[1]);}
       if(!sessionLabel){const sm=line.match(/Meet Program\s*-\s*(Session\s+\d+)/i);if(sm)sessionLabel=sm[1];}
       if(!dateRange){const dm=line.match(/-\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);if(dm)dateRange=`${dm[1]} to ${dm[2]}`;}
       const em=line.match(/^Event\s+(\d+)\s+(.+)$/i);if(em){const info=eventInfo(em[2]);currentEvent={event_number:Number(em[1]),event:text(em[2]),...info};heat=0;startTime='';relayTeam=false;relayLane=null;relaySeed='';continue;}
       const hm=line.match(/^Heat\s+(\d+)(?:\s+of\s+\d+)?\s+Finals(?:\s+\(#\d+[^)]*\))?(?:\s+Starts at\s+(.+))?/i);if(hm){heat=Number(hm[1]);startTime=text(hm[2]||'');relayTeam=false;continue;}
       if(!currentEvent)continue;
       if(currentEvent.relay){
-        const tm=line.match(/^(\d+)\s+(.+?)\s+([A-Z])\s+(NT|X?\d+(?::\d+)?\.\d+)$/);if(tm){relayLane=Number(tm[1]);relaySeed=text(tm[4]);relayTeam=/\bAquagym\b/i.test(tm[2]);continue;}
+        const tm=line.match(/^(\d+)\s+(.+?)\s+([A-Z])\s+(NT|X?\d+(?::\d+)?\.\d+)$/);if(tm){relayLane=Number(tm[1]);relaySeed=text(tm[4]);relayTeam=isAquaGymClub(tm[2]);continue;}
         if(relayTeam){const legRe=/(\d+)\)\s*([^\d]+?)\s+([MW])(\d{1,2})(?=\s+\d+\)|$)/g;let mm;while((mm=legRe.exec(line))){const sourceName=text(mm[2]),match=matchAthlete(sourceName),row={event_number:currentEvent.event_number,event:currentEvent.event,distance:currentEvent.distance,stroke:currentEvent.stroke,relay:true,relay_leg:Number(mm[1]),heat,lane:relayLane,start_time:startTime,seed_time:relaySeed,seed_seconds:timeSeconds(relaySeed),source_name:sourceName,sex:mm[3],age:Number(mm[4]),athlete_id:match.athlete?.id||'',athlete_name:match.athlete?.full_name||sourceName,match_confidence:match.confidence};races.push(row);if(!match.athlete)unmatched.push(row);}continue;}
       }
-      const im=line.match(/^(\d+)\s+(.+?)\s+((?:S\d+\/Sb\d+\/Sm\d+)?)([MW])(\d{1,2})\s+Aquagym\s+(NT|X?\d+(?::\d+)?\.\d+)$/i);
-      if(im){const sourceName=text(im[2]),match=matchAthlete(sourceName),seed=text(im[6]).replace(/^X/i,''),row={event_number:currentEvent.event_number,event:currentEvent.event,distance:currentEvent.distance,stroke:currentEvent.stroke,relay:false,heat,lane:Number(im[1]),start_time:startTime,seed_time:seed,seed_seconds:timeSeconds(seed),source_name:sourceName,classification:text(im[3]),sex:im[4].toUpperCase(),age:Number(im[5]),athlete_id:match.athlete?.id||'',athlete_name:match.athlete?.full_name||sourceName,match_confidence:match.confidence};races.push(row);if(!match.athlete)unmatched.push(row);}
+      const im=line.match(/^(\d+)\s+(.+?)\s+((?:S\d+\/Sb\d+\/Sm\d+)?)([MW])(\d{1,2})\s+(.+?)\s+(NT|X?\d+(?::\d+)?\.\d+)$/i);
+      if(im&&isAquaGymClub(im[6])){const sourceName=text(im[2]),match=matchAthlete(sourceName),seed=text(im[7]).replace(/^X/i,''),row={event_number:currentEvent.event_number,event:currentEvent.event,distance:currentEvent.distance,stroke:currentEvent.stroke,relay:false,heat,lane:Number(im[1]),start_time:startTime,seed_time:seed,seed_seconds:timeSeconds(seed),source_name:sourceName,classification:text(im[3]),sex:im[4].toUpperCase(),age:Number(im[5]),athlete_id:match.athlete?.id||'',athlete_name:match.athlete?.full_name||sourceName,match_confidence:match.confidence};races.push(row);if(!match.athlete)unmatched.push(row);}
     }
     const swimmers=[...new Set(races.map(r=>r.athlete_name))];
     return{format:'HY-TEK',title:title||'Meet programme',session:sessionLabel,date_range:dateRange,races,swimmers,unmatched:unmatched.filter((r,i,a)=>a.findIndex(x=>x.event_number===r.event_number&&x.heat===r.heat&&x.lane===r.lane&&norm(x.source_name)===norm(r.source_name))===i)};
@@ -62,5 +64,5 @@
   installStyle();
   const previous=M.ui.renderMeet?.bind(M.ui);
   if(previous)M.ui.renderMeet=()=>{previous();install()};
-  M.meetFieldPatch={build:PATCH,parseHytekProgramme,install,renderDeck};
+  M.meetFieldPatch={build:PATCH,parseHytekProgramme,install,renderDeck,isAquaGymClub};
 })(globalThis);
