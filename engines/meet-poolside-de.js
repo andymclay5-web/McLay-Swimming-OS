@@ -2,11 +2,11 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260827de2';
+  const BUILD='v4-meet-poolside-20260827de3';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
-  let observer=null,repairing=false;
+  let observer=null,repairing=false,maintainQueued=false;
 
   function programmeState(){
     if(!M.state.meetProgramBA||typeof M.state.meetProgramBA!=='object')M.state.meetProgramBA={};
@@ -82,34 +82,42 @@
     }
   }
   function maintain(){
+    maintainQueued=false;
     if(M.state?.settings?.view!=='meet')return;
     repairManagedDecks();pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
+  }
+  function queueMaintain(){
+    if(maintainQueued)return;
+    maintainQueued=true;
+    requestAnimationFrame(maintain);
   }
   function style(){
     if(document.getElementById('meet-poolside-de-style'))return;
     const s=document.createElement('style');s.id='meet-poolside-de-style';
     s.textContent=`
-      #meetView>[data-meet-workspace-cy].meet-poolside-top{position:sticky;top:0;z-index:80;margin:0 0 .45rem;background:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+      #meetView>[data-meet-workspace-cy]{position:sticky;top:0;z-index:80;margin:0 0 .45rem;background:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.08)}
       [data-meet-program-ba] .ba-intel .ba-actions>[data-mpo-video]{min-height:48px;font-weight:800}
       @media(max-width:620px){[data-meet-program-ba] .ba-intel .ba-actions{grid-template-columns:repeat(3,1fr)!important}}
     `;document.head.appendChild(s);
   }
   function install(){
-    style();repairManagedDecks();maintain();
+    style();repairManagedDecks();queueMaintain();
     document.addEventListener('click',e=>{
       if(!e.target?.closest?.('[data-mfa-use]'))return;
       setTimeout(()=>{
         try{M.meetWorkspaceEngine?.snapshotCurrent?.({persist:true})}catch{}
-        repairManagedDecks();maintain();
+        repairManagedDecks();queueMaintain();
       },80);
     },false);
     const h=document.querySelector('#meetView');
     if(h&&!observer){
-      observer=new MutationObserver(()=>queueMicrotask(maintain));
-      observer.observe(h,{childList:true,subtree:true});
+      // Only watch top-level Meet view replacement. Subtree watching caused our own
+      // Video/button decoration to retrigger maintenance repeatedly on real phones.
+      observer=new MutationObserver(queueMaintain);
+      observer.observe(h,{childList:true,subtree:false});
     }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')maintain()});
-  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,pinMeetSwitcher,enhanceVideo,maintain};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')queueMaintain()});
+  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,pinMeetSwitcher,enhanceVideo,maintain,queueMaintain};
 })(globalThis);
