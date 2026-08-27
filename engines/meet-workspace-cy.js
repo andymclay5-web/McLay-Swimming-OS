@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260827dc';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260827dd';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -47,6 +47,14 @@
     return ws[id];
   }
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
+  function renderIntentionalEmpty(id,title){
+    // meet-ops' legacy recovery only fires when there is no deck at render time.
+    // Give it an explicit empty marker for this render so it records this meet as intentionally empty,
+    // then return canonical workspace state to null immediately afterwards.
+    M.state.meetFieldDeck=emptyDeck(id,title);save();
+    M.ui.renderMeet?.();
+    M.state.meetFieldDeck=null;save();
+  }
 
   function sourceTextForDeck(d){
     if(!d)return'';
@@ -95,12 +103,10 @@
     const ws=workspaces()[id];if(!ws)return;
     try{M.meet.setCurrent(id)}catch{M.state.settings.currentMeetId=id}
     const m=currentMeet();
-    M.state.meetFieldDeck=ws.deck?clone(ws.deck):emptyDeck(id,m?.title||ws.title||'Swim meet');
     M.state.meetOps=clone(ws.ops||blankOps());
     applyProgram(ws.program||{});
-    tagActiveMeet(id);
-    save();
-    M.ui.renderMeet?.();
+    if(ws.deck){M.state.meetFieldDeck=clone(ws.deck);tagActiveMeet(id);save();M.ui.renderMeet?.();}
+    else renderIntentionalEmpty(id,m?.title||ws.title||'Swim meet');
   }
 
   function closeModal(){const h=document.querySelector('#modalHost');if(h)h.innerHTML='';M.nav?.dismissLayer?.()}
@@ -115,8 +121,7 @@
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
       let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
-      M.state.meetFieldDeck=emptyDeck(m.id,m.title);M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);
-      save();closeModal();M.ui.renderMeet?.();M.toast?.(`${m.title} ready · add Session 1 programme`);
+      M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();closeModal();renderIntentionalEmpty(m.id,m.title);M.toast?.(`${m.title} ready · add Session 1 programme`);
     };
   }
 
