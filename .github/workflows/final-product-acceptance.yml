@@ -19,9 +19,11 @@ jobs:
         run: |
           node --check engines/dosage.js
           node --check engines/dosage-ui.js
+          node --check engines/meet-program-ops-bridge.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
           node --check tests/phone-target-stability-20260826.cjs
           node --check tests/meet-program-phone-acceptance-20260826.cjs
+          node --check tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
@@ -42,6 +44,8 @@ jobs:
         run: node tests/phone-target-stability-20260826.cjs
       - name: Meet programme Android acceptance
         run: node tests/meet-program-phone-acceptance-20260826.cjs
+      - name: Meet phone-priority controls acceptance
+        run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/msos-final-http.log || true

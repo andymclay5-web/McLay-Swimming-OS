@@ -62,6 +62,7 @@ jobs:
           node --check engines/meet-field-au.js
           node --check engines/meet-ops-av.js
           node --check engines/meet-program-ba.js
+          node --check engines/meet-program-ops-bridge.js
           node --check engines/phone-fixes-ao.js
           node --check engines/amber-ratio-ap.js
           node --check engines/amber-alignment-aq.js
