@@ -24,6 +24,7 @@ jobs:
           node --check tests/phone-target-stability-20260826.cjs
           node --check tests/meet-program-phone-acceptance-20260826.cjs
           node --check tests/meet-working-card-phone-acceptance-20260827.cjs
+          node --check tests/roll-fixture-diagnostic-20260827.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
@@ -38,6 +39,8 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-final-http.log 2>&1 &
           echo $! > /tmp/msos-final-http.pid
           sleep 1
+      - name: Diagnose injected Roll fixture
+        run: node tests/roll-fixture-diagnostic-20260827.cjs
       - name: All-inclusive coach journey at Android phone shape
         run: node tests/all-inclusive-product-acceptance-20260825.cjs
       - name: Phone target loading and stroke scroll stability
