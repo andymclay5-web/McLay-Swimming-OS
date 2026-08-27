@@ -2,11 +2,12 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260827de5';
+  const BUILD='v4-meet-poolside-20260828de6';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
-  let observer=null,repairing=false,maintainQueued=false,programmeRenderQueued=false;
+  const norm=v=>String(v??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  let observer=null,repairing=false,maintainQueued=false,programmeRenderQueued=false,explicitOpen=null;
 
   function programmeState(){
     if(!M.state.meetProgramBA||typeof M.state.meetProgramBA!=='object')M.state.meetProgramBA={};
@@ -50,16 +51,23 @@
       return changed;
     }finally{repairing=false}
   }
+  function repairSiscSources(){
+    const p=programmeState();let invalid=false;
+    for(const src of p.sources||[]){
+      if(!/AQGCB/i.test(String(src?.raw||'')))continue;
+      const aq=(src?.parsed?.heats||[]).flatMap(h=>h.rows||[]).filter(r=>r?.is_aquagym).length;
+      if(!aq){delete src._sisc_format_build;delete src._sisc_raw_sig;invalid=true}
+    }
+    let changed=false;try{changed=!!M.meetSiscFormat?.repair?.()}catch{}
+    return changed||invalid;
+  }
   function pinMeetSwitcher(){
     const h=document.querySelector('#meetView'),box=h?.querySelector('[data-meet-workspace-cy]');
     if(!h||!box)return;
     if(h.firstElementChild!==box)h.insertBefore(box,h.firstElementChild);
     box.classList.add('meet-poolside-top');
   }
-  function ensureProgrammeVisible(){
-    const h=document.querySelector('#meetView');
-    if(!h||M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
-    if(h.querySelector('[data-meet-program-ba]'))return;
+  function renderProgrammeSoon(){
     if(programmeRenderQueued)return;
     programmeRenderQueued=true;
     requestAnimationFrame(()=>{
@@ -69,6 +77,40 @@
       try{M.meetProgramBA?.render?.()}catch{}
       pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
     });
+  }
+  function ensureProgrammeVisible(){
+    const h=document.querySelector('#meetView');
+    if(!h||M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
+    if(h.querySelector('[data-meet-program-ba]'))return;
+    renderProgrammeSoon();
+  }
+  function sourceId(src){return src?.source_id||src?.parsed?.id||''}
+  function findOpenForAthlete(id){
+    const p=programmeState(),deck=M.state?.meetFieldDeck,rs=deck?.races||[];
+    for(const src of p.sources||[]){
+      for(const h of src?.parsed?.heats||[]){
+        for(const row of h.rows||[]){
+          if(!row?.is_aquagym)continue;
+          const r=rs.find(x=>!x.relay&&x.event_number===h.event_number&&(x.heat||0)===(h.heat||0)&&(x.lane||0)===(row.lane||0)&&x.athlete_id===id);
+          if(!r)continue;
+          return{meetId:M.state?.settings?.currentMeetId||'',athleteId:id,expandedKey:[h.session_id,h.event_number,h.heat,row.lane||0,norm(row.name)].join('|'),selectedKey:[deck?.source_id||'field',r.event_number||0,r.heat||0,r.lane||0,r.athlete_id||r.athlete_name||''].join('|'),selectedSourceId:sourceId(src),selectedEventNumber:Number(h.event_number)||0};
+        }
+      }
+    }
+    return null;
+  }
+  function applyExplicitOpen(){
+    if(!explicitOpen||explicitOpen.meetId!==(M.state?.settings?.currentMeetId||''))return false;
+    const p=programmeState();let changed=false;
+    for(const [k,v] of [['selectedAthleteId',explicitOpen.athleteId],['expandedKey',explicitOpen.expandedKey],['selectedKey',explicitOpen.selectedKey],['selectedSourceId',explicitOpen.selectedSourceId]])if(v&&p[k]!==v){p[k]=v;changed=true}
+    if(explicitOpen.selectedEventNumber&&Number(p.selectedEventNumber)!==explicitOpen.selectedEventNumber){p.selectedEventNumber=explicitOpen.selectedEventNumber;changed=true}
+    return changed;
+  }
+  function openAthlete(id){
+    if(!id)return;
+    repairSiscSources();
+    const lock=findOpenForAthlete(id);if(!lock)return;
+    explicitOpen=lock;applyExplicitOpen();saveOnce();renderProgrammeSoon();
   }
   function raceForCaptureButton(btn){
     const k=btn?.dataset?.baCapture||'';
@@ -92,20 +134,17 @@
     const h=document.querySelector('#meetView');if(!h)return;
     const hasProgramme=!!h.querySelector('[data-meet-program-ba]');
     document.body.classList.toggle('meet-program-authority-active',hasProgramme);
-    for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]']){
-      for(const n of h.querySelectorAll(sel))n.hidden=hasProgramme;
-    }
+    for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'])for(const n of h.querySelectorAll(sel))n.hidden=hasProgramme;
   }
   function maintain(){
     maintainQueued=false;
     if(M.state?.settings?.view!=='meet')return;
-    repairManagedDecks();ensureProgrammeVisible();pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
+    repairManagedDecks();
+    const sourceChanged=repairSiscSources(),selectionChanged=applyExplicitOpen();
+    if(sourceChanged||selectionChanged)renderProgrammeSoon();else ensureProgrammeVisible();
+    pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
   }
-  function queueMaintain(){
-    if(maintainQueued)return;
-    maintainQueued=true;
-    requestAnimationFrame(maintain);
-  }
+  function queueMaintain(){if(maintainQueued)return;maintainQueued=true;requestAnimationFrame(maintain)}
   function style(){
     if(document.getElementById('meet-poolside-de-style'))return;
     const s=document.createElement('style');s.id='meet-poolside-de-style';
@@ -122,19 +161,20 @@
   function install(){
     style();repairManagedDecks();queueMaintain();
     document.addEventListener('click',e=>{
+      const meetBtn=e.target?.closest?.('[data-mwm-meet]');if(meetBtn&&meetBtn.dataset.mwmMeet!==(M.state?.settings?.currentMeetId||''))explicitOpen=null;
+      if(e.target?.closest?.('[data-ba-collapse],[data-ba-close-athlete]'))explicitOpen=null;
+      const athleteBtn=e.target?.closest?.('[data-ba-athlete]');if(athleteBtn)queueMicrotask(()=>openAthlete(athleteBtn.dataset.baAthlete));
+      const row=e.target?.closest?.('[data-ba-row].aqua');if(row&&!e.target?.closest?.('button,details,summary,input,textarea'))queueMicrotask(()=>{
+        const p=programmeState();if(!p.expandedKey){explicitOpen=null;return}
+        explicitOpen={meetId:M.state?.settings?.currentMeetId||'',athleteId:p.selectedAthleteId||'',expandedKey:p.expandedKey,selectedKey:p.selectedKey||'',selectedSourceId:p.selectedSourceId||'',selectedEventNumber:Number(p.selectedEventNumber)||0};
+      });
       if(!e.target?.closest?.('[data-mfa-use]'))return;
-      setTimeout(()=>{
-        try{M.meetWorkspaceEngine?.snapshotCurrent?.({persist:true})}catch{}
-        repairManagedDecks();queueMaintain();
-      },80);
+      setTimeout(()=>{try{M.meetWorkspaceEngine?.snapshotCurrent?.({persist:true})}catch{}repairManagedDecks();queueMaintain()},80);
     },false);
     const h=document.querySelector('#meetView');
-    if(h&&!observer){
-      observer=new MutationObserver(queueMaintain);
-      observer.observe(h,{childList:true,subtree:false});
-    }
+    if(h&&!observer){observer=new MutationObserver(queueMaintain);observer.observe(h,{childList:true,subtree:false})}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')queueMaintain()});
-  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,pinMeetSwitcher,enhanceVideo,ensureProgrammeVisible,maintain,queueMaintain};
+  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,repairSiscSources,pinMeetSwitcher,enhanceVideo,ensureProgrammeVisible,maintain,queueMaintain,openAthlete};
 })(globalThis);
