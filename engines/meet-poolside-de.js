@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260828de11';
+  const BUILD='v4-meet-poolside-20260828de12';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -77,14 +77,19 @@
   function openDirectVideo(btn){const r=raceForCaptureButton(btn);if(!r)return M.toast?.('Select an AquaGym race first');M.meetOpsEngine?.openCapture?.(r);requestAnimationFrame(()=>document.querySelector('#modalHost [data-mo-video]')?.click())}
   function enhanceVideo(){const root=document.querySelector('#meetView [data-meet-program-ba]');if(!root)return;for(const cap of root.querySelectorAll('[data-ba-capture]')){const actions=cap.closest('.ba-actions');if(!actions||actions.querySelector('[data-mpo-video]'))continue;const b=document.createElement('button');b.type='button';b.dataset.mpoVideo='1';b.dataset.baCapture=cap.dataset.baCapture||'';b.textContent='Video';b.onclick=e=>{e.preventDefault();e.stopPropagation();openDirectVideo(b)};actions.appendChild(b)}}
   function suppressLegacyWhenProgramme(){const h=document.querySelector('#meetView');if(!h)return;const hasProgramme=!!h.querySelector('[data-meet-program-ba]')&&(currentDeckOwned()||explicitOpenActive());document.body.classList.toggle('meet-program-authority-active',hasProgramme);for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'])for(const n of h.querySelectorAll(sel))n.hidden=hasProgramme}
+  function clearProgrammeAuthority(){
+    document.body.classList.remove('meet-program-authority-active');
+    const h=document.querySelector('#meetView');if(!h)return;
+    for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'])for(const n of h.querySelectorAll(sel))n.hidden=false;
+  }
   function maintain(){
     maintainQueued=false;if(M.state?.settings?.view!=='meet')return;
-    if(Date.now()<transitionUntil){pinMeetSwitcher();return}
+    if(Date.now()<transitionUntil){clearProgrammeAuthority();pinMeetSwitcher();return}
     repairManagedDecks();const owned=currentDeckOwned(),sisc=(owned||explicitOpenActive())&&hasSiscSource();const sourceChanged=sisc?repairSiscSources():false,selectionChanged=sisc?applyExplicitOpen():false;
     if(sourceChanged||selectionChanged)renderProgrammeSoon(explicitOpenActive());else if(owned)ensureProgrammeVisible();pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
   }
   function queueMaintain(){if(maintainQueued)return;maintainQueued=true;requestAnimationFrame(maintain)}
-  function beginTransition(){transitionUntil=Date.now()+900;explicitOpen=null;setTimeout(queueMaintain,950)}
+  function beginTransition(){transitionUntil=Date.now()+900;explicitOpen=null;clearProgrammeAuthority();setTimeout(queueMaintain,950)}
   function style(){
     if(document.getElementById('meet-poolside-de-style'))return;const s=document.createElement('style');s.id='meet-poolside-de-style';s.textContent=`
       #meetView>[data-meet-workspace-cy]{position:sticky;top:0;z-index:80;margin:0 0 .45rem;background:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.08)}
