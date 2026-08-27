@@ -2,12 +2,14 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260827dd';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260828de-same-competition-authority';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const now=()=>U.now?U.now():new Date().toISOString();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const competitionKey=v=>norm(v).split(' ').filter(w=>!(/^(?:20\d{2}|scm|lcm|sc|lc|meter|metre|meters|metres|championship|championships|champ|champs)$/i.test(w))).join(' ').trim();
+  const sameCompetition=(a,b)=>{const na=norm(a),nb=norm(b);if(!na||!nb)return false;if(na===nb)return true;const ka=competitionKey(a),kb=competitionKey(b);return !!(ka&&kb&&ka===kb&&ka.length>=6)};
   const host=()=>document.querySelector('#meetView');
 
   function program(){
@@ -48,9 +50,6 @@
   }
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
   function renderIntentionalEmpty(id,title){
-    // meet-ops' legacy recovery only fires when there is no deck at render time.
-    // Give it an explicit empty marker for this render so it records this meet as intentionally empty,
-    // then return canonical workspace state to null immediately afterwards.
     M.state.meetFieldDeck=emptyDeck(id,title);save();
     M.ui.renderMeet?.();
     M.state.meetFieldDeck=null;save();
@@ -80,16 +79,26 @@
   }
   function adoptLoadedProgramme(){
     const d=M.state?.meetFieldDeck;if(!d?.races?.length)return currentMeet();
-    const title=sourceTitleForDeck(d),key=norm(title),rows=meets(),ws=workspaces();
+    const title=sourceTitleForDeck(d),rows=meets(),ws=workspaces();
     if(title&&(!txt(d.title)||norm(d.title)==='meet programme'))d.title=title;
-    let m=rows.find(x=>x.id===d.meet_id&&ws[x.id]);
-    if(!m)m=rows.find(x=>norm(x.title)===key&&ws[x.id]);
-    if(!m)m=rows.find(x=>norm(x.title)===key);
+
+    // Competition identity outranks a stale meet_id. This prevents a loaded programme
+    // from being displayed over a different empty/previous meet workspace.
+    let m=rows.find(x=>sameCompetition(x.title,title)&&ws[x.id]);
+    if(!m)m=rows.find(x=>sameCompetition(x.title,title));
+    const tagged=rows.find(x=>x.id===d.meet_id);
+    if(!m&&tagged&&sameCompetition(tagged.title,title))m=tagged;
+
     if(!m){
       try{m=M.meet.create({title,date:d.date_range||'',course:d.course||''})}catch{return currentMeet()}
-    }else if(currentId()!==m.id){try{M.meet.setCurrent(m.id)}catch{M.state.settings.currentMeetId=m.id}}
+    }
+    if(currentId()!==m.id){
+      try{M.meet.setCurrent(m.id)}catch{M.state.settings.currentMeetId=m.id}
+    }
     tagActiveMeet(m.id);
-    if(!ws[m.id])snapshotCurrent();
+    // The loaded deck/programme is the current live truth. Snapshot it into the
+    // matched workspace immediately so the lower Live Meet Deck cannot remain empty.
+    snapshotCurrent({persist:true});
     return m;
   }
 
@@ -155,5 +164,5 @@
   const previous=M.ui.renderMeet?.bind(M.ui);
   if(previous)M.ui.renderMeet=()=>{const x=previous();queueMicrotask(renderSwitcher);return x};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(M.state?.settings?.view==='meet')renderSwitcher()},0),{once:true});else setTimeout(()=>{if(M.state?.settings?.view==='meet')renderSwitcher()},0);
-  M.meetWorkspaceEngine={build:BUILD,render:renderSwitcher,snapshotCurrent,restoreMeet,newMeetModal,managedRows,adoptLoadedProgramme,sourceTitleForDeck};
+  M.meetWorkspaceEngine={build:BUILD,render:renderSwitcher,snapshotCurrent,restoreMeet,newMeetModal,managedRows,adoptLoadedProgramme,sourceTitleForDeck,sameCompetition};
 })(globalThis);
