@@ -1,15 +1,16 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.ui)return;
-  const BUILD='v4-meet-unified-friday-20260828b-single-authority';
+  const BUILD='v4-meet-unified-friday-20260828c-phone-workflow';
   const U=M.util||{};
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const now=()=>U.now?U.now():new Date().toISOString();
-  let observer=null,queued=false,activeVoice=null,recognition=null,audioRecorder=null,audioStream=null,audioChunks=[];
+  let observer=null,queued=false,activeVoice=null,recognition=null,audioRecorder=null,audioStream=null,audioChunks=[],noteTimer=null;
   const host=()=>document.querySelector('#meetView');
   const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
-  const raceForKey=k=>(M.state?.meetFieldDeck?.races||[]).find(r=>M.meetOpsEngine?.keyFor?.(r)===k)||null;
+  const deck=()=>M.state?.meetFieldDeck||null;
+  const raceForKey=k=>(deck()?.races||[]).find(r=>M.meetOpsEngine?.keyFor?.(r)===k)||null;
   const recFor=r=>r?M.meetOpsEngine?.recordFor?.(r,true):null;
   const evidenceFor=k=>(M.state?.meetOps?.evidence||[]).filter(e=>e.race_key===k);
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}try{M.meetOpsEngine?.backup?.()}catch{}}
@@ -20,6 +21,22 @@
       if(n===p||n.matches?.('[data-meet-workspace-cy]'))continue;
       if(n.matches?.('.meet-hero,.next-race-card,.page-card'))n.hidden=true;
     }
+  }
+  function eventRows(){
+    const groups=new Map();
+    for(const r of deck()?.races||[]){
+      const n=Number(r.event_number)||0;if(!n)continue;
+      let x=groups.get(n);if(!x){x={event_number:n,event:r.event||`${r.distance||''} ${r.stroke||''}`,start_time:r.start_time||'',names:[],keys:[]};groups.set(n,x)}
+      if(!x.start_time&&r.start_time)x.start_time=r.start_time;
+      const name=txt(r.athlete_name||r.source_name);if(name&&!x.names.includes(name))x.names.push(name);
+      const k=M.meetOpsEngine?.keyFor?.(r);if(k&&!x.keys.includes(k))x.keys.push(k);
+    }
+    return [...groups.values()].sort((a,b)=>a.event_number-b.event_number);
+  }
+  function ensureEventMap(p){
+    let map=p.querySelector('[data-mu-event-map]');if(!map){map=document.createElement('section');map.dataset.muEventMap='1';map.className='mu-event-map';const sticky=p.querySelector('.ba-sticky');sticky?.after(map)}
+    const rows=eventRows();
+    map.innerHTML=`<div class="mu-event-map-head"><div><b>AquaGym events</b><small>Tap an event, then tap our swimmer in the heat</small></div></div><div class="mu-event-map-grid">${rows.map(x=>`<button type="button" data-mu-event="${x.event_number}"><span><b>E${x.event_number}</b><strong>${esc(x.event)}</strong></span><small>${esc(x.start_time||'Time in programme')}</small><em>${esc(x.names.join(' · ')||'AquaGym')}</em></button>`).join('')}</div>`;
   }
   function addEvidence(r,type,{text='',mediaId=null,mimeType=null}={}){
     if(!r)return null;M.state.meetOps=M.state.meetOps||{};if(!Array.isArray(M.state.meetOps.evidence))M.state.meetOps.evidence=[];
@@ -40,7 +57,7 @@
     let video=actions.querySelector('[data-mu-video-label]');
     if(!video){video=document.createElement('label');video.className='buttonlike mu-video';video.dataset.muVideoLabel='1';video.innerHTML=`Video<input data-mu-video="${esc(k)}" type="file" accept="video/*" capture="environment" hidden>`;actions.appendChild(video)}
     let data=actions.querySelector('[data-mu-race-data]');
-    if(!data){data=document.createElement('button');data.type='button';data.dataset.muRaceData='1';data.dataset.muRace=k;data.textContent='Race data';actions.appendChild(data)}
+    if(!data){data=document.createElement('button');data.type='button';data.dataset.muRaceData='1';data.dataset.muRace=k;data.textContent='Result / splits';actions.appendChild(data)}
   }
   function evidenceHtml(k){
     const ev=evidenceFor(k).slice(-8).reverse();
@@ -48,14 +65,16 @@
     return ev.map(e=>{const label=e.capture_type==='commentary'?'Voice commentary':e.capture_type==='voice'?'Voice note':e.capture_type==='video'?'Video':e.capture_type==='photo'?'Photo':e.capture_type||'Evidence',play=e.media_id?`<button data-mu-play="${esc(e.id)}">Play</button>`:'';return `<div class="mu-evidence-row"><div><b>${esc(label)}</b>${e.text_content?`<span>${esc(e.text_content)}</span>`:'<span>Saved media</span>'}</div>${play}</div>`}).join('');
   }
   function ensureEvidence(intel){
-    const capture=intel.querySelector('[data-ba-capture]'),k=capture?.dataset.baCapture||'';if(!k)return;
-    let box=intel.querySelector('[data-mu-evidence]');
+    const capture=intel.querySelector('[data-ba-capture]'),k=capture?.dataset.baCapture||'',r=raceForKey(k);if(!k||!r)return;
+    const x=recFor(r);let box=intel.querySelector('[data-mu-evidence]');
     if(!box){box=document.createElement('section');box.dataset.muEvidence='1';box.className='mu-evidence';capture.closest('.ba-actions')?.after(box)}
-    box.innerHTML=`<div class="mu-evidence-head"><b>Race evidence</b><small>saved locally</small></div>${evidenceHtml(k)}`;
+    const active=document.activeElement?.matches?.(`[data-mu-note="${CSS.escape(k)}"]`);
+    if(active)return;
+    box.innerHTML=`<div class="mu-evidence-head"><div><b>Race capture</b><small>${esc(r.athlete_name||r.source_name||'Swimmer')} · E${r.event_number} · ${esc(r.distance||'')} ${esc(r.stroke||'')} · H${r.heat||'—'} L${r.lane||'—'}</small></div><small>local-first</small></div><label class="mu-note-label">Type race note<textarea data-mu-note="${esc(k)}" rows="3" placeholder="Type what you saw while you watch…">${esc(x?.notes||'')}</textarea></label><div class="mu-saved-head"><b>Saved evidence</b></div>${evidenceHtml(k)}`;
   }
   function enhance(){
     queued=false;const p=programme();if(!p||M.state?.settings?.view!=='meet')return;
-    suppressLegacyDeck();
+    suppressLegacyDeck();ensureEventMap(p);
     for(const intel of p.querySelectorAll('.ba-intel')){ensureActions(intel);ensureEvidence(intel)}
   }
   function queue(){if(queued)return;queued=true;requestAnimationFrame(enhance)}
@@ -95,18 +114,20 @@
     M.nav?.openLayer?.('modal');
     const close=()=>{try{h.querySelector('[data-mu-player]')?.pause()}catch{}URL.revokeObjectURL(url);h.innerHTML='';M.nav?.dismissLayer?.()};h.querySelectorAll('[data-mu-close]').forEach(b=>b.onclick=close);
   }
+  function jumpEvent(n){const p=programme();if(!p)return;const b=[...p.querySelectorAll('[data-ba-event]')].find(x=>Number(x.dataset.baEvent)===Number(n));if(b){b.click();setTimeout(()=>programme()?.querySelector('.ba-session')?.scrollIntoView?.({block:'start',behavior:'smooth'}),30)}}
   function bind(){
-    document.addEventListener('click',e=>{const v=e.target.closest?.('[data-mu-voice]');if(v){e.preventDefault();e.stopPropagation();const r=raceForKey(v.dataset.muRace||'');if(r)startVoice(r,v.dataset.muRace);return}const d=e.target.closest?.('[data-mu-race-data]');if(d){e.preventDefault();e.stopPropagation();const r=raceForKey(d.dataset.muRace||'');if(r)M.meetOpsEngine?.openRaceEdit?.(r);return}const p=e.target.closest?.('[data-mu-play]');if(p){e.preventDefault();e.stopPropagation();playEvidence(p.dataset.muPlay);return}},true);
-    document.addEventListener('change',e=>{const input=e.target.closest?.('[data-mu-video]');if(input)saveVideo(input)},true);
+    document.addEventListener('click',e=>{const ev=e.target.closest?.('[data-mu-event]');if(ev){e.preventDefault();jumpEvent(ev.dataset.muEvent);return}const v=e.target.closest?.('[data-mu-voice]');if(v){e.preventDefault();e.stopPropagation();const r=raceForKey(v.dataset.muRace||'');if(r)startVoice(r,v.dataset.muRace);return}const d=e.target.closest?.('[data-mu-race-data]');if(d){e.preventDefault();e.stopPropagation();const r=raceForKey(d.dataset.muRace||'');if(r)M.meetOpsEngine?.openRaceEdit?.(r);return}const p=e.target.closest?.('[data-mu-play]');if(p){e.preventDefault();e.stopPropagation();playEvidence(p.dataset.muPlay);return}},true);
+    document.addEventListener('input',e=>{const a=e.target.closest?.('[data-mu-note]');if(!a)return;const r=raceForKey(a.dataset.muNote||''),x=recFor(r);if(!x)return;x.notes=a.value;x.updated_at=now();clearTimeout(noteTimer);noteTimer=setTimeout(save,180)},true);
+    document.addEventListener('change',e=>{const input=e.target.closest?.('[data-mu-video]');if(input){saveVideo(input);return}if(e.target.closest?.('[data-mu-note]'))save()},true);
   }
   function style(){
     if(document.getElementById('meet-unified-dh-style'))document.getElementById('meet-unified-dh-style').remove();
     const s=document.createElement('style');s.id='meet-unified-dh-style';
-    s.textContent=`body.meet-program-ba-active #meetView>.meet-hero,body.meet-program-ba-active #meetView>.next-race-card,body.meet-program-ba-active #meetView>.page-card{display:none!important}[data-meet-program-ba] .ba-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}[data-meet-program-ba] .ba-actions button,[data-meet-program-ba] .ba-actions .buttonlike{min-height:48px;font-weight:800}.mu-video{display:flex;align-items:center;justify-content:center;border:1px solid currentColor;border-radius:8px;padding:.35rem;cursor:pointer}.mu-live-transcript{border:2px solid currentColor;border-radius:10px;padding:.5rem;font-weight:750;background:var(--surface,#fff)}.mu-evidence{display:grid;gap:.3rem;border-top:1px solid rgba(13,69,102,.14);padding-top:.4rem}.mu-evidence-head{display:flex;justify-content:space-between}.mu-evidence-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.4rem;align-items:center;border:1px solid rgba(13,69,102,.12);border-radius:9px;padding:.4rem}.mu-evidence-row>div{display:grid;min-width:0}.mu-evidence-row span{font-size:.82rem;white-space:normal}.mu-evidence-row button{min-height:42px}@media(max-width:620px){[data-meet-program-ba] .ba-actions{grid-template-columns:1fr 1fr!important}.mu-evidence-row{grid-template-columns:1fr}.mu-evidence-row button{width:100%}}`;
+    s.textContent=`body.meet-program-ba-active #meetView>.meet-hero,body.meet-program-ba-active #meetView>.next-race-card,body.meet-program-ba-active #meetView>.page-card{display:none!important}.mu-event-map{display:grid;gap:.4rem;padding:.45rem 0}.mu-event-map-head>div{display:grid}.mu-event-map-head small{font-size:.76rem;opacity:.72}.mu-event-map-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem}.mu-event-map-grid button{display:grid;gap:.18rem;text-align:left;padding:.48rem;border-radius:10px;min-width:0}.mu-event-map-grid button>span{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.35rem;align-items:start}.mu-event-map-grid strong{font-size:.82rem;line-height:1.15;white-space:normal}.mu-event-map-grid small{font-size:.72rem}.mu-event-map-grid em{font-style:normal;font-size:.73rem;font-weight:750;white-space:normal}[data-meet-program-ba] .ba-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}[data-meet-program-ba] .ba-actions button,[data-meet-program-ba] .ba-actions .buttonlike{min-height:48px;font-weight:800}.mu-video{display:flex;align-items:center;justify-content:center;border:1px solid currentColor;border-radius:8px;padding:.35rem;cursor:pointer}.mu-live-transcript{border:2px solid currentColor;border-radius:10px;padding:.5rem;font-weight:750;background:var(--surface,#fff)}.mu-evidence{display:grid;gap:.38rem;border-top:1px solid rgba(13,69,102,.14);padding-top:.45rem}.mu-evidence-head{display:flex;justify-content:space-between;gap:.4rem}.mu-evidence-head>div{display:grid}.mu-evidence-head small{font-size:.72rem}.mu-note-label{display:grid;gap:.2rem;font-weight:800}.mu-note-label textarea{width:100%;min-height:72px;font:inherit;padding:.48rem;border:1px solid rgba(13,69,102,.2);border-radius:9px}.mu-saved-head{margin-top:.1rem}.mu-evidence-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.4rem;align-items:center;border:1px solid rgba(13,69,102,.12);border-radius:9px;padding:.4rem}.mu-evidence-row>div{display:grid;min-width:0}.mu-evidence-row span{font-size:.82rem;white-space:normal}.mu-evidence-row button{min-height:42px}@media(max-width:620px){html,body,#appMain,#meetView{touch-action:pan-y}.ba-sticky,.ba-session-head{position:static!important;top:auto!important}.ba-pills{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;overflow:visible!important;gap:.28rem!important}.ba-pills button{min-width:0!important;width:100%;padding:.34rem .25rem!important}.ba-pills button b{overflow:hidden;text-overflow:ellipsis}.ba-event-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;overflow:visible!important;gap:.3rem!important}.ba-event-tabs button{min-width:0!important;width:100%!important;padding:.38rem!important}.ba-event-tabs small{max-width:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.1}.ba-swimmer-strip>div:last-child{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;overflow:visible!important}.ba-swimmer-strip button{min-width:0!important}.mwm-tabs{flex-wrap:wrap!important;overflow:visible!important}.mwm-tabs button{min-width:0!important;flex:1 1 44%!important}.mu-event-map-grid{grid-template-columns:1fr}.mu-evidence-row{grid-template-columns:1fr}.mu-evidence-row button{width:100%}[data-meet-program-ba] .ba-actions{grid-template-columns:1fr 1fr!important}}`;
     document.head.appendChild(s);
   }
   function install(){style();bind();queue();const h=host();if(h&&!observer){observer=new MutationObserver(queue);observer.observe(h,{childList:true,subtree:false})}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){save();return}queue()});g.addEventListener?.('pagehide',save);
-  M.meetUnifiedFriday={build:BUILD,enhance,stopVoice,playEvidence,suppressLegacyDeck};
+  M.meetUnifiedFriday={build:BUILD,enhance,stopVoice,playEvidence,suppressLegacyDeck,eventRows};
 })(globalThis);
