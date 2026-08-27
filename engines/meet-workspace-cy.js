@@ -2,9 +2,9 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260827cz';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260827da';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
-  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const now=()=>U.now?U.now():new Date().toISOString();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -47,6 +47,23 @@
   }
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
 
+  function sourceTextForDeck(d){
+    if(!d)return'';
+    const imp=(M.state.meetImports||[]).find(x=>x.id===d.source_id&&x.text);
+    if(imp?.text)return String(imp.text);
+    const src=(program().sources||[]).find(x=>x.source_id===d.source_id&&x.raw);
+    return String(src?.raw||'');
+  }
+  function sourceTitleForDeck(d){
+    const raw=sourceTextForDeck(d),lines=raw.replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean);
+    const titleLine=lines.find(line=>!/(?:HY-TEK'?s?\s+)?MEET MANAGER/i.test(line)&&!/^Meet Program\s*-/i.test(line)&&/\d{1,2}\/\d{1,2}\/\d{4}/.test(line)&&/(?:Carnival|Championships?|Champs?|Meet)/i.test(line));
+    if(titleLine){
+      const cleaned=txt(titleLine.replace(/\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}.*$/,''));
+      if(cleaned)return cleaned;
+    }
+    return txt(d?.title)||'Swim meet';
+  }
+
   function tagActiveMeet(id){
     const d=M.state.meetFieldDeck;if(d)d.meet_id=id;
     for(const r of M.state.meetImports||[])if(!r.meet_id||r.id===d?.source_id)r.meet_id=id;
@@ -54,9 +71,9 @@
   }
   function adoptLoadedProgramme(){
     const d=M.state?.meetFieldDeck;if(!d?.races?.length)return currentMeet();
-    const title=txt(d.title)||'Swim meet',key=norm(title),rows=meets(),ws=workspaces();
-    // If the programme was loaded while a real managed meet was active, its meet_id is authoritative.
-    // Do not create a second meet merely because the HY-TEK title parser returned a generic/different title.
+    const title=sourceTitleForDeck(d),key=norm(title),rows=meets(),ws=workspaces();
+    if(title&&(!txt(d.title)||norm(d.title)==='meet programme'))d.title=title;
+    // A programme loaded inside an existing managed meet belongs to that meet even if its HY-TEK header differs slightly.
     let m=rows.find(x=>x.id===d.meet_id&&ws[x.id]);
     if(!m)m=rows.find(x=>norm(x.title)===key&&ws[x.id]);
     if(!m)m=rows.find(x=>norm(x.title)===key);
@@ -114,9 +131,22 @@
   }
   function style(){if(document.getElementById('meet-workspace-cy-style'))return;const s=document.createElement('style');s.id='meet-workspace-cy-style';s.textContent=`.meet-workspace-cy{position:relative;z-index:20;background:var(--surface,#fff);border-bottom:1px solid rgba(13,69,102,.14);padding:.25rem 0 .35rem}.mwm-tabs{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:thin}.mwm-tabs button{flex:0 0 auto;display:grid;text-align:left;min-width:118px;border-radius:10px;padding:.38rem .5rem}.mwm-tabs button small{font-size:.68rem;opacity:.7}.mwm-tabs button.active{outline:2px solid currentColor}.mwm-tabs .mwm-new{min-width:132px}`;document.head.appendChild(s)}
 
+  function bindIntakeHandoff(){
+    document.addEventListener('click',e=>{
+      if(!e.target?.closest?.('[data-mfa-use]'))return;
+      queueMicrotask(()=>{
+        if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
+        adoptLoadedProgramme();
+        renderSwitcher();
+        save();
+      });
+    },true);
+  }
+
   style();
+  bindIntakeHandoff();
   const previous=M.ui.renderMeet?.bind(M.ui);
   if(previous)M.ui.renderMeet=()=>{const x=previous();queueMicrotask(renderSwitcher);return x};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(M.state?.settings?.view==='meet')renderSwitcher()},0),{once:true});else setTimeout(()=>{if(M.state?.settings?.view==='meet')renderSwitcher()},0);
-  M.meetWorkspaceEngine={build:BUILD,render:renderSwitcher,snapshotCurrent,restoreMeet,newMeetModal,managedRows,adoptLoadedProgramme};
+  M.meetWorkspaceEngine={build:BUILD,render:renderSwitcher,snapshotCurrent,restoreMeet,newMeetModal,managedRows,adoptLoadedProgramme,sourceTitleForDeck};
 })(globalThis);
