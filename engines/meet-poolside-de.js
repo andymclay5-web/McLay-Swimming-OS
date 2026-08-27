@@ -2,11 +2,11 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260827de3';
+  const BUILD='v4-meet-poolside-20260827de4';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
-  let observer=null,repairing=false,maintainQueued=false;
+  let observer=null,repairing=false,maintainQueued=false,programmeRenderQueued=false;
 
   function programmeState(){
     if(!M.state.meetProgramBA||typeof M.state.meetProgramBA!=='object')M.state.meetProgramBA={};
@@ -56,6 +56,20 @@
     if(h.firstElementChild!==box)h.insertBefore(box,h.firstElementChild);
     box.classList.add('meet-poolside-top');
   }
+  function ensureProgrammeVisible(){
+    const h=document.querySelector('#meetView');
+    if(!h||M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
+    if(h.querySelector('[data-meet-program-ba]'))return;
+    if(programmeRenderQueued)return;
+    programmeRenderQueued=true;
+    requestAnimationFrame(()=>{
+      programmeRenderQueued=false;
+      if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
+      try{M.meetSiscFormat?.repair?.()}catch{}
+      try{M.meetProgramBA?.render?.()}catch{}
+      pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
+    });
+  }
   function raceForCaptureButton(btn){
     const k=btn?.dataset?.baCapture||'';
     return(M.state?.meetFieldDeck?.races||[]).find(r=>M.meetOpsEngine?.keyFor?.(r)===k)||null;
@@ -84,7 +98,7 @@
   function maintain(){
     maintainQueued=false;
     if(M.state?.settings?.view!=='meet')return;
-    repairManagedDecks();pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
+    repairManagedDecks();ensureProgrammeVisible();pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
   }
   function queueMaintain(){
     if(maintainQueued)return;
@@ -111,13 +125,11 @@
     },false);
     const h=document.querySelector('#meetView');
     if(h&&!observer){
-      // Only watch top-level Meet view replacement. Subtree watching caused our own
-      // Video/button decoration to retrigger maintenance repeatedly on real phones.
       observer=new MutationObserver(queueMaintain);
       observer.observe(h,{childList:true,subtree:false});
     }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')queueMaintain()});
-  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,pinMeetSwitcher,enhanceVideo,maintain,queueMaintain};
+  M.meetPoolsideRepair={build:BUILD,repairManagedDecks,pinMeetSwitcher,enhanceVideo,ensureProgrammeVisible,maintain,queueMaintain};
 })(globalThis);
