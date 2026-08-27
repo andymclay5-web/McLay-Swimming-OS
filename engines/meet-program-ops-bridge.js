@@ -2,228 +2,155 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-ops-bridge-20260827b4';
-  let retainedOps=null,syncTimer=null,observer=null,mountQueued=false,browseMode=false;
+  const BUILD='v4-meet-program-phone-priority-20260827c1';
+  let observer=null,queued=false,noteTimer=null;
 
-  const meetHost=()=>document.querySelector('#meetView');
-  const programme=()=>meetHost()?.querySelector('[data-meet-program-ba]')||null;
+  const host=()=>document.querySelector('#meetView');
+  const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
+  const stamp=()=>M.util?.now?.()||new Date().toISOString();
 
-  function workingCard(){
-    const h=meetHost();
-    return h?.querySelector('[data-meet-ops-av]')||retainedOps||null;
+  function save(){
+    try{M.store?.save?.(M.state)}catch{}
+    try{M.storageEngine?.saveUi?.(M.state)}catch{}
   }
 
-  function enableWorkingControls(){
-    M.state.meetOps=M.state.meetOps||{};
-    M.state.meetOps.showRaceControls=true;
+  function raceForKey(k){
+    const rows=M.state?.meetFieldDeck?.races||[];
+    return rows.find(r=>M.meetOpsEngine?.keyFor?.(r)===k)||null;
   }
 
-  function selectedRace(){
-    return M.meetOpsEngine?.selectedRace?.()||null;
-  }
-
-  function selectedHeatKey(){
-    const p=programme();
-    const expanded=p?.querySelector('.ba-row.expanded')?.closest('[data-ba-heat-key]');
-    if(expanded?.dataset.baHeatKey)return expanded.dataset.baHeatKey;
-    const r=selectedRace(),heats=M.meetProgramBA?.allHeats?.()||[],sid=M.state?.meetProgramBA?.selectedSourceId||'';
-    if(!r)return M.state?.meetProgramBA?.nowKey||'';
-    const hit=heats.find(h=>String(h.session_id||'')===String(sid)&&Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat))||heats.find(h=>Number(h.event_number)===Number(r.event_number)&&Number(h.heat)===Number(r.heat));
-    return hit?[hit.session_id,r.event_number||0,r.heat||0].join('|'):(M.state?.meetProgramBA?.nowKey||'');
-  }
-
-  function openCaptureFor(r){
-    if(!r)return false;
-    M.meetOpsEngine?.openCapture?.(r);
-    return true;
-  }
-
-  function openVideoFor(r){
-    if(!openCaptureFor(r))return false;
-    const input=document.querySelector('[data-mo-video]');
-    if(input){input.click();return true}
-    return false;
-  }
-
-  function startCommentary(){
-    const hk=selectedHeatKey();
-    if(!hk)return M.toast?.('Select an AquaGym race first');
-    M.meetProgramBA?.startTalk?.(hk);
+  function hideLegacyLayers(){
+    const h=host(),p=programme();
+    if(!h||!p)return;
+    for(const sel of ['[data-meet-board-ay]','[data-meet-board-az]','[data-meet-ops-av]','[data-meet-field-deck-au]','[data-meet-intake-au]']){
+      for(const n of h.querySelectorAll(sel))n.hidden=true;
+    }
   }
 
   function ensureStyle(){
-    if(document.getElementById('meet-program-ops-priority-style'))return;
+    if(document.getElementById('meet-program-phone-priority-style'))return;
     const s=document.createElement('style');
-    s.id='meet-program-ops-priority-style';
+    s.id='meet-program-phone-priority-style';
     s.textContent=`
-      [data-meet-program-working-card="1"] .mo-card.primary{display:grid;gap:.4rem}
-      [data-meet-program-working-card="1"] .mo-manual{margin:.25rem 0 .1rem}
-      [data-meet-program-working-card="1"] .mo-manual input{font-size:1.08rem;min-height:46px;font-variant-numeric:tabular-nums}
-      [data-meet-program-working-card="1"] .mo-quick-note{margin:.1rem 0}
-      [data-meet-program-working-card="1"] .mo-quick-note textarea{min-height:66px}
-      [data-meet-program-working-card="1"] .mpo-primary-actions{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:.35rem;margin:.15rem 0 .25rem}
-      [data-meet-program-working-card="1"] .mpo-primary-actions button{min-height:48px;font-weight:800}
-      [data-meet-program-working-card="1"] details.mpo-backup-timer{border:1px solid rgba(13,69,102,.14);border-radius:10px;padding:.35rem .45rem;margin:.1rem 0}
-      [data-meet-program-working-card="1"] details.mpo-backup-timer>summary{cursor:pointer;font-size:.84rem;font-weight:750}
-      [data-meet-program-working-card="1"] details.mpo-backup-timer .mo-timer{margin-top:.4rem;border-width:1px;padding:.45rem}
-      [data-meet-program-working-card="1"] details.mpo-backup-timer .mo-timer>[data-mo-clock-key]{font-size:1.5rem}
-      [data-meet-program-working-card="1"] details.mpo-backup-timer .mo-timer button{min-height:42px}
-      [data-meet-program-working-card="1"] .mo-actions{opacity:.9}
-      @media(max-width:620px){[data-meet-program-working-card="1"] .mpo-primary-actions{grid-template-columns:1fr 1fr}[data-meet-program-working-card="1"] .mpo-primary-actions [data-mpo-commentary]{grid-column:1/-1}}
+      [data-meet-program-ba] .ba-row-main .ba-seed{font-variant-numeric:tabular-nums;white-space:nowrap;display:grid;justify-items:end;line-height:1.02}
+      [data-meet-program-ba] .ba-row-main .ba-seed>span{font-size:.58rem;letter-spacing:.03em;text-transform:uppercase;opacity:.68}
+      [data-meet-program-ba] .ba-row-main .ba-seed>b{font-size:.88rem}
+      [data-meet-program-ba] .mpo-quick-note{display:grid;gap:.2rem;margin:.15rem 0 .35rem;font-weight:750}
+      [data-meet-program-ba] .mpo-quick-note textarea{min-height:64px;width:100%;resize:vertical;font:inherit;padding:.45rem .5rem;border:1px solid rgba(13,69,102,.2);border-radius:9px}
+      [data-meet-program-ba] .ba-intel .ba-actions{grid-template-columns:1fr 1fr!important;align-items:stretch}
+      [data-meet-program-ba] .ba-intel .ba-actions>[data-ba-talk],
+      [data-meet-program-ba] .ba-intel .ba-actions>[data-ba-capture]{min-height:48px;font-weight:800}
+      [data-meet-program-ba] details.mpo-backup{grid-column:1/-1;border:1px solid rgba(13,69,102,.14);border-radius:9px;padding:.3rem .4rem}
+      [data-meet-program-ba] details.mpo-backup>summary{cursor:pointer;font-size:.8rem;font-weight:750}
+      [data-meet-program-ba] details.mpo-backup button{width:100%;min-height:42px;margin-top:.35rem}
+      @media(max-width:620px){
+        [data-meet-program-ba] .ba-row-main{grid-template-columns:1.6rem minmax(0,1fr) auto!important;column-gap:.35rem!important;row-gap:.12rem!important;overflow:hidden}
+        [data-meet-program-ba] .ba-row-main>.lane{grid-column:1;grid-row:1 / span 2;align-self:start}
+        [data-meet-program-ba] .ba-row-main>strong{grid-column:2;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        [data-meet-program-ba] .ba-row-main>span:not(.club){grid-column:2!important;grid-row:2!important;justify-self:start}
+        [data-meet-program-ba] .ba-row-main>.club{grid-column:2 / 4!important;grid-row:3!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        [data-meet-program-ba] .ba-row-main>.ba-seed{grid-column:3!important;grid-row:1!important;align-self:start;justify-self:end;min-width:4.25rem;padding:.2rem .34rem;border:1px solid rgba(13,69,102,.16);border-radius:8px;background:var(--surface,#fff)}
+        [data-meet-program-ba] .ba-row-main>em{grid-column:3!important;grid-row:2!important;justify-self:end}
+      }
     `;
     document.head.appendChild(s);
   }
 
-  function collapseTimers(ops){
-    for(const card of ops.querySelectorAll('.mo-card')){
-      const timer=card.querySelector('.mo-timer');
-      if(!timer||timer.closest('[data-meet-backup-timer]'))continue;
-      const d=document.createElement('details');
-      d.className='mpo-backup-timer';
-      d.dataset.meetBackupTimer='1';
-      const summary=document.createElement('summary');
-      summary.textContent='Backup stopwatch';
-      d.appendChild(summary);
-      timer.before(d);
-      d.appendChild(timer);
-      const k=card.dataset.moCard||'';
-      if(M.state?.meetOps?.races?.[k]?.timer_running)d.open=true;
-    }
-    for(const d of ops.querySelectorAll('[data-meet-backup-timer]')){
-      const card=d.closest('.mo-card'),k=card?.dataset.moCard||'';
-      if(M.state?.meetOps?.races?.[k]?.timer_running)d.open=true;
+  function enhanceSeedRows(p){
+    for(const row of p.querySelectorAll('.ba-row-main')){
+      if(row.dataset.mpoSeed==='1')continue;
+      const seed=row.querySelector(':scope > small');
+      if(!seed)continue;
+      const value=(seed.textContent||'').trim()||'—';
+      seed.classList.add('ba-seed');
+      seed.dataset.seedValue=value;
+      seed.replaceChildren();
+      const label=document.createElement('span'),val=document.createElement('b');
+      label.textContent='Seed';val.textContent=value;
+      seed.append(label,val);
+      row.dataset.mpoSeed='1';
     }
   }
 
-  function primaryActions(ops){
-    const card=ops.querySelector('.mo-card.primary');
-    if(!card)return;
-    card.dataset.meetPriorityCard='1';
-    const manual=card.querySelector('.mo-manual'),note=card.querySelector('.mo-quick-note');
-    const label=manual?.querySelector('label');
-    if(label?.firstChild?.nodeType===Node.TEXT_NODE)label.firstChild.nodeValue='Type race time';
-    const quickVoice=note?.querySelector('[data-mo-quick-voice]');
-    if(quickVoice&&!/Stop voice/i.test(quickVoice.textContent||''))quickVoice.textContent='Race voice note';
-    let actions=card.querySelector('[data-meet-priority-actions]');
-    if(!actions){
-      actions=document.createElement('div');
-      actions.className='mpo-primary-actions';
-      actions.dataset.meetPriorityActions='1';
-      actions.innerHTML='<button data-mpo-commentary>Live commentary</button><button data-mpo-video>Video</button><button data-mpo-more>Photo / more</button>';
-      (note||manual||card.querySelector('.mo-metrics'))?.after(actions);
-      actions.querySelector('[data-mpo-commentary]').onclick=startCommentary;
-      actions.querySelector('[data-mpo-video]').onclick=()=>openVideoFor(selectedRace());
-      actions.querySelector('[data-mpo-more]').onclick=()=>openCaptureFor(selectedRace());
+  function enhanceIntel(p){
+    for(const intel of p.querySelectorAll('.ba-intel')){
+      const capture=intel.querySelector('[data-ba-capture]');
+      if(!capture)continue;
+      const key=capture.dataset.baCapture||'';
+      const actions=capture.closest('.ba-actions');
+      const talk=actions?.querySelector('[data-ba-talk]')||intel.querySelector('[data-ba-talk]');
+      if(talk)talk.textContent=document.querySelector('[data-ba-talkbar]')?'Stop commentary':'Voice commentary';
+      capture.textContent='Capture';
+
+      if(!intel.querySelector('[data-mpo-quick-note]')){
+        const label=document.createElement('label');
+        label.className='mpo-quick-note';
+        const title=document.createElement('span'),area=document.createElement('textarea');
+        title.textContent='Quick note';
+        area.dataset.mpoQuickNote=key;
+        area.rows=2;
+        area.placeholder='Type a note while you watch…';
+        const r=raceForKey(key),rec=r?M.meetOpsEngine?.recordFor?.(r,false):null;
+        area.value=rec?.notes||'';
+        label.append(title,area);
+        actions?.before(label);
+      }
+
+      const backup=actions?.querySelector('[data-ba-backup]');
+      if(backup&&!backup.closest('[data-mpo-backup]')){
+        const d=document.createElement('details'),summary=document.createElement('summary');
+        d.className='mpo-backup';d.dataset.mpoBackup='1';
+        summary.textContent='Backup stopwatch';
+        backup.before(d);d.append(summary,backup);
+        const r=raceForKey(backup.dataset.baBackup||''),rec=r?M.meetOpsEngine?.recordFor?.(r,false):null;
+        backup.textContent=rec?.timer_running?'Finish stopwatch':'Start stopwatch';
+      }
     }
-    const talk=actions.querySelector('[data-mpo-commentary]');
-    if(talk)talk.textContent=document.querySelector('[data-ba-talkbar]')?'Stop commentary':'Live commentary';
-    const timer=card.querySelector('[data-meet-backup-timer]');
-    if(timer&&actions.nextElementSibling!==timer)actions.after(timer);
   }
 
-  function prioritiseDeckTools(ops){
+  function enhance(){
+    queued=false;
+    const p=programme();
+    if(!p||M.state?.settings?.view!=='meet')return false;
     ensureStyle();
-    collapseTimers(ops);
-    primaryActions(ops);
-    const running=Object.values(M.state?.meetOps?.races||{}).some(x=>x?.timer_running);
-    const heatHead=ops.querySelector('.mo-heat-head');
-    if(heatHead&&heatHead.hidden===running)heatHead.hidden=!running;
-  }
-
-  function hasExplicitRace(p=programme()){
-    return !!p?.querySelector('.ba-row.expanded');
-  }
-
-  function hideWorking(){
-    const ops=workingCard();
-    if(ops?.isConnected&&!ops.hidden)ops.hidden=true;
-    return false;
-  }
-
-  function mount(){
-    mountQueued=false;
-    const h=meetHost(),p=programme();
-    if(!h||!p||M.state?.settings?.view!=='meet')return false;
-    if(browseMode||!hasExplicitRace(p))return hideWorking();
-    enableWorkingControls();
-    const ops=h.querySelector('[data-meet-ops-av]')||retainedOps;
-    if(!ops)return false;
-    retainedOps=ops;
-    if(ops.hidden)ops.hidden=false;
-    ops.dataset.meetProgramWorkingCard='1';
-    for(const card of ops.querySelectorAll('.mo-card'))if(card.hidden)card.hidden=false;
-    const sticky=p.querySelector('.ba-sticky');
-    if(sticky&&ops.previousElementSibling!==sticky)sticky.after(ops);
-    prioritiseDeckTools(ops);
+    hideLegacyLayers();
+    enhanceSeedRows(p);
+    enhanceIntel(p);
     return true;
   }
 
-  function queueMount(){
-    if(mountQueued)return;
-    mountQueued=true;
-    queueMicrotask(mount);
+  function queue(){
+    if(queued)return;
+    queued=true;
+    queueMicrotask(enhance);
   }
 
-  function cardMatches(key){
-    const ops=workingCard(),primary=ops?.querySelector('.mo-card.primary');
-    return !!primary&&primary.dataset.moCard===key;
-  }
-
-  function syncSelected(){
-    enableWorkingControls();
-    const key=M.state?.meetProgramBA?.selectedKey||M.state?.meetOps?.selectedRaceKey||'';
-    if(!key){mount();return false}
-    if(cardMatches(key)){
-      mount();
-      return true;
-    }
-    // meet-program already writes the exact selected key. selectKey uses meet-ops'
-    // private operational renderer, so only the small race card is refreshed.
-    if(M.meetOpsEngine?.selectKey){
-      M.meetOpsEngine.selectKey(key,{scroll:false});
-      queueMicrotask(mount);
-      return true;
-    }
-    mount();
-    return false;
-  }
-
-  function scheduleSync(){
-    clearTimeout(syncTimer);
-    syncTimer=setTimeout(syncSelected,0);
-  }
-
-  function onProgrammeClick(e){
-    if(!e.target?.closest)return;
-    if(e.target.closest('[data-ba-row].aqua,[data-ba-jump-race],[data-ba-athlete]')){
-      browseMode=false;
-      scheduleSync();
-      return;
-    }
-    if(e.target.closest('[data-ba-event],[data-ba-source],[data-ba-prev],[data-ba-next],[data-ba-add-session],[data-ba-jump-now]')){
-      browseMode=true;
-      setTimeout(hideWorking,0);
-    }
+  function bind(){
+    document.addEventListener('input',e=>{
+      const area=e.target?.closest?.('[data-mpo-quick-note]');
+      if(!area)return;
+      const r=raceForKey(area.dataset.mpoQuickNote||''),rec=r?M.meetOpsEngine?.recordFor?.(r,true):null;
+      if(!rec)return;
+      rec.notes=area.value;rec.updated_at=stamp();
+      clearTimeout(noteTimer);noteTimer=setTimeout(save,220);
+    });
+    document.addEventListener('change',e=>{
+      if(e.target?.matches?.('[data-mpo-quick-note]'))save();
+    });
   }
 
   function observe(){
-    const h=meetHost();
-    if(!h||observer)return;
-    observer=new MutationObserver(queueMount);
-    observer.observe(h,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
+    const h=host();
+    if(!h){setTimeout(observe,60);return}
+    if(observer)return;
+    observer=new MutationObserver(queue);
+    observer.observe(h,{childList:true,subtree:true});
+    enhance();
   }
 
-  function boot(){
-    observe();
-    setTimeout(()=>{
-      mount();
-      if(M.state?.meetProgramBA?.selectedKey&&hasExplicitRace())syncSelected();
-    },0);
-  }
+  bind();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observe,{once:true});else observe();
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')setTimeout(enhance,0)});
 
-  document.addEventListener('click',onProgrammeClick,false);
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet')setTimeout(mount,0)});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-
-  M.meetProgramOpsBridge={build:BUILD,mount,syncSelected,workingCard,prioritiseDeckTools};
+  M.meetProgramOpsBridge={build:BUILD,enhance,raceForKey};
 })(globalThis);
