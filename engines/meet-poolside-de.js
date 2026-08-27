@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260828de9';
+  const BUILD='v4-meet-poolside-20260828de10';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -33,6 +33,7 @@
     const curTitle=cur?.title||cur?.name||'';
     return !!(curTitle&&d.title&&meetTitleKey(curTitle)&&meetTitleKey(curTitle)===meetTitleKey(d.title));
   }
+  function explicitOpenActive(){return !!(explicitOpen&&explicitOpen.meetId===(M.state?.settings?.currentMeetId||'')&&hasSiscSource())}
   function saveOnce(){
     try{M.store?.save?.(M.state)}catch{}
     try{M.storageEngine?.saveUi?.(M.state)}catch{}
@@ -85,12 +86,12 @@
     if(h.firstElementChild!==box)h.insertBefore(box,h.firstElementChild);
     box.classList.add('meet-poolside-top');
   }
-  function renderProgrammeSoon(){
+  function renderProgrammeSoon(force=false){
     if(programmeRenderQueued)return;
     programmeRenderQueued=true;
     requestAnimationFrame(()=>{
       programmeRenderQueued=false;
-      if(M.state?.settings?.view!=='meet'||!currentDeckOwned())return;
+      if(M.state?.settings?.view!=='meet'||(!force&&!currentDeckOwned()))return;
       if(hasSiscSource())try{M.meetSiscFormat?.repair?.()}catch{}
       try{M.meetProgramBA?.render?.()}catch{}
       pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
@@ -100,11 +101,10 @@
     const h=document.querySelector('#meetView');
     if(!h||M.state?.settings?.view!=='meet'||!currentDeckOwned())return;
     if(h.querySelector('[data-meet-program-ba]'))return;
-    renderProgrammeSoon();
+    renderProgrammeSoon(false);
   }
   function sourceId(src){return src?.source_id||src?.parsed?.id||''}
   function findOpenForAthlete(id){
-    if(!currentDeckOwned())return null;
     const p=programmeState(),deck=M.state?.meetFieldDeck,rs=deck?.races||[];
     for(const src of p.sources||[]){
       if(!/AQGCB/i.test(String(src?.raw||'')))continue;
@@ -120,17 +120,17 @@
     return null;
   }
   function applyExplicitOpen(){
-    if(!explicitOpen||explicitOpen.meetId!==(M.state?.settings?.currentMeetId||'')||!hasSiscSource()||!currentDeckOwned())return false;
+    if(!explicitOpenActive())return false;
     const p=programmeState();let changed=false;
     for(const [k,v] of [['selectedAthleteId',explicitOpen.athleteId],['expandedKey',explicitOpen.expandedKey],['selectedKey',explicitOpen.selectedKey],['selectedSourceId',explicitOpen.selectedSourceId]])if(v&&p[k]!==v){p[k]=v;changed=true}
     if(explicitOpen.selectedEventNumber&&Number(p.selectedEventNumber)!==explicitOpen.selectedEventNumber){p.selectedEventNumber=explicitOpen.selectedEventNumber;changed=true}
     return changed;
   }
   function openAthlete(id){
-    if(!id||!hasSiscSource()||!currentDeckOwned())return;
+    if(!id||!hasSiscSource())return;
     repairSiscSources();
     const lock=findOpenForAthlete(id);if(!lock)return;
-    explicitOpen=lock;applyExplicitOpen();saveOnce();renderProgrammeSoon();
+    explicitOpen=lock;applyExplicitOpen();saveOnce();renderProgrammeSoon(true);
   }
   function raceForCaptureButton(btn){
     const k=btn?.dataset?.baCapture||'';
@@ -152,7 +152,7 @@
   }
   function suppressLegacyWhenProgramme(){
     const h=document.querySelector('#meetView');if(!h)return;
-    const hasProgramme=!!h.querySelector('[data-meet-program-ba]')&&currentDeckOwned();
+    const hasProgramme=!!h.querySelector('[data-meet-program-ba]')&&(currentDeckOwned()||explicitOpenActive());
     document.body.classList.toggle('meet-program-authority-active',hasProgramme);
     for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'])for(const n of h.querySelectorAll(sel))n.hidden=hasProgramme;
   }
@@ -160,9 +160,9 @@
     maintainQueued=false;
     if(M.state?.settings?.view!=='meet')return;
     repairManagedDecks();
-    const owned=currentDeckOwned(),sisc=owned&&hasSiscSource();
+    const owned=currentDeckOwned(),sisc=(owned||explicitOpenActive())&&hasSiscSource();
     const sourceChanged=sisc?repairSiscSources():false,selectionChanged=sisc?applyExplicitOpen():false;
-    if(sourceChanged||selectionChanged)renderProgrammeSoon();else if(owned)ensureProgrammeVisible();
+    if(sourceChanged||selectionChanged)renderProgrammeSoon(explicitOpenActive());else if(owned)ensureProgrammeVisible();
     pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
   }
   function queueMaintain(){if(maintainQueued)return;maintainQueued=true;requestAnimationFrame(maintain)}
