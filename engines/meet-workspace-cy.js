@@ -4,7 +4,7 @@
   if(!M?.ui||!M?.meet)return;
   const U=M.util||{},BUILD='v4-meet-workspace-20260827cy';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
-  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const now=()=>U.now?U.now():new Date().toISOString();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
