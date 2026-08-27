@@ -22,6 +22,8 @@ jobs:
           node --check engines/meet-field-au.js
           node --check engines/meet-program-ops-bridge.js
           node --check engines/meet-workspace-cy.js
+          node --check engines/meet-sisc-format-dz.js
+          node --check engines/meet-poolside-de.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
           node --check tests/phone-target-stability-20260826.cjs
           node --check tests/meet-program-phone-acceptance-20260826.cjs
@@ -29,6 +31,7 @@ jobs:
           node --check tests/meet-new-meet-phone-acceptance-20260827.cjs
           node --check tests/meet-explicit-selection-authority-20260827.cjs
           node --check tests/meet-aqgcb-alias-20260827.cjs
+          node --check tests/meet-sisc-programme-authority-20260827.cjs
       - name: AQGCB / AquaGym meet alias parsing
         run: node tests/meet-aqgcb-alias-20260827.cjs
       - name: Matthew swimmer and pathway contract
@@ -57,12 +60,16 @@ jobs:
         run: node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
       - name: Explicit meet selection authority
         run: node tests/meet-explicit-selection-authority-20260827.cjs
+      - name: SISC full-programme authority after meet switch
+        run: node tests/meet-sisc-programme-authority-20260827.cjs 2>&1 | tee /tmp/meet-sisc-authority.log
       - name: Upload Meet workspace failure log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: meet-new-meet-failure-log
-          path: /tmp/meet-new-meet.log
+          path: |
+            /tmp/meet-new-meet.log
+            /tmp/meet-sisc-authority.log
           if-no-files-found: ignore
       - name: Show server log on failure
         if: failure()
