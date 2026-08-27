@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260827de4';
+  const BUILD='v4-meet-poolside-20260827de5';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -91,6 +91,7 @@
   function suppressLegacyWhenProgramme(){
     const h=document.querySelector('#meetView');if(!h)return;
     const hasProgramme=!!h.querySelector('[data-meet-program-ba]');
+    document.body.classList.toggle('meet-program-authority-active',hasProgramme);
     for(const sel of ['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]']){
       for(const n of h.querySelectorAll(sel))n.hidden=hasProgramme;
     }
@@ -111,6 +112,10 @@
     s.textContent=`
       #meetView>[data-meet-workspace-cy]{position:sticky;top:0;z-index:80;margin:0 0 .45rem;background:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.08)}
       [data-meet-program-ba] .ba-intel .ba-actions>[data-mpo-video]{min-height:48px;font-weight:800}
+      body.meet-program-authority-active #meetView [data-meet-ops-av],
+      body.meet-program-authority-active #meetView [data-meet-board-ay],
+      body.meet-program-authority-active #meetView [data-meet-board-az],
+      body.meet-program-authority-active #meetView [data-meet-field-deck-au]{display:none!important}
       @media(max-width:620px){[data-meet-program-ba] .ba-intel .ba-actions{grid-template-columns:repeat(3,1fr)!important}}
     `;document.head.appendChild(s);
   }
