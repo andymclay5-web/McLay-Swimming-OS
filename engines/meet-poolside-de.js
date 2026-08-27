@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260828de6';
+  const BUILD='v4-meet-poolside-20260828de7';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -16,6 +16,7 @@
     if(!Array.isArray(p.sources))p.sources=[];
     return p;
   }
+  const hasSiscSource=()=>programmeState().sources.some(src=>/AQGCB/i.test(String(src?.raw||'')));
   function saveOnce(){
     try{M.store?.save?.(M.state)}catch{}
     try{M.storageEngine?.saveUi?.(M.state)}catch{}
@@ -58,8 +59,9 @@
       const aq=(src?.parsed?.heats||[]).flatMap(h=>h.rows||[]).filter(r=>r?.is_aquagym).length;
       if(!aq){delete src._sisc_format_build;delete src._sisc_raw_sig;invalid=true}
     }
-    let changed=false;try{changed=!!M.meetSiscFormat?.repair?.()}catch{}
-    return changed||invalid;
+    if(!invalid)return false;
+    try{M.meetSiscFormat?.repair?.()}catch{}
+    return true;
   }
   function pinMeetSwitcher(){
     const h=document.querySelector('#meetView'),box=h?.querySelector('[data-meet-workspace-cy]');
@@ -73,7 +75,7 @@
     requestAnimationFrame(()=>{
       programmeRenderQueued=false;
       if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
-      try{M.meetSiscFormat?.repair?.()}catch{}
+      if(hasSiscSource())try{M.meetSiscFormat?.repair?.()}catch{}
       try{M.meetProgramBA?.render?.()}catch{}
       pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
     });
@@ -88,6 +90,7 @@
   function findOpenForAthlete(id){
     const p=programmeState(),deck=M.state?.meetFieldDeck,rs=deck?.races||[];
     for(const src of p.sources||[]){
+      if(!/AQGCB/i.test(String(src?.raw||'')))continue;
       for(const h of src?.parsed?.heats||[]){
         for(const row of h.rows||[]){
           if(!row?.is_aquagym)continue;
@@ -100,14 +103,14 @@
     return null;
   }
   function applyExplicitOpen(){
-    if(!explicitOpen||explicitOpen.meetId!==(M.state?.settings?.currentMeetId||''))return false;
+    if(!explicitOpen||explicitOpen.meetId!==(M.state?.settings?.currentMeetId||'')||!hasSiscSource())return false;
     const p=programmeState();let changed=false;
     for(const [k,v] of [['selectedAthleteId',explicitOpen.athleteId],['expandedKey',explicitOpen.expandedKey],['selectedKey',explicitOpen.selectedKey],['selectedSourceId',explicitOpen.selectedSourceId]])if(v&&p[k]!==v){p[k]=v;changed=true}
     if(explicitOpen.selectedEventNumber&&Number(p.selectedEventNumber)!==explicitOpen.selectedEventNumber){p.selectedEventNumber=explicitOpen.selectedEventNumber;changed=true}
     return changed;
   }
   function openAthlete(id){
-    if(!id)return;
+    if(!id||!hasSiscSource())return;
     repairSiscSources();
     const lock=findOpenForAthlete(id);if(!lock)return;
     explicitOpen=lock;applyExplicitOpen();saveOnce();renderProgrammeSoon();
@@ -140,7 +143,8 @@
     maintainQueued=false;
     if(M.state?.settings?.view!=='meet')return;
     repairManagedDecks();
-    const sourceChanged=repairSiscSources(),selectionChanged=applyExplicitOpen();
+    const sisc=hasSiscSource();
+    const sourceChanged=sisc?repairSiscSources():false,selectionChanged=sisc?applyExplicitOpen():false;
     if(sourceChanged||selectionChanged)renderProgrammeSoon();else ensureProgrammeVisible();
     pinMeetSwitcher();enhanceVideo();suppressLegacyWhenProgramme();
   }
@@ -163,8 +167,8 @@
     document.addEventListener('click',e=>{
       const meetBtn=e.target?.closest?.('[data-mwm-meet]');if(meetBtn&&meetBtn.dataset.mwmMeet!==(M.state?.settings?.currentMeetId||''))explicitOpen=null;
       if(e.target?.closest?.('[data-ba-collapse],[data-ba-close-athlete]'))explicitOpen=null;
-      const athleteBtn=e.target?.closest?.('[data-ba-athlete]');if(athleteBtn)queueMicrotask(()=>openAthlete(athleteBtn.dataset.baAthlete));
-      const row=e.target?.closest?.('[data-ba-row].aqua');if(row&&!e.target?.closest?.('button,details,summary,input,textarea'))queueMicrotask(()=>{
+      const athleteBtn=e.target?.closest?.('[data-ba-athlete]');if(athleteBtn&&hasSiscSource())queueMicrotask(()=>openAthlete(athleteBtn.dataset.baAthlete));
+      const row=e.target?.closest?.('[data-ba-row].aqua');if(row&&hasSiscSource()&&!e.target?.closest?.('button,details,summary,input,textarea'))queueMicrotask(()=>{
         const p=programmeState();if(!p.expandedKey){explicitOpen=null;return}
         explicitOpen={meetId:M.state?.settings?.currentMeetId||'',athleteId:p.selectedAthleteId||'',expandedKey:p.expandedKey,selectedKey:p.selectedKey||'',selectedSourceId:p.selectedSourceId||'',selectedEventNumber:Number(p.selectedEventNumber)||0};
       });
