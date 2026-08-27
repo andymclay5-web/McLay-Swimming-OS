@@ -50,15 +50,21 @@ jobs:
           echo $! > /tmp/msos-final-http.pid
           sleep 1
       - name: SISC swimmer intel survives delayed refresh
-        run: node tests/meet-sisc-swimmer-persist-20260828.cjs 2>&1 | tee /tmp/meet-sisc-swimmer-persist.log
+        run: |
+          set -o pipefail
+          node tests/meet-sisc-swimmer-persist-20260828.cjs 2>&1 | tee /tmp/meet-sisc-swimmer-persist.log
       - name: SISC full-programme authority after meet switch
-        run: node tests/meet-sisc-programme-authority-20260827.cjs 2>&1 | tee /tmp/meet-sisc-authority.log
+        run: |
+          set -o pipefail
+          node tests/meet-sisc-programme-authority-20260827.cjs 2>&1 | tee /tmp/meet-sisc-authority.log
       - name: Meet programme Android acceptance
         run: node tests/meet-program-phone-acceptance-20260826.cjs
       - name: Meet phone-priority controls acceptance
         run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Add new meet Android acceptance
-        run: node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
+        run: |
+          set -o pipefail
+          node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
       - name: Explicit meet selection authority
         run: node tests/meet-explicit-selection-authority-20260827.cjs
       - name: All-inclusive coach journey at Android phone shape
