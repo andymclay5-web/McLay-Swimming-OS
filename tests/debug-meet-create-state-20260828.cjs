@@ -1,0 +1,17 @@
+'use strict';
+const {chromium}=require('playwright');
+const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
+const NORTH=`North Canterbury Swimming HY-TEK's MEET MANAGER 8.0 - Page 1
+2026 NCSC Best Time Ribbon Carnival - 21/08/2026 to 22/08/2026
+Meet Program - Session 1
+Event 1 Mixed 12 & Under 50 SC Meter Freestyle
+Heat 1 of 1 Finals Starts at 06:15 PM
+3 Matthew Callow M13 Aquagym 34.56`;
+(async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});try{
+ await page.goto(BASE,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
+ await page.evaluate(()=>{const M=MSOS4;M.state.athletes=M.state.athletes||[];let a=M.state.athletes.find(x=>x.full_name==='Matthew Callow');if(!a)M.state.athletes.push({id:'dbg-matt',full_name:'Matthew Callow',squad:'National',active:true});M.state.meets=[];M.state.meetEntries=[];M.state.meetRaces=[];M.state.meetEvidence=[];M.state.meetImports=[];M.state.meetFieldDeck=null;M.state.meetProgramBA={sources:[],commentaries:[],meetWorkspaces:{},nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0};M.state.meetOps={races:{},evidence:[],selectedAthleteId:'',selectedRaceKey:''};M.store.save(M.state);M.navigationEngine?.go?.('meet',{restore:false})});
+ await page.waitForSelector('[data-meet-intake-au]',{timeout:5000});await page.click('[data-mfa-paste-btn]');await page.fill('[data-mfa-paste]',NORTH);await page.click('[data-mfa-process]');await page.click('[data-mfa-use]');await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
+ await page.click('[data-mwm-new]');await page.fill('[data-mwm-title]','South Island SC Champs');await page.fill('[data-mwm-date]','2026-08-28');await page.fill('[data-mwm-venue]','Moana pool');await page.selectOption('[data-mwm-course]','SCM');await page.click('[data-mwm-create]');await page.waitForTimeout(1200);
+ const s=await page.evaluate(()=>{const M=MSOS4,p=M.state.meetProgramBA||{},id=M.state.settings.currentMeetId,ws=p.meetWorkspaces?.[id];let cur=null;try{cur=M.meet.current()}catch{};const h=document.querySelector('#meetView');return{currentId:id,currentMeet:cur&&{id:cur.id,title:cur.title},deck:M.state.meetFieldDeck&&{meet_id:M.state.meetFieldDeck.meet_id,title:M.state.meetFieldDeck.title,source_id:M.state.meetFieldDeck.source_id,races:M.state.meetFieldDeck.races?.length,explicit_empty:M.state.meetFieldDeck.explicit_empty},sources:(p.sources||[]).map(x=>({meet_id:x.meet_id,source_id:x.source_id,raw:String(x.raw||'').slice(0,80)})),workspace:ws&&{title:ws.title,deck:ws.deck&&{meet_id:ws.deck.meet_id,title:ws.deck.title,races:ws.deck.races?.length},sources:ws.program?.sources?.length},bodyClass:document.body.className,intakeCount:document.querySelectorAll('[data-meet-intake-au]').length,intakeVisible:[...document.querySelectorAll('[data-meet-intake-au]')].map(n=>({hidden:n.hidden,display:getComputedStyle(n).display,parentHidden:!!n.closest('[hidden]')})),programmeCount:document.querySelectorAll('[data-meet-program-ba]').length,workspaceCount:document.querySelectorAll('[data-meet-workspace-cy]').length,text:(h?.innerText||'').slice(0,1200)}});
+ console.log('POST_CREATE_STATE '+JSON.stringify(s));
+}finally{await browser.close()}})().catch(e=>{console.error(e.stack||e);process.exit(1)});
