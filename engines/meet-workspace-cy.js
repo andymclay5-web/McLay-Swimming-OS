@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260827db',LEGACY_BACKUP_KEY='mclay_swimming_v4_meet_field_backup_v1';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260827dc';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -20,6 +20,7 @@
   const meets=()=>{M.meet.ensureState?.();return M.state.meets||[]};
   const currentId=()=>M.state?.settings?.currentMeetId||'';
   const currentMeet=()=>meets().find(x=>x.id===currentId())||null;
+  const emptyDeck=(id,title='Swim meet')=>({meet_id:id,source_id:'',title,session:'',date_range:'',races:[],swimmers:[],explicit_empty:true,created_at:now()});
 
   function snapshotProgram(){
     const p=program();
@@ -40,8 +41,8 @@
   function snapshotCurrent({persist=false}={}){
     const id=currentId();if(!id)return null;
     const m=currentMeet();if(!m)return null;
-    const ws=workspaces();
-    ws[id]={meet_id:id,title:m.title||'Swim meet',saved_at:now(),deck:clone(M.state.meetFieldDeck||null),program:snapshotProgram(),ops:clone(M.state.meetOps||blankOps())};
+    const ws=workspaces(),activeDeck=M.state.meetFieldDeck;
+    ws[id]={meet_id:id,title:m.title||'Swim meet',saved_at:now(),deck:activeDeck?.explicit_empty?null:clone(activeDeck||null),program:snapshotProgram(),ops:clone(M.state.meetOps||blankOps())};
     if(persist)save();
     return ws[id];
   }
@@ -93,13 +94,11 @@
     snapshotCurrent();
     const ws=workspaces()[id];if(!ws)return;
     try{M.meet.setCurrent(id)}catch{M.state.settings.currentMeetId=id}
-    M.state.meetFieldDeck=clone(ws.deck||null);
+    const m=currentMeet();
+    M.state.meetFieldDeck=ws.deck?clone(ws.deck):emptyDeck(id,m?.title||ws.title||'Swim meet');
     M.state.meetOps=clone(ws.ops||blankOps());
     applyProgram(ws.program||{});
     tagActiveMeet(id);
-    // Explicit coach meet selection outranks the old single-deck crash backup.
-    // An intentionally empty managed meet must stay empty until its own programme is added.
-    if(!ws.deck){try{localStorage.removeItem(LEGACY_BACKUP_KEY)}catch{}}
     save();
     M.ui.renderMeet?.();
   }
@@ -116,8 +115,7 @@
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
       let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
-      M.state.meetFieldDeck=null;M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);
-      try{localStorage.removeItem(LEGACY_BACKUP_KEY)}catch{}
+      M.state.meetFieldDeck=emptyDeck(m.id,m.title);M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);
       save();closeModal();M.ui.renderMeet?.();M.toast?.(`${m.title} ready · add Session 1 programme`);
     };
   }
