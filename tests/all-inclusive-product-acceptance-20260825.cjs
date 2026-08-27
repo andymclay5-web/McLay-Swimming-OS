@@ -35,9 +35,15 @@ const specs=[
   async function nav(view){await page.click(`[data-nav="${view}"]`);await page.waitForFunction(v=>MSOS4.state.settings.view===v&&document.querySelector(`#${v}View`)?.classList.contains('active'),view,{timeout:3000});}
   for(const v of ['hub','roll','times','board'])await nav(v);
 
-  // Natural session intake -> one canonical 2,600m session.
-  await page.click('#newSessionBtn');await page.waitForSelector('#coreRaw');await page.fill('#coreRaw',SOURCE);await page.waitForFunction(()=>document.querySelector('#coreCreate')?.disabled===false);await page.click('#coreCreate');
-  await page.waitForFunction(()=>MSOS4.currentSession?.()&&MSOS4.session.total(MSOS4.currentSession())===2600,{timeout:5000});
+  // Natural session intake -> one canonical 2,600m National session.
+  await page.click('#newSessionBtn');await page.waitForSelector('#coreRaw');
+  const nationalSlot=page.locator('#coreSlot option').filter({hasText:/National/i}).first();
+  assert.equal(await nationalSlot.count(),1,'Published National session slot missing from session intake');
+  const nationalSlotValue=await nationalSlot.getAttribute('value');
+  assert.ok(nationalSlotValue,'Published National session slot has no value');
+  await page.selectOption('#coreSlot',nationalSlotValue);
+  await page.fill('#coreRaw',SOURCE);await page.waitForFunction(()=>document.querySelector('#coreCreate')?.disabled===false);await page.click('#coreCreate');
+  await page.waitForFunction(()=>MSOS4.currentSession?.()&&MSOS4.session.total(MSOS4.currentSession())===2600&&(MSOS4.currentSession().identity?.squads||[]).some(x=>/National/i.test(x)),{timeout:5000});
   const sessionId=await page.evaluate(()=>MSOS4.currentSession().id);
   let board=await page.locator('#boardView').innerText(),flat=board.replace(/\s+/g,' ');
   for(const rule of [/2\s*[×x]\s*400\s*(?:Fr|Freestyle)/i,/8\s*[×x]\s*100\s*(?:Fr|Freestyle)/i,/4\s*[×x]\s*50[^\n]*#1\s*Stroke/i,/REG|Regeneration/i,/THR|Threshold/i,/RP200|200 Pace/i])assert.match(flat,rule);
