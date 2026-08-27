@@ -19,6 +19,7 @@ jobs:
         run: |
           node --check engines/dosage.js
           node --check engines/dosage-ui.js
+          node --check engines/meet-field-au.js
           node --check engines/meet-program-ops-bridge.js
           node --check engines/meet-workspace-cy.js
           node --check tests/all-inclusive-product-acceptance-20260825.cjs
@@ -27,6 +28,9 @@ jobs:
           node --check tests/meet-working-card-phone-acceptance-20260827.cjs
           node --check tests/meet-new-meet-phone-acceptance-20260827.cjs
           node --check tests/meet-explicit-selection-authority-20260827.cjs
+          node --check tests/meet-aqgcb-alias-20260827.cjs
+      - name: AQGCB / AquaGym meet alias parsing
+        run: node tests/meet-aqgcb-alias-20260827.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
