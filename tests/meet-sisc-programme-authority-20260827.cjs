@@ -10,8 +10,6 @@ Event 1 Mixed 12 & Under 50 SC Meter Freestyle
 Heat 1 of 1 Finals Starts at 06:15 PM
 3 Matthew Callow M13 Aquagym 34.56`;
 
-// Deliberately matches the real South Islands export shape: no M/W field,
-// AQGCB club code and a Prelims heat header.
 const SISC=`Moana Pool - Site License HY-TEK's MEET MANAGER 8.0 - 4:41 PM 26/08/2026 Page 1
 South Island SCM Championships 2026 - 28/08/2026 to 30/08/2026
 Meet Program - Friday Morning - warmup from 7.30am
@@ -50,7 +48,6 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
    if(M.navigationEngine?.go)M.navigationEngine.go('meet',{restore:false});else{M.state.settings.view='meet';M.ui.renderCurrent()}
   });
 
-  // Load North Canterbury first so the test reproduces the real switch direction.
   await page.waitForSelector('[data-meet-intake-au]',{timeout:5000});
   await page.click('[data-mfa-paste-btn]');
   await page.fill('[data-mfa-paste]',NORTH);
@@ -60,7 +57,6 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   const northId=await page.evaluate(()=>MSOS4.state.settings.currentMeetId);
 
-  // Create South Islands and load the exact SISC-format source.
   await page.click('[data-mwm-new]');
   await page.waitForSelector('[data-mwm-create]',{timeout:3000});
   await page.fill('[data-mwm-title]','South Island SC Champs');
@@ -79,12 +75,10 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
   await page.click('[data-mfa-use]');
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
 
-  // Go North -> South again. This is the real-device path that froze/regressed.
   await page.locator(`[data-mwm-meet="${northId}"]`).click();
   await page.waitForFunction(id=>MSOS4.state.settings.currentMeetId===id,northId,{timeout:5000});
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
 
-  let topMutations=0;
   await page.evaluate(()=>{
    window.__siscTopMutations=0;
    window.__siscObs?.disconnect?.();
@@ -97,7 +91,7 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
   await page.waitForFunction(id=>MSOS4.state.settings.currentMeetId===id,southId,{timeout:5000});
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   await page.waitForTimeout(700);
-  topMutations=await page.evaluate(()=>{window.__siscObs?.disconnect?.();return window.__siscTopMutations||0});
+  const topMutations=await page.evaluate(()=>{window.__siscObs?.disconnect?.();return window.__siscTopMutations||0});
 
   const programme=page.locator('[data-meet-program-ba]');
   assert.equal(await programme.count(),1,'SISC must settle to one authoritative programme surface');
@@ -107,13 +101,20 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
   assert.match(programmeText,/Matthew Callow/i,'AquaGym swimmer must be attached to the full programme');
   assert.match(programmeText,/2:19\.53/,'SISC seed must remain visible');
 
-  const legacyVisible=await page.evaluate(()=>{
-   const sels=['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'];
-   return sels.flatMap(s=>[...document.querySelectorAll(s)]).some(n=>!n.hidden&&getComputedStyle(n).display!=='none');
-  });
+  const legacySelectors=['[data-meet-ops-av]','[data-meet-board-ay]','[data-meet-board-az]','[data-meet-field-deck-au]'];
+  let legacyVisible=await page.evaluate(sels=>sels.flatMap(s=>[...document.querySelectorAll(s)]).some(n=>!n.hidden&&getComputedStyle(n).display!=='none'),legacySelectors);
   assert.equal(legacyVisible,false,'old LIVE MEET DECK / race queue must not be the active SISC surface');
-  assert.ok(topMutations<20,`SISC switch must settle instead of render-looping; top-level mutations=${topMutations}`);
 
+  // Reproduce the phone regression directly: an old renderer clears the hidden attribute
+  // after the programme has already rendered. CSS authority must still keep it invisible.
+  const hardHide=await page.evaluate(sels=>{
+    const nodes=sels.flatMap(s=>[...document.querySelectorAll(s)]);
+    for(const n of nodes)n.hidden=false;
+    return nodes.length>0&&nodes.every(n=>getComputedStyle(n).display==='none');
+  },legacySelectors);
+  assert.equal(hardHide,true,'legacy Meet surfaces must remain CSS-hidden even if an old renderer unhides them');
+
+  assert.ok(topMutations<20,`SISC switch must settle instead of render-looping; top-level mutations=${topMutations}`);
   const topOrder=await page.evaluate(()=>{
    const h=document.querySelector('#meetView'),switcher=h?.querySelector('[data-meet-workspace-cy]'),program=h?.querySelector('[data-meet-program-ba]');
    return !!switcher&&!!program&&switcher.getBoundingClientRect().top<=program.getBoundingClientRect().top;
@@ -122,6 +123,6 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
 
   assert.deepEqual(pageErrors,[],`page errors: ${pageErrors.join('\n')}`);
   assert.equal(consoleErrors.length,0,`console errors: ${consoleErrors.join('\n')}`);
-  console.log(`MEET_SISC_AUTHORITY_PASS programme=visible timing=08:27 legacyHidden=true topMutations=${topMutations}`);
+  console.log(`MEET_SISC_AUTHORITY_PASS programme=visible timing=08:27 legacyHardHidden=true topMutations=${topMutations}`);
  }finally{await browser.close()}
 })().catch(e=>{console.error(e.stack||e);process.exit(1)});
