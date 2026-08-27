@@ -49,7 +49,14 @@ jobs:
       - name: Meet phone-priority controls acceptance
         run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Add new meet Android acceptance
-        run: node tests/meet-new-meet-phone-acceptance-20260827.cjs
+        run: node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
+      - name: Upload Meet workspace failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meet-new-meet-failure-log
+          path: /tmp/meet-new-meet.log
+          if-no-files-found: ignore
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/msos-final-http.log || true
