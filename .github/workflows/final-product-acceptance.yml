@@ -26,6 +26,7 @@ jobs:
           node --check tests/meet-program-phone-acceptance-20260826.cjs
           node --check tests/meet-working-card-phone-acceptance-20260827.cjs
           node --check tests/meet-new-meet-phone-acceptance-20260827.cjs
+          node --check tests/meet-explicit-selection-authority-20260827.cjs
       - name: Matthew swimmer and pathway contract
         run: node tests/matthew-ready-cv.cjs
       - name: Release package integrity
@@ -50,6 +51,8 @@ jobs:
         run: node tests/meet-working-card-phone-acceptance-20260827.cjs
       - name: Add new meet Android acceptance
         run: node tests/meet-new-meet-phone-acceptance-20260827.cjs 2>&1 | tee /tmp/meet-new-meet.log
+      - name: Explicit meet selection authority
+        run: node tests/meet-explicit-selection-authority-20260827.cjs
       - name: Upload Meet workspace failure log
         if: failure()
         uses: actions/upload-artifact@v4
