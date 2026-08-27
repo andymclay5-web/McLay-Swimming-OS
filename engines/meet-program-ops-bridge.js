@@ -2,8 +2,8 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-phone-priority-20260827c5';
-  let queued=false,noteTimer=null,bound=false,active=false;
+  const BUILD='v4-meet-program-phone-priority-20260827c6-cold-start';
+  let queued=false,noteTimer=null,bound=false,active=false,probing=false;
 
   const host=()=>document.querySelector('#meetView');
   const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
@@ -110,6 +110,7 @@
     queued=false;
     const p=programme();
     if(!active||!p||M.state?.settings?.view!=='meet')return false;
+    document.body.classList.add('meet-program-ba-active');
     ensureStyle();
     hideLegacyLayers();
     enhanceSeedRows(p);
@@ -121,6 +122,22 @@
     if(queued||!active)return;
     queued=true;
     setTimeout(enhance,0);
+  }
+
+  function probeForColdProgramme(){
+    if(probing)return;
+    probing=true;
+    let tries=0;
+    const tick=()=>{
+      if(M.state?.settings?.view==='meet'&&programme()){
+        probing=false;
+        enhance();
+        return;
+      }
+      if(++tries>=60){probing=false;return;}
+      setTimeout(tick,100);
+    };
+    tick();
   }
 
   function bindEvents(){
@@ -148,7 +165,9 @@
     active=true;
     bindEvents();
     ensureStyle();
+    if(M.state?.settings?.view==='meet')document.body.classList.add('meet-program-ba-active');
     queue();
+    probeForColdProgramme();
   }
 
   const priorRenderMeet=M.ui.renderMeet?.bind(M.ui);
@@ -157,6 +176,12 @@
     activate();
     return result;
   };
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',activate,{once:true});
+  else activate();
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet')activate();
+  });
 
   M.meetProgramOpsBridge={build:BUILD,enhance,activate,raceForKey};
 })(globalThis);
