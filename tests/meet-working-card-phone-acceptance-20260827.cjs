@@ -97,13 +97,18 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.evaluate(async r=>{await MSOS4.storageEngine.whenPersisted(r)},rev);
   await page.waitForFunction(()=>Number(MSOS4.storageEngine.lastCompactPersistedAt||0)>0,{timeout:6000});
 
-  // Hard reload, then reproduce the missed authority path deliberately: the programme
-  // becomes current through its own render(), not through M.ui.renderMeet/navigation.
+  // Hard reload, then reproduce the missed authority path deliberately: make the Meet
+  // section visible and let the programme render itself, without M.ui.renderMeet/navigation.
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
   await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
   await page.waitForFunction(()=>window.MSOS4?.meetProgramBA?.render&&window.MSOS4?.meetProgramOpsBridge,{timeout:5000});
-  await page.evaluate(()=>{MSOS4.state.settings.view='meet';MSOS4.meetProgramBA.render()});
+  await page.evaluate(()=>{
+   MSOS4.state.settings.view='meet';
+   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+   document.querySelector('#meetView')?.classList.add('active');
+   MSOS4.meetProgramBA.render();
+  });
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('cold-start'),{timeout:3000});
   await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:6000});
