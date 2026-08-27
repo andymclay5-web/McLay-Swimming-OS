@@ -2,11 +2,12 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-poolside-20260828de8';
+  const BUILD='v4-meet-poolside-20260828de9';
   const U=M.util||{};
   const now=()=>U.now?U.now():new Date().toISOString();
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const norm=v=>String(v??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const meetTitleKey=v=>norm(v).split(' ').filter(x=>x&&!/^20\d\d$/.test(x)&&!['scm','sc','championship','championships','champs'].includes(x)).join(' ');
   let observer=null,repairing=false,maintainQueued=false,programmeRenderQueued=false,explicitOpen=null;
 
   function programmeState(){
@@ -24,10 +25,13 @@
     const ws=p.meetWorkspaces?.[id],wd=ws?.deck;
     if(wd?.races?.length){
       if(wd.source_id&&d.source_id)return wd.source_id===d.source_id;
-      if(wd.title&&d.title)return norm(wd.title)===norm(d.title);
+      if(wd.title&&d.title&&meetTitleKey(wd.title)===meetTitleKey(d.title))return true;
     }
     const imp=(M.state.meetImports||[]).find(x=>x?.meet_id===id&&x?.id&&x.id===d.source_id);
-    return !!imp;
+    if(imp)return true;
+    let cur=null;try{cur=M.meet?.current?.()}catch{}
+    const curTitle=cur?.title||cur?.name||'';
+    return !!(curTitle&&d.title&&meetTitleKey(curTitle)&&meetTitleKey(curTitle)===meetTitleKey(d.title));
   }
   function saveOnce(){
     try{M.store?.save?.(M.state)}catch{}
