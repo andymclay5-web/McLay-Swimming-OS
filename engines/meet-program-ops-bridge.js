@@ -2,8 +2,8 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui)return;
-  const BUILD='v4-meet-program-phone-priority-20260827c2';
-  let observer=null,queued=false,noteTimer=null,bound=false,active=false;
+  const BUILD='v4-meet-program-phone-priority-20260827c3';
+  let queued=false,noteTimer=null,bound=false,active=false;
 
   const host=()=>document.querySelector('#meetView');
   const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
@@ -33,8 +33,7 @@
     s.id='meet-program-phone-priority-style';
     s.textContent=`
       [data-meet-program-ba] .ba-row-main .ba-seed{font-variant-numeric:tabular-nums;white-space:nowrap;display:grid;justify-items:end;line-height:1.02}
-      [data-meet-program-ba] .ba-row-main .ba-seed>span{font-size:.58rem;letter-spacing:.03em;text-transform:uppercase;opacity:.68}
-      [data-meet-program-ba] .ba-row-main .ba-seed>b{font-size:.88rem}
+      [data-meet-program-ba] .ba-row-main .ba-seed::before{content:'Seed';font-size:.58rem;letter-spacing:.03em;text-transform:uppercase;opacity:.68}
       [data-meet-program-ba] .mpo-quick-note{display:grid;gap:.2rem;margin:.15rem 0 .35rem;font-weight:750}
       [data-meet-program-ba] .mpo-quick-note textarea{min-height:64px;width:100%;resize:vertical;font:inherit;padding:.45rem .5rem;border:1px solid rgba(13,69,102,.2);border-radius:9px}
       [data-meet-program-ba] .ba-intel .ba-actions{grid-template-columns:1fr 1fr!important;align-items:stretch}
@@ -58,17 +57,11 @@
 
   function enhanceSeedRows(p){
     for(const row of p.querySelectorAll('.ba-row-main')){
-      if(row.dataset.mpoSeed==='1')continue;
       const seed=row.querySelector(':scope > small');
       if(!seed)continue;
       const value=(seed.textContent||'').trim()||'—';
       seed.classList.add('ba-seed');
       seed.dataset.seedValue=value;
-      seed.replaceChildren();
-      const label=document.createElement('span'),val=document.createElement('b');
-      label.textContent='Seed';val.textContent=value;
-      seed.append(label,val);
-      row.dataset.mpoSeed='1';
     }
   }
 
@@ -122,10 +115,10 @@
   function queue(){
     if(queued||!active)return;
     queued=true;
-    queueMicrotask(enhance);
+    setTimeout(enhance,0);
   }
 
-  function bindInputs(){
+  function bindEvents(){
     if(bound)return;
     bound=true;
     document.addEventListener('input',e=>{
@@ -139,17 +132,18 @@
     document.addEventListener('change',e=>{
       if(e.target?.matches?.('[data-mpo-quick-note]'))save();
     });
+    document.addEventListener('click',e=>{
+      if(!active||M.state?.settings?.view!=='meet')return;
+      const h=host();
+      if(h?.contains(e.target))queue();
+    });
   }
 
   function activate(){
     active=true;
-    bindInputs();
-    const h=host();
-    if(h&&!observer){
-      observer=new MutationObserver(queue);
-      observer.observe(h,{childList:true,subtree:true});
-    }
-    queueMicrotask(enhance);
+    bindEvents();
+    ensureStyle();
+    queue();
   }
 
   const priorRenderMeet=M.ui.renderMeet?.bind(M.ui);
