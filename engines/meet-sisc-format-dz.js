@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.meetProgramBA)return;
-  const BUILD='v4-meet-sisc-format-20260828dz3-full-rows';
+  const BUILD='v4-meet-sisc-format-20260828dz4-full-rows-single-deck';
   const txt=v=>M.util?.text?M.util.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const AQ=new Set(['aquagym','aqua gym','aqgcb','aqua gym canterbury','aquagym canterbury','aquagym swimming club','aqua gym swimming club']);
@@ -49,6 +49,11 @@
     if(changed){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
     return changed;
   }
+  function style(){
+    if(document.getElementById('meet-sisc-dz-style'))return;
+    const s=document.createElement('style');s.id='meet-sisc-dz-style';s.textContent='body.meet-program-ba-active #meetView>.meet-hero,body.meet-program-ba-active #meetView>.next-race-card,body.meet-program-ba-active #meetView>.page-card{display:none!important}';document.head.appendChild(s);
+  }
+  style();
   const baseRender=M.meetProgramBA.render?.bind(M.meetProgramBA);
   if(baseRender)M.meetProgramBA.render=()=>{repair();return baseRender()};
   setTimeout(()=>{if(M.state?.settings?.view==='meet'){repair();baseRender?.()}},0);
