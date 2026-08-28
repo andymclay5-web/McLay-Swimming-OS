@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.meetProgramBA)return;
-  const BUILD='v4-meet-sisc-format-20260828dz6-full-programme';
+  const BUILD='v4-meet-sisc-format-20260828dz7-post-hydration';
   const txt=v=>M.util?.text?M.util.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const isAQ=v=>{const n=norm(v);return n==='aqgcb'||n.includes('aquagym')||n.includes('aqua gym')};
@@ -34,8 +34,14 @@
   }
   function rawFor(src){if(src?.raw)return src.raw;const imports=M.state?.meetImports||[],d=M.state?.meetFieldDeck;return imports.find(x=>x.id===src?.source_id)?.text||imports.find(x=>x.id===d?.source_id)?.text||imports.find(x=>x.meet_id&&x.meet_id===d?.meet_id&&x.text)?.text||''}
   function repair(){const s=M.state?.meetProgramBA;if(!s?.sources?.length)return false;let changed=false;for(const src of s.sources){const raw=rawFor(src);if(!raw||!/South\s+Island|AQGCB|Aquagym|Aqua\s*Gym/i.test(raw))continue;const p=parse(raw,src.source_id||'session'),rows=p.heats.reduce((n,h)=>n+h.rows.length,0),old=src.parsed?.heats?.reduce((n,h)=>n+(h.rows?.length||0),0)||0;if(rows>0&&(src._sisc_format_build!==BUILD||rows!==old)){src.raw=raw;src.parsed=p;src._sisc_format_build=BUILD;changed=true}}if(changed){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}return changed}
-  const base=M.meetProgramBA.render?.bind(M.meetProgramBA);
-  if(base)M.meetProgramBA.render=()=>{const first=base();if(repair())return base();return first};
-  setTimeout(()=>{if(M.state?.settings?.view==='meet'&&base){base();if(repair())base()}},0);
+  const programmeRender=M.meetProgramBA.render?.bind(M.meetProgramBA);
+  const previousUiRender=M.ui?.renderMeet?.bind(M.ui);
+  let rerendering=false;
+  function afterRender(){if(rerendering)return;const changed=repair();if(changed&&programmeRender){rerendering=true;try{programmeRender()}finally{rerendering=false}}}
+  if(previousUiRender)M.ui.renderMeet=()=>{const out=previousUiRender();queueMicrotask(afterRender);return out};
+  if(programmeRender)M.meetProgramBA.render=()=>{const out=programmeRender();queueMicrotask(afterRender);return out};
+  M.storageEngine?.readyPromise?.then?.(()=>{if(M.state?.settings?.view==='meet'){repair();programmeRender?.()}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet'){repair();programmeRender?.()}});
+  setTimeout(()=>{if(M.state?.settings?.view==='meet'){repair();programmeRender?.()}},250);
   M.meetSiscFormat={build:BUILD,parse,repair,isAQ};
 })(globalThis);
