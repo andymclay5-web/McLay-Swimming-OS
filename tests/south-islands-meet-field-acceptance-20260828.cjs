@@ -2,27 +2,22 @@
 const {chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 const SOUTH=`South Island SCM Championships 2026 - 28/08/2026 to 30/08/2026
-Meet Program - Friday Morning - warmup from 7.30am
-Event 1 Men 12 & Over 200 SC Meter IM
-Heat 1 of 5 Finals Starts at 08:15 AM
-1 Jack Other M14 Neptune Swimming 2:35.11
-2 Matthew Callow M13 Aquagym Swimming Club 2:29.45
-3 Tom Rival M15 Jasi Swimming 2:27.31
-4 Matthew Robertson M14 AQGCB 2:25.20
-Heat 2 of 5 Finals Starts at 08:20 AM
-1 William Callow M13 Aqua Gym 2:40.00
-2 Sam Other M14 Wharenui Swimming Club 2:38.10`;
-const FINALS=`South Island SCM Championships 2026 - 28/08/2026 to 30/08/2026
 Meet Program - Friday Afternoon - warmup from 3:00pm
 Event 1 Men 12 & Over 200 SC Meter IM
 Heat 1
 1 Aydan Brown M14 JASCB 2:32.49
+2 Angelo Liu M14 JASCB 2:29.25
+3 Konrad Artz M14 ASTCB 2:23.47
+4 Zachary Horton M14 JASCB 2:14.71
 5 Matthew Callow M13 AQGCB 2:23.15
-6 Bodie Gilmour M14 WAVSL 2:27.14`;
+6 Bodie Gilmour M14 WAVSL 2:27.14
+7 Arlee Williamson M14 STUCB 2:29.93
+8 Tyrone Xu M14 JASCB 2:33.75`;
 const fail=m=>{throw new Error(m)};
 (async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});try{
  await page.goto(BASE,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>MSOS4?.storageEngine?.hydrated?.()===true,{timeout:15000});await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:15000});
- await page.evaluate(raw=>{const M=MSOS4;M.state.athletes=M.state.athletes||[];for(const [id,name] of [['mattc','Matthew Callow'],['mattr','Matthew Robertson'],['willc','William Callow']])if(!M.state.athletes.some(x=>x.full_name===name))M.state.athletes.push({id,full_name:name,squad:'National',active:true});const races=[{event_number:1,event:'Men 12 & Over 200 SC Meter IM',distance:200,stroke:'IM',heat:1,lane:2,athlete_id:'mattc',athlete_name:'Matthew Callow',club:'Aquagym Swimming Club',seed_time:'2:29.45'},{event_number:1,event:'Men 12 & Over 200 SC Meter IM',distance:200,stroke:'IM',heat:1,lane:4,athlete_id:'mattr',athlete_name:'Matthew Robertson',club:'AQGCB',seed_time:'2:25.20'},{event_number:1,event:'Men 12 & Over 200 SC Meter IM',distance:200,stroke:'IM',heat:2,lane:1,athlete_id:'willc',athlete_name:'William Callow',club:'Aqua Gym',seed_time:'2:40.00'}];M.state.meetImports=[{id:'south-fixture',meet_id:'south-island-2026',title:'South Island SCM Championships 2026',text:raw}];M.state.meetFieldDeck={meet_id:'south-island-2026',source_id:'south-fixture',title:'South Island SCM Championships 2026',races};M.state.meetProgramBA={sources:[{source_id:'south-fixture',meet_id:'south-island-2026',raw,parsed:{heats:[]}}],commentaries:[],meetWorkspaces:{},nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'south-fixture',selectedEventNumber:1};M.state.meetOps={races:{},evidence:[],selectedAthleteId:'',selectedRaceKey:''};M.meetSiscFormat?.repair?.();M.store.save(M.state);M.navigationEngine?.go?.('meet',{restore:false});M.ui?.renderMeet?.();M.meetProgramBA?.render?.()},SOUTH);await page.waitForTimeout(700);
- const out=await page.evaluate(()=>{const root=document.querySelector('[data-meet-program-ba]')||document.querySelector('#meetView');return{text:root?.innerText||'',visible:!!(root&&root.getBoundingClientRect().height),rows:[...root.querySelectorAll('[data-ba-row]')].map(x=>({text:x.innerText,aq:x.classList.contains('aqua')||x.classList.contains('aqgcb'),key:x.getAttribute('data-ba-row')}))}});if(!out.visible)fail('programme is not visible in phone Meet view');for(const s of ['Jack Other','Neptune Swimming','2:35.11','Matthew Callow','Aquagym Swimming Club','2:29.45','Tom Rival','Jasi Swimming','2:27.31','Matthew Robertson','AQGCB','2:25.20','William Callow','Aqua Gym','2:40.00'])if(!out.text.includes(s))fail('missing rendered programme value: '+s);const matt=out.rows.find(r=>r.text.includes('Matthew Callow'));await page.locator(`[data-ba-row="${matt.key}"]`).tap();await page.waitForTimeout(250);if(!/Race history|Next 2/.test(await page.locator(`[data-ba-row="${matt.key}"]`).innerText()))fail('morning AquaGym expansion failed');
- await page.evaluate(raw=>{const M=MSOS4,p=M.meetSiscFormat.parse(raw,'finals');M.state.meetProgramBA.sources.push({source_id:'finals',raw,parsed:p,added_at:new Date().toISOString()});M.state.meetProgramBA.selectedSourceId='finals';M.state.meetProgramBA.selectedEventNumber=1;M.state.meetProgramBA.expandedKey='';M.meetProgramBA.render()},FINALS);await page.waitForTimeout(400);const frow=page.locator('[data-ba-row].aqua',{hasText:'Matthew Callow'});if(await frow.count()!==1)fail('Friday afternoon Matthew AQ row missing');await frow.tap();await page.waitForTimeout(300);const ftext=await frow.innerText();if(!/Race history|Next 2|Seed/.test(ftext))fail('Friday afternoon AquaGym row did not expand: '+ftext);console.log('SOUTH_ISLANDS_MEET_FIELD_ACCEPTANCE_PASS including Friday finals expansion');
+ await page.evaluate(raw=>{const M=MSOS4;M.state.athletes=M.state.athletes||[];if(!M.state.athletes.some(x=>x.full_name==='Matthew Callow'))M.state.athletes.push({id:'mattc',full_name:'Matthew Callow',squad:'National',active:true});M.state.meetImports=[{id:'finals-fixture',meet_id:'south-island-2026',title:'South Island SCM Championships 2026',text:raw}];M.state.meetFieldDeck={meet_id:'south-island-2026',source_id:'finals-fixture',title:'South Island SC Champs',date:'2026-08-28',venue:'Moana pool',course:'SCM',races:[],swimmers:[]};M.state.meetProgramBA={sources:[{source_id:'finals-fixture',meet_id:'south-island-2026',raw,parsed:{heats:[]}}],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'finals-fixture',selectedEventNumber:1};M.state.meetOps={races:{},evidence:[],selectedAthleteId:'',selectedRaceKey:''};M.state.settings.view='meet';M.meetSiscFormat?.repair?.();M.store.save(M.state);M.ui.renderMeet()},SOUTH);
+ await page.waitForTimeout(800);
+ const start=await page.evaluate(()=>({text:document.querySelector('#meetView')?.innerText||'',programme:!!document.querySelector('[data-meet-program-ba]'),races:MSOS4.state.meetFieldDeck?.races?.length||0}));if(!start.programme)fail('Meet startup stayed on generic empty deck\n'+start.text);if(start.races<1)fail('AquaGym race was not linked on startup');for(const s of ['Aydan Brown','JASCB','2:32.49','Matthew Callow','AQGCB','2:23.15'])if(!start.text.includes(s))fail('missing visible finals value '+s+'\n'+start.text);
+ const matt=await page.locator('[data-ba-row]').filter({hasText:'Matthew Callow'}).first();await matt.scrollIntoViewIfNeeded();await matt.click();await page.waitForTimeout(300);const expanded=await page.evaluate(()=>document.querySelector('[data-meet-program-ba]')?.innerText||'');if(!/Seed/.test(expanded)||!/Race history/.test(expanded))fail('Matthew did not expand in programme\n'+expanded);console.log('SOUTH_ISLANDS_MEET_FIELD_ACCEPTANCE_PASS startup-programme races='+start.races);
 }finally{await browser.close()}})().catch(e=>{console.error(e.stack||e);process.exit(1)});
