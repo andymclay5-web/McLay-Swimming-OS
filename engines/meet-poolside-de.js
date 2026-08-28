@@ -1,133 +1,45 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.ui)return;
-  const BUILD='v4-meet-unified-friday-20260828c-phone-workflow';
-  const U=M.util||{};
-  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const U=M.util||{},BUILD='v4-meet-direct-races-20260828d';
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'');
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const now=()=>U.now?U.now():new Date().toISOString();
-  let observer=null,queued=false,activeVoice=null,recognition=null,audioRecorder=null,audioStream=null,audioChunks=[],noteTimer=null;
   const host=()=>document.querySelector('#meetView');
-  const programme=()=>host()?.querySelector('[data-meet-program-ba]')||null;
   const deck=()=>M.state?.meetFieldDeck||null;
-  const raceForKey=k=>(deck()?.races||[]).find(r=>M.meetOpsEngine?.keyFor?.(r)===k)||null;
-  const recFor=r=>r?M.meetOpsEngine?.recordFor?.(r,true):null;
-  const evidenceFor=k=>(M.state?.meetOps?.evidence||[]).filter(e=>e.race_key===k);
-  function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}try{M.meetOpsEngine?.backup?.()}catch{}}
-  function suppressLegacyDeck(){
-    const h=host(),p=programme();if(!h||!p)return;
-    document.body.classList.add('meet-unified-live','meet-program-ba-active');
-    for(const n of [...h.children]){
-      if(n===p||n.matches?.('[data-meet-workspace-cy]'))continue;
-      if(n.matches?.('.meet-hero,.next-race-card,.page-card'))n.hidden=true;
-    }
-  }
-  function eventRows(){
-    const groups=new Map();
-    for(const r of deck()?.races||[]){
-      const n=Number(r.event_number)||0;if(!n)continue;
-      let x=groups.get(n);if(!x){x={event_number:n,event:r.event||`${r.distance||''} ${r.stroke||''}`,start_time:r.start_time||'',names:[],keys:[]};groups.set(n,x)}
-      if(!x.start_time&&r.start_time)x.start_time=r.start_time;
-      const name=txt(r.athlete_name||r.source_name);if(name&&!x.names.includes(name))x.names.push(name);
-      const k=M.meetOpsEngine?.keyFor?.(r);if(k&&!x.keys.includes(k))x.keys.push(k);
-    }
-    return [...groups.values()].sort((a,b)=>a.event_number-b.event_number);
-  }
-  function ensureEventMap(p){
-    let map=p.querySelector('[data-mu-event-map]');if(!map){map=document.createElement('section');map.dataset.muEventMap='1';map.className='mu-event-map';const sticky=p.querySelector('.ba-sticky');sticky?.after(map)}
-    const rows=eventRows();
-    map.innerHTML=`<div class="mu-event-map-head"><div><b>AquaGym events</b><small>Tap an event, then tap our swimmer in the heat</small></div></div><div class="mu-event-map-grid">${rows.map(x=>`<button type="button" data-mu-event="${x.event_number}"><span><b>E${x.event_number}</b><strong>${esc(x.event)}</strong></span><small>${esc(x.start_time||'Time in programme')}</small><em>${esc(x.names.join(' · ')||'AquaGym')}</em></button>`).join('')}</div>`;
-  }
-  function addEvidence(r,type,{text='',mediaId=null,mimeType=null}={}){
-    if(!r)return null;M.state.meetOps=M.state.meetOps||{};if(!Array.isArray(M.state.meetOps.evidence))M.state.meetOps.evidence=[];
-    const k=M.meetOpsEngine.keyFor(r),id=U.uid?U.uid('meet-evidence'):`meet-evidence-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const e={id,race_key:k,athlete_id:r.relay?'':(r.athlete_id||''),athlete_name:r.athlete_name||r.source_name||'',event_number:r.event_number,capture_type:type,text_content:txt(text),media_id:mediaId,mime_type:mimeType||null,created_at:now()};
-    M.state.meetOps.evidence.push(e);
-    if(text){const x=recFor(r);if(x){const line=txt(text);x.notes=x.notes?`${x.notes}\n${line}`:line;x.updated_at=now();}}
-    save();queue();return e;
-  }
-  function ensureActions(intel){
-    const capture=intel.querySelector('[data-ba-capture]');if(!capture)return;
-    const k=capture.dataset.baCapture||'',r=raceForKey(k);if(!r)return;
-    const actions=capture.closest('.ba-actions');if(!actions)return;
-    const oldTalk=actions.querySelector('[data-ba-talk]');if(oldTalk)oldTalk.hidden=true;
-    let voice=actions.querySelector('[data-mu-voice]');
-    if(!voice){voice=document.createElement('button');voice.type='button';voice.dataset.muVoice='1';voice.dataset.muRace=k;actions.prepend(voice)}
-    voice.textContent=activeVoice===k?'Stop voice':'Voice race';
-    let video=actions.querySelector('[data-mu-video-label]');
-    if(!video){video=document.createElement('label');video.className='buttonlike mu-video';video.dataset.muVideoLabel='1';video.innerHTML=`Video<input data-mu-video="${esc(k)}" type="file" accept="video/*" capture="environment" hidden>`;actions.appendChild(video)}
-    let data=actions.querySelector('[data-mu-race-data]');
-    if(!data){data=document.createElement('button');data.type='button';data.dataset.muRaceData='1';data.dataset.muRace=k;data.textContent='Result / splits';actions.appendChild(data)}
-  }
-  function evidenceHtml(k){
-    const ev=evidenceFor(k).slice(-8).reverse();
-    if(!ev.length)return'<small class="muted">No saved race evidence yet.</small>';
-    return ev.map(e=>{const label=e.capture_type==='commentary'?'Voice commentary':e.capture_type==='voice'?'Voice note':e.capture_type==='video'?'Video':e.capture_type==='photo'?'Photo':e.capture_type||'Evidence',play=e.media_id?`<button data-mu-play="${esc(e.id)}">Play</button>`:'';return `<div class="mu-evidence-row"><div><b>${esc(label)}</b>${e.text_content?`<span>${esc(e.text_content)}</span>`:'<span>Saved media</span>'}</div>${play}</div>`}).join('');
-  }
-  function ensureEvidence(intel){
-    const capture=intel.querySelector('[data-ba-capture]'),k=capture?.dataset.baCapture||'',r=raceForKey(k);if(!k||!r)return;
-    const x=recFor(r);let box=intel.querySelector('[data-mu-evidence]');
-    if(!box){box=document.createElement('section');box.dataset.muEvidence='1';box.className='mu-evidence';capture.closest('.ba-actions')?.after(box)}
-    const active=document.activeElement?.matches?.(`[data-mu-note="${CSS.escape(k)}"]`);
-    if(active)return;
-    box.innerHTML=`<div class="mu-evidence-head"><div><b>Race capture</b><small>${esc(r.athlete_name||r.source_name||'Swimmer')} · E${r.event_number} · ${esc(r.distance||'')} ${esc(r.stroke||'')} · H${r.heat||'—'} L${r.lane||'—'}</small></div><small>local-first</small></div><label class="mu-note-label">Type race note<textarea data-mu-note="${esc(k)}" rows="3" placeholder="Type what you saw while you watch…">${esc(x?.notes||'')}</textarea></label><div class="mu-saved-head"><b>Saved evidence</b></div>${evidenceHtml(k)}`;
-  }
-  function enhance(){
-    queued=false;const p=programme();if(!p||M.state?.settings?.view!=='meet')return;
-    suppressLegacyDeck();ensureEventMap(p);
-    for(const intel of p.querySelectorAll('.ba-intel')){ensureActions(intel);ensureEvidence(intel)}
-  }
-  function queue(){if(queued)return;queued=true;requestAnimationFrame(enhance)}
-  async function fallbackAudio(r,k){
-    try{
-      audioStream=await navigator.mediaDevices.getUserMedia({audio:true});audioChunks=[];audioRecorder=new MediaRecorder(audioStream);activeVoice=k;
-      audioRecorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};
-      audioRecorder.onstop=async()=>{const blob=new Blob(audioChunks,{type:audioRecorder.mimeType||'audio/webm'});let mediaId=null;try{mediaId=await M.media?.save?.(blob,{type:'meet_voice',raceKey:k,athleteIds:[r.athlete_id].filter(Boolean)})}catch{}addEvidence(r,'voice',{mediaId,mimeType:blob.type});audioStream?.getTracks?.().forEach(t=>t.stop());audioRecorder=null;audioStream=null;audioChunks=[];activeVoice=null;queue();M.toast?.('Voice note saved locally')};
-      audioRecorder.start();queue();M.toast?.('Voice recording · tap Stop voice when done');
-    }catch(e){activeVoice=null;M.toast?.(e.message||String(e))}
-  }
-  async function startVoice(r,k){
-    if(activeVoice){if(activeVoice===k)return stopVoice();return M.toast?.('Finish the current voice capture first')}
-    const SR=g.SpeechRecognition||g.webkitSpeechRecognition;if(!SR)return fallbackAudio(r,k);
-    try{
-      let finalText='',interim='';recognition=new SR();recognition.continuous=true;recognition.interimResults=true;recognition.lang='en-NZ';activeVoice=k;
-      recognition.onresult=e=>{interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0]?.transcript||'';if(e.results[i].isFinal)finalText+=`${finalText?' ':''}${t}`;else interim+=t}const intel=document.querySelector(`[data-ba-capture="${CSS.escape(k)}"]`)?.closest('.ba-intel'),status=intel?.querySelector('[data-mu-live-transcript]');if(status)status.textContent=txt(`${finalText} ${interim}`)||'Listening…'};
-      recognition.onerror=e=>M.toast?.(`Voice commentary: ${e.error||'error'}`);
-      recognition.onend=()=>{const text=txt(`${finalText} ${interim}`);recognition=null;activeVoice=null;if(text){addEvidence(r,'commentary',{text});M.toast?.('Race commentary saved')}queue()};
-      recognition.start();
-      const intel=document.querySelector(`[data-ba-capture="${CSS.escape(k)}"]`)?.closest('.ba-intel');if(intel&&!intel.querySelector('[data-mu-live-transcript]')){const s=document.createElement('div');s.dataset.muLiveTranscript='1';s.className='mu-live-transcript';s.textContent='Listening…';intel.querySelector('.ba-actions')?.before(s)}
-      queue();M.toast?.('Voice commentary · speak naturally, then tap Stop voice');
-    }catch(e){recognition=null;activeVoice=null;return fallbackAudio(r,k)}
-  }
+  const races=()=>[...(deck()?.races||[])].filter(r=>r&&r.event_number).sort((a,b)=>(a.event_number-b.event_number)||((a.heat||0)-(b.heat||0))||((a.lane||0)-(b.lane||0)));
+  const key=r=>M.meetOpsEngine?.keyFor?.(r)||'';
+  const rec=r=>M.meetOpsEngine?.recordFor?.(r,true)||null;
+  const athlete=id=>(M.state?.athletes||[]).find(a=>a.id===id)||null;
+  const state=()=>{M.state.meetDirectFriday=M.state.meetDirectFriday||{};return M.state.meetDirectFriday};
+  const save=()=>{try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}try{M.meetOpsEngine?.backup?.()}catch{}};
+  let recognition=null,voiceKey='',audioRecorder=null,audioStream=null,audioChunks=[],noteTimer=null;
+
+  function uniqueRaces(){const seen=new Set(),out=[];for(const r of races()){const k=key(r);if(!k||seen.has(k))continue;seen.add(k);out.push(r)}return out}
+  function eventGroups(){const map=new Map();for(const r of uniqueRaces()){const n=Number(r.event_number);let e=map.get(n);if(!e){e={n,label:r.event||`${r.distance||''} ${r.stroke||''}`,time:r.start_time||'',races:[]};map.set(n,e)}if(!e.time&&r.start_time)e.time=r.start_time;e.races.push(r)}return [...map.values()].sort((a,b)=>a.n-b.n)}
+  function selectedRace(){const k=state().selectedKey;return uniqueRaces().find(r=>key(r)===k)||null}
+  function clock(s){return U.clock?U.clock(s):String(s??'—')}
+  function course(r){return /LCM|LC Meter|long course/i.test(r?.event||'')?'LCM':'SCM'}
+  function normStroke(s){s=txt(s).toLowerCase();return s.startsWith('free')?'Freestyle':s.startsWith('back')?'Backstroke':s.startsWith('breast')?'Breaststroke':s.startsWith('butter')?'Butterfly':s==='im'||s.includes('medley')?'IM':txt(s)}
+  function performanceRows(r){if(!r?.athlete_id||!M.performanceEngine?.rows)return[];const a=athlete(r.athlete_id);if(!a)return[];try{return M.performanceEngine.rows(a,M.state,course(r)).filter(x=>Number(x.distance)===Number(r.distance)&&normStroke(x.stroke)===normStroke(r.stroke)).sort((a,b)=>a.seconds-b.seconds)}catch{return[]}}
+  function evidence(r){return(M.state?.meetOps?.evidence||[]).filter(e=>e.race_key===key(r)).slice(-10).reverse()}
+  function addEvidence(r,type,{text='',mediaId=null,mimeType=null}={}){if(!r)return;M.state.meetOps=M.state.meetOps||{};M.state.meetOps.evidence=M.state.meetOps.evidence||[];const e={id:U.uid?U.uid('meet-evidence'):`meet-evidence-${Date.now()}`,race_key:key(r),athlete_id:r.athlete_id||'',athlete_name:r.athlete_name||'',event_number:r.event_number,capture_type:type,text_content:txt(text),media_id:mediaId,mime_type:mimeType||null,created_at:now()};M.state.meetOps.evidence.push(e);if(text){const x=rec(r);if(x){x.notes=x.notes?`${x.notes}\n${txt(text)}`:txt(text);x.updated_at=now()}}save();render()}
+
+  function raceSummary(r){const x=rec(r),rows=performanceRows(r),pb=rows[0],a=athlete(r.athlete_id),name=a?.preferred_name||a?.nickname||a?.full_name||r.athlete_name||'Swimmer';return{name,x,rows,pb}}
+  function evidenceHtml(r){const rows=evidence(r);if(!rows.length)return'<p class="muted">No saved race evidence yet.</p>';return rows.map(e=>`<div class="md-evidence-row"><div><b>${esc(e.capture_type==='commentary'?'Voice commentary':e.capture_type==='voice'?'Voice note':e.capture_type==='video'?'Video':e.capture_type||'Evidence')}</b>${e.text_content?`<span>${esc(e.text_content)}</span>`:'<span>Saved media</span>'}</div>${e.media_id?`<button data-md-play="${esc(e.id)}">Play</button>`:''}</div>`).join('')}
+  function workspaceHtml(r){if(!r)return'<section class="md-empty"><b>Tap one of your swimmers below.</b><span>Their race workspace opens here.</span></section>';const s=raceSummary(r),x=s.x||{},recent=s.rows.slice(0,4);return`<section class="md-workspace" data-md-workspace><header><div><small>CURRENT RACE</small><h2>${esc(s.name)}</h2><strong>E${r.event_number} · ${esc(r.distance||'')} ${esc(normStroke(r.stroke))}</strong><span>${esc(r.start_time||'Time in programme')} · Heat ${r.heat||'—'} · Lane ${r.lane||'—'}${r.seed_time?` · Seed ${esc(r.seed_time)}`:''}</span></div><button data-md-close>×</button></header><div class="md-kpis"><span><small>PB ${course(r)}</small><b>${s.pb?.seconds?clock(s.pb.seconds):'—'}</b></span><span><small>Today</small><b>${x.draft_time_seconds!=null?clock(x.draft_time_seconds):x.official_result_seconds!=null?clock(x.official_result_seconds):'—'}</b></span><span><small>Status</small><b>${esc(x.status||'scheduled')}</b></span></div>${recent.length?`<details><summary>Recent ${r.distance} ${esc(normStroke(r.stroke))}</summary><div class="md-history">${recent.map(q=>`<span><b>${clock(q.seconds)}</b><small>${esc(q.result_date||q.date||q.meet_name||q.source_label||'stored result')}</small></span>`).join('')}</div></details>`:''}<label class="md-note">Race notes<textarea data-md-note="${esc(key(r))}" rows="4" placeholder="Type what you see, or use Voice race…">${esc(x.notes||'')}</textarea></label><div class="md-actions"><button data-md-voice="${esc(key(r))}">${voiceKey===key(r)?'Stop voice':'🎙 Voice race'}</button><label>🎥 Video<input data-md-video="${esc(key(r))}" type="file" accept="video/*" capture="environment" hidden></label><button data-md-data="${esc(key(r))}">Result / splits</button><button data-md-complete="${esc(key(r))}">Mark complete</button></div><section class="md-evidence"><h3>Saved evidence</h3>${evidenceHtml(r)}</section></section>`}
+  function eventHtml(e){return`<article class="md-event"><header><div><b>E${e.n}</b><strong>${esc(e.label)}</strong></div><time>${esc(e.time||'')}</time></header><div class="md-swimmers">${e.races.map(r=>{const s=raceSummary(r),x=s.x||{},active=state().selectedKey===key(r);return`<button class="${active?'active':''}" data-md-race="${esc(key(r))}"><b>${esc(s.name)}</b><small>H${r.heat||'—'} · L${r.lane||'—'}${r.seed_time?` · ${esc(r.seed_time)}`:''}</small><em>${x.status==='complete'?'DONE':x.draft_time_seconds!=null?clock(x.draft_time_seconds):s.pb?.seconds?`PB ${clock(s.pb.seconds)}`:'OPEN'}</em></button>`}).join('')}</div></article>`}
+  function hideOld(){const h=host();if(!h)return;for(const n of [...h.children])if(!n.matches?.('[data-md-shell]'))n.hidden=true}
+  function render(){const h=host();if(!h||M.state?.settings?.view!=='meet')return;h.querySelector('[data-md-shell]')?.remove();const d=deck();if(!d?.races?.length)return;const shell=document.createElement('section');shell.dataset.mdShell='1';shell.className='md-shell';shell.innerHTML=`<div class="md-top"><div><small>MEET · AQUAGYM</small><h1>${esc(d.title||'Meet programme')}</h1><span>${esc(d.session||d.date_range||'')}</span></div><div><button data-md-add-session>Add session</button><button data-md-results>Results</button></div></div>${workspaceHtml(selectedRace())}<section class="md-list"><h2>AquaGym races</h2>${eventGroups().map(eventHtml).join('')}</section>`;h.prepend(shell);hideOld();bindShell(shell)}
+  function findRace(k){return uniqueRaces().find(r=>key(r)===k)||null}
+  function select(k){const r=findRace(k);if(!r)return;state().selectedKey=k;M.meetOpsEngine?.selectRace?.(r);save();render();setTimeout(()=>host()?.querySelector('[data-md-workspace]')?.scrollIntoView?.({block:'start',behavior:'smooth'}),20)}
+  function startVoice(r){const k=key(r);if(voiceKey){if(voiceKey===k)return stopVoice();return M.toast?.('Finish the current voice capture first')}const SR=g.SpeechRecognition||g.webkitSpeechRecognition;if(SR){try{let finalText='',interim='';recognition=new SR();recognition.continuous=true;recognition.interimResults=true;recognition.lang='en-NZ';voiceKey=k;recognition.onresult=e=>{interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0]?.transcript||'';if(e.results[i].isFinal)finalText+=`${finalText?' ':''}${t}`;else interim+=t}const box=host()?.querySelector('[data-md-live]');if(box)box.textContent=txt(`${finalText} ${interim}`)||'Listening…'};recognition.onerror=e=>M.toast?.(`Voice: ${e.error||'error'}`);recognition.onend=()=>{const text=txt(`${finalText} ${interim}`);recognition=null;voiceKey='';if(text)addEvidence(r,'commentary',{text});else render()};recognition.start();render();const w=host()?.querySelector('[data-md-workspace]');if(w&&!w.querySelector('[data-md-live]')){const box=document.createElement('div');box.dataset.mdLive='1';box.className='md-live';box.textContent='Listening…';w.querySelector('.md-note')?.before(box)}M.toast?.('Speak naturally · tap Stop voice when finished');return}catch{recognition=null;voiceKey=''}}fallbackAudio(r)}
+  async function fallbackAudio(r){try{audioStream=await navigator.mediaDevices.getUserMedia({audio:true});audioChunks=[];audioRecorder=new MediaRecorder(audioStream);voiceKey=key(r);audioRecorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};audioRecorder.onstop=async()=>{const blob=new Blob(audioChunks,{type:audioRecorder.mimeType||'audio/webm'});let mediaId=null;try{mediaId=await M.media?.save?.(blob,{type:'meet_voice',raceKey:key(r),athleteIds:[r.athlete_id].filter(Boolean)})}catch{}audioStream?.getTracks?.().forEach(t=>t.stop());audioRecorder=null;audioStream=null;audioChunks=[];voiceKey='';addEvidence(r,'voice',{mediaId,mimeType:blob.type})};audioRecorder.start();render();M.toast?.('Voice recording · tap Stop voice when done')}catch(e){voiceKey='';M.toast?.(e.message||String(e))}}
   function stopVoice(){if(recognition){try{recognition.stop()}catch{}return}if(audioRecorder&&audioRecorder.state!=='inactive'){try{audioRecorder.stop()}catch{}}}
-  async function saveVideo(input){
-    const f=input.files?.[0],r=raceForKey(input.dataset.muVideo||'');if(!f||!r)return;
-    let mediaId=null;M.toast?.('Saving video locally…');
-    try{mediaId=await M.media?.save?.(f,{type:'meet_video',raceKey:M.meetOpsEngine.keyFor(r),athleteIds:[r.athlete_id].filter(Boolean)})}catch(e){return M.toast?.(`Video save failed: ${e.message||e}`)}
-    addEvidence(r,'video',{mediaId,mimeType:f.type});M.toast?.('Video saved · playback ready');
-  }
-  async function playEvidence(id){
-    const e=(M.state?.meetOps?.evidence||[]).find(x=>x.id===id);if(!e?.media_id)return M.toast?.('No local media attached');
-    let row=null;try{row=await M.media?.get?.(e.media_id)}catch{}if(!row?.blob)return M.toast?.('Saved media blob is not available on this device');
-    const url=URL.createObjectURL(row.blob),isVideo=(e.mime_type||row.blob.type||'').startsWith('video/'),tag=isVideo?'video':'audio',h=document.querySelector('#modalHost');
-    h.innerHTML=`<div class="modal-backdrop"><section class="modal"><header><h2>${isVideo?'Race video':'Race voice'}</h2><button data-mu-close>×</button></header><div class="modal-body"><${tag} data-mu-player controls playsinline preload="metadata" src="${esc(url)}" style="width:100%;max-height:70vh"></${tag}>${e.text_content?`<p>${esc(e.text_content)}</p>`:''}</div><footer><button data-mu-close>Close</button></footer></section></div>`;
-    M.nav?.openLayer?.('modal');
-    const close=()=>{try{h.querySelector('[data-mu-player]')?.pause()}catch{}URL.revokeObjectURL(url);h.innerHTML='';M.nav?.dismissLayer?.()};h.querySelectorAll('[data-mu-close]').forEach(b=>b.onclick=close);
-  }
-  function jumpEvent(n){const p=programme();if(!p)return;const b=[...p.querySelectorAll('[data-ba-event]')].find(x=>Number(x.dataset.baEvent)===Number(n));if(b){b.click();setTimeout(()=>programme()?.querySelector('.ba-session')?.scrollIntoView?.({block:'start',behavior:'smooth'}),30)}}
-  function bind(){
-    document.addEventListener('click',e=>{const ev=e.target.closest?.('[data-mu-event]');if(ev){e.preventDefault();jumpEvent(ev.dataset.muEvent);return}const v=e.target.closest?.('[data-mu-voice]');if(v){e.preventDefault();e.stopPropagation();const r=raceForKey(v.dataset.muRace||'');if(r)startVoice(r,v.dataset.muRace);return}const d=e.target.closest?.('[data-mu-race-data]');if(d){e.preventDefault();e.stopPropagation();const r=raceForKey(d.dataset.muRace||'');if(r)M.meetOpsEngine?.openRaceEdit?.(r);return}const p=e.target.closest?.('[data-mu-play]');if(p){e.preventDefault();e.stopPropagation();playEvidence(p.dataset.muPlay);return}},true);
-    document.addEventListener('input',e=>{const a=e.target.closest?.('[data-mu-note]');if(!a)return;const r=raceForKey(a.dataset.muNote||''),x=recFor(r);if(!x)return;x.notes=a.value;x.updated_at=now();clearTimeout(noteTimer);noteTimer=setTimeout(save,180)},true);
-    document.addEventListener('change',e=>{const input=e.target.closest?.('[data-mu-video]');if(input){saveVideo(input);return}if(e.target.closest?.('[data-mu-note]'))save()},true);
-  }
-  function style(){
-    if(document.getElementById('meet-unified-dh-style'))document.getElementById('meet-unified-dh-style').remove();
-    const s=document.createElement('style');s.id='meet-unified-dh-style';
-    s.textContent=`body.meet-program-ba-active #meetView>.meet-hero,body.meet-program-ba-active #meetView>.next-race-card,body.meet-program-ba-active #meetView>.page-card{display:none!important}.mu-event-map{display:grid;gap:.4rem;padding:.45rem 0}.mu-event-map-head>div{display:grid}.mu-event-map-head small{font-size:.76rem;opacity:.72}.mu-event-map-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem}.mu-event-map-grid button{display:grid;gap:.18rem;text-align:left;padding:.48rem;border-radius:10px;min-width:0}.mu-event-map-grid button>span{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.35rem;align-items:start}.mu-event-map-grid strong{font-size:.82rem;line-height:1.15;white-space:normal}.mu-event-map-grid small{font-size:.72rem}.mu-event-map-grid em{font-style:normal;font-size:.73rem;font-weight:750;white-space:normal}[data-meet-program-ba] .ba-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}[data-meet-program-ba] .ba-actions button,[data-meet-program-ba] .ba-actions .buttonlike{min-height:48px;font-weight:800}.mu-video{display:flex;align-items:center;justify-content:center;border:1px solid currentColor;border-radius:8px;padding:.35rem;cursor:pointer}.mu-live-transcript{border:2px solid currentColor;border-radius:10px;padding:.5rem;font-weight:750;background:var(--surface,#fff)}.mu-evidence{display:grid;gap:.38rem;border-top:1px solid rgba(13,69,102,.14);padding-top:.45rem}.mu-evidence-head{display:flex;justify-content:space-between;gap:.4rem}.mu-evidence-head>div{display:grid}.mu-evidence-head small{font-size:.72rem}.mu-note-label{display:grid;gap:.2rem;font-weight:800}.mu-note-label textarea{width:100%;min-height:72px;font:inherit;padding:.48rem;border:1px solid rgba(13,69,102,.2);border-radius:9px}.mu-saved-head{margin-top:.1rem}.mu-evidence-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.4rem;align-items:center;border:1px solid rgba(13,69,102,.12);border-radius:9px;padding:.4rem}.mu-evidence-row>div{display:grid;min-width:0}.mu-evidence-row span{font-size:.82rem;white-space:normal}.mu-evidence-row button{min-height:42px}@media(max-width:620px){html,body,#appMain,#meetView{touch-action:pan-y}.ba-sticky,.ba-session-head{position:static!important;top:auto!important}.ba-pills{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;overflow:visible!important;gap:.28rem!important}.ba-pills button{min-width:0!important;width:100%;padding:.34rem .25rem!important}.ba-pills button b{overflow:hidden;text-overflow:ellipsis}.ba-event-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;overflow:visible!important;gap:.3rem!important}.ba-event-tabs button{min-width:0!important;width:100%!important;padding:.38rem!important}.ba-event-tabs small{max-width:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.1}.ba-swimmer-strip>div:last-child{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;overflow:visible!important}.ba-swimmer-strip button{min-width:0!important}.mwm-tabs{flex-wrap:wrap!important;overflow:visible!important}.mwm-tabs button{min-width:0!important;flex:1 1 44%!important}.mu-event-map-grid{grid-template-columns:1fr}.mu-evidence-row{grid-template-columns:1fr}.mu-evidence-row button{width:100%}[data-meet-program-ba] .ba-actions{grid-template-columns:1fr 1fr!important}}`;
-    document.head.appendChild(s);
-  }
-  function install(){style();bind();queue();const h=host();if(h&&!observer){observer=new MutationObserver(queue);observer.observe(h,{childList:true,subtree:false})}}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){save();return}queue()});g.addEventListener?.('pagehide',save);
-  M.meetUnifiedFriday={build:BUILD,enhance,stopVoice,playEvidence,suppressLegacyDeck,eventRows};
+  async function saveVideo(input){const r=findRace(input.dataset.mdVideo),f=input.files?.[0];if(!r||!f)return;M.toast?.('Saving video locally…');let mediaId=null;try{mediaId=await M.media?.save?.(f,{type:'meet_video',raceKey:key(r),athleteIds:[r.athlete_id].filter(Boolean)})}catch(e){return M.toast?.(`Video save failed: ${e.message||e}`)}addEvidence(r,'video',{mediaId,mimeType:f.type});M.toast?.('Video saved · playback ready')}
+  async function playEvidence(id){const e=(M.state?.meetOps?.evidence||[]).find(x=>x.id===id);if(!e?.media_id)return M.toast?.('No saved media');let row=null;try{row=await M.media?.get?.(e.media_id)}catch{}if(!row?.blob)return M.toast?.('Media not available on this device');const url=URL.createObjectURL(row.blob),video=(e.mime_type||row.blob.type||'').startsWith('video/'),tag=video?'video':'audio',mh=document.querySelector('#modalHost');mh.innerHTML=`<div class="modal-backdrop"><section class="modal"><header><h2>${video?'Race video':'Race voice'}</h2><button data-md-media-close>×</button></header><div class="modal-body"><${tag} controls playsinline autoplay src="${esc(url)}" style="width:100%;max-height:70vh"></${tag}></div><footer><button data-md-media-close>Close</button></footer></section></div>`;M.nav?.openLayer?.('modal');const close=()=>{URL.revokeObjectURL(url);mh.innerHTML='';M.nav?.dismissLayer?.()};mh.querySelectorAll('[data-md-media-close]').forEach(b=>b.onclick=close)}
+  function bindShell(shell){shell.querySelectorAll('[data-md-race]').forEach(b=>b.onclick=()=>select(b.dataset.mdRace));shell.querySelector('[data-md-close]')?.addEventListener('click',()=>{state().selectedKey='';save();render()});shell.querySelector('[data-md-add-session]')?.addEventListener('click',()=>{const b=[...document.querySelectorAll('[data-ba-add-session]')].find(x=>x.closest('[data-meet-program-ba]'));if(b)b.click();else M.toast?.('Add session control is not available')});shell.querySelector('[data-md-results]')?.addEventListener('click',()=>{const b=[...document.querySelectorAll('[data-ba-results]')].find(x=>x.closest('[data-meet-program-ba]'));if(b)b.click();else M.toast?.('Results control is not available')});shell.querySelector('[data-md-voice]')?.addEventListener('click',e=>{const r=findRace(e.currentTarget.dataset.mdVoice);if(r)startVoice(r)});shell.querySelector('[data-md-data]')?.addEventListener('click',e=>{const r=findRace(e.currentTarget.dataset.mdData);if(r)M.meetOpsEngine?.openRaceEdit?.(r)});shell.querySelector('[data-md-complete]')?.addEventListener('click',e=>{const r=findRace(e.currentTarget.dataset.mdComplete);if(r)M.meetOpsEngine?.completeRace?.(r)});shell.querySelectorAll('[data-md-play]').forEach(b=>b.onclick=()=>playEvidence(b.dataset.mdPlay));shell.querySelector('[data-md-note]')?.addEventListener('input',e=>{const r=findRace(e.target.dataset.mdNote),x=rec(r);if(!x)return;x.notes=e.target.value;x.updated_at=now();clearTimeout(noteTimer);noteTimer=setTimeout(save,180)});shell.querySelector('[data-md-note]')?.addEventListener('change',save);shell.querySelector('[data-md-video]')?.addEventListener('change',e=>saveVideo(e.target))}
+  function style(){document.getElementById('meet-direct-friday-style')?.remove();const s=document.createElement('style');s.id='meet-direct-friday-style';s.textContent=`#meetView>.md-shell{display:grid!important;gap:.7rem;padding-bottom:5rem}.md-top{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}.md-top h1{font-size:1.15rem;margin:.1rem 0}.md-top>div:last-child{display:flex;gap:.35rem}.md-empty{border:2px dashed rgba(13,69,102,.2);border-radius:12px;padding:.7rem;display:grid}.md-workspace{border:2px solid rgba(13,69,102,.28);border-radius:14px;padding:.65rem;display:grid;gap:.55rem;background:var(--surface,#fff)}.md-workspace header{display:flex;justify-content:space-between;gap:.5rem}.md-workspace header>div{display:grid}.md-workspace h2{margin:.1rem 0;font-size:1.3rem}.md-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}.md-kpis span{border:1px solid rgba(13,69,102,.15);border-radius:9px;padding:.4rem;display:grid}.md-history{display:flex;flex-wrap:wrap;gap:.3rem}.md-history span{border:1px solid rgba(13,69,102,.12);border-radius:8px;padding:.3rem;display:grid}.md-note{display:grid;gap:.25rem;font-weight:800}.md-note textarea{font-size:16px;min-height:88px}.md-actions{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}.md-actions button,.md-actions label{min-height:52px;display:flex;align-items:center;justify-content:center;border:1px solid currentColor;border-radius:9px;font-weight:850;padding:.4rem;text-align:center}.md-live{border:2px solid currentColor;border-radius:10px;padding:.55rem;font-weight:800}.md-evidence{display:grid;gap:.35rem}.md-evidence h3{margin:.1rem 0}.md-evidence-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.35rem;align-items:center;border:1px solid rgba(13,69,102,.12);border-radius:9px;padding:.4rem}.md-evidence-row>div{display:grid}.md-list{display:grid;gap:.5rem}.md-list>h2{margin:.1rem 0}.md-event{border:1px solid rgba(13,69,102,.16);border-radius:12px;padding:.5rem;display:grid;gap:.4rem}.md-event>header{display:flex;justify-content:space-between;gap:.4rem;align-items:start}.md-event>header>div{display:grid;grid-template-columns:auto 1fr;gap:.4rem}.md-event time{font-weight:800;white-space:nowrap}.md-swimmers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem}.md-swimmers button{display:grid;text-align:left;gap:.15rem;padding:.5rem;border-radius:9px;min-height:66px}.md-swimmers button.active{outline:3px solid currentColor}.md-swimmers em{font-style:normal;font-weight:850;font-size:.75rem}.md-swimmers small{font-size:.72rem}@media(max-width:620px){.md-top{display:grid}.md-top>div:last-child{display:grid;grid-template-columns:1fr 1fr;width:100%}.md-kpis{grid-template-columns:repeat(3,1fr)}.md-swimmers{grid-template-columns:1fr}.md-event>header{display:grid}.md-event>header>div{grid-template-columns:auto 1fr}.md-actions{grid-template-columns:1fr 1fr}.md-evidence-row{grid-template-columns:1fr}.md-evidence-row button{width:100%}}`;document.head.appendChild(s)}
+  function install(){style();const old=M.ui.renderMeet?.bind(M.ui);if(old)M.ui.renderMeet=()=>{const out=old();queueMicrotask(render);return out};document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){save();return}if(M.state?.settings?.view==='meet')render()});g.addEventListener?.('pageshow',()=>{if(M.state?.settings?.view==='meet')render()});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(render,0),{once:true});else setTimeout(render,0)}
+  style();install();M.meetDirectFriday={build:BUILD,render};
 })(globalThis);
