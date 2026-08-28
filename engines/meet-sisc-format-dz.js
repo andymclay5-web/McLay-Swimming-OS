@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.meetProgramBA)return;
-  const BUILD='v4-meet-sisc-format-20260828dz7-post-hydration';
+  const BUILD='v4-meet-sisc-format-20260828dz8-startup-programme';
   const txt=v=>M.util?.text?M.util.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const isAQ=v=>{const n=norm(v);return n==='aqgcb'||n.includes('aquagym')||n.includes('aqua gym')};
@@ -34,14 +34,17 @@
   }
   function rawFor(src){if(src?.raw)return src.raw;const imports=M.state?.meetImports||[],d=M.state?.meetFieldDeck;return imports.find(x=>x.id===src?.source_id)?.text||imports.find(x=>x.id===d?.source_id)?.text||imports.find(x=>x.meet_id&&x.meet_id===d?.meet_id&&x.text)?.text||''}
   function repair(){const s=M.state?.meetProgramBA;if(!s?.sources?.length)return false;let changed=false;for(const src of s.sources){const raw=rawFor(src);if(!raw||!/South\s+Island|AQGCB|Aquagym|Aqua\s*Gym/i.test(raw))continue;const p=parse(raw,src.source_id||'session'),rows=p.heats.reduce((n,h)=>n+h.rows.length,0),old=src.parsed?.heats?.reduce((n,h)=>n+(h.rows?.length||0),0)||0;if(rows>0&&(src._sisc_format_build!==BUILD||rows!==old)){src.raw=raw;src.parsed=p;src._sisc_format_build=BUILD;changed=true}}if(changed){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}return changed}
+  function athlete(name){const k=norm(name),rows=(M.state?.athletes||[]).filter(a=>a.active!==false);return rows.find(a=>norm(a.full_name)===k)||rows.find(a=>{const x=norm(a.full_name).split(' '),y=k.split(' ');return x[0]===y[0]&&x.at(-1)===y.at(-1)})||null}
+  function selectedSource(){const s=M.state?.meetProgramBA,srcs=s?.sources||[];return srcs.find(x=>x.source_id===s?.selectedSourceId)||srcs.at(-1)||srcs[0]||null}
+  function ensureDeckRaces(){const src=selectedSource(),heats=src?.parsed?.heats||[];if(!heats.length)return false;let d=M.state.meetFieldDeck;if(!d||typeof d!=='object'){d=M.state.meetFieldDeck={meet_id:'south-island-2026',source_id:src.source_id,title:'South Island SC Champs',races:[],swimmers:[]}}if(!Array.isArray(d.races))d.races=[];if(d.races.length)return true;for(const h of heats)for(const row of h.rows||[]){if(!row.is_aquagym||row.kind==='relay')continue;const a=athlete(row.name);d.races.push({event_number:h.event_number,event:h.event,distance:h.distance,stroke:h.stroke,relay:false,heat:h.heat,lane:row.lane,start_time:h.start_time,seed_time:row.seed_time,seed_seconds:row.seed_seconds,source_name:row.name,classification:row.classification,sex:row.sex,age:row.age,club:row.club,athlete_id:a?.id||'',athlete_name:a?.full_name||row.name,match_confidence:a?'exact-or-name':'unmatched'})}d.source_id=src.source_id||d.source_id;d.swimmers=[...new Set(d.races.map(r=>r.athlete_name).filter(Boolean))];try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}return d.races.length>0}
   const programmeRender=M.meetProgramBA.render?.bind(M.meetProgramBA);
   const previousUiRender=M.ui?.renderMeet?.bind(M.ui);
   let rerendering=false;
-  function afterRender(){if(rerendering)return;const changed=repair();if(changed&&programmeRender){rerendering=true;try{programmeRender()}finally{rerendering=false}}}
+  function afterRender(){if(rerendering||M.state?.settings?.view!=='meet')return;repair();const src=selectedSource(),heats=src?.parsed?.heats||[];if(!heats.length||!programmeRender)return;ensureDeckRaces();rerendering=true;try{programmeRender()}finally{rerendering=false}}
   if(previousUiRender)M.ui.renderMeet=()=>{const out=previousUiRender();queueMicrotask(afterRender);return out};
   if(programmeRender)M.meetProgramBA.render=()=>{const out=programmeRender();queueMicrotask(afterRender);return out};
-  M.storageEngine?.readyPromise?.then?.(()=>{if(M.state?.settings?.view==='meet'){repair();programmeRender?.()}});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet'){repair();programmeRender?.()}});
-  setTimeout(()=>{if(M.state?.settings?.view==='meet'){repair();programmeRender?.()}},250);
-  M.meetSiscFormat={build:BUILD,parse,repair,isAQ};
+  M.storageEngine?.readyPromise?.then?.(()=>{if(M.state?.settings?.view==='meet')afterRender()});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet')afterRender()});
+  setTimeout(()=>{if(M.state?.settings?.view==='meet')afterRender()},250);
+  M.meetSiscFormat={build:BUILD,parse,repair,isAQ,ensureDeckRaces};
 })(globalThis);
