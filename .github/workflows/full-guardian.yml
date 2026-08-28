@@ -52,12 +52,13 @@ jobs:
           node tests/live-guardian-regressions-20260824.cjs
       - name: South Islands Meet field acceptance
         run: |
-          npx --yes playwright@1.55.0 install chromium --with-deps >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium --with-deps >/dev/null 2>&1
           python3 -m http.server 8765 >/tmp/msos-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           sleep 1
-          npx -p playwright@1.55.0 node tests/south-islands-meet-field-acceptance-20260828.cjs
+          node tests/south-islands-meet-field-acceptance-20260828.cjs
       - name: Architecture regression
         run: |
           node architecture/architecture.test.js
