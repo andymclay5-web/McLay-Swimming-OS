@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const src=fs.readFileSync('engines/meet-sunday-simple.js','utf8');
+for(const token of ['parseUnified','full?.cumulative_seconds','data-msos-race-text','data-msos-race-voice','data-msos-race-video','data-msos-race-mic'])assert(src.includes(token),`missing ${token}`);
+const seconds=v=>{const s=String(v??'').trim();let m=s.match(/^(\d+):(\d{1,2})(?:\.(\d+))?$/);if(m)return Number(m[1])*60+Number(m[2])+Number(`0.${m[3]||0}`);const n=Number(s);return Number.isFinite(n)?n:null};
+const sandbox={globalThis:{MSOS4:{ui:{},util:{text:v=>String(v??'').replace(/\s+/g,' ').trim(),seconds,clock:s=>String(s),escape:s=>String(s)},state:{settings:{}},meetOpsEngine:{},store:{}}},document:{readyState:'loading',addEventListener(){},querySelector(){return null},querySelectorAll(){return[]},getElementById(){return null}},navigator:{},CSS:{escape:s=>s},requestAnimationFrame(){},setTimeout,clearTimeout,console};
+Object.assign(sandbox.globalThis,{document:sandbox.document,navigator:sandbox.navigator,CSS:sandbox.CSS,requestAnimationFrame:sandbox.requestAnimationFrame,setTimeout,clearTimeout});
+vm.runInNewContext(src,sandbox);
+const parse=sandbox.globalThis.MSOS4.meetSundaySimple.parseUnified;
+let p=parse('25 14.50 SR 60\n50 31.30 SR 58.8\nStrong breakout',{distance:50});
+assert.equal(p.time,31.30);assert.equal(p.derivedTime,true);assert.equal(p.splits.length,2);assert(p.notes.includes('25m SR 60'));assert(p.notes.includes('50m SR 58.8'));assert(p.notes.includes('Strong breakout'));
+p=parse('Time 30.90\n25 14.40\n50 31.20',{distance:50});assert.equal(p.time,30.90);assert.equal(p.derivedTime,false);
+p=parse('50 31.20\n100 1:07.60\n150 1:44.44\n200 2:21.97',{distance:200});assert.equal(p.time,141.97);assert.equal(p.derivedTime,true);assert.equal(p.splits.length,4);
+console.log('meet Sunday simple overlay PASS');
