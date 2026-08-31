@@ -22,7 +22,7 @@ global.MSOS4={
 };
 require(path.resolve(__dirname,'../engines/live-training-authority.js'));
 const M=global.MSOS4,L=M.live;
-assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260901a');
+assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260901b');
 const payload=L.payload(M.state);assert.equal(payload.authority,'coach-operational');assert.equal(payload.sourceView,'board');
 const stale={kind:'v4-live-state',build:'test-build',from:'stale-tab',authority:'coach-operational',sourceView:'roll',sourceRole:'owner',surfaceMode:'training',sessionId:'s',session:{id:'s',blocks:[{id:'main',items:[{id:'ol'}]}]},attendance:[],adaptationOverrides:[],trainingTestResults:[],revision:99};
 assert.equal(L.apply(stale),false,'operational Board must ignore another tab/window broadcast');
