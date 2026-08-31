@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.TrainingPolicy=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.1-20260831';
+  const VERSION='1.1.2-20260831';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const ceil5=n=>Math.ceil(Number(n||0)/5)*5;
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -42,7 +42,7 @@
     const target=Number(targetSeconds)||0;
     if(isKick(item)){const cycle=kickCycleSeconds(item,athlete,volumeRatio);return cycle?{cycleSeconds:cycle,restSeconds:target>0?Math.max(0,cycle-target):null,owner:'kick',authoredCycleSeconds:authoredCycle(item)}:null;}
     if(isRacePace(item)&&target>0){const requiredRest=racePaceRestSeconds(item,target,referenceWorkSeconds),requiredCycle=ceil5(target+requiredRest),cycle=preserveLongerAuthoredCycle(item,requiredCycle);return{cycleSeconds:cycle,restSeconds:Math.max(requiredRest,cycle-target),owner:'race-pace',raceDistance:raceDistance(item),authoredCycleSeconds:authoredCycle(item),requiredCycleSeconds:requiredCycle};}
-    if(isAerobic(item)&&target>0){const requiredRest=aerobicRestSeconds(item),requiredCycle=ceil5(target+requiredRest),cycle=preserveLongerAuthoredCycle(item,requiredCycle);return{cycleSeconds:cycle,restSeconds:Math.max(requiredRest,cycle-target),owner:'aerobic',authoredCycleSeconds:authoredCycle(item),requiredCycleSeconds:requiredCycle};}
+    if(isAerobic(item)&&target>0){const requiredRest=aerobicRestSeconds(item),requiredCycle=ceil5(target+requiredRest),cycle=preserveLongerAuthoredCycle(item,requiredCycle);return{cycleSeconds:cycle,restSeconds:requiredRest,owner:'aerobic',authoredCycleSeconds:authoredCycle(item),requiredCycleSeconds:requiredCycle};}
     return null;
   }
   return{VERSION,isKick,isRacePace,isAerobic,raceDistance,groupWorkRest,aerobicRestSeconds,racePaceRestSeconds,kickCycleSeconds,safeCycle,preserveLongerAuthoredCycle};
