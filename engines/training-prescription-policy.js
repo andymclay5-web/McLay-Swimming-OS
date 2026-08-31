@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.TrainingPolicy=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.0-20260831';
+  const VERSION='1.1.1-20260831';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const ceil5=n=>Math.ceil(Number(n||0)/5)*5;
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -19,17 +19,15 @@
   function aerobicRestSeconds(item){const authored=authoredRest(item);if(authored!=null)return clamp(authored,5,60);const c=Number(item?.cycleSeconds),t=Number(item?.targetSeconds);if(c>0&&t>0&&c>t)return clamp(c-t,10,30);return 20;}
   function raceDistance(item){const direct=Number(item?.raceIntent?.distance);if(direct)return direct;for(const x of item?.repInstructions||[]){const d=Number(x?.raceIntent?.distance);if(d)return d;}const m=rawOf(item).match(/\b(50|100|200|400)\s*(?:m\s*)?(?:race\s*)?pace\b/i);return m?Number(m[1]):null;}
   function groupWorkRest(item,referenceWorkSeconds){const cycle=Number(item?.cycleSeconds)||0,work=Number(referenceWorkSeconds)||0;if(!(cycle>0&&work>0&&cycle>work))return null;const rest=cycle-work;return{work,rest,ratio:rest/work,cycle};}
+  function racePaceBase(item,targetSeconds){const target=Number(targetSeconds)||0,race=raceDistance(item);let minRest=20,minRatio=.5,maxRest=150;if(race===100){minRest=60;minRatio=1;maxRest=150;}else if(race===200){minRest=30;minRatio=.45;maxRest=90;}else if(race===50){minRest=90;minRatio=1.5;maxRest=180;}let rest=Math.max(minRest,target*minRatio);if(race===100&&target>=50)rest=Math.max(rest,60);if(race===200&&target>=55)rest=Math.max(rest,30);return{race,minRest,minRatio,maxRest,rest};}
   function racePaceRestSeconds(item,targetSeconds,referenceWorkSeconds){
-    const target=Number(targetSeconds)||0;if(!target)return null;const race=raceDistance(item),group=groupWorkRest(item,referenceWorkSeconds);
-    let minRest=20,minRatio=.5,maxRest=150;
-    if(race===100){minRest=60;minRatio=1.0;maxRest=150;}
-    else if(race===200){minRest=30;minRatio=.45;maxRest=90;}
-    else if(race===50){minRest=90;minRatio=1.5;maxRest=180;}
-    if(group){const comparable=group.ratio;minRatio=Math.max(minRatio,comparable*.75);}
-    let rest=Math.max(minRest,target*minRatio);
-    if(race===100&&target>=50)rest=Math.max(rest,60);
-    if(race===200&&target>=55)rest=Math.max(rest,30);
-    return ceil5(Math.min(maxRest,rest));
+    const target=Number(targetSeconds)||0;if(!target)return null;const base=racePaceBase(item,target),authored=authoredCycle(item);
+    // A coach-authored cycle that already clears the race-pace floor is authoritative.
+    // Comparable group-ratio logic is only used when that authored cycle is too short.
+    if(authored!=null&&authored>=ceil5(target+base.rest))return Math.max(base.rest,authored-target);
+    let minRatio=base.minRatio;const group=groupWorkRest(item,referenceWorkSeconds);if(group)minRatio=Math.max(minRatio,group.ratio*.75);
+    const rest=Math.max(base.minRest,target*minRatio);
+    return ceil5(Math.min(base.maxRest,rest));
   }
   function kickCycleSeconds(item,ath,volumeRatio=1){
     if(!isKick(item)||Number(item?.distance)!==50)return null;
