@@ -15,14 +15,16 @@ jobs:
       - name: Syntax
         run: |
           node --check engines/live-training-authority.js
-          node --check engines/training-prescription-policy.js
+          node --check engines/storage.js
+          node --check engines/session-repair.js
+          node --check engines/navigation.js
           node --check tests/live-training-state-authority-20260901.cjs
-          node --check tests/sep1-live-board-final-recovery-20260901.cjs
+          node --check tests/operational-authority-root-20260901.cjs
           node --check tests/sep1-mckenzie-preset-cycle-20260901.cjs
       - name: Operational state cannot be overwritten by display broadcasts
         run: node tests/live-training-state-authority-20260901.cjs
-      - name: Exact Sep 1 persisted Board recovery
-        run: node tests/sep1-live-board-final-recovery-20260901.cjs
+      - name: Root operational authority survives hydration and surface changes
+        run: node tests/operational-authority-root-20260901.cjs
       - name: McKenzie Sep 1 modified send-off
         run: node tests/sep1-mckenzie-preset-cycle-20260901.cjs
       - name: Sep 1 canonical parser remains intact
