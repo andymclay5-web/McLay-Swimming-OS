@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs');
-const app=fs.readFileSync('app.js','utf8'),sw=fs.readFileSync('sw.js','utf8'),index=fs.readFileSync('index.html','utf8');
+const app=fs.readFileSync('app.js','utf8'),sw=fs.readFileSync('sw.js','utf8'),index=fs.readFileSync('index.html','utf8'),version=fs.readFileSync('VERSION.txt','utf8').trim();
 assert.doesNotMatch(app,/function renderAdapt\(/,'legacy initials-card Board renderer still exists in app.js');
 assert.doesNotMatch(app,/UI\.renderBoard\s*=\s*\(\)\s*=>/,'app.js still owns Board rendering');
 assert.match(index,/app\.js\?v=20260825-board-authority-e/,'repaired app.js does not have a unique asset identity');
@@ -8,10 +8,11 @@ assert.match(index,/parser-semantics\.js\?v=20260825-round-scope-e/,'repaired pa
 assert.doesNotMatch(index,/app\.js\?v=20260821ak-cache/,'retired app.js asset identity is still active');
 assert.match(sw,/app\.js\?v=20260825-board-authority-e/,'offline package does not pin repaired app.js identity');
 assert.match(sw,/parser-semantics\.js\?v=20260825-round-scope-e/,'offline package does not pin repaired parser identity');
-assert.match(sw,/v4-coherent-runtime-20260826a/,'new coherent cache identity missing');
+const vm=version.match(/McLay Swimming OS Version 4 · (\S+)/),bm=sw.match(/const BUILD='([^']+)'/),cm=sw.match(/const CACHE='([^']+)'/);assert.ok(vm&&bm&&cm,'release identity declarations missing');assert.equal(bm[1],vm[1],'service worker build must match VERSION.txt');assert.match(cm[1],/^mclay-swimming-os-v4-/,'service worker cache identity must be versioned');
 assert.match(sw,/async function networkFirst/,'network-first runtime strategy missing');
 assert.doesNotMatch(sw,/immediateCached/,'stale-while-revalidate runtime strategy still present');
 assert.match(sw,/if\(e\.request\.mode==='navigate'\)[\s\S]*networkFirst/,'navigations are not network-first');
 assert.match(sw,/\.\(\?:js\|css\)\$[\s\S]*networkFirst/,'runtime JS/CSS are not network-first');
 assert.ok(index.indexOf('app.js')<index.indexOf('engines/board.js'),'dedicated Board engine must load after base app');
+assert.ok(index.indexOf('engines/training-prescription-policy.js')<index.indexOf('engines/modification.js'),'training policy must load before modification/coordinator composition');
 console.log('COHERENT_RUNTIME_RELEASE_PASS');
