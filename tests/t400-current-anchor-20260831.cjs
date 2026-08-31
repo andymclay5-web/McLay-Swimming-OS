@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const E=require('../engines/evidence.js');
+global.MSOSEngines={Evidence:E};
 const A=require('../engines/aerobic.js');
 
 const ath={id:'mck',full_name:'McKenzie Drage'};
