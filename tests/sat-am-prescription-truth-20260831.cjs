@@ -7,6 +7,7 @@ const Aerobic=require('../engines/aerobic.js');global.MSOSEngines.Aerobic=Aerobi
 const RacePace=require('../engines/race-pace.js');global.MSOSEngines.RacePace=RacePace;
 const Modification=require('../engines/modification.js');global.MSOSEngines.Modification=Modification;
 const TrainingPolicy=require('../engines/training-prescription-policy.js');global.MSOSEngines.TrainingPolicy=TrainingPolicy;
+const RaceTargetIntent=require('../engines/race-target-intent.js');global.MSOSEngines.RaceTargetIntent=RaceTargetIntent;
 const Coordinator=require('../engines/coordinator.js');
 
 const session={id:'sat-am',identity:{course:'SCM',squads:['National']}};
@@ -21,11 +22,12 @@ const state={
     {id:'md-current',athlete_id:'md',test_type_id:'tf',result_seconds:480,result_date:'2026-08-20',stroke:'Freestyle',distance:400,valid_for_anchor:true,source_type:'training_test'}
   ],resultsPbBoard:[
     {athlete_id:'cm',distance:100,stroke:'Backstroke',course:'SCM',result_seconds:120},
+    {athlete_id:'cm',distance:200,stroke:'Backstroke',course:'SCM',result_seconds:260},
     {athlete_id:'md',distance:100,stroke:'Freestyle',course:'SCM',result_seconds:100}
   ],resultsEventHistory:[],coachResults:[]
 };
 
-function set(id,reps,distance,extra={}){return{id,kind:'set',reps,distance,stroke:extra.stroke||'Freestyle',raw:extra.raw||`${reps} x ${distance}`,text:extra.text||extra.raw||`${reps} x ${distance}`,cues:extra.cues||[],repPattern:extra.repPattern||[],repInstructions:extra.repInstructions||[],raceIntent:extra.raceIntent||null,zone:extra.zone||'',restSeconds:extra.restSeconds??null,cycleSeconds:extra.cycleSeconds??null,equipment:[]};}
+function set(id,reps,distance,extra={}){return{id,kind:'set',reps,distance,stroke:extra.stroke||'Freestyle',raw:extra.raw||`${reps} x ${distance}`,text:extra.text||extra.raw||`${reps} x ${distance}`,instruction:extra.instruction||'',cues:extra.cues||[],repPattern:extra.repPattern||[],repInstructions:extra.repInstructions||[],raceIntent:extra.raceIntent||null,zone:extra.zone||'',restSeconds:extra.restSeconds??null,cycleSeconds:extra.cycleSeconds??null,equipment:[]};}
 
 // Exact Saturday aerobic shape: delivered distance owns the target, not the parent 400.
 const aerobic=set('aero',2,400,{raw:'2 x 400 Freestyle',cues:['#1 Regeneration','#2 Development','10 seconds rest'],repPattern:[{rep:1,zone:'Regeneration'},{rep:2,zone:'Development'}],restSeconds:10});
@@ -44,15 +46,23 @@ const kick=set('kick',5,50,{stroke:'Freestyle',raw:'5 x 50 Kick Build @ 1:00',cu
 p=Coordinator.prescription(session,kick,mckenzie,state);
 assert.equal(p.item.cycleSeconds,90);assert.match(p.item.raw,/@ 1:30/);assert.match(p.item.cues.join(' '),/@ 1:30/);assert.doesNotMatch(p.item.cues.join(' '),/@ 1:00/);
 
-// Longer coach-authored race-pace recovery is a floor authority, never shortened.
+// Longer coach-authored race-pace recovery is authoritative once it already clears the floor.
 const rpLong=set('rp-long',4,50,{stroke:'#1 Stroke',raw:'4 x 50 #1 Stroke @ 2:30',cues:['#1 Build','#2-4 @ 100m Race Pace'],cycleSeconds:150,repInstructions:[{rep:1,label:'Build',raceIntent:null},{rep:2,label:'100m Race Pace',raceIntent:{distance:100}},{rep:3,label:'100m Race Pace',raceIntent:{distance:100}},{rep:4,label:'100m Race Pace',raceIntent:{distance:100}}]});
 p=Coordinator.prescription(session,rpLong,charlotte,state);
 assert.equal(p.item.stroke,'Backstroke','#1 stroke must remain Charlotte Backstroke through the modified prescription');
 assert.equal(p.item.cycleSeconds,150,'authored 2:30 must not be shortened');
 
-// Unsafe short 100-pace cycle lengthens to protect race-pace work:rest.
+// Unsafe short 100-pace cycle lengthens to protect comparable work:rest.
 const rpShort=set('rp-short',6,25,{stroke:'#1 Stroke',raw:'6 x 25 #1 Stroke @ 1:00',cues:['#1 Build','#2-6 @ 100m Race Pace'],cycleSeconds:60,repInstructions:[{rep:1,label:'Build',raceIntent:null},...Array.from({length:5},(_,i)=>({rep:i+2,label:'100m Race Pace',raceIntent:{distance:100}}))]});
 p=Coordinator.prescription(session,rpShort,charlotte,state);
 assert.equal(p.item.stroke,'Backstroke');assert.ok(p.item.cycleSeconds>=90);assert.match(p.item.raw,/@ 1:30|@ 1:35|@ 1:40|@ 1:45|@ 1:50|@ 1:55|@ 2:00/);
 
-console.log('SAT_AM_PRESCRIPTION_TRUTH_PASS modified-distance-aerobic current-T400 kick-display authored-cycle #1-stroke race-pace-floor');
+// Explicit coach language "Second 100 of 200 Race" must target that segment, not the whole 200 PB.
+const second100=set('second-100',1,100,{stroke:'#1 Stroke',raw:'1 x 100 #1 Stroke MAX',instruction:'Target: Second 100 of 200 Race. Finish strong under pressure.',cues:['Target: Second 100 of 200 Race','Finish strong under pressure']});
+p=Coordinator.prescription(session,second100,charlotte,state);
+assert.equal(p.item.stroke,'Backstroke');assert.equal(p.item.raceIntent?.distance,200);assert.equal(p.target.status,'ok');
+assert.ok(p.target.seconds>125&&p.target.seconds<140,`second 100 of a 4:20 200 Back should be a second-100 segment, got ${p.target.seconds}`);
+assert.ok(p.target.seconds<200,'second-100 target must not expose the whole 200 event time');
+assert.match(p.target.source||'',/race pace model/i);
+
+console.log('SAT_AM_PRESCRIPTION_TRUTH_PASS modified-distance-aerobic current-T400 kick-display authored-cycle #1-stroke race-pace-floor second-100-segment');
