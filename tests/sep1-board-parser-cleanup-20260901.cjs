@@ -40,6 +40,7 @@ Descend 1-4
 WARM DOWN
 200 Easy`;
 const s=global.MSOS4.parser.parse(source,{id:'sep1-am',course:'SCM',squads:['National']});
+const distances=s.blocks.map(b=>[b.type,S.blockDistance(b)]);console.log('SEP1_BLOCK_DISTANCES',JSON.stringify(distances));
 assert.equal(S.total(s),4300,'Sep 1 session distance must remain 4,300m');
 assert.deepEqual(s.blocks.map(S.blockDistance),[1200,600,1500,800,200]);
 const pre=s.blocks.find(b=>b.type==='pre_set');assert.ok(pre);assert.equal(pre.items.filter(x=>x.kind==='group').length,0,'cue-only 3 Rounds must fold into 12x50, not remain a 0m group');
