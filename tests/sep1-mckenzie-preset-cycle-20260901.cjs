@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict');
+const P=require('../engines/training-prescription-policy.js');
+const item={distance:50,reps:8,cycleSeconds:75,raw:'8 x 50 @ 1:15',repeatBreakdownCue:'2 rounds · Build / Middle 20m MAX / First 15m MAX / Easy',cues:['2 rounds · Build / Middle 20m MAX / First 15m MAX / Easy']};
+const mck={full_name:'McKenzie Drage'};
+const plan=P.safeCycle({item,targetSeconds:0,referenceWorkSeconds:null,athlete:mck,volumeRatio:2/3});
+assert.ok(plan,'McKenzie modified quality pattern needs an athlete-specific send-off');
+assert.equal(plan.cycleSeconds,105,'McKenzie 8x50 quality preset must be @1:45');
+assert.equal(plan.owner,'modified-quality');
+const squad=P.safeCycle({item,targetSeconds:0,referenceWorkSeconds:null,athlete:{full_name:'Squad Swimmer'},volumeRatio:1});
+assert.equal(squad,null,'unmodified squad prescription remains authored @1:15 without a derived override');
+console.log('SEP1_MCKENZIE_PRESET_CYCLE_PASS 8x50@1:45 squad-source-unchanged');

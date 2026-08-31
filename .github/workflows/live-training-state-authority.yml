@@ -1,0 +1,28 @@
+name: Live training state authority
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+jobs:
+  live-training-authority:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check engines/live-training-authority.js
+          node --check engines/training-prescription-policy.js
+          node --check tests/live-training-state-authority-20260901.cjs
+          node --check tests/sep1-mckenzie-preset-cycle-20260901.cjs
+      - name: Operational state cannot be overwritten by display broadcasts
+        run: node tests/live-training-state-authority-20260901.cjs
+      - name: McKenzie Sep 1 modified send-off
+        run: node tests/sep1-mckenzie-preset-cycle-20260901.cjs
+      - name: Sep 1 canonical parser remains intact
+        run: node tests/sep1-board-parser-cleanup-20260901.cjs
+      - name: Training prescription policy regression
+        run: node tests/training-prescription-policy-20260831.cjs
