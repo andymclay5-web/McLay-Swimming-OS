@@ -36,7 +36,9 @@ jobs:
           node --check engines/session-repair.js
           node --check engines/aerobic.js
           node --check engines/race-pace.js
+          node --check engines/training-prescription-policy.js
           node --check engines/modification.js
+          node --check engines/race-target-intent.js
           node --check engines/coordinator.js
           node --check engines/bridge.js
           node --check engines/contract-fixes-al.js
@@ -92,6 +94,8 @@ jobs:
           node tests/modification-consolidation-regression.cjs
           node tests/modification-stimulus-contract.cjs
           node tests/t400-current-anchor-20260831.cjs
+          node tests/training-prescription-policy-20260831.cjs
+          node tests/sat-am-prescription-truth-20260831.cjs
           node tests/swimmer-fast-open-cg.cjs
           node tests/plan-reference-ch.cjs
           node tests/swimmer-display-regression.cjs

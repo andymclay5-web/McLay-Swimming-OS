@@ -15,8 +15,12 @@ jobs:
       - name: Syntax
         run: |
           node --check engines/training-prescription-policy.js
+          node --check engines/race-target-intent.js
           node --check engines/coordinator.js
           node --check engines/board-mod-volume.js
           node --check tests/training-prescription-policy-20260831.cjs
+          node --check tests/sat-am-prescription-truth-20260831.cjs
       - name: Policy regression
-        run: node tests/training-prescription-policy-20260831.cjs
+        run: |
+          node tests/training-prescription-policy-20260831.cjs
+          node tests/sat-am-prescription-truth-20260831.cjs
