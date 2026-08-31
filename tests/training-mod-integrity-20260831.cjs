@@ -10,7 +10,11 @@ globalThis.MSOSEngines={Modification:{
     if(ov?.patch)Object.assign(out,ov.patch);
     return out;
   },
-  profile(ath){return{ratio:/mckenzie|mackenzie/i.test(ath.full_name)?2/3:/charlotte/i.test(ath.full_name)?.5:.75};}
+  profile(ath){
+    if(/mckenzie|mackenzie/i.test(ath.full_name))return{ratio:2/3};
+    if(/charlotte/i.test(ath.full_name))return{ratio:.5};
+    return{ratio:.75};
+  }
 }};
 vm.runInThisContext(fs.readFileSync('engines/training-mod-integrity.js','utf8'),{filename:'engines/training-mod-integrity.js'});
 const adapt=globalThis.MSOSEngines.Modification.adaptItem;
