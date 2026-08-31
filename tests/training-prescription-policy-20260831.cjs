@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict');
+const P=require('../engines/training-prescription-policy.js');
+const rp200={raw:'6 x 25 #1 Stroke @ 1:00 · #2-6 @ 200 Race Pace',distance:25,cycleSeconds:60,raceIntent:{distance:200}};
+let x=P.safeCycle({item:rp200,targetSeconds:63,referenceWorkSeconds:32});
+assert.equal(x.owner,'race-pace');assert.ok(x.cycleSeconds>=95,'63s 200-pace target needs ~30s+ recovery');
+const rp100={raw:'4 x 50 #1 Stroke @ 2:30 · #2-4 @ 100 Race Pace',distance:50,cycleSeconds:150,raceIntent:{distance:100}};
+x=P.safeCycle({item:rp100,targetSeconds:55,referenceWorkSeconds:30});
+assert.equal(x.owner,'race-pace');assert.ok(x.cycleSeconds>=120,'55s 100-pace target should not leave before 2:00');
+const aero={raw:'8 x 100 Freestyle Threshold · 10 seconds rest',distance:100,zone:'Threshold',restSeconds:10};
+x=P.safeCycle({item:aero,targetSeconds:72});assert.equal(x.owner,'aerobic');assert.equal(x.restSeconds,10);assert.equal(x.cycleSeconds,85);
+const md={full_name:'McKenzie Drage'};assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 1:00',distance:50,cycleSeconds:60},md,2/3),90);
+console.log('TRAINING_PRESCRIPTION_POLICY_PASS 200pace>=1:35 100pace>=2:00 aerobic=authored-rest kick=1:30');
