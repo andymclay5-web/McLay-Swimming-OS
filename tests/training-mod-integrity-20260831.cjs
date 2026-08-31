@@ -2,6 +2,15 @@ const fs=require('fs');
 const vm=require('vm');
 const assert=require('assert');
 
+globalThis.document={
+  createElement(){return{dataset:{},style:{},textContent:'',appendChild(){}};},
+  head:{appendChild(){}},
+  addEventListener(){},
+  querySelectorAll(){return[];}
+};
+globalThis.requestAnimationFrame=fn=>fn();
+globalThis.setInterval=()=>0;
+globalThis.clearInterval=()=>{};
 globalThis.MSOS4={state:{adaptationOverrides:[]}};
 globalThis.MSOSEngines={Modification:{
   adaptItem(item,ath,state,session){
