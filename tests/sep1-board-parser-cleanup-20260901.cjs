@@ -8,36 +8,51 @@ const U={text:v=>String(v??'').replace(/\s+/g,' ').trim(),lines:v=>String(v??'')
 const S={};S.empty=(identity={},source='')=>({schema:4,id:identity.id||'s',identity:{...identity},originalPlan:{text:String(source).trim()},currentSource:{text:String(source).trim()},blocks:[],changes:[],finish:null,metadata:{},updatedAt:U.now()});S.itemDistance=item=>!item?0:item.kind==='set'?Math.max(0,Number(item.reps)||1)*Math.max(0,Number(item.distance)||0):item.kind==='group'?Math.max(1,Number(item.rounds)||1)*(item.items||[]).reduce((n,x)=>n+S.itemDistance(x),0):0;S.blockDistance=b=>(b?.items||[]).reduce((n,x)=>n+S.itemDistance(x),0);S.total=s=>(s?.blocks||[]).reduce((n,b)=>n+S.blockDistance(b),0);
 global.MSOS4={util:U,session:S};vm.runInThisContext(app.slice(start,end),{filename:'app-parser-section.js'});require('../engines/parser-semantics.js');
 const source=`WARM UP
+
 400 Choice
+
 8 x 50
 4 Kick
 4 Drill
 10 sec Rest
+
 4 x 100 IM
 Descend 1-4
 10 sec Rest
 
+
 PRE-SET
+
 12 x 50 @ 1:15
+
 3 Rounds:
 1 Build
 1 Middle 20m MAX
 1 First 15m MAX
 1 Easy
 
+
 MAIN SET
+
 5 Rounds:
+
 200 Overload
 10 sec Rest
+
 100 Threshold
 10 sec Rest
 
+
 POST-SET
+
 8 x 75 Pull @ 1:30
 Descend 1-4
+
 8 x 25 Underwater with Fins @ 0:45
 
+
 WARM DOWN
+
 200 Easy`;
 const s=global.MSOS4.parser.parse(source,{id:'sep1-am',course:'SCM',squads:['National']});
 const distances=s.blocks.map(b=>[b.type,S.blockDistance(b)]);console.log('SEP1_BLOCK_DISTANCES',JSON.stringify(distances));
