@@ -1,0 +1,23 @@
+name: Sep 1 Board parser cleanup
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+jobs:
+  sep1-cleanup:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check engines/parser-semantics.js
+          node --check engines/board.js
+          node --check tests/sep1-board-parser-cleanup-20260901.cjs
+      - name: Exact Sep 1 regression
+        run: node tests/sep1-board-parser-cleanup-20260901.cjs
+      - name: Existing parser regression
+        run: node tests/parser-natural-cw.cjs
