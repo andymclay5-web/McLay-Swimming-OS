@@ -15,6 +15,7 @@ jobs:
       - name: Syntax
         run: |
           node --check engines/training-prescription-policy.js
+          node --check engines/race-target-intent.js
           node --check engines/coordinator.js
           node --check engines/board-mod-volume.js
           node --check tests/training-prescription-policy-20260831.cjs
