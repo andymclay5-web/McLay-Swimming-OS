@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),path=require('node:path');
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 let removed=0;
 const meetBtn={remove:()=>removed++},meetNav={remove:()=>removed++};
 global.document={addEventListener:()=>{},getElementById:id=>id==='meetModeBtn'?meetBtn:null,querySelectorAll:q=>q.includes('[data-nav="meet"]')?[meetNav]:[]};
@@ -22,4 +22,9 @@ assert.equal(L.apply(stale),false);assert.equal(M.state.canonicalSessions.s.bloc
 M.state.settings.view='tv';const fresh={...stale,from:'coach-board',session:{id:'s',blocks:[{id:'main',items:[{id:'ol'},{id:'thr'},{id:'extra'}]}]},attendance:[{session_id:'s',athlete_id:'mck',status:'present'},{session_id:'s',athlete_id:'a',status:'present'}],revision:100};
 assert.equal(L.apply(fresh),true);assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,3);assert.equal(M.state.attendance.length,2);assert.equal(M._tv,1);
 M.state.settings.view='swimmer';M.state.settings.activeRole='swimmer';assert.equal(L.apply({...fresh,from:'meet-screen',surfaceMode:'meet'}),false);
-console.log('LIVE_TRAINING_STATE_AUTHORITY_PASS meet-chrome-removed');
+const nav=fs.readFileSync(path.resolve(__dirname,'../engines/navigation.js'),'utf8');
+const applyHistory=nav.match(/N\.applyHistory=state=>\{([\s\S]*?)\};\n\n  let rootBackArmed/)?.[1]||'';
+assert.ok(applyHistory,'navigation history owner must exist');
+assert.doesNotMatch(applyHistory,/selectedSessionId\s*=/,'Android/browser Back must never select a different session');
+assert.match(nav,/v4-navigation-session-selection-authority-20260901/,'session-selection authority build missing');
+console.log('LIVE_TRAINING_STATE_AUTHORITY_PASS meet-chrome-removed history-cannot-switch-session');
