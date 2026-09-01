@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
-  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-surface-authority-20260901'};
+  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-session-selection-authority-20260901'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const active=view=>{if(!views.has(view))view='board';document.querySelectorAll('.view').forEach(x=>{const on=x.id===`${view}View`;x.classList.toggle('active',on);x.hidden=!on;if('inert'in x)x.inert=!on});document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;document.body.dataset.msosSurface=view==='meet'?'meet':'training';};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
@@ -17,7 +17,7 @@
     M.boardStateEngine?.cancelWork?.();rememberScroll();closeTransient();
     M.state.settings=M.state.settings||{};M.state.settings.view=view;M.state.settings.surfaceMode=view==='meet'?'meet':'training';
     paint(view);
-    if(push){try{history.pushState(N.state?.(view)||{msos:true,msosView:view,sessionId:M.state.settings.selectedSessionId||''},'',`#${view}`)}catch{}}
+    if(push){try{history.pushState(N.state?.(view)||{msos:true,msosView:view},'',`#${view}`)}catch{}}
     saveUi();
     const doRestore=restoreOpt===undefined?restore:restoreOpt;if(doRestore)restoreScroll(view);else requestAnimationFrame(()=>window.scrollTo(0,0));
   };
@@ -25,7 +25,8 @@
 
   N.show=V.go;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.activateView=active;
   N.dismissLayer=()=>{const layer=history.state?.layer;if(layer){closeTransient();history.back();return true}closeTransient();M.boardStateEngine?.cancelWork?.();paint(M.state?.settings?.view||'board');saveUi();return false;};
-  N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=views.has(state?.msosView)?state.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;M.state.settings.surfaceMode=view==='meet'?'meet':'training';if(state?.sessionId&&M.state.canonicalSessions?.[state.sessionId])M.state.settings.selectedSessionId=state.sessionId;if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
+  // Browser/Android history owns view/detail only. It must never select a different training session.
+  N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=views.has(state?.msosView)?state.msosView:'board';M.state.settings=M.state.settings||{};M.state.settings.view=view;M.state.settings.surfaceMode=view==='meet'?'meet':'training';if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
 
   let rootBackArmed=false;
   N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=views.has(M.state?.settings?.view)?M.state.settings.view:'board';M.state.settings.surfaceMode=initial==='meet'?'meet':'training';active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(N.state?.(initial)||{msos:true,msosView:initial},'',`#${initial}`)}catch{}
