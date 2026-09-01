@@ -1,5 +1,9 @@
 const assert=require('node:assert/strict');
 const P=require('../engines/training-prescription-policy.js');
+const RT=require('../engines/race-target-intent.js');
+const shorthand=RT.resolve({kind:'set',raw:'50 #1 @100p @ 1:30',text:'50 #1 @100p @ 1:30',distance:50,cycleSeconds:90});
+assert.equal(shorthand.raceIntent.distance,100,'@100p must create a 100 race-pace target intent');
+assert.equal(shorthand.raceTargetIntent.workDistance,50,'shorthand must preserve the delivered 50m work distance');
 const rp200={raw:'6 x 25 #1 Stroke @ 1:00 · #2-6 @ 200 Race Pace',distance:25,cycleSeconds:60,raceIntent:{distance:200}};
 let x=P.safeCycle({item:rp200,targetSeconds:63,referenceWorkSeconds:32});
 assert.equal(x.owner,'race-pace');assert.ok(x.cycleSeconds>=95,'63s 200-pace target needs ~30s+ recovery');
@@ -11,4 +15,4 @@ x=P.safeCycle({item:rp100Unsafe,targetSeconds:29,referenceWorkSeconds:15});asser
 const aero={raw:'8 x 100 Freestyle Threshold · 10 seconds rest',distance:100,zone:'Threshold',restSeconds:10};
 x=P.safeCycle({item:aero,targetSeconds:72});assert.equal(x.owner,'aerobic');assert.equal(x.restSeconds,10);assert.equal(x.cycleSeconds,85);
 const md={full_name:'McKenzie Drage'};assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 1:00',distance:50,cycleSeconds:60},md,2/3),90);assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 2:00',distance:50,cycleSeconds:120},md,2/3),120,'kick floor must not shorten a longer coach-authored cycle');
-console.log('TRAINING_PRESCRIPTION_POLICY_PASS authored-longer-preserved comparable-race-pace aerobic-rest kick-floor');
+console.log('TRAINING_PRESCRIPTION_POLICY_PASS shorthand-100p authored-longer-preserved comparable-race-pace aerobic-rest kick-floor');
