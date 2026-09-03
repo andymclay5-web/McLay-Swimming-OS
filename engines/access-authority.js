@@ -5,10 +5,10 @@
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const placeholderName=name=>M.stabilityIdentityBH?.placeholderName?.(name)??/^swimmer\s+[a-z0-9]+$/i.test(text(name));
   const linkedAthlete=id=>{const a=(M.state.athletes||[]).find(x=>String(x.id)===String(id)&&x.active!==false);return a&&!placeholderName(a.full_name||a.name)?a:null;};
-  function resetOwner(reason='access-invalid-role'){
+  function resetOwner(reason='access-invalid-role',{navigate=false}={}){
     const s=M.state.settings=M.state.settings||{};
     Object.assign(s,{activeRole:'owner',activeUserAthleteId:'',assistantId:'',roleBindingVersion:BINDING,roleBindingKind:'owner',roleBindingAthleteId:'',roleBindingReason:reason});
-    if(['swimmer','athletes'].includes(s.view))s.view='board';
+    if(navigate&&['swimmer','athletes'].includes(s.view))s.view='board';
     return'owner';
   }
   function ensure(){
@@ -42,7 +42,7 @@
       Object.assign(s,{activeRole:'swimmer',activeUserAthleteId:id,assistantId:'',roleBindingVersion:BINDING,roleBindingKind:'swimmer',roleBindingAthleteId:id,roleBindingReason:'explicit-swimmer-link'});
     }else if(next==='assistant'){
       Object.assign(s,{activeRole:'assistant',activeUserAthleteId:'',assistantId:String(assistantId||''),roleBindingVersion:BINDING,roleBindingKind:'assistant',roleBindingAthleteId:'',roleBindingReason:'explicit-assistant'});
-    }else resetOwner('explicit-owner');
+    }else resetOwner('explicit-owner',{navigate:true});
     M.store?.save?.(M.state);return next;
   }
   function athleteAllowed(ath){const r=role();if(r==='owner')return true;if(r==='swimmer')return String(ath?.id||'')===String(M.state.settings.activeUserAthleteId||'');const s=assignedSquads();return !!s.size&&s.has(text(ath?.squad).toLowerCase());}
