@@ -92,7 +92,7 @@ These files still contain useful behaviour or historical debt outside the comple
 
 - `v4-correct.js` — loaded before the engine bridge. Its old adaptation wrapper is superseded at runtime but should eventually be removed from source after its remaining compatibility behaviour is relocated.
 - `engines/rainbow-rules-au.js` — currently not loaded by `index.html`, but still contains parser/RacePace/Modification wrapper code. Its valid rules should be folded into the relevant owners before the file is retired.
-- `engines/presence-persistence-bc.js` — currently wraps `M.store.save` to journal attendance/presence. Move this to a storage hook/event API.
+- `engines/presence-persistence-bc.js` — **not currently shipped** (confirmed absent from `index.html`'s script list, 3 Sept 2026 — this line previously described it as live/wrapping `M.store.save`, which was wrong). Contains a `M.store.save` wrap that would need moving to a storage hook/event API before this file is ever loaded again; no live remediation needed while it stays unshipped.
 - ~~`engines/guardian-runtime.js` — currently wraps `M.store.save` for Guardian startup behaviour. Move this through an explicit storage API.~~ Read in full and corrected: this file wraps `M.guardian.run`, not `M.store.save`, and its only storage interaction is `M.storageEngine.saveGuardianResult(...)` — already the sanctioned `storage.js` API. No remediation needed here.
 - `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without result replacement/filtering.
 
