@@ -41,10 +41,11 @@ assert.equal(p.item.distance,250);assert.equal(p.target.status,'pattern');
 assert.ok(Math.abs(p.target.rows[0].seconds-346.8)<.02,`McKenzie 250 REG should use current 8:00 T400, got ${p.target.rows[0].seconds}`);
 assert.match(p.target.source||'',/8:00|8:00\.0/,'current T400 must be the source');
 
-// McKenzie kick: final cycle and displayed cue must agree.
+// McKenzie kick: modification.js keeps her coach-authored cycle; TrainingPolicy must not
+// invent a ratio-derived floor on top of it, and the displayed cue must still agree with it.
 const kick=set('kick',5,50,{stroke:'Freestyle',raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build @ 1:00'],cycleSeconds:60});
 p=Coordinator.prescription(session,kick,mckenzie,state);
-assert.equal(p.item.cycleSeconds,90);assert.match(p.item.raw,/@ 1:30/);assert.match(p.item.cues.join(' '),/@ 1:30/);assert.doesNotMatch(p.item.cues.join(' '),/@ 1:00/);
+assert.equal(p.item.cycleSeconds,60,'McKenzie 50 kick must keep the coach-authored cycle, not a ratio-derived floor');assert.match(p.item.raw,/@ 1:00/);assert.match(p.item.cues.join(' '),/@ 1:00/);
 
 // Longer coach-authored race-pace recovery is authoritative once it already clears the floor.
 const rpLong=set('rp-long',4,50,{stroke:'#1 Stroke',raw:'4 x 50 #1 Stroke @ 2:30',cues:['#1 Build','#2-4 @ 100m Race Pace'],cycleSeconds:150,repInstructions:[{rep:1,label:'Build',raceIntent:null},{rep:2,label:'100m Race Pace',raceIntent:{distance:100}},{rep:3,label:'100m Race Pace',raceIntent:{distance:100}},{rep:4,label:'100m Race Pace',raceIntent:{distance:100}}]});

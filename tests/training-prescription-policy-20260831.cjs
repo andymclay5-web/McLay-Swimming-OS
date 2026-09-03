@@ -14,5 +14,5 @@ const rp100Unsafe={raw:'6 x 25 #1 Stroke @ 1:00 · #2-6 @ 100 Race Pace',distanc
 x=P.safeCycle({item:rp100Unsafe,targetSeconds:29,referenceWorkSeconds:15});assert.ok(x.cycleSeconds>=90&&x.cycleSeconds<=120,`unsafe 1:00 should lengthen into the comparable 1:30-2:00 range, got ${x.cycleSeconds}`);
 const aero={raw:'8 x 100 Freestyle Threshold · 10 seconds rest',distance:100,zone:'Threshold',restSeconds:10};
 x=P.safeCycle({item:aero,targetSeconds:72});assert.equal(x.owner,'aerobic');assert.equal(x.restSeconds,10);assert.equal(x.cycleSeconds,85);
-const md={full_name:'McKenzie Drage'};assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 1:00',distance:50,cycleSeconds:60},md,2/3),90);assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 2:00',distance:50,cycleSeconds:120},md,2/3),120,'kick floor must not shorten a longer coach-authored cycle');
-console.log('TRAINING_PRESCRIPTION_POLICY_PASS shorthand-100p authored-longer-preserved comparable-race-pace aerobic-rest kick-floor');
+const md={full_name:'McKenzie Drage'};assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 1:00',distance:50,cycleSeconds:60},md,2/3),60,'kick timing must never invent a ratio-derived pace floor; that decision belongs to modification.js');assert.equal(P.kickCycleSeconds({raw:'5 x 50 Kick @ 2:00',distance:50,cycleSeconds:120},md,2/3),120,'kick timing must preserve whatever coach-authored cycle modification.js already decided');
+console.log('TRAINING_PRESCRIPTION_POLICY_PASS shorthand-100p authored-longer-preserved comparable-race-pace aerobic-rest kick-authored-preserved');

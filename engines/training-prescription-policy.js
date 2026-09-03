@@ -29,12 +29,12 @@
   }
   function kickCycleSeconds(item,ath,volumeRatio=1){
     if(!isKick(item)||Number(item?.distance)!==50)return null;
-    const authored=authoredCycle(item)||0,k=key(ath);let floor=0;
-    if(k==='mckenziedrage'||k==='mackenziedrage')floor=90;
-    else if(k==='charlottemurphy')floor=135;
-    else if(authored&&Number(volumeRatio)<.98)floor=ceil5(authored/Math.max(.5,Number(volumeRatio)||1));
-    else floor=authored;
-    return Math.max(authored,floor)||null;
+    // Kick pacing is owned by modification.js (per-athlete rules there: McKenzie keeps the
+    // coach-authored cycle, Charlotte uses a 130-140s base, everyone else preserves authored
+    // timing under the general load fallback). This must never invent a pace from the load
+    // ratio, and must never re-derive a competing floor for a named athlete that could
+    // silently override what modification.js already decided for that same swimmer.
+    return authoredCycle(item);
   }
   function modifiedQualityCycleSeconds(item,ath,volumeRatio=1){
     const authored=authoredCycle(item),k=key(ath),raw=rawOf(item);if(!(authored>0)||Number(volumeRatio)>=.98||Number(item?.distance)!==50)return null;
