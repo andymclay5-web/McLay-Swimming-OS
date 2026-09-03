@@ -125,6 +125,8 @@ Recommend tackling in roughly that order — #1/#2 because they silently destroy
 
 **`AUTHORITY_MAP.md` already names this an open "consolidation target."** Confirmed the underlying mechanism: **six independent, unguarded writers** of `M.BUILD` in load order — `app.js:5` (bootstrap default) → `v4-correct.js:18-19` → `v4-poolside-core.js:6-7` → `engines/bridge.js:8` → `engines/coach-loop-ui.js:6-9` → `engines/release-authority.js:4-5` (final, intended value). None are "set only if unset" — each blindly overwrites. The app is coherent today purely because `release-authority.js` happens to load last (position 79/80). Concrete, confirmed failure mode: the Connection and Guardian screens both read `M.BUILD` directly at render time; a future script reorder, a new script inserted after `release-authority.js`, or a thrown error in any of the middle five writers would silently roll the displayed build string back to an earlier date — looking exactly like an app rollback with no actual rollback having occurred. Several downstream systems trust `M.BUILD`'s coherence for real gating logic (cloud-write cutover, live-sync cross-tab compatibility, service-worker staleness detection, Guardian's own release-attestation check) — all currently self-consistent, but only by accident of ordering.
 
+**Status: closed 3 September 2026** — see the addendum below ("§9 build-identity consolidation") for what was investigated and the actual fix (an enforced, self-maintaining load-order regression test; no writer removed).
+
 ---
 
 ## 10. Purely cosmetic / documentation debt
@@ -200,6 +202,61 @@ touching it. Recorded here so the next pass doesn't repeat the same investigatio
   fallback list used elsewhere) and is real duplicate-table drift risk exactly as §6 says, but is
   not safe to delete outright without also verifying every Guardian self-test that exercises
   `M.adapt.item`. Left as a follow-up rather than acted on in this pass.
+
+## Addendum — §9 build-identity consolidation (closed 3 September 2026)
+
+Andy asked for the build-identity item to be tackled as its own dedicated pass, deliberately
+deferred out of the main landmine-removal pass above. Investigation before any code change:
+
+- **Re-verified the six writers empirically**, not just by re-reading §9's claim. `v4-correct.js`'s
+  writer is not actually a "blind overwrite" like the other five — it reads the prior `M.BUILD`
+  value into `BASE_BUILD` first and validates it against an `EXPECTED_BASE_BUILD` constant as a
+  deliberate base-build lineage check (`C.baseBuild`), which several Guardian self-tests and the
+  T400 sort-order self-test both depend on. This writer was correctly left untouched.
+- **The other four writers' guard clauses were read individually** (`app.js`, `v4-poolside-core.js`,
+  `engines/bridge.js`, `engines/coach-loop-ui.js`) — none depends on another writer's success or
+  reads a prior `M.BUILD` value; each is an independent, unconditional overwrite exactly as §9
+  describes. `engines/release-authority.js`'s own guard is `if(!M)return;` — trivial, and provably
+  independent of every other writer (proved by loading it in Node against a bare
+  `global.MSOS4={}` with no prior state at all: it still produces a fully self-consistent
+  `M.BUILD`/`M.RELEASE_ATTESTATION`/`M.releaseAuthority`).
+- **`<script defer>` tags execute independently of one another** — confirmed this means a thrown
+  error in one of the middle five writers does *not* stop later scripts (including
+  `release-authority.js`) from running. So §9's "thrown error in any of the middle five writers"
+  failure mode is already largely mitigated by ordering alone today; the real, live risk is the
+  other half of §9's sentence — a future script reorder, or a new file inserted after
+  `release-authority.js` that also stamps `.BUILD` — since nothing enforced "release-authority.js
+  loads last" beyond it happening to sit at script position 79 of 80.
+- **Checked whether the various `engines/release-guardian-*.js` and `v4-thursday-*.js` files that
+  also write `M.RELEASE_ATTESTATION`** (surfaced by a repo-wide grep) are shipped: none are —
+  confirmed via `grep -o` against every `<script src>` in `index.html`, and separately confirmed
+  that `tests/release-package.test.js` already asserts several of them (`release-guardian-bg.js`,
+  `release-guardian-bj.js`, `release-guardian-bl.js`, `privacy-hardening-bk.js`) are *not* loaded.
+  `engines/release-guardian-bl.js` does still have its own dedicated isolation test
+  (`tests/guardian-current-runtime-bl.cjs`) exercising it directly — left alone, out of scope, not
+  touched.
+- **Decided against removing any of the five overwrite-writers.** Given the actual risk is ordering
+  rather than a mid-chain exception, and this session's own repeated experience that "looks like a
+  landmine" writers often turn out to have real, tested dependents, removing writers whose full
+  blast radius wasn't characterised was judged higher-risk than the problem being solved.
+- **Fix actually made: `tests/build-identity-final-writer-order-20260903.cjs`**, a new,
+  dependency-free Node regression test. It (a) parses `index.html`'s real script order and
+  dynamically discovers every shipped file that assigns `.BUILD` (no hardcoded writer list, so a
+  future writer is picked up automatically), and asserts `engines/release-authority.js` is the
+  last one — proven to actually catch a reorder via a negative-control run (script tags swapped in
+  memory, confirmed the assertion fails with the actual offending file named); and (b) proves
+  `release-authority.js`'s write has no dependency on any prior writer's state. `AUTHORITY_MAP.md`'s
+  "consolidation target" row and note were updated to record this as closed. Full local suite
+  (58 Node-executable test files, Playwright/browser-server acceptance tests excluded — see below)
+  green before and after.
+- **Note on the Playwright/browser acceptance suite** (`tests/final-product-acceptance-20260825.cjs`,
+  `tests/all-inclusive-product-acceptance-20260825.cjs`, `tests/v4-browser-predeploy.test.js`, and
+  others requiring a live server + Chromium): these already hardcode stale expected `BUILD` strings
+  (e.g. `'v4-final-acceptance-20260825a'`, `'v4-poolside-core-20260819f-targettruth'`) that predate
+  `engines/release-authority.js`'s current `'v4-race-pace-shorthand-targets-20260901a'`, and
+  `CLAUDE.md`'s own handover notes record Final Product Acceptance already blocked on an unrelated
+  SISC persistence failure. This drift pre-dates this pass, is unrelated to build-identity
+  consolidation, and was not touched — flagged here rather than silently left unmentioned.
 
 ## Recommended order of work
 

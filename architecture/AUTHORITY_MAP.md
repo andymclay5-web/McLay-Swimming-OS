@@ -33,7 +33,7 @@ A later-loaded file is not allowed to become the new policy merely because it ex
 | Meet truth | Meet domain modules | project programme/race evidence | mutate training-session truth |
 | TV / swimmer / coach Board | projection surfaces | group/hide/reformat prescriptions | calculate a competing prescription |
 | Guardian / release policy | CI tests + immutable product contracts | report failures | filter out a failing foundation assertion and manufacture a pass |
-| Build identity | **consolidation target: one build manifest** | display the manifest | independently invent a build ID |
+| Build identity | `engines/release-authority.js` (last shipped `.BUILD` writer, load-order now enforced — see note below) | display the manifest | independently invent a build ID |
 | Squad stimulus/readiness | **consolidation target: new squad-stimulus owner** | compare athlete to squad reference | use whoever happens to attend today as the only reference |
 
 Note: `v4-poolside-core.js` wraps the parser and delegates persistence back to `app.js`'s
@@ -41,6 +41,24 @@ Note: `v4-poolside-core.js` wraps the parser and delegates persistence back to `
 `architecture/athlete-session-core.js` (Athlete/session boundaries, above) contains no writes of
 its own; the real boundary-write implementation is `engines/athlete-session-bd.js`, which goes
 through `Store.putSession` like any other adapter.
+
+Note on build identity (closed 3 September 2026, see WRITER_MAP_FINDINGS.md §9 addendum): six
+shipped files each assign `.BUILD` on their own top-level load (`app.js`, `v4-correct.js`,
+`v4-poolside-core.js`, `engines/bridge.js`, `engines/coach-loop-ui.js`,
+`engines/release-authority.js`). This was not converted into a single owner that the other five
+delegate to — `v4-correct.js`'s writer legitimately reads the prior `M.BUILD` value first as a
+base-build lineage check and must keep doing so, and the other four were left alone rather than
+risk removing writers whose blast radius wasn't fully characterised. What was actually unsafe was
+that "release-authority.js writes last" was pure load-order accident (script position 79 of 80),
+not an enforced contract — a reorder or a new file inserted after it would have silently rolled
+the attested build back with nothing to catch it. `tests/build-identity-final-writer-order-20260903.cjs`
+now makes that ordering an explicit, self-maintaining regression test (it discovers `.BUILD`
+writers from the shipped file list dynamically, so a future writer is picked up automatically) and
+proves `engines/release-authority.js`'s own write has no dependency on any earlier writer
+succeeding, so it is safe by construction as long as it stays last. Note also that `<script defer>`
+tags execute independently of one another — a thrown error in one of the middle five writers does
+not stop later scripts from running, which is why the practical risk here was always the ordering,
+not a mid-chain exception.
 
 ## Modification consolidation status
 
