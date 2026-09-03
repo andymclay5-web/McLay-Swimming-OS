@@ -12,7 +12,9 @@ This document lists every finding, ordered by the handover document's own priori
 
 ## Priority summary — the 5 findings that are live, confirmed, and affect real coaching/data outcomes today
 
-These are not architecture debt; they are bugs currently shipping to real users:
+**All 6 items below (including the Meet-nav one) are now CLOSED** — fixed same-day, 3 September 2026, commits `e35cd9f`/`4f50250`/`a265aa8`/`a07b904`/`54b585a`/`a31b9d6` ("writer-map fix #1" through "#6"). See the "Addendum — post-fix status verification" near the end of this document for what was independently re-verified against current code, and for the true current state of every other finding in §1-§10 below (most of whose prose was never edited back to match after these fixes landed, so read the addendum as authoritative over the section text where the two disagree).
+
+These were not architecture debt; they were bugs shipping to real users, now fixed:
 
 1. **`v4-poolside-core.js:159-233,408`** — on every app boot, a hardcoded-constant matcher silently rewrites and re-persists (and cloud-stages) any canonical session matching exact date/squad/total/block-signature values from one specific historical bug (2026-08-15 National AM). Same anti-pattern was already found, fixed, and reverted once before for a different date (git history: `0bb4498`, `d8ef29f`) — this one survived.
 2. **`v4-poolside-core.js:361`** (`repairSelected`, runs on every load) — if the parser's repair pass finds a stored session's distance doesn't match its written total, this silently **wipes all attendance rows already taken for that session** and swaps in a different session id as canonical. Real Roll-data-loss risk, no user prompt.
@@ -258,15 +260,98 @@ deferred out of the main landmine-removal pass above. Investigation before any c
   SISC persistence failure. This drift pre-dates this pass, is unrelated to build-identity
   consolidation, and was not touched — flagged here rather than silently left unmentioned.
 
+## Addendum — post-fix status verification (3 September 2026, later same day)
+
+Fixes #1-#6 above, plus a separate "writer-map fix 7" landmine-removal pass (commit `e66b3df`,
+addendum above), plus "writer-map fix 8" (build identity, §9's addendum), all landed the same day
+as this audit — but the section prose in §1-§10 above was never edited back to match, so it still
+reads as if those items were open. This addendum is the correction, based on an independent
+re-verification of every named finding against current code (not just trusting commit messages).
+Read this as authoritative over the section text above wherever the two disagree.
+
+**Fixed, confirmed in current code (no longer open):**
+- Priority #1-#5 and the Meet-nav item (#6) — all confirmed fixed, matching their commit messages.
+- §4: `stability-identity-bh.js`'s `resetOwner`/`normalize` background-navigate pattern — fixed
+  (`navigate` now defaults `false`; only the deliberate startup path opts in).
+- §4/§5: `guardian-device-state-bj.js`'s dead placeholder-purge duplicate — removed entirely;
+  `stability-identity-bh.js`'s `purgePlaceholders` is now the sole implementation.
+- §5: `app.js`'s dead duplicate `UI.renderRoll` and `v4-correct.js`'s `enforceRoster()` wrap of it —
+  both removed.
+- §7: SCM/LCM T400 course pooling — fixed end-to-end (`evidence.js` → `evidence-index.js` →
+  `aerobic.js` → `bridge.js`), with a passing regression test
+  (`tests/t400-course-isolation-20260903.cjs`). `v4-correct.js`'s dormant "fastest wins" T400
+  selector and its stale self-test are also fixed (sort + test both now correct).
+- §9: build identity — closed, per that section's own addendum.
+- §10: the `sw.js`/`index.html` version mismatch, and the `AUTHORITY_MAP.md` ownership-doc
+  corrections for session identity, `athlete-session-core.js`, and `guardian-runtime.js` — all
+  fixed/corrected.
+
+**Re-characterized, not bugs (originally flagged, now confirmed deliberate and safe):**
+- `engines/session-repair.js`, `engines/bridge.js`'s `deepHydrate`, and (a distinct part of)
+  `stability-identity-bh.js`'s role wrapper — all confirmed deliberately-kept, tested, and not
+  auto-wired into any live path. Not landmines; leave as-is.
+- `app.js:329`'s ratio table — **not dead** (confirmed it's the real fallback `v4-correct.js`'s
+  `baseAdaptItem` calls into). The "safe to delete" note in §10 above is itself wrong and should be
+  read as retracted; it's a live third ratio-table copy, see below.
+
+**Still genuinely open — real, unchanged since the original audit:**
+- §1: `engines/attendance-roster.js:25-28` `addSquad` still writes the session directly
+  (illegal writer, bypasses the session-edit surface) — untouched by any fix.
+- §1/§4: `engines/live-training-authority.js`'s `L.apply` still applies an incoming live-sync
+  session with no timestamp/revision check *before* writing (only bumps a counter after).
+- §3/§8: `engines/meet-ops-av.js`'s `backup`/`restoreBackup` — still a second, parallel
+  localStorage-only persistence channel outside `storage.js` (low risk: fill-empty-only restore).
+- §2/§4: `app.js`'s dead original `N.applyHistory` (~line 855) and the dead original live-sync
+  `L.apply` (~line 737) — both still present verbatim, superseded only by load order, still one
+  reorder away from resurfacing.
+- §4: `engines/storage.js`'s `hydrate()` is still a fire-and-forget IndexedDB round-trip, not
+  awaited by boot (mitigated by `startup-gate.js` blocking first paint, not eliminated).
+- §4 (new, surfaced by this verification pass, not in the original audit): `stability-identity-bh.js`'s
+  `A.role()` runtime check still calls `resetOwner()` with its *default* `navigate=true` — a
+  residual background-force-navigate surface distinct from the now-fixed `resetOwner`/`normalize`
+  pattern in the same file. Not yet confirmed reachable in a real background render; worth a
+  dedicated follow-up before calling it either live or safe.
+- §6: `v4-correct.js`'s inert-but-present `M.adapt.item` wrapper (307-331) and unguarded
+  `M.adapt.profile=` table (248-271) — both still present, still shadowed by `bridge.js`'s later,
+  final assignment, neither removed.
+- §6: three separate ratio tables now confirmed to exist in source (`v4-correct.js`, `app.js:329`
+  — confirmed live, not dead — and `modification.js`) — real drift risk, unchanged.
+- §6: the four independent `adaptationOverrides` writers (`app.js:834`,
+  `engines/modification-edit.js:19`, `engines/board.js:49`, `engines/board-state.js:81`) — still
+  four, inconsistent field coverage unchanged.
+- §6: `board.js`/`board-state.js` both still bind `data-msos-stroke` independently. One correction
+  to the original claim: `board-state.js`'s handler is capture-phase with
+  `stopImmediatePropagation()`, so it deterministically wins over `board.js`'s bubble-phase
+  handler — this is not actually a "whichever attaches last wins" race as originally described,
+  but it's still two independently-coded implementations of the same write.
+- §10: the live-sync echo re-save in `v4-correct.js` (~1472-1481) — still present, still
+  triggers an avoidable re-broadcast after applying a remote message.
+- `AUTHORITY_MAP.md`'s "Squad stimulus/readiness" row — still an explicit open consolidation
+  target, no owner built.
+- `AUTHORITY_MAP.md`'s "Transitional wrappers still to retire" list — `v4-correct.js`,
+  `engines/rainbow-rules-au.js` (unloaded), `engines/release-guardian-*.js` (unloaded) all still
+  genuinely un-retired. `engines/presence-persistence-bc.js`'s own list entry was additionally
+  found to be a stale doc bug in its own right (described as currently live/wrapping
+  `M.store.save`; it isn't loaded by `index.html` at all) — corrected in that file today.
+
 ## Recommended order of work
 
 Per `AUTHORITY_MAP.md`'s own change-gate ("every consolidation PR should reduce or hold the wrapper count, never increase it") and its stated repair philosophy (establish full picture, identify intended ownership, then repair one owner at a time):
 
-1. Remove `v4-poolside-core.js`'s hardcoded-constant session rewrite (§1, priority #1) — this is actively mutating specific real historical data on every boot with no user consent.
-2. Review and likely remove/guard `repairSelected`'s attendance-wipe-on-mismatch behavior (§1/§5, priority #2) — real data-loss risk.
-3. Fix `access-authority.js`'s `ensure()`/`resetOwner()` to not force-navigate away from the current view on background/non-click renders (§4, priority #3).
-4. Fix `evidence-index.js`'s T400 sort back to newest-valid (§7, priority #4) — this is corrupting every T400-based target in the app.
-5. Remove or fix `training-prescription-policy.js`'s `kickCycleSeconds` ratio-derived pace floor (§6, priority #5).
-6. Fix the Meet-nav-button resurfacing for Assistant/Swimmer roles (§8, priority #6) — small, contained fix.
-7. Then work down through the dormant-but-live landmines (§1 session-repair.js, §6 v4-correct.js's inert wrapper, §7 v4-correct.js's inert T400 selector, §3 bridge.js's deepHydrate) — none are firing today, but each is one load-order change away from becoming live, and removing them (per the change-gate's "reduce wrapper count") closes that risk permanently rather than leaving it to luck.
-8. Build-identity consolidation (§9) and the documentation corrections (§10) can follow once the live bugs are closed.
+1. ~~Remove `v4-poolside-core.js`'s hardcoded-constant session rewrite~~ — **done, writer-map fix #1**.
+2. ~~Review and likely remove/guard `repairSelected`'s attendance-wipe-on-mismatch behavior~~ — **done, writer-map fix #2**.
+3. ~~Fix `access-authority.js`'s `ensure()`/`resetOwner()` force-navigate on background renders~~ — **done, writer-map fix #3**.
+4. ~~Fix `evidence-index.js`'s T400 sort back to newest-valid~~ — **done, writer-map fix #4**.
+5. ~~Remove or fix `training-prescription-policy.js`'s ratio-derived pace floor~~ — **done, writer-map fix #5**.
+6. ~~Fix the Meet-nav-button resurfacing for Assistant/Swimmer roles~~ — **done, writer-map fix #6**.
+7. ~~Work down through the dormant-but-live landmines~~ — **mostly done, writer-map fix #7**: `guardian-device-state-bj.js`'s duplicate purge removed, `v4-correct.js`'s dormant T400 selector fixed, SCM/LCM course filter threaded through. `session-repair.js` and `bridge.js`'s `deepHydrate` were investigated and confirmed deliberately-kept, not landmines — left in place on purpose.
+8. ~~Build-identity consolidation and documentation corrections~~ — **done, writer-map fix #8**.
+9. **Still open, next up:** `attendance-roster.js`'s `addSquad` illegal session write (§1); a
+   pre-apply timestamp/revision check for `live-training-authority.js`'s `L.apply` (§1/§4);
+   `v4-correct.js`'s two inert-but-shadowed adapt wrappers and the resulting three-way ratio-table
+   drift (§6); the four independent `adaptationOverrides` writers and the `board.js`/`board-state.js`
+   dual stroke-write (§6); `meet-ops-av.js`'s parallel backup channel (§3/§8); the two dead-but-live-order-dependent
+   originals (`app.js`'s `N.applyHistory` and `L.apply`) (§2/§4); `storage.js`'s unawaited
+   `hydrate()` race (§4); the new `stability-identity-bh.js` `A.role()` follow-up (§4); the
+   live-sync echo re-save (§10); and, at the architecture level, building a real owner for Squad
+   stimulus/readiness and retiring the remaining transitional wrappers.
