@@ -3,7 +3,7 @@
   function athlete(id,state){return(state?.athletes||[]).find(a=>a.id===id)||null;}
   function comparison(current,prior){if(!Number.isFinite(prior))return{status:'baseline',delta:null};const delta=Number(current)-Number(prior);if(Math.abs(delta)<.01)return{status:'equal',delta:0};return{status:delta<0?'improved':'slower',delta};}
   M.timing.saveT400=function(athleteId,value,session=M.currentSession?.(),state=M.state,date,stroke='Freestyle',meta={}){
-    const ath=athlete(athleteId,state),st=E.Evidence.stroke(stroke||'Freestyle'),prior=ath?E.Aerobic.t400(ath,state,st):null,priorSec=E.Evidence.seconds(prior),row=base(athleteId,value,session,state,date,st,meta),current=E.Evidence.seconds(row),cmp=comparison(current,priorSec),liveState=state===M.state;
+    const ath=athlete(athleteId,state),st=E.Evidence.stroke(stroke||'Freestyle'),course=session?.identity?.course||'',prior=ath?E.Aerobic.t400(ath,state,st,course):null,priorSec=E.Evidence.seconds(prior),row=base(athleteId,value,session,state,date,st,meta),current=E.Evidence.seconds(row),cmp=comparison(current,priorSec),liveState=state===M.state;
     if(row&&Number.isFinite(current)){
       row.stroke=st;row.valid_for_anchor=row.valid_for_anchor!==false;row.metadata={...(row.metadata||{}),t400_comparison:cmp.status,t400_delta_seconds:cmp.delta,t400_previous_best_seconds:Number.isFinite(priorSec)?priorSec:null,t400_compared_at:now()};row.t400_comparison=cmp.status;row.t400_delta_seconds=cmp.delta;
       // Guardian/regression fixtures deliberately pass isolated state objects. They may exercise

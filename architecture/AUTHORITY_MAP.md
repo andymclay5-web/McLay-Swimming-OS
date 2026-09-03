@@ -17,7 +17,7 @@ A later-loaded file is not allowed to become the new policy merely because it ex
 
 | Domain | Authoritative owner | Projection / adapter files may | Projection / adapter files may not |
 | --- | --- | --- | --- |
-| Canonical session / parser / live edits | `v4-poolside-core.js` | read canonical session, request transactions | maintain a second session tree or rewrite original plan |
+| Canonical session / parser / live edits | `app.js` (`Store.putSession`, `M.session.*`, `M.changes.*`) | read canonical session, request transactions | maintain a second session tree or rewrite original plan |
 | Athlete evidence identity / PB lookup primitives | `engines/evidence.js` | hydrate/merge evidence | invent replacement evidence or reinterpret identity |
 | Aerobic physiology / T400 targets | `engines/aerobic.js` | display target, request target | replace T400 coefficients or choose a different target rule |
 | Race-specific target model | `engines/race-pace.js` | display race target | substitute generic PB division when the race model is required |
@@ -35,6 +35,12 @@ A later-loaded file is not allowed to become the new policy merely because it ex
 | Guardian / release policy | CI tests + immutable product contracts | report failures | filter out a failing foundation assertion and manufacture a pass |
 | Build identity | **consolidation target: one build manifest** | display the manifest | independently invent a build ID |
 | Squad stimulus/readiness | **consolidation target: new squad-stimulus owner** | compare athlete to squad reference | use whoever happens to attend today as the only reference |
+
+Note: `v4-poolside-core.js` wraps the parser and delegates persistence back to `app.js`'s
+`Store.putSession`/`M.session.*`/`M.changes.*` — it is not itself the CRUD owner. Similarly,
+`architecture/athlete-session-core.js` (Athlete/session boundaries, above) contains no writes of
+its own; the real boundary-write implementation is `engines/athlete-session-bd.js`, which goes
+through `Store.putSession` like any other adapter.
 
 ## Modification consolidation status
 
@@ -69,7 +75,7 @@ These files still contain useful behaviour or historical debt outside the comple
 - `v4-correct.js` — loaded before the engine bridge. Its old adaptation wrapper is superseded at runtime but should eventually be removed from source after its remaining compatibility behaviour is relocated.
 - `engines/rainbow-rules-au.js` — currently not loaded by `index.html`, but still contains parser/RacePace/Modification wrapper code. Its valid rules should be folded into the relevant owners before the file is retired.
 - `engines/presence-persistence-bc.js` — currently wraps `M.store.save` to journal attendance/presence. Move this to a storage hook/event API.
-- `engines/guardian-runtime.js` — currently wraps `M.store.save` for Guardian startup behaviour. Move this through an explicit storage API.
+- ~~`engines/guardian-runtime.js` — currently wraps `M.store.save` for Guardian startup behaviour. Move this through an explicit storage API.~~ Read in full and corrected: this file wraps `M.guardian.run`, not `M.store.save`, and its only storage interaction is `M.storageEngine.saveGuardianResult(...)` — already the sanctioned `storage.js` API. No remediation needed here.
 - `engines/release-guardian-*.js` — historical runtime Guardian overlays. Consolidation target is one current Guardian contract generated from source tests, without result replacement/filtering.
 
 ## Modification-specific consolidation rule

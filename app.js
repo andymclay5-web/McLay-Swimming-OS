@@ -758,9 +758,12 @@
 })(globalThis);
 
 
-(function(g){const M=g.MSOS4,U=M.util,UI=M.ui;
- UI.renderRoll=()=>{const h=document.querySelector('#rollView'),s=M.currentSession();if(!h)return;if(!M.access?.can?.('attendance.read')){h.innerHTML='<section class="empty-card"><h2>Roll is not available on this device</h2></section>';return}if(!s){h.innerHTML='<div class="empty-card">No session selected.</div>';return}const athletes=UI.currentAthletes();h.innerHTML=`<section class="page-card"><h1>Roll · ${U.escape(s.identity.title)}</h1><p class="muted">Attendance is local-first. Modified means the swimmer stays in the squad session with a derived v4 version.</p>${athletes.map(a=>{const st=UI.attendanceFor(a.id)?.status||'absent';return `<div class="roll-row"><div><strong>${U.escape(a.full_name)}</strong><small>${U.escape(a.squad||'')}</small></div><div class="seg"><button data-roll="${a.id}:present" class="${st==='present'?'active':''}">Here</button><button data-roll="${a.id}:modified" class="${st==='modified'?'active warn':''}">Modified</button><button data-roll="${a.id}:absent" class="${st==='absent'?'active':''}">Away</button></div></div>`}).join('')}</section>`;h.querySelectorAll('[data-roll]').forEach(b=>b.onclick=()=>{if(!M.access.can('attendance.write'))return;const [athleteId,status]=b.dataset.roll.split(':'),existing=M.state.attendance.find(x=>x.session_id===s.id&&x.athlete_id===athleteId);if(existing)existing.status=status;else M.state.attendance.push({id:`attendance-${s.id}-${athleteId}`,session_id:s.id,athlete_id:athleteId,status,note:'',updated_at:U.now()});const row=M.state.attendance.find(x=>x.session_id===s.id&&x.athlete_id===athleteId);row.id=`attendance-${s.id}-${athleteId}`;row.updated_at=U.now();M.store.save(M.state);M.cloud?.stageAttendance?.(row);UI.renderRoll();if(M.state.settings.view==='board')UI.renderBoard()})};
-})(globalThis);
+// UI.renderRoll's real owner is engines/attendance-roster.js (setAttendance is the sole
+// legitimate attendance write path; that file's renderRoll adds note normalization and
+// roster/squad-add that this slot's earlier draft never had). attendance-roster.js loads
+// after this file and unconditionally reassigns UI.renderRoll, so a second, independently
+// written implementation here was always discarded before first render — removed rather
+// than left as a landmine that only an accident of script order kept harmless.
 
 
 (function(g){

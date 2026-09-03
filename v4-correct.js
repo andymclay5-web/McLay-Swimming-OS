@@ -344,8 +344,10 @@
         .filter(r=>r.valid_for_anchor!==false)
         .filter(r=>!course||t400Course(r)===String(course).toUpperCase())
         .filter(r=>Number.isFinite(resultSeconds(r)))
-        // Proven v3 behaviour: fastest valid like-for-like test is the current anchor.
-        .sort((a,b)=>resultSeconds(a)-resultSeconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))[0]||null;
+        // Owner behaviour (evidence.js / evidence-index.js): newest valid like-for-like test
+        // is the current anchor, not the fastest ever recorded. A swimmer who has slowed since
+        // a taper-week PB must still see their present-day pace, not a stale fast number.
+        .sort((a,b)=>String(b.result_date||'').localeCompare(String(a.result_date||''))||resultSeconds(a)-resultSeconds(b))[0]||null;
     };
 
     T.aerobic=(anchor,distance,zone,authoredRest=10)=>{
@@ -1423,7 +1425,6 @@
     C.baseRenderTimes=UI.renderTimes?.bind(UI);
     C.baseRenderAthletes=UI.renderAthletes?.bind(UI);
     C.baseRenderBoard=UI.renderBoard?.bind(UI);
-    C.baseRenderRoll=UI.renderRoll?.bind(UI);
     C.baseRenderTV=UI.renderTV?.bind(UI);
     C.baseRenderSwimmer=UI.renderSwimmer?.bind(UI);
     C.baseRenderCurrent=UI.renderCurrent?.bind(UI);
@@ -1440,7 +1441,10 @@
       C.baseRenderBoard?.();
       enhanceBoard();
     };
-    UI.renderRoll=()=>{C.enforceRoster();C.baseRenderRoll?.();};
+    // UI.renderRoll is not wrapped here: engines/attendance-roster.js loads after this file and
+    // unconditionally reassigns UI.renderRoll to its own owner implementation, discarding any
+    // wrapper installed at this point — roster hygiene for Roll still runs via renderCurrent's
+    // own enforceRoster() call, so removing this dead wrap changes nothing observable.
     UI.renderTV=()=>{C.enforceRoster();C.baseRenderTV?.();};
     UI.renderSwimmer=()=>{C.enforceRoster();C.baseRenderSwimmer?.();enhanceIndividualDevice();};
     UI.renderCurrent=()=>{
@@ -1539,10 +1543,12 @@
           ]
         };
         const ath={id:'g',full_name:'Guardian Swimmer'};
-        tests.push(gtest('T400 uses fastest valid exact-stroke anchor',resultSeconds(M.targets.t400(ath,st,'SCM','Freestyle'))===269&&resultSeconds(M.targets.t400(ath,st,'SCM','Backstroke'))===300));
+        tests.push(gtest('T400 uses newest valid exact-stroke anchor',resultSeconds(M.targets.t400(ath,st,'SCM','Freestyle'))===269&&resultSeconds(M.targets.t400(ath,st,'SCM','Backstroke'))===300));
         tests.push(gtest('Named-stroke T400 never silently falls back to Freestyle',M.targets.t400(ath,st,'SCM','Butterfly')===null));
         const dev=M.targets.aerobic(269,100,'Development',10);
         tests.push(gtest('T400 Development target keeps authored rest model and practical cycle',Math.abs(dev.seconds-72.63)<.02&&dev.sendOff===85));
+        const olderFaster=M.targets.t400(ath,{trainingTestTypes:st.trainingTestTypes,trainingTestResults:[...st.trainingTestResults,{athlete_id:'g',test_type_id:'gf',result_seconds:250,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-01-01'}]},'SCM','Freestyle');
+        tests.push(gtest('A newer, slower result outranks an older, faster one',resultSeconds(olderFaster)===269,olderFaster?`got ${resultSeconds(olderFaster)}`:'missing'));
       }catch(e){tests.push(gtest('T400 exact-stroke contract',false,e.message));}
       try{
         const st={trainingTestTypes:[],trainingTestResults:[]},legacy={

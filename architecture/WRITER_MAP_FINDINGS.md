@@ -144,6 +144,63 @@ Recommend tackling in roughly that order — #1/#2 because they silently destroy
 
 ---
 
+## Addendum — landmine-removal pass findings (post-fix #6)
+
+Working through §7's "then work down through the dormant-but-live landmines" step surfaced several
+corrections to this document's own claims, found only by empirically checking each candidate
+against the real script-load order and the existing test suite (not just reading the source) before
+touching it. Recorded here so the next pass doesn't repeat the same investigation:
+
+- **`v4-correct.js:307-331` (`M.adapt.item` wrapper) is not inert.** §6 claimed the wrapper's guard
+  never passes because `M.adapt.item` doesn't exist yet when this file loads. Verified by execution
+  (`require('app.js')` then checking `typeof M.adapt.item`): `app.js:337` sets a real base
+  `M.adapt.item` before `v4-correct.js` loads, so the guard passes and the wrapper does install. In
+  full production it is still shadowed a few scripts later by `bridge.js`'s final assignment, same
+  as `M.adapt.profile` and `M.targets.t400` next to it — but it is not "never installs." Left
+  in place: `baseAdaptItem` is real, load-order-dependent working code, not dead weight.
+- **`engines/session-repair.js`'s `repairOne`/`repairStored` are deliberately-kept, tested API, not
+  a landmine to delete.** `tests/board-evidence-regression.cjs` asserts these functions exist in
+  source; `tests/recovered-richer-local-round-repair-20260826.cjs` calls `repairOne` directly and
+  asserts it performs a real repair; `tests/operational-authority-root-20260901.cjs` separately
+  asserts the file must **not** auto-run. Together these confirm the file's actual, intended
+  contract is "correct manual repair tool, never auto-wired" — exactly what §3 already praised as
+  "deliberately de-fanged." No change made.
+- **`engines/bridge.js`'s `deepHydrate` is deliberately-kept API, not dead code.**
+  `tests/bridge-operational-fast-start-20260826.cjs` asserts it exists as a distinct chunk of source
+  or the test's own string-slicing logic breaks. It is intentionally excluded from the fast-boot
+  path and exposed for on-demand full evidence hydration. No change made.
+- **`engines/stability-identity-bh.js`'s `A.role`/`A.setRole` wrapper is unit-tested in isolation**
+  (`tests/stability-identity-bh.cjs` requires this file alone, with a minimal `M.access` mock, and
+  asserts this wrapper's own validation/throw behavior). It is superseded in the full 80-file stack
+  by `engines/access-authority.js` loading later, but deleting it breaks its own dedicated test. Left
+  in place.
+- **Real, fixed bug found in the same file**: `resetOwner()`/`normalize()` forced `settings.view`
+  back to `'board'` unconditionally, including from the `configureRoleChrome` wrap that runs on
+  *every* render and from post-hydration `afterHydrate` — the same live "silent background
+  navigation" bug already fixed in `access-authority.js` (priority #3), just a second copy. Fixed by
+  adding a `navigate` flag, defaulting to `false` for the two background call sites and `true` only
+  for the one-time startup repair of confirmed-corrupted role state (the scenario
+  `tests/stability-identity-bh.cjs` actually exercises).
+- **Genuinely removed as confirmed-dead** (zero call sites in the 80-file shipping scope or in
+  `tests/`, verified by grep before deletion): `app.js:762`'s duplicate `UI.renderRoll` and
+  `v4-correct.js`'s wrapper of it (both discarded every time by `attendance-roster.js`'s later
+  unconditional reassignment), and `engines/guardian-device-state-bj.js`'s `cleanupPlaceholders`
+  (a second, always-unused copy of `stability-identity-bh.js`'s live `purgePlaceholders`).
+- **Real bug fixed**: `v4-correct.js:337-349`'s own T400 selector had the same "fastest wins"
+  defect as priority #4's `evidence-index.js` (this copy is shadowed by `bridge.js` in production,
+  but is the version actually exercised by the Guardian test harness, which never loads
+  `bridge.js`). Sorted to newest-valid-first to match the real owner, and added a Guardian
+  self-test (older-faster vs newer-slower) that the old fixture's coincidental fastest=newest data
+  would not have caught.
+- **`app.js:329`'s ratio-fallback table is not dead.** §10 called it "superseded twice, never
+  read." It is in fact the closure the Guardian-test-path `M.adapt.item` wrapper's `baseAdaptItem`
+  actually uses internally for its own reps/distance scaling, independent of whatever
+  `M.adapt.profile` currently resolves to — confirmed by tracing the closure, not just usage
+  counts. It does contain a stale athlete roster (references athletes no longer on the historical
+  fallback list used elsewhere) and is real duplicate-table drift risk exactly as §6 says, but is
+  not safe to delete outright without also verifying every Guardian self-test that exercises
+  `M.adapt.item`. Left as a follow-up rather than acted on in this pass.
+
 ## Recommended order of work
 
 Per `AUTHORITY_MAP.md`'s own change-gate ("every consolidation PR should reduce or hold the wrapper count, never increase it") and its stated repair philosophy (establish full picture, identify intended ownership, then repair one owner at a time):

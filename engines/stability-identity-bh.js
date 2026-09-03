@@ -44,21 +44,24 @@
     return{changed:true,removed:removed.map(a=>({id:a.id||'',name:String(a.full_name||a.name||'')}))};
   }
 
-  function resetOwner(reason='identity-reset',persist=true){
+  function resetOwner(reason='identity-reset',persist=true,navigate=true){
     const s=M.state.settings=M.state.settings||{};
     s.activeRole='owner';s.activeUserAthleteId='';s.assistantId='';
     s.roleBindingVersion=BINDING;s.roleBindingKind='owner';s.roleBindingAthleteId='';s.roleBindingReason=reason;
-    if(['swimmer','athletes'].includes(s.view))s.view='board';
+    // Only navigate away from Swimmer/Athletes on the one-time startup repair of genuinely
+    // corrupted role state (see normalize() below). A background re-validation on every render
+    // must never silently bounce a legitimately-viewing swimmer/assistant off their screen.
+    if(navigate&&['swimmer','athletes'].includes(s.view))s.view='board';
     if(persist)saveUi();
     return'owner';
   }
-  function normalize({persist=true}={}){
+  function normalize({persist=true,navigate=false}={}){
     const s=M.state.settings=M.state.settings||{};
     let changed=false,reason='';
-    if(s.roleBindingVersion!==BINDING){reason='migrate-pre-bh-role-state';resetOwner(reason,false);changed=true;}
+    if(s.roleBindingVersion!==BINDING){reason='migrate-pre-bh-role-state';resetOwner(reason,false,navigate);changed=true;}
     else if(s.activeRole==='swimmer'){
       const valid=s.roleBindingKind==='swimmer'&&s.roleBindingAthleteId===s.activeUserAthleteId&&validLinkedAthlete(s.activeUserAthleteId);
-      if(!valid){reason='invalid-swimmer-link';resetOwner(reason,false);changed=true;}
+      if(!valid){reason='invalid-swimmer-link';resetOwner(reason,false,navigate);changed=true;}
     }else if(s.activeRole==='owner'&&(s.activeUserAthleteId||s.roleBindingKind==='swimmer')){
       s.activeUserAthleteId='';s.roleBindingKind='owner';s.roleBindingAthleteId='';reason='owner-cleared-stale-athlete';changed=true;
     }
@@ -67,7 +70,7 @@
   }
   I.athlete=athlete;I.placeholderName=placeholderName;I.isPlaceholderAthlete=isPlaceholderAthlete;I.validLinkedAthlete=validLinkedAthlete;I.purgePlaceholders=purgePlaceholders;I.resetOwner=resetOwner;I.normalize=normalize;
 
-  const firstPurge=purgePlaceholders({persist:false}),firstIdentity=normalize({persist:false});
+  const firstPurge=purgePlaceholders({persist:false}),firstIdentity=normalize({persist:false,navigate:true});
   if(firstPurge.changed)saveFull();else if(firstIdentity.changed)saveUi();
 
   const oldRole=typeof A.role==='function'?A.role.bind(A):()=>M.state.settings.activeRole||'owner';
