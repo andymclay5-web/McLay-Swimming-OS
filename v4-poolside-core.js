@@ -293,11 +293,6 @@
     create.onclick=()=>{if(!candidate||!build())return;candidate.metadata={...candidate.metadata,intakeSource:sourceType,intakeMediaId:mediaId||null,rollEpoch:U.now(),poolsideCoreBuild:BUILD};candidate.updatedAt=U.now();M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==candidate.id);const saved=M.store.putSession(M.state,candidate);M.state.settings.selectedSessionId=saved.id;M.state.settings.view='board';M.store.save(M.state);localStorage.removeItem(DRAFT_KEY);host.innerHTML='';M.nav.clearTransient?.();M.nav.activateView?.('board');history.replaceState(M.nav.state('board'),'','#board');UI.renderCurrent();scrollTo(0,0);M.toast(`Session ready · ${S.total(saved).toLocaleString()}m · Roll is clean`)};paint();
   };
 
-  function repairSelected(){
-    const s=M.currentSession?.();if(!s||s.identity?.date!==nzToday())return false;const source=s.originalPlan?.text||s.currentSource?.text||'';if(!source)return false;
-    try{const repaired=M.parser.parse(source,{...s.identity,id:s.id}),written=Number(repaired.metadata?.explicitTotal)||null,total=S.total(repaired),current=S.total(s);if((written&&Math.abs(total-written)>1)||total===current)return false;repaired.originalPlan=s.originalPlan;repaired.changes=s.changes||[];repaired.metadata={...s.metadata,...repaired.metadata,rollEpoch:U.now(),poolsideRepair:BUILD};repaired.finish=s.finish||null;repaired.updatedAt=U.now();M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==s.id);M.store.putSession(M.state,repaired);M.state.settings.selectedSessionId=repaired.id;M.store.save(M.state);return true}catch{return false}
-  }
-
   M.poolsideCore.selfTest=()=>{
     const a=M.parser.parse(`WARM-UP\n12 x 50 #1 @ 1:10\n1 x 50 Scull\n1 x 50 Drill\n1 x 50 Swim Perfect Technique`,{id:'pattern',date:'2026-08-17'});
     const b=M.parser.parse(`Warm up\n200 fr\n200 IM\n4x50 hbs\n10sr\n\nPre set\n5x50#1 build on 60\n5x10p I'm desc 1-5 on 1.45\n\nMain set 3 rounds\n5x100 free threshold 10 sr\n400 easy\n\nPost set\n8x75\n25 Easy\n25 Build\n25 Fast\n\n4650m`,{id:'live',date:'2026-08-17'});
@@ -331,5 +326,5 @@
       return {...result,build:M.BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
     };
   }
-  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const known=repairKnownSavedSessions(),repaired=repairSelected();if(known||repaired||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const known=repairKnownSavedSessions();if(known||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
 })(globalThis);
