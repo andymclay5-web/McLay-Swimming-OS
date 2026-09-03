@@ -134,7 +134,7 @@ Recommend tackling in roughly that order — #1/#2 because they silently destroy
 - **`athlete-session-core.js` ownership doc is misleading** (§1) — the file has zero writes; the real boundary-write implementation is `athlete-session-bd.js`, going through `Store.putSession`.
 - **`guardian-runtime.js` remediation note is based on a stale premise** (§3) — it doesn't wrap `M.store.save`.
 - Dead ratio-table copy at `app.js:329` (superseded twice, never read) — safe to delete.
-- Live-sync echo: `v4-correct.js:1476-1479` re-saves after applying a remote message, triggering an avoidable re-broadcast to other tabs. Not a correctness bug, worth cleaning up in the same pass.
+- Live-sync echo: `v4-correct.js:1476-1477` re-saves after applying a remote message, triggering an avoidable re-broadcast to other tabs. Not a correctness bug, worth cleaning up in the same pass.
 
 ---
 
