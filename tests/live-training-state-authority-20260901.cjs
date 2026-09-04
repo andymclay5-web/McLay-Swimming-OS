@@ -1,8 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
-let removed=0;
-const meetBtn={remove:()=>removed++},meetNav={remove:()=>removed++};
-global.document={addEventListener:()=>{},getElementById:id=>id==='meetModeBtn'?meetBtn:null,querySelectorAll:q=>q.includes('[data-nav="meet"]')?[meetNav]:[]};
+global.document={addEventListener:()=>{},getElementById:()=>null,querySelectorAll:()=>[]};
 global.MSOS4={
   BUILD:'test-build',
   util:{now:()=> '2026-09-01T06:00:00.000Z'},
@@ -13,9 +11,9 @@ global.MSOS4={
 };
 require(path.resolve(__dirname,'../engines/live-training-authority.js'));
 const M=global.MSOS4,L=M.live;
-assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260901d-no-meet-chrome');
+assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260904a-meet-tab-allowed');
 assert.equal(M.liveTrainingAuthority.mode,'derived-displays-only');
-assert.equal(removed,2,'Training authority must remove Meet header/nav chrome, not merely hide it');
+assert.equal(M.liveTrainingAuthority.stripMeetChrome,undefined,'Meet is now an owned bottom-nav tab; training authority must not strip its chrome');
 const payload=L.payload(M.state);assert.equal(payload.authority,'coach-operational');assert.equal(payload.sourceView,'board');
 const stale={kind:'v4-live-state',build:'test-build',from:'stale-tab',authority:'coach-operational',sourceView:'roll',sourceRole:'owner',surfaceMode:'training',sessionId:'s',session:{id:'s',blocks:[{id:'main',items:[{id:'ol'}]}]},attendance:[],adaptationOverrides:[],trainingTestResults:[],revision:99};
 assert.equal(L.apply(stale),false);assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,2);assert.equal(M.state.attendance.length,1);assert.equal(M.state.settings.selectedSessionId,'s');
@@ -27,4 +25,4 @@ const applyHistory=nav.match(/N\.applyHistory=state=>\{([\s\S]*?)\};\n\n  let ro
 assert.ok(applyHistory,'navigation history owner must exist');
 assert.doesNotMatch(applyHistory,/selectedSessionId\s*=/,'Android/browser Back must never select a different session');
 assert.match(nav,/v4-navigation-session-selection-authority-20260901/,'session-selection authority build missing');
-console.log('LIVE_TRAINING_STATE_AUTHORITY_PASS meet-chrome-removed history-cannot-switch-session');
+console.log('LIVE_TRAINING_STATE_AUTHORITY_PASS meet-tab-allowed history-cannot-switch-session');
