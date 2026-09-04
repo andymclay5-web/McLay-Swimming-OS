@@ -47,7 +47,7 @@
   }
   function install(){
     style();schedule();
-    document.addEventListener('click',e=>{if(e.target.closest?.('#meetView')||e.target.closest?.('#meetModeBtn'))schedule()},false);
+    document.addEventListener('click',e=>{if(e.target.closest?.('#meetView')||e.target.closest?.('#meetModeBtn')||e.target.closest?.('[data-nav="meet"]'))schedule()},false);
     document.addEventListener('change',e=>{if(e.target.closest?.('#meetView'))schedule()},false);
     g.addEventListener?.('pageshow',schedule);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule()});
