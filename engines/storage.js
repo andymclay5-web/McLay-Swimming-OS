@@ -53,8 +53,22 @@
 
   function mergeMissingById(dest,src){const out=Array.isArray(dest)?dest:[],seen=new Set(out.map(x=>x?.id).filter(Boolean));for(const row of src||[])if(row?.id&&!seen.has(row.id)){out.push(safeClone(row));seen.add(row.id)}return out}
   function mergeAttendanceMissing(dest,src){const out=Array.isArray(dest)?dest:[],seen=new Set(out.map(attendanceKey));for(const row of src||[]){const k=attendanceKey(row);if(k&&!seen.has(k)){out.push(safeClone(row));seen.add(k)}}return out}
-  function mergeBackgroundDurable(local,full){
+  function mergeBackgroundDurable(local,full,{fullNotStale=true}={}){
     local.canonicalSessions=local.canonicalSessions||{};for(const[id,s]of Object.entries(full?.canonicalSessions||{}))if(!local.canonicalSessions[id])local.canonicalSessions[id]=safeClone(s);
+    // Cold-boot reconciliation: if the local snapshot has no (or a dangling) selected
+    // session but the durable record names a real one, adopt it. Fill-only — never
+    // overrides a session the coach has actively selected (product rules 2.11/2.16).
+    // Guarded on the durable record not being behind local, so a genuine mid-session
+    // background hydration cannot pull the coach onto an older session (2.20).
+    if(fullNotStale&&full?.settings){
+      local.settings=local.settings||{};
+      const wantSel=full.settings.selectedSessionId;
+      const localSel=local.settings.selectedSessionId;
+      if(wantSel&&local.canonicalSessions[wantSel]&&(!localSel||!local.canonicalSessions[localSel])){
+        local.settings.selectedSessionId=wantSel;
+        if((!local.settings.view||local.settings.view==='board')&&full.settings.view)local.settings.view=full.settings.view;
+      }
+    }
     local.athletes=mergeMissingById(local.athletes,full?.athletes);local.attendance=mergeAttendanceMissing(local.attendance,full?.attendance);
     for(const key of ['captures','timedSets','trainingTestTypes','trainingTestResults','adaptationProfiles','coachResults','athleteAchievements','adaptationOverrides','meets','meetEntries','meetRaces','meetEvidence','pending','presenceEvents'])local[key]=mergeMissingById(local[key],full?.[key]);
     local.attendanceSnapshots=local.attendanceSnapshots||{};for(const[k,v]of Object.entries(full?.attendanceSnapshots||{}))if(local.attendanceSnapshots[k]===undefined)local.attendanceSnapshots[k]=safeClone(v);
@@ -65,6 +79,6 @@
   function operationalAlreadyLive(){if(M.navigationEngine?.initialized===true)return true;if(typeof document==='undefined')return false;return document.readyState!=='loading'||document.body?.dataset?.msosView!==undefined}
 
   S.save=M.store.save;S.saveUi=saveUi;S.readUi=readUi;S.applyUi=applyUi;S.compact=compact;S.getFull=getFull;S.ensurePresence=ensurePresence;S.saveGuardianResult=saveGuardianResult;S.scheduleFull=scheduleFull;S.whenPersisted=whenPersisted;S.meetDurableSignature=meetDurableSignature;S.mergeBackgroundDurable=mergeBackgroundDurable;Object.defineProperty(S,'ready',{get:()=>ready});
-  async function hydrate(){try{const row=await getFull(),local=M.state||{},live=operationalAlreadyLive();if(row?.payload){const full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full),localRicher=localSessions>fullSessions,useFull=!live&&(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;if(useFull){for(const k of Object.keys(local))delete local[k];Object.assign(local,safeClone(full));M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true}else if(live){mergeBackgroundDurable(local,full);S.liveOperationalStatePreserved=true}else if(localRicher)S.recoveredRicherLocalState=true;S.lastPersistedRevision=fullRev}if(!live)applyUi(M.state,{operationalSavedAt:Number(row?.savedAt)||0});await loadGuardian();knownAttendance=new Map((M.state.attendance||[]).filter(x=>(x?.session_id||x?.sessionId)&&(x?.athlete_id||x?.athleteId)).map(x=>[attendanceKey(x),`${x.status||''}|${x.updated_at||''}`]));M.state.settings=M.state.settings||{};M.state.settings.storageMode='indexeddb';meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true;if(!row?.payload)scheduleFull(250,{compactAfter:true})}catch(e){S.lastError=String(e?.message||e);const live=operationalAlreadyLive();if(!live)applyUi(M.state);meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true}}
+  async function hydrate(){try{const row=await getFull(),local=M.state||{},live=operationalAlreadyLive();if(row?.payload){const full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full),localRicher=localSessions>fullSessions,useFull=!live&&(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;if(useFull){for(const k of Object.keys(local))delete local[k];Object.assign(local,safeClone(full));M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true}else if(live){mergeBackgroundDurable(local,full,{fullNotStale:fullRev>=localRev});S.liveOperationalStatePreserved=true}else if(localRicher)S.recoveredRicherLocalState=true;S.lastPersistedRevision=fullRev}if(!live)applyUi(M.state,{operationalSavedAt:Number(row?.savedAt)||0});await loadGuardian();knownAttendance=new Map((M.state.attendance||[]).filter(x=>(x?.session_id||x?.sessionId)&&(x?.athlete_id||x?.athleteId)).map(x=>[attendanceKey(x),`${x.status||''}|${x.updated_at||''}`]));M.state.settings=M.state.settings||{};M.state.settings.storageMode='indexeddb';meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true;if(!row?.payload)scheduleFull(250,{compactAfter:true})}catch(e){S.lastError=String(e?.message||e);const live=operationalAlreadyLive();if(!live)applyUi(M.state);meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true}}
   S.readyPromise=hydrate();S.hydrated=()=>hydrateDone;
 })(globalThis);
