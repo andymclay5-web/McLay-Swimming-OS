@@ -23,6 +23,13 @@
       if(!derivedViews.has(view)){L.ignoredOperationalMessages=Number(L.ignoredOperationalMessages||0)+1;return false;}
       if(msg.authority!=='coach-operational'){L.ignoredDerivedMessages=Number(L.ignoredDerivedMessages||0)+1;return false;}
       if(msg.surfaceMode&&msg.surfaceMode!=='training'){L.ignoredMeetMessages=Number(L.ignoredMeetMessages||0)+1;return false;}
+      // Drop a stale / out-of-order broadcast before it touches the display, so a
+      // late-delivered older revision can't momentarily un-update a TV/swimmer
+      // surface (WRITER_MAP_FINDINGS.md §4). An equal revision is a harmless
+      // idempotent re-broadcast and is still applied.
+      if(Number(msg.revision||0)<Number(M.state.settings.liveRevision||0)){
+        L.ignoredStaleMessages=Number(L.ignoredStaleMessages||0)+1;return false;
+      }
       L.suppress=true;
       try{
         const role=M.state.settings.activeRole,aid=M.state.settings.activeUserAthleteId,assistantId=M.state.settings.assistantId;

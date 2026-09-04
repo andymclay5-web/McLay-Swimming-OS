@@ -21,6 +21,13 @@ const stale={kind:'v4-live-state',build:'test-build',from:'stale-tab',authority:
 assert.equal(L.apply(stale),false);assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,2);assert.equal(M.state.attendance.length,1);assert.equal(M.state.settings.selectedSessionId,'s');
 M.state.settings.view='tv';const fresh={...stale,from:'coach-board',session:{id:'s',blocks:[{id:'main',items:[{id:'ol'},{id:'thr'},{id:'extra'}]}]},attendance:[{session_id:'s',athlete_id:'mck',status:'present'},{session_id:'s',athlete_id:'a',status:'present'}],revision:100};
 assert.equal(L.apply(fresh),true);assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,3);assert.equal(M.state.attendance.length,2);assert.equal(M._tv,1);
+// A late / out-of-order broadcast older than what the display already applied must be
+// dropped before it touches state — it cannot momentarily un-update the surface (§4).
+const outOfOrder={...fresh,from:'lagging-tab',session:{id:'s',blocks:[{id:'main',items:[{id:'ol'}]}]},attendance:[],revision:100-1};
+assert.equal(L.apply(outOfOrder),false,'stale-revision live message must be rejected');
+assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,3,'stale message must not mutate the applied session');
+assert.equal(M.state.attendance.length,2,'stale message must not mutate applied attendance');
+assert.equal(M._tv,1,'stale message must not trigger a re-render');
 M.state.settings.view='swimmer';M.state.settings.activeRole='swimmer';assert.equal(L.apply({...fresh,from:'meet-screen',surfaceMode:'meet'}),false);
 const nav=fs.readFileSync(path.resolve(__dirname,'../engines/navigation.js'),'utf8');
 const applyHistory=nav.match(/N\.applyHistory=state=>\{([\s\S]*?)\};\n\n  let rootBackArmed/)?.[1]||'';

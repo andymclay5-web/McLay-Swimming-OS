@@ -23,9 +23,13 @@
     M.store?.save?.(M.state);M.cloud?.stageAttendance?.(row);return row;
   }
   function addSquad(session,squad){
+    // Roll UI requests the identity edit; the canonical-session owner (M.changes)
+    // builds it and M.actions.commit persists it. The Roll must not clone-and-
+    // replace the session itself (WRITER_MAP_FINDINGS.md §1).
     M.access?.assert?.('session.edit');squad=text(squad);if(!session||!squad)return false;
-    const before=[...(session.identity?.squads||[])];if(before.some(x=>text(x).toLowerCase()===squad.toLowerCase()))return false;
-    const next=M.session?.cloneCurrent?M.session.cloneCurrent(session):U.clone(session);next.identity=next.identity||{};next.identity.squads=[...before,squad];next.changes=next.changes||[];next.changes.push({id:U.uid('change'),sessionId:next.id,type:'add_session_squad',itemId:null,before:{squads:before},after:{squads:[...next.identity.squads]},meta:{squad},at:U.now()});next.updatedAt=U.now();M.store?.putSession?.(M.state,next);return true;
+    if((session.identity?.squads||[]).some(x=>text(x).toLowerCase()===squad.toLowerCase()))return false;
+    if(!M.changes?.addSessionSquad||!M.actions?.commit)return false;
+    M.actions.commit(M.changes.addSessionSquad(session,squad));return true;
   }
   function close(){const h=document.querySelector('#modalHost');if(h)h.innerHTML='';M.nav?.dismissLayer?.();}
   function modal(title,body){const h=document.querySelector('#modalHost');if(!h)return null;h.innerHTML=`<div class="modal-backdrop"><section class="modal"><header><h2>${esc(title)}</h2><button type="button" data-roster-close>×</button></header><div class="modal-body">${body}</div></section></div>`;M.nav?.openLayer?.('modal');h.querySelector('[data-roster-close]')?.addEventListener('click',close);h.querySelector('.modal-backdrop')?.addEventListener('click',e=>{if(e.target===e.currentTarget)close()});return h;}
