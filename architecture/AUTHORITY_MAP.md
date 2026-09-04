@@ -1,7 +1,17 @@
 # MSOS Runtime Authority Map
 
 Status: consolidation guardrail
-Date: 23 August 2026
+Date: 23 August 2026 · last reconciled 4 September 2026
+
+> **4 Sept 2026 consolidation branch:** `architecture/ownership-net.test.js` now
+> freezes the tracked writer sets for `settings.selectedSessionId`,
+> `canonicalSessions[id] =`, the `C.*` session-mutation methods, browser-history
+> session selection and `L.apply`; any new or removed writer fails CI. The Roll's
+> `addSquad` was moved onto `M.changes.addSessionSquad`; `L.apply` now rejects a
+> stale-revision broadcast; the boot-time renderer race and the cold-boot
+> selected-session loss were fixed in `startup-gate.js` / `storage.js`. The nine
+> dead `engines/release-guardian-{ao..be}.js` drafts, the `v4-deck-*` /
+> `v4-thursday-*` families and `poolside-now.html` were deleted (never loaded).
 
 ## Purpose
 

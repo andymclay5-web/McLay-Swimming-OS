@@ -44,6 +44,8 @@ jobs:
           node --check architecture/poolside-runtime.js
       - name: Run authority consolidation gate
         run: node architecture/authority-audit.test.js
+      - name: Run protected-state ownership net
+        run: node architecture/ownership-net.test.js
       - name: Run architecture contract tests
         run: node architecture/architecture.test.js
       - name: Run end-to-end poolside runtime tests

@@ -294,11 +294,30 @@ Read this as authoritative over the section text above wherever the two disagree
   `baseAdaptItem` calls into). The "safe to delete" note in §10 above is itself wrong and should be
   read as retracted; it's a live third ratio-table copy, see below.
 
+**Closed since the original audit (consolidation branch, 4 Sept 2026):**
+- ~~§1: `engines/attendance-roster.js` `addSquad` writes the session directly~~ — **fixed.**
+  The identity edit is now `app.js` `M.changes.addSessionSquad(session, squad)` (same
+  clone → `tx(…)` journal → return pattern as `finishAtBlock`), applied via
+  `M.actions.commit`. The Roll only requests it. `tests/attendance-roster-static.cjs`
+  asserts the delegation and that the Roll contains no direct `putSession`.
+- ~~§1/§4: `live-training-authority.js` `L.apply` has no pre-apply revision check~~ —
+  **fixed.** It now drops any broadcast whose `revision` is strictly below the display's
+  current `liveRevision` before touching state (equal = idempotent re-broadcast, still
+  applied). Regression case in `tests/live-training-state-authority-20260901.cjs`.
+- ~~Boot-time `UI.renderBoard is not a function` on ~30 % of cold loads~~ — **fixed** in
+  `engines/startup-gate.js` (defer the first render until the renderers exist) plus a
+  null-safe renderer dispatch in `app.js` `renderCurrent`.
+- ~~Cold-boot loses `settings.selectedSessionId` on the live-hydration merge path~~ —
+  **fixed** in `engines/storage.js` `mergeBackgroundDurable` (adopt a real selected
+  session from the durable record only when local has none/dangling and the record is
+  not behind — never overrides an active selection). Was the root of the
+  `all-inclusive-product-acceptance` offline-reload failure.
+
+The frozen writer sets for the items below are now enforced by
+`architecture/ownership-net.test.js` (runs in Architecture Foundation and Full Guardian):
+a new writer, or a removed one, fails CI with a pointer to the finding.
+
 **Still genuinely open — real, unchanged since the original audit:**
-- §1: `engines/attendance-roster.js:25-28` `addSquad` still writes the session directly
-  (illegal writer, bypasses the session-edit surface) — untouched by any fix.
-- §1/§4: `engines/live-training-authority.js`'s `L.apply` still applies an incoming live-sync
-  session with no timestamp/revision check *before* writing (only bumps a counter after).
 - §3/§8: `engines/meet-ops-av.js`'s `backup`/`restoreBackup` — still a second, parallel
   localStorage-only persistence channel outside `storage.js` (low risk: fill-empty-only restore).
 - §2/§4: `app.js`'s dead original `N.applyHistory` (~line 855) and the dead original live-sync
@@ -346,12 +365,26 @@ Per `AUTHORITY_MAP.md`'s own change-gate ("every consolidation PR should reduce 
 6. ~~Fix the Meet-nav-button resurfacing for Assistant/Swimmer roles~~ — **done, writer-map fix #6**.
 7. ~~Work down through the dormant-but-live landmines~~ — **mostly done, writer-map fix #7**: `guardian-device-state-bj.js`'s duplicate purge removed, `v4-correct.js`'s dormant T400 selector fixed, SCM/LCM course filter threaded through. `session-repair.js` and `bridge.js`'s `deepHydrate` were investigated and confirmed deliberately-kept, not landmines — left in place on purpose.
 8. ~~Build-identity consolidation and documentation corrections~~ — **done, writer-map fix #8**.
-9. **Still open, next up:** `attendance-roster.js`'s `addSquad` illegal session write (§1); a
-   pre-apply timestamp/revision check for `live-training-authority.js`'s `L.apply` (§1/§4);
-   `v4-correct.js`'s two inert-but-shadowed adapt wrappers and the resulting three-way ratio-table
-   drift (§6); the four independent `adaptationOverrides` writers and the `board.js`/`board-state.js`
-   dual stroke-write (§6); `meet-ops-av.js`'s parallel backup channel (§3/§8); the two dead-but-live-order-dependent
-   originals (`app.js`'s `N.applyHistory` and `L.apply`) (§2/§4); `storage.js`'s unawaited
-   `hydrate()` race (§4); the new `stability-identity-bh.js` `A.role()` follow-up (§4); the
-   live-sync echo re-save (§10); and, at the architecture level, building a real owner for Squad
-   stimulus/readiness and retiring the remaining transitional wrappers.
+9. ~~`attendance-roster.js`'s `addSquad` illegal session write (§1)~~ — **done** (consolidation
+   branch): now delegates to `M.changes.addSessionSquad` + `M.actions.commit`.
+10. ~~pre-apply revision check for `live-training-authority.js`'s `L.apply` (§1/§4)~~ — **done**.
+11. ~~boot-time `UI.renderBoard` race / `storage.js` cold-boot `selectedSessionId` loss (§4)~~ —
+    **done** (`startup-gate.js` defers first render until renderers exist; `storage.js`
+    `mergeBackgroundDurable` reconciles the selected session from the durable record).
+12. ~~make Final Product Acceptance report every failure instead of bailing early~~ — **done**
+    (`tests/fpa-runner.cjs`, `docs/KNOWN_DEFERRED.md`).
+13. ~~freeze the tracked writer sets so drift fails CI~~ — **done**
+    (`architecture/ownership-net.test.js`).
+
+**Still open, next up:**
+- `v4-correct.js`'s two inert-but-shadowed adapt wrappers and the resulting three-way
+  ratio-table drift (§6); the four independent `adaptationOverrides` writers and the
+  `board.js`/`board-state.js` dual stroke-write (§6).
+- `meet-ops-av.js`'s parallel backup channel (§3/§8).
+- The two dead-but-load-order-dependent originals (`app.js`'s `N.applyHistory` and the
+  original `L.apply`) (§2/§4) — the `ownership-net.test.js` gate now makes their state
+  visible; removing them is safe once the retirement is recorded there.
+- `stability-identity-bh.js` `A.role()` follow-up (§4); the live-sync echo re-save (§10).
+- Architecture level: a real owner for Squad stimulus/readiness; retiring `v4-correct.js`
+  and the remaining transitional wrappers (needs each piece of compatibility behaviour
+  relocated first — see `AUTHORITY_MAP.md`).

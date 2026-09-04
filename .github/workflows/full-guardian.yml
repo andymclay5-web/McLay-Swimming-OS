@@ -61,6 +61,8 @@ jobs:
           node tests/south-islands-meet-field-acceptance-20260828.cjs
       - name: Architecture regression
         run: |
+          node architecture/authority-audit.test.js
+          node architecture/ownership-net.test.js
           node architecture/architecture.test.js
           node architecture/runtime.test.js
           node architecture/vision-surface.test.js
