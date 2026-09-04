@@ -78,10 +78,14 @@ assert.doesNotMatch(navApply,/selectedSessionId\s*=/,
 // --- live-sync apply single owner at runtime ------------------------------
 gate('L.apply definitions',
   /\bL\.apply\s*=/,
-  ['app.js', 'engines/live-training-authority.js'],
-  'The app.js definition is the shadowed original; live-training-authority.js loads later and wins. A third definition, or a reorder, needs a conscious decision — WRITER_MAP_FINDINGS.md §1/§4.');
+  ['engines/live-training-authority.js'],
+  'Sole owner. The shadowed original in app.js was removed (consolidation branch); a second definition anywhere needs a conscious decision — WRITER_MAP_FINDINGS.md §1/§4.');
 assert.ok(loaded.indexOf('engines/live-training-authority.js')>loaded.indexOf('app.js'),
   'live-training-authority.js must load after app.js to own L.apply');
+const appSrc=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
+assert.doesNotMatch(appSrc,/\bL\.apply\s*=\s*msg=>/,'app.js must not carry a second (shadowed) L.apply');
+assert.doesNotMatch(appSrc,/\bN\.applyHistory\s*=\s*state=>/,'app.js must not carry a second (shadowed) N.applyHistory — it wrote selectedSessionId from history state (rule 2.14)');
+assert.doesNotMatch(appSrc,/N\.state=\([^)]*\)=>\([^)]*sessionId:/,'history state must not embed a session id (rule 2.14)');
 assert.match(fs.readFileSync(path.join(ROOT,'engines/live-training-authority.js'),'utf8'),
   /Number\(msg\.revision\|\|0\)<Number\(M\.state\.settings\.liveRevision\|\|0\)/,
   'live-sync must reject a stale-revision broadcast before applying it — WRITER_MAP_FINDINGS.md §4');

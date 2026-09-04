@@ -9,6 +9,7 @@ global.localStorage={
 };
 global.document={
   addEventListener(){},
+  getElementById(){return null;},
   querySelector(){return null;},
   querySelectorAll(){return[];},
   body:{dataset:{}}
@@ -21,6 +22,9 @@ global.removeEventListener=()=>{};
 require('../app.js');
 require('../v4-correct.js');
 require('../v4-poolside-core.js');
+// L.apply owner (moved out of app.js on the consolidation branch); the Guardian
+// self-test for live-sync display behaviour exercises it.
+require('../engines/live-training-authority.js');
 
 const result=global.MSOS4.guardian.run();
 const failures=result.tests.filter(test=>!test.ok);
