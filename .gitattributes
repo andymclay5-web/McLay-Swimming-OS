@@ -1,0 +1,12 @@
+# Normalise line endings: LF in the repo and in every working tree,
+# regardless of the contributor's core.autocrlf setting.
+# (Prevents CRLF-sensitive tests such as tests/release-package.test.js
+# from failing on Windows checkouts.)
+* text=auto eol=lf
+
+# Binary assets — never touch these.
+*.png binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
