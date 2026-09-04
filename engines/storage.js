@@ -54,6 +54,7 @@
   function mergeMissingById(dest,src){const out=Array.isArray(dest)?dest:[],seen=new Set(out.map(x=>x?.id).filter(Boolean));for(const row of src||[])if(row?.id&&!seen.has(row.id)){out.push(safeClone(row));seen.add(row.id)}return out}
   function mergeAttendanceMissing(dest,src){const out=Array.isArray(dest)?dest:[],seen=new Set(out.map(attendanceKey));for(const row of src||[]){const k=attendanceKey(row);if(k&&!seen.has(k)){out.push(safeClone(row));seen.add(k)}}return out}
   function mergeBackgroundDurable(local,full){
+    if(full?.settings)for(const k of['activeRole','activeUserAthleteId','assistantId','assistantPermissions','assistantSquads','roleBindingVersion','roleBindingKind','roleBindingAthleteId'])if(full.settings[k]!==undefined){local.settings=local.settings||{};local.settings[k]=safeClone(full.settings[k])}
     local.canonicalSessions=local.canonicalSessions||{};for(const[id,s]of Object.entries(full?.canonicalSessions||{}))if(!local.canonicalSessions[id])local.canonicalSessions[id]=safeClone(s);
     local.athletes=mergeMissingById(local.athletes,full?.athletes);local.attendance=mergeAttendanceMissing(local.attendance,full?.attendance);
     for(const key of ['captures','timedSets','trainingTestTypes','trainingTestResults','adaptationProfiles','coachResults','athleteAchievements','adaptationOverrides','meets','meetEntries','meetRaces','meetEvidence','pending','presenceEvents'])local[key]=mergeMissingById(local[key],full?.[key]);
