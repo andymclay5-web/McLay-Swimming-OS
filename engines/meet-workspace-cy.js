@@ -29,14 +29,14 @@
     return{
       sources:(p.sources||[]).map(s=>({source_id:s?.source_id||'',meet_id:s?.meet_id||currentId(),added_at:s?.added_at||'',raw:String(s?.raw||'')})),
       commentaries:clone(p.commentaries||[]),
-      nowKey:p.nowKey||'',selectedKey:p.selectedKey||'',selectedAthleteId:p.selectedAthleteId||'',expandedKey:p.expandedKey||'',selectedSourceId:p.selectedSourceId||'',selectedEventNumber:Number(p.selectedEventNumber)||0
+      nowKey:p.nowKey||'',selectedKey:p.selectedKey||'',selectedAthleteId:p.selectedAthleteId||'',pinnedAthleteId:p.pinnedAthleteId||'',expandedKey:p.expandedKey||'',selectedSourceId:p.selectedSourceId||'',selectedEventNumber:Number(p.selectedEventNumber)||0
     };
   }
   function applyProgram(snap){
     const p=program(),ws=p.meetWorkspaces;
     p.sources=clone(snap?.sources||[]);
     p.commentaries=clone(snap?.commentaries||[]);
-    p.nowKey=snap?.nowKey||'';p.selectedKey=snap?.selectedKey||'';p.selectedAthleteId=snap?.selectedAthleteId||'';p.expandedKey=snap?.expandedKey||'';p.selectedSourceId=snap?.selectedSourceId||'';p.selectedEventNumber=Number(snap?.selectedEventNumber)||0;
+    p.nowKey=snap?.nowKey||'';p.selectedKey=snap?.selectedKey||'';p.selectedAthleteId=snap?.selectedAthleteId||'';p.pinnedAthleteId=snap?.pinnedAthleteId||'';p.expandedKey=snap?.expandedKey||'';p.selectedSourceId=snap?.selectedSourceId||'';p.selectedEventNumber=Number(snap?.selectedEventNumber)||0;
     p.meetWorkspaces=ws;
   }
   function blankOps(){return{races:{},evidence:[],selectedAthleteId:'',selectedRaceKey:''}}

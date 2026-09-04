@@ -1,8 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
 const {chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-final-acceptance-20260825a';
+// Canonical shipping build, read from the service worker so this test never pins
+// a stale date-string across releases. release-package.test.js separately proves
+// sw.js / VERSION.txt / release-authority.js all agree on this value.
+const BUILD=fs.readFileSync(__dirname+'/../sw.js','utf8').match(/const BUILD='([^']+)'/)[1];
 const SOURCE=`WARM-UP
 400 Choice
 4 x 50 as 25 Drill / 25 Swim
