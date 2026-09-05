@@ -24,8 +24,15 @@
   }
   function addSquad(session,squad){
     M.access?.assert?.('session.edit');squad=text(squad);if(!session||!squad)return false;
-    const before=[...(session.identity?.squads||[])];if(before.some(x=>text(x).toLowerCase()===squad.toLowerCase()))return false;
-    const next=M.session?.cloneCurrent?M.session.cloneCurrent(session):U.clone(session);next.identity=next.identity||{};next.identity.squads=[...before,squad];next.changes=next.changes||[];next.changes.push({id:U.uid('change'),sessionId:next.id,type:'add_session_squad',itemId:null,before:{squads:before},after:{squads:[...next.identity.squads]},meta:{squad},at:U.now()});next.updatedAt=U.now();M.store?.putSession?.(M.state,next);return true;
+    // The picker captures `session` when the modal opens, but the modal can stay open for a while
+    // and Store.putSession is an unconditional whole-session overwrite (no merge, no revision check).
+    // If canonical Session state changes in the meantime -- a live-sync apply from another device, an
+    // edit made elsewhere in the same session -- committing a clone of the STALE captured `session`
+    // would silently roll that change back. Always re-resolve to the live canonical session right
+    // before mutating, so a squad add can only ever layer on top of whatever is currently true.
+    const live=M.state?.canonicalSessions?.[session.id]||session;
+    const before=[...(live.identity?.squads||[])];if(before.some(x=>text(x).toLowerCase()===squad.toLowerCase()))return false;
+    const next=M.session?.cloneCurrent?M.session.cloneCurrent(live):U.clone(live);next.identity=next.identity||{};next.identity.squads=[...before,squad];next.changes=next.changes||[];next.changes.push({id:U.uid('change'),sessionId:next.id,type:'add_session_squad',itemId:null,before:{squads:before},after:{squads:[...next.identity.squads]},meta:{squad},at:U.now()});next.updatedAt=U.now();M.store?.putSession?.(M.state,next);return true;
   }
   function close(){const h=document.querySelector('#modalHost');if(h)h.innerHTML='';M.nav?.dismissLayer?.();}
   function modal(title,body){const h=document.querySelector('#modalHost');if(!h)return null;h.innerHTML=`<div class="modal-backdrop"><section class="modal"><header><h2>${esc(title)}</h2><button type="button" data-roster-close>×</button></header><div class="modal-body">${body}</div></section></div>`;M.nav?.openLayer?.('modal');h.querySelector('[data-roster-close]')?.addEventListener('click',close);h.querySelector('.modal-backdrop')?.addEventListener('click',e=>{if(e.target===e.currentTarget)close()});return h;}
