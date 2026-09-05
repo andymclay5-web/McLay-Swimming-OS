@@ -19,6 +19,12 @@ global.addEventListener=()=>{};
 global.removeEventListener=()=>{};
 
 require('../app.js');
+// index.html loads engines/live-training-authority.js immediately after app.js, before v4-correct.js
+// (which wraps M.live.apply only `if(M.live?.apply)` -- see v4-correct.js's live-sync section).
+// Without this, app.js's own dead original L.apply (retired 4 Sep 2026, see
+// architecture/WRITER_MAP_FINDINGS.md) was silently standing in for the real owner here -- this
+// harness was never actually exercising the gated, revision-checked apply production runs.
+require('../engines/live-training-authority.js');
 require('../v4-correct.js');
 require('../v4-poolside-core.js');
 
