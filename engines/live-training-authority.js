@@ -17,6 +17,17 @@
       if(!derivedViews.has(view)){L.ignoredOperationalMessages=Number(L.ignoredOperationalMessages||0)+1;return false;}
       if(msg.authority!=='coach-operational'){L.ignoredDerivedMessages=Number(L.ignoredDerivedMessages||0)+1;return false;}
       if(msg.surfaceMode&&msg.surfaceMode!=='training'){L.ignoredMeetMessages=Number(L.ignoredMeetMessages||0)+1;return false;}
+      // Pre-apply staleness guard. `revision` is a per-sender, strictly-increasing local counter
+      // (bumped on every local save -- see Store.save), not a shared logical clock, so it is only
+      // ever meaningful compared against the last revision actually applied FROM THAT SAME SENDER.
+      // Without this, an out-of-order delivery (a frozen/backgrounded tab flushing a backlog, or any
+      // future transport that isn't BroadcastChannel's same-origin FIFO guarantee) could apply an
+      // older session/attendance snapshot over a newer one already showing on a TV/swimmer display,
+      // then just ratchet the counter forward afterwards as if nothing had regressed.
+      const lastBySender=L.lastAppliedRevisionBySender||(L.lastAppliedRevisionBySender={});
+      const senderPrev=Number(lastBySender[msg.from]||0),incomingRevision=Number(msg.revision||0);
+      if(incomingRevision<senderPrev){L.ignoredStaleMessages=Number(L.ignoredStaleMessages||0)+1;return false;}
+      lastBySender[msg.from]=Math.max(senderPrev,incomingRevision);
       L.suppress=true;
       try{
         const role=M.state.settings.activeRole,aid=M.state.settings.activeUserAthleteId,assistantId=M.state.settings.assistantId;
