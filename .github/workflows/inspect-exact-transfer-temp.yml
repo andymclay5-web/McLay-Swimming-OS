@@ -1,0 +1,18 @@
+name: Inspect exact transfer chunks
+on:
+  push:
+    branches: [tmp/exact-3file-staging-20260906]
+    paths: [.exact-transfer/INSPECT]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: python
+        run: |
+          import glob, pathlib, hashlib
+          for prefix in ['app','claude','writer']:
+            ps=sorted(glob.glob(f'.exact-transfer/{prefix}.part*'))
+            s=''.join(pathlib.Path(p).read_text(encoding='ascii') for p in ps)
+            print(prefix, [(p,len(pathlib.Path(p).read_text(encoding='ascii'))) for p in ps])
+            print(prefix,'total',len(s),'sha256',hashlib.sha256(s.encode()).hexdigest())
