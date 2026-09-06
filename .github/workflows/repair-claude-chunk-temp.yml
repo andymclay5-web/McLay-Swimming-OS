@@ -1,0 +1,44 @@
+name: Repair exact CLAUDE chunk (temporary)
+on:
+  push:
+    branches: [tmp/exact-3file-staging-20260906]
+    paths: [.exact-transfer/REPAIR_CLAUDE]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Recover the one missing base64 character exactly
+        shell: python
+        run: |
+          import hashlib, pathlib, string
+          p=pathlib.Path('.exact-transfer/claude.part05b')
+          s=p.read_text(encoding='ascii')
+          target='2715cc9da805718274e3d8089ad44c592609f4433b0e5d64838395941c1f3c97'
+          assert len(s)==4999, len(s)
+          alphabet=string.ascii_uppercase+string.ascii_lowercase+string.digits+'+/='
+          found=None
+          for i in range(len(s)+1):
+              pre=s[:i]; post=s[i:]
+              for ch in alphabet:
+                  cand=pre+ch+post
+                  if hashlib.sha256(cand.encode('ascii')).hexdigest()==target:
+                      found=cand
+                      print('recovered position',i,'character',repr(ch))
+                      break
+              if found is not None: break
+          if found is None:
+              raise SystemExit('No exact single-character repair found')
+          assert len(found)==5000
+          p.write_text(found,encoding='ascii',newline='')
+      - name: Commit exact repaired chunk
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .exact-transfer/claude.part05b
+          git commit -m "temp: repair exact CLAUDE chunk 05b"
+          git push
