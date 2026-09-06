@@ -1,0 +1,48 @@
+name: Reconstruct exact attached files (temporary)
+
+on:
+  push:
+    branches:
+      - tmp/exact-3file-staging-20260906
+    paths:
+      - .exact-transfer/TRIGGER
+
+permissions:
+  contents: write
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct and verify exact bytes
+        shell: python
+        run: |
+          import base64, glob, hashlib, lzma, pathlib
+          files = [
+              ('.exact-transfer/app', 'app.js', 'afbac8e81fa6273be41b4d315b69b907aea6ed9f05eb280803fb021ce60d163a'),
+              ('.exact-transfer/claude', 'CLAUDE.md', '9bbd070de8f9ce8d902f9ddf458a80543600dd13eb26c3b08e6dedd6edb672b0'),
+              ('.exact-transfer/writer', 'architecture/WRITER_MAP_FINDINGS.md', '82764aff318fac98bae0774ae518032f393f5b47ff52670c61f09f02df0d6aa8'),
+          ]
+          for prefix, out, expected in files:
+              parts = sorted(glob.glob(prefix + '.part*'))
+              if not parts:
+                  raise SystemExit(f'No chunks for {prefix}')
+              payload = ''.join(pathlib.Path(p).read_text(encoding='ascii') for p in parts)
+              raw = lzma.decompress(base64.b64decode(payload))
+              actual = hashlib.sha256(raw).hexdigest()
+              if actual != expected:
+                  raise SystemExit(f'{out}: SHA256 {actual} != {expected}')
+              path = pathlib.Path(out)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(raw)
+              print(out, len(raw), actual)
+      - name: Commit reconstructed files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js CLAUDE.md architecture/WRITER_MAP_FINDINGS.md
+          git commit -m "temp: reconstruct exact attached MSOS files"
+          git push
