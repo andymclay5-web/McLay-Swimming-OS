@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
   "calendar_id": "aquagym-2026-08-published",
-  "title": "AquaGym August 2026 Training Schedule",
+  "title": "AquaGym August-September 2026 Training Schedule",
   "month": "2026-08",
   "timezone": "Pacific/Auckland",
   "status": "published",
   "coverage_mode": "replace",
   "coverage_start": "2026-07-27",
-  "coverage_end": "2026-09-06",
-  "source_file": "Aquagym August 26 Schedule.pdf",
-  "published_at": "2026-07-31T10:37:00+12:00",
+  "coverage_end": "2026-10-04",
+  "source_file": "Aquagym August 26 Schedule.pdf; September 26 schedule.pdf",
+  "published_at": "2026-09-07T09:00:00+12:00",
   "rules": {
     "calendar_overrides_recurring_timetable": true,
     "expand_combined_squads_to_separate_sessions": true,
@@ -1589,7 +1589,7 @@
           "venue": "AquaGym",
           "pool_course": "SCM",
           "note": ""
-        },
+         },
         {
           "day_part": "PM",
           "start_time": "18:30",
@@ -1659,6 +1659,1065 @@
     },
     {
       "date": "2026-09-06",
+      "status": "off",
+      "sessions": [],
+      "events": [],
+      "notes": [
+        "OFF — no scheduled sessions."
+      ]
+    },
+    {
+      "date": "2026-09-07",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-08",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-09",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-10",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:15",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "Parakiore",
+          "pool_course": "LCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-11",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-12",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:30",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "06:00",
+          "end_time": "07:30",
+          "squads": [
+            "Development",
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [
+        {
+          "name": "Selwyn Spring Classic",
+          "kind": "meet"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "date": "2026-09-13",
+      "status": "meet",
+      "sessions": [],
+      "events": [
+        {
+          "name": "Selwyn Spring Classic",
+          "kind": "meet"
+        }
+      ],
+      "notes": [
+        "No regular Sunday training."
+      ]
+    },
+    {
+      "date": "2026-09-14",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": [
+        "AM OFF (Post-Meet)."
+      ]
+    },
+    {
+      "date": "2026-09-15",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+         },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-16",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-17",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:15",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "Parakiore",
+          "pool_course": "LCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-18",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-19",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:30",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "06:00",
+          "end_time": "07:30",
+          "squads": [
+            "Development",
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-20",
+      "status": "off",
+      "sessions": [],
+      "events": [],
+      "notes": [
+        "OFF — no scheduled sessions."
+      ]
+    },
+    {
+      "date": "2026-09-21",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-22",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-23",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-24",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:15",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "Parakiore",
+          "pool_course": "LCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-25",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:20",
+          "end_time": "07:20",
+          "squads": [
+            "National"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:00",
+          "squads": [
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "Development",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:45",
+          "squads": [
+            "Intermediate"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "19:30",
+          "squads": [
+            "Junior"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-26",
+      "status": "training",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "06:00",
+          "end_time": "07:30",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": []
+    },
+    {
+      "date": "2026-09-27",
+      "status": "meet",
+      "sessions": [],
+      "events": [
+        {
+          "name": "NZ Short Course Champs",
+          "kind": "meet"
+        }
+      ],
+      "notes": [
+        "No regular Sunday training."
+      ]
+    },
+    {
+      "date": "2026-09-28",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [
+        {
+          "name": "NZ Short Course Champs",
+          "kind": "meet"
+        }
+      ],
+      "notes": [
+        "AM OFF."
+      ]
+    },
+    {
+      "date": "2026-09-29",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:15",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [
+        {
+          "name": "NZ Short Course Champs",
+          "kind": "meet"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "date": "2026-09-30",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [
+        {
+          "name": "NZ Short Course Champs",
+          "kind": "meet"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "date": "2026-10-01",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "AM",
+          "start_time": "05:30",
+          "end_time": "07:15",
+          "squads": [
+            "National",
+            "Development"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        },
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [
+        {
+          "name": "NZ Short Course Champs",
+          "kind": "meet"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "date": "2026-10-02",
+      "status": "adjusted",
+      "sessions": [
+        {
+          "day_part": "PM",
+          "start_time": "18:30",
+          "end_time": "20:00",
+          "squads": [
+            "National",
+            "Development",
+            "Intermediate",
+            "Junior",
+            "Fitness"
+          ],
+          "venue": "AquaGym",
+          "pool_course": "SCM",
+          "note": ""
+        }
+      ],
+      "events": [],
+      "notes": [
+        "AM OFF."
+      ]
+    },
+    {
+      "date": "2026-10-03",
+      "status": "off",
+      "sessions": [],
+      "events": [],
+      "notes": [
+        "OFF — no scheduled sessions."
+      ]
+    },
+    {
+      "date": "2026-10-04",
       "status": "off",
       "sessions": [],
       "events": [],
