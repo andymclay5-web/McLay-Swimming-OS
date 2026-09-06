@@ -355,3 +355,124 @@ Per `AUTHORITY_MAP.md`'s own change-gate ("every consolidation PR should reduce 
    `hydrate()` race (§4); the new `stability-identity-bh.js` `A.role()` follow-up (§4); the
    live-sync echo re-save (§10); and, at the architecture level, building a real owner for Squad
    stimulus/readiness and retiring the remaining transitional wrappers.
+
+## Addendum — 4 September 2026 consolidation pass (items #1 and #2)
+
+Two more items from the "still open, next up" list above are now fixed, following a fresh product
+review that asked for exactly this kind of continued single-owner consolidation. As with the earlier
+addendum, read this as authoritative over the section prose above where they disagree.
+
+**§1 `attendance-roster.js`'s `addSquad` — fixed (commit `6d05edd`).** Investigated the actual
+mechanism before changing anything: `addSquad` already went through the sanctioned
+`M.session.cloneCurrent` → `M.store.putSession` path (not a raw bypass), and does correctly journal
+the change. The real defect was narrower than "writes the session from the wrong surface" implies:
+`openSquadPicker()` captures the session object once, when the modal opens, and closes over it in the
+squad button's click handler. `Store.putSession` is an unconditional whole-session overwrite (no
+merge, no revision check). If the canonical session changed between modal-open and squad-tap — a
+live-sync apply, or any other edit to the same session — the old code would clone the *stale*
+captured snapshot and silently roll back that interim change when the squad was added. Fix:
+`addSquad` now re-resolves the live canonical session by id immediately before cloning, so it can
+only ever layer the squad addition on top of whatever is currently true. Regression:
+`tests/attendance-roster-add-squad-live-edit-20260904.cjs` — reproduces exactly this sequence (live
+edit arrives while the picker is open, squad added from the stale snapshot) and asserts the interim
+edit survives; includes a static source pin so a regression back to trusting the stale argument fails
+fast. Verified via negative control that both the static and dynamic assertions correctly fail
+against the pre-fix code.
+
+**§1/§4 `live-training-authority.js`'s `L.apply` pre-apply revision check — fixed (commit pending),
+with one correction to how this finding was originally framed.** The original audit (and this
+document's own prose above) describes this as "cross-device live-sync." That is not accurate:
+`L.channel` (see `app.js`'s `L.init`) is a plain `BroadcastChannel('mclay-swimming-v4-live')`, which
+is same-origin, same-browser-profile only — it cannot reach a different physical device at all. The
+actual scope is same-device, multi-tab sync (e.g. a Board tab and a cast/kiosk TV-display tab open in
+the same browser), already narrowed to `tv`/`swimmer` derived views and `coach-operational` senders.
+Given BroadcastChannel's FIFO delivery guarantee and that `revision` is bumped strictly on every local
+save before a throttled post, genuine out-of-order delivery under the current transport is very
+unlikely in practice — this was a real gap in the code, not a live production bug. Fixed anyway,
+since it was flagged, the fix is cheap and unambiguous, and it removes a landmine for whenever the
+transport changes (e.g. if live-sync is ever extended beyond BroadcastChannel to something that
+doesn't guarantee ordering). `L.apply` now tracks the last-applied revision **per sender** (`msg.from`)
+and rejects any incoming message whose revision is lower than the last one actually applied from that
+same sender, before touching any state — not just an after-the-fact counter ratchet. Comparison is
+scoped per-sender because `revision` is a local monotonic counter, not a shared logical clock: two
+different senders' revision numbers carry no ordering relationship to each other, so a naive global
+comparison would incorrectly drop legitimate updates from a second operational source. Regression:
+`tests/live-training-authority-stale-revision-20260904.cjs`.
+
+Remaining open items from §9's "next up" list are unchanged by this pass: the two dead-but-live-order-dependent
+originals in `app.js`, the three-way ratio-table drift and four `adaptationOverrides` writers, the
+`board.js`/`board-state.js` dual stroke-write, `meet-ops-av.js`'s parallel backup channel,
+`storage.js`'s unawaited `hydrate()`, the `stability-identity-bh.js` `A.role()` follow-up, the
+live-sync echo re-save, and the two `AUTHORITY_MAP.md` architecture-level items.
+
+## Addendum — 4 September 2026, item #3: dead app.js originals retired
+
+`app.js`'s dead original `L.apply` (~line 746) and dead original `N.applyHistory` (~line 868) are
+now deleted, not just shadowed by load order. Verified safe before removing, not after: both were
+looked up lazily (`L.channel.onmessage=e=>L.apply(e.data)`, `N.init`'s popstate handler calling
+`N.applyHistory(e.state)`) by property name at event-delivery time, never captured into a local
+variable at registration time, and both real owners (`engines/live-training-authority.js`,
+`engines/navigation.js`) load via `<script defer>` after `app.js` and reassign the same properties
+before boot ever fires the events that would invoke them (`N.init`'s own dead popstate registration
+is itself superseded by `engines/navigation.js`'s later `N.init` reassignment, before `boot()` calls
+`N.init()` at all). `L.init` (BroadcastChannel setup) and `app.js`'s own `N.init`/`N.show`/etc. were
+left untouched -- only the two specifically-flagged writers were retired, not the surrounding
+subsystem. Regression: `tests/dead-live-nav-originals-retired-20260904.cjs` -- static pins that both
+dead bodies are gone, that what app.js legitimately still owns nearby is untouched, that the real
+owner engines still exist and are wired, and that `index.html`'s script order still puts both owner
+engines after `app.js` (the entire safety argument depends on that order holding).
+
+**A real finding surfaced while doing this, unrelated to whether the removal itself was safe:**
+removing the dead `L.apply` broke `tests/v4-guardian.test.js` (`M.live.apply is not a function`).
+That test's require list (`app.js`, `v4-correct.js`, `v4-poolside-core.js`) never included
+`engines/live-training-authority.js` -- so in that one isolated bare-Node harness, `M.live.apply`
+had only ever been standing in on the now-retired dead original, not the real production owner.
+Fixed by adding the missing `require`, matching production's actual script order. That surfaced a
+second, pre-existing, genuine bug: app.js's own embedded Guardian self-test ("Live TV update follows
+canonical session but preserves display role/view", line ~1042) called `M.live.apply` with a message
+missing `authority:'coach-operational'`. Against the real gated owner (which this test had never
+actually exercised before, in any environment, given the same missing-require gap likely also masked
+it in a way that never surfaced until this specific edit), that message is correctly rejected --
+meaning this self-test's claim was never actually true against production code, it was only ever
+validated against the ungated dead body. Fixed by adding the missing `authority`/`sourceView`/
+`sourceRole`/`surfaceMode` fields so the test message matches what `L.payload` actually produces from
+a real coach-operational tab; Guardian is back to 82/82 with the self-test now proving something real.
+This is exactly the "don't mechanically delete -- check if apparently dead code is a depended-on
+fallback" risk this document has been warning about, and it was a fallback, just for a test harness
+rather than for users -- worth remembering when retiring any of the remaining items below.
+
+## Addendum — 4 September 2026: Jordan (assistant coach) role-persistence verification
+
+Per the product review's request, verified -- not redesigned -- that the current capability model
+(`engines/access-authority.js`) actually holds up for an assistant coach's device across every real
+lifecycle event, against the real running app (not a hand-built stub). New regression:
+`tests/jordan-assistant-role-persistence-20260904.cjs`. Checked and confirmed, in order: role +
+assigned-squad scoping survive a full page reload (real re-hydration, waited for the actual
+IndexedDB write via `M.storageEngine.whenPersisted` before reloading -- an immediate reload races
+`Store.save`'s ~40ms debounce and was the first, spurious failure this test hit); survive
+background/resume (`visibilitychange`); survive navigation between views; survive the boot-time
+cloud evidence refresh (item covered by `tests/evidence-refresh-authority-20260904.cjs`, re-checked
+here specifically for role); survive an explicit session switch, with a cross-squad switch correctly
+throwing rather than silently succeeding (`M.selectSession`'s own `M.access.sessionAllowed` guard);
+and survive an incoming live-sync message from another tab, which the code already strips role/view/
+assistantId back to this device's own values after applying (see the L.apply addendum above).
+Confirmed with a negative control (temporarily changing `athleteAllowed`'s empty-squad guard from
+`!!s.size&&...` to fail OPEN) that the fail-closed assertion is real, not vacuous -- it caught the
+injected bug immediately. Also added a static check that `activeRole`/`assistantSquads`/
+`assistantId`/`assistantPermissions` never appear in `C.PULL_TABLES`/`C.CORE_WRITE_TABLES`: role
+assignment is architecturally local-only, never a Supabase table, so "does this affect the owner's
+device or another assistant's device" isn't just behaviorally correct today, it's structurally
+impossible to violate via cloud sync.
+
+**One more dead-code finding, confirmed but NOT touched in this pass (deliberately, to keep this
+verification pass's blast radius to verification):** the §4 "stability-identity-bh.js's `A.role()`
+runtime check... not yet confirmed reachable" item from the earlier addenda is now confirmed
+**unreachable, not live**. `engines/stability-identity-bh.js` (loads at index.html position ~76)
+wraps `M.access.role`/`M.access.setRole` at load time, but `engines/access-authority.js` (loads at
+position ~78, i.e. after it) unconditionally reassigns `A.role=role;...A.setRole=setRole;` again,
+discarding stability-identity-bh.js's wrapper entirely. Confirmed empirically against the real
+running app: `M.access.role.toString()` is access-authority.js's own implementation, not
+stability-identity-bh.js's wrapped one. This is the same class of landmine as the retired
+`L.apply`/`N.applyHistory` originals above (dead-by-load-order, one script reorder away from
+resurfacing with a background-force-navigate default `navigate=true`) -- left as a follow-up rather
+than retired here, since it wasn't part of what this pass set out to verify.
