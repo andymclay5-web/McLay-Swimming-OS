@@ -933,3 +933,91 @@ Before this handover was written, Claude was granted live Supabase MCP access to
 - Not fixable via SQL: "Leaked password protection" (HaveIBeenPwned check) is an Auth dashboard setting, still needs to be enabled manually.
 
 This does not mean Supabase security is fully audited — 11.4's instruction to verify RLS coverage for every table category (not just what the Advisor flagged) is still open.
+
+## Addendum — Authority-consolidation pass, product-vision reaffirmation (Claude, 4 Sept 2026)
+
+Andy reviewed an independent assessment of `main` (crediting the hardcoded-session-rewrite removal,
+boot-repair-wiping-Roll removal, background role-validation fix, T400 recency fix,
+ratio-derived-pacing removal, Meet-nav ownership clarification, the Jordan work, and the Supabase
+data-landscape audit) and explicitly asked that these gains not be undone, and that this document
+durably record the authority/vision principles below so future work — including future AI sessions —
+stays anchored to them rather than re-litigating settled ground. Everything here restates and
+reaffirms sections 5–8, 22 and 28 above; nothing below overrides them.
+
+**MSOS is a coaching operating system, not a workout renderer.** The Board must behave predictably:
+- Explicit session selection stays selected. Nothing — not a reload, a background/resume cycle, a
+  render pass, a role re-validation, a cloud/evidence sync, or history/back navigation — may silently
+  select a different session than the one the coach chose.
+- Roll modifies attendance only. It is bound to the selected session and must never cause the
+  canonical workout to reparse, mutate, or be replaced.
+- Adaptations derive from the canonical workout, preserving set purpose and coaching grammar — not
+  from mechanically reducing metres by a ratio. A modified swimmer's work should still read as "that's
+  what the squad is doing → this is my version," not a different, unrelated set.
+- A live edit becomes canonical immediately — local-first, no waiting on cloud, no second competing
+  version of the workout.
+- Targets/evidence update from that canonical truth, and only from real evidence (T400, PB/race
+  evidence, authored rest, race-pace models). Never invent a target; never derive pace from a volume
+  ratio.
+- Background and cloud work — hydration, boot-time refreshes, live-sync from another tab, role
+  re-validation — must never take over the live coaching context: never change view, selected session,
+  Roll, an in-flight edit, scroll/detail context, or device role as a side effect of running.
+- Preserve Charlotte/McKenzie/para individualisation as the model, not the exception: modified work
+  must preserve the set's purpose and grammar, not just hit a smaller number.
+
+Restated as a test: **the coach should never wonder** why the session changed, why Roll changed the
+workout, why a background sync moved them somewhere else, or why a target appeared with no evidence
+behind it. Any of those is an authority failure, not a cosmetic bug, and gets triaged and fixed with
+that severity regardless of how small the diff looks.
+
+**Meet**, per section 28, stays functional and isolated from Training truth; it does not get
+polished for its own sake unless doing so is required to protect Training architecture. The long-term
+Meet direction is unchanged and reaffirmed: capture race → voice/video/evidence → process → produce a
+structured race report. The report is the product; the transcript/audio is evidence, not the
+deliverable.
+
+### What was done in this pass (commits `029c340`..`3d49fd6`, all on `main`)
+
+Full findings, investigation notes and regression details live in
+`architecture/WRITER_MAP_FINDINGS.md`'s dated addenda; this is the summary for this document.
+
+1. **`029c340`** — the boot-time automatic coach-evidence pull (added in the previous pass) was
+   scoped down from the broad admin `pullShadow`/`applyShadow` (which touches sessions, attendance,
+   roster, captures — the exact class of background-authority risk this document warns against) to a
+   new, narrow `C.pullEvidence`/`applyEvidence` that can only ever touch `coach_results`/
+   `results_pb_board`/`results_event_history`. Regression proves the forbidden tables are never even
+   requested over the network, not just ignored after the fact.
+2. **`6d05edd`** — `engines/attendance-roster.js`'s `addSquad` (Roll's "+ Add squad" action) cloned
+   and committed whatever session snapshot was captured when the picker modal opened; if the
+   canonical session changed while the modal sat open, adding a squad would silently roll that change
+   back. Now re-resolves the live canonical session immediately before cloning.
+3. **`bcec067`** — `engines/live-training-authority.js`'s `L.apply` (live TV/swimmer display sync,
+   same-browser multi-tab only — corrected an earlier "cross-device" mischaracterization of this
+   mechanism) applied incoming messages before checking whether they were actually newer. Now rejects
+   a message whose revision is older than the last one applied from that same sender, before touching
+   state.
+4. **`617fca4`** — retired the dead original `L.apply`/`N.applyHistory` implementations still
+   present verbatim in `app.js`, kept dead only by script load order. Along the way, found and fixed
+   two real pre-existing bugs this surfaced: a test harness (`tests/v4-guardian.test.js`) had been
+   silently exercising the dead code instead of the real owner, which in turn revealed that app.js's
+   own embedded Guardian self-test for live TV updates had never actually been valid against the real
+   gated implementation (fixed the test message to include the fields a real coach-operational tab
+   sends).
+5. Verified end-to-end (not redesigned) that assistant-coach device role persists correctly across
+   reload, background/resume, navigation, cloud evidence refresh, and session switching, fails closed
+   with no assigned squad, and is structurally incapable of affecting another device (role/squad
+   fields are never part of any Supabase table).
+
+### Next highest-risk items, still open (see `architecture/WRITER_MAP_FINDINGS.md` for full detail)
+
+`engines/stability-identity-bh.js`'s dead `A.role()` background-navigate wrapper (same class of
+landmine as item 4 above, confirmed unreachable by load order, not yet retired); the four independent
+`adaptationOverrides` writers; the `board.js`/`board-state.js` dual stroke-write; three separate ratio
+tables in `v4-correct.js`/`app.js`/`modification.js`; `engines/meet-ops-av.js`'s parallel localStorage
+backup channel; `engines/storage.js`'s unawaited `hydrate()`; the live-sync echo re-save in
+`v4-correct.js`; and, at the architecture level, a real owner for Squad stimulus/readiness and
+retiring the remaining transitional wrappers named in `AUTHORITY_MAP.md`.
+
+This does not change the standing caution from the previous addendum and from section 37: **not
+production-trusted yet.** No build from this pass has been proven on Andy's actual phone. The goal
+remains one canonical session truth, one attendance truth, one navigation authority, one prescription
+authority, one evidence authority, and background services that enrich without ever taking control.
