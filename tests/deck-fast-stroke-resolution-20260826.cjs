@@ -28,13 +28,15 @@ global.MSOS4={
 require('../engines/performance.js');
 const P=global.MSOS4.performanceEngine,session={id:'s1',identity:{course:'SCM'}};
 const deck=P.selectStrokeForContext(athlete,{raw:'#1 Stroke'},global.MSOS4.state,session,{});
-assert.equal(deepCalls,0,'Board target resolution must not invoke deep weekly stroke-balance analysis');
-assert.equal(deck.stroke,'Freestyle','Deck fast path should use highest-ranked usable stroke PB when no recent coach override exists');
+assert.equal(deepCalls,0,'Board #1 resolution must not invoke deep weekly stroke-balance analysis');
+assert.equal(deck.stroke,'Freestyle','Deck #1 must use the highest-points eligible stroke PB; IM is not a stroke choice');
+assert.match(deck.source,/highest ranked WA stroke PB/i);
 assert.match(deck.source,/deck fast path/i);
 
 global.MSOS4.state.settings.view='athletes';
 P.invalidate(global.MSOS4.state);
 const deep=P.selectStrokeForContext(athlete,{raw:'#1 Stroke'},global.MSOS4.state,session,{});
-assert.equal(deepCalls,1,'Non-deck performance context should retain deep stroke-balance analysis');
-assert.equal(deep.stroke,'Breaststroke');
-console.log('DECK_FAST_STROKE_RESOLUTION_PASS');
+assert.equal(deepCalls,0,'Non-deck #1 resolution must use the same points authority and must not let stroke-balance heuristics redefine #1');
+assert.equal(deep.stroke,'Freestyle','Highest-points eligible stroke remains #1 in athlete/deep views too');
+assert.match(deep.source,/highest ranked WA stroke PB/i);
+console.log('DECK_FAST_STROKE_RESOLUTION_PASS points-authority-consistent');
