@@ -11,6 +11,9 @@ on:
       - 'engines/modification.js'
       - 'engines/training-prescription-policy.js'
       - 'monthly_calendar.json'
+      - 'SHA256SUMS.txt'
+      - 'app.js'
+      - 'styles.css'
       - 'tests/navigation-calendar-board-20260907.cjs'
       - 'tests/number-one-points-authority-20260907.cjs'
       - 'tests/modified-race-pace-wiring-20260907.cjs'
@@ -37,3 +40,8 @@ jobs:
           node tests/navigation-calendar-board-20260907.cjs
           node tests/number-one-points-authority-20260907.cjs
           node tests/modified-race-pace-wiring-20260907.cjs
+      - name: Audit protected release hashes
+        run: |
+          sha256sum app.js styles.css monthly_calendar.json
+          printf '%s\n' '--- locked rows ---'
+          grep -E '  (app\.js|styles\.css|monthly_calendar\.json)$' SHA256SUMS.txt
