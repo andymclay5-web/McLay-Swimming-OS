@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/training-board-capture-20260907
+      - fix/training-start-calendar-20260907
   pull_request:
     branches:
       - main
@@ -24,6 +25,7 @@ jobs:
           node --check sw.js
           node --check tests/training-board-capture-after-meet-20260907.cjs
           node --check tests/training-session-load-tonight-20260907.cjs
+          node --check tests/training-start-calendar-live-20260907.cjs
       - name: Release package coherence
         run: node tests/release-package.test.js
       - name: Calendar coverage
@@ -40,6 +42,8 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-training-http.log 2>&1 &
           echo $! >/tmp/msos-training-http.pid
           sleep 1
+      - name: Training boot leaves shelved Meet and calendar opens on September
+        run: node tests/training-start-calendar-live-20260907.cjs
       - name: Load Sep 7 training session from real UI and reload
         run: node tests/training-session-load-tonight-20260907.cjs
       - name: Training capture survives stale Meet chrome and reload
