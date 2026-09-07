@@ -3,7 +3,11 @@
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
   const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-session-selection-authority-20260901'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
-  const active=view=>{if(!views.has(view))view='board';document.querySelectorAll('.view').forEach(x=>{const on=x.id===`${view}View`;x.classList.toggle('active',on);x.hidden=!on;if('inert'in x)x.inert=!on});document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;document.body.dataset.msosSurface=view==='meet'?'meet':'training';};
+  const clearMeetChrome=()=>{
+    document.body.classList.remove('meet-program-ba-active');
+    document.querySelector('[data-ba-talkbar]')?.remove();
+  };
+  const active=view=>{if(!views.has(view))view='board';document.querySelectorAll('.view').forEach(x=>{const on=x.id===`${view}View`;x.classList.toggle('active',on);x.hidden=!on;if('inert'in x)x.inert=!on});document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;document.body.dataset.msosSurface=view==='meet'?'meet':'training';if(view!=='meet')clearMeetChrome();};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
   const scrollKey=view=>`${M.state?.settings?.selectedSessionId||'none'}:${view||M.state?.settings?.view||'board'}`;
   const rememberScroll=()=>{try{M.state.settings=M.state.settings||{};M.state.settings.viewScroll=M.state.settings.viewScroll||{};M.state.settings.viewScroll[scrollKey()]=Math.max(0,Math.round(window.scrollY||0));saveUi()}catch{}};
