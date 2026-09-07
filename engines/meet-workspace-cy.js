@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260907-empty-first';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260907-bounded-projection-authority';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -49,6 +49,20 @@
     return ws[id];
   }
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
+  function restoreWorkspaceProjection(ws){
+    if(!ws)return;
+    M.state.meetOps=clone(ws.ops||blankOps());
+    applyProgram(ws.program||{});
+    M.state.meetFieldDeck=ws.deck?clone(ws.deck):null;
+    save();
+  }
+  function clearRejectedDeckProjection(){
+    const h=host();if(!h)return;
+    h.querySelector('[data-meet-program-ba]')?.remove();
+    h.querySelector('[data-meet-field-deck-au]')?.remove();
+    document.body.classList.remove('meet-program-ba-active');
+    try{M.meetFieldPatch?.install?.()}catch{}
+  }
   function renderIntentionalEmpty(id,title){
     M.state.meetFieldDeck=emptyDeck(id,title);save();
     M.ui.renderMeet?.();
@@ -79,11 +93,16 @@
   }
   function adoptLoadedProgramme(){
     const d=M.state?.meetFieldDeck;if(!d?.races?.length)return currentMeet();
-    const title=sourceTitleForDeck(d),rows=meets(),ws=workspaces();
+    const title=sourceTitleForDeck(d),rows=meets(),ws=workspaces(),cur=currentMeet(),curWs=cur?ws[cur.id]:null;
     if(title&&(!txt(d.title)||norm(d.title)==='meet programme'))d.title=title;
 
-    // Competition identity outranks a stale meet_id. This prevents a loaded programme
-    // from being displayed over a different empty/previous meet workspace.
+    const belongsToCurrent=!!(cur&&(d.meet_id===cur.id||sameCompetition(cur.title,title)));
+    if(cur&&curWs&&!belongsToCurrent){
+      restoreWorkspaceProjection(curWs);
+      clearRejectedDeckProjection();
+      return cur;
+    }
+
     let m=rows.find(x=>sameCompetition(x.title,title)&&ws[x.id]);
     if(!m)m=rows.find(x=>sameCompetition(x.title,title));
     const tagged=rows.find(x=>x.id===d.meet_id);
@@ -96,8 +115,6 @@
       try{M.meet.setCurrent(m.id)}catch{M.state.settings.currentMeetId=m.id}
     }
     tagActiveMeet(m.id);
-    // The loaded deck/programme is the current live truth. Snapshot it into the
-    // matched workspace immediately so the lower Live Meet Deck cannot remain empty.
     snapshotCurrent({persist:true});
     return m;
   }
@@ -112,9 +129,8 @@
     const ws=workspaces()[id];if(!ws)return;
     try{M.meet.setCurrent(id)}catch{M.state.settings.currentMeetId=id}
     const m=currentMeet();
-    M.state.meetOps=clone(ws.ops||blankOps());
-    applyProgram(ws.program||{});
-    if(ws.deck){M.state.meetFieldDeck=clone(ws.deck);tagActiveMeet(id);save();M.ui.renderMeet?.();}
+    restoreWorkspaceProjection(ws);
+    if(ws.deck){tagActiveMeet(id);M.ui.renderMeet?.();}
     else renderIntentionalEmpty(id,m?.title||ws.title||'Swim meet');
   }
 
@@ -130,10 +146,7 @@
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
       let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
-      M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();
-      // Establish the new competition's empty authority before dismissing the modal.
-      // dismissLayer can trigger a Meet render; if the previous deck is still live at
-      // that instant it can be re-adopted and steal current-meet authority back.
+      restoreWorkspaceProjection(workspaces()[m.id]);
       renderIntentionalEmpty(m.id,m.title);closeModal();M.toast?.(`${m.title} ready · add Session 1 programme`);
     };
   }
@@ -154,13 +167,13 @@
   function bindIntakeHandoff(){
     document.addEventListener('click',e=>{
       if(!e.target?.closest?.('[data-mfa-use]'))return;
-      queueMicrotask(()=>{
+      setTimeout(()=>{
         if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
         adoptLoadedProgramme();
         renderSwitcher();
         save();
-      });
-    },true);
+      },0);
+    },false);
   }
 
   style();
