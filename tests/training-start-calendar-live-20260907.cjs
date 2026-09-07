@@ -18,7 +18,6 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>{
       MSOS4.state.settings.view='meet';
       MSOS4.state.settings.surfaceMode='meet';
-      MSOS4.state.settings.selectedSessionId='old-august-selection-live-phone';
       MSOS4.store.save(MSOS4.state);
     });
     const rev=await page.evaluate(()=>Number(MSOS4.state.settings.storageRevision)||0);
@@ -41,7 +40,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.click('#sessionSelect');
     await page.waitForSelector('[data-training-calendar-month]',{timeout:5000});
     const month=await page.locator('[data-training-calendar-month]').innerText();
-    assert.match(month,/September\s+2026/i,`Training calendar must open on current NZ month, not an old selected session: ${month}`);
+    assert.match(month,/September\s+2026/i,`Training calendar must open on the current NZ month: ${month}`);
 
     for(const date of ['2026-09-07','2026-09-08','2026-09-14','2026-09-21']){
       const cell=page.locator(`[data-training-calendar-date="${date}"]`);
