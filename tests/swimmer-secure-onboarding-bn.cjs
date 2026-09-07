@@ -20,6 +20,7 @@ assert.ok(portal.includes('Strongest performance first.')&&portal.includes('Tap 
 assert.ok(portal.includes('Finish session with Andy')||portal.includes('Finish session with your coach'),'session finish action missing');
 assert.ok(portal.includes('Challenge this set')&&portal.includes('Edit your version'),'swimmer session challenge/edit contract missing');
 assert.ok(portal.includes('msos_swimmer_submit_session_action'),'secure session-action submit missing');
+assert.ok(portal.includes('PAST SESSIONS')&&portal.includes('staticItemHtml'),'completed history must be visible and read-only');
 assert.ok(coach.includes('Give swimmer access'),'coach access action missing');
 assert.ok(coach.includes('msos_publish_swimmer_payload'),'athlete-specific projection publish missing');
 assert.ok(coach.includes("['shared','swimmer']"),'coach-private captures are not explicitly excluded');
@@ -28,7 +29,9 @@ assert.ok(coach.includes('prepareAthlete'),'QR publish no longer verifies comple
 assert.ok(coach.includes('readinessFor'),'QR publish no longer has a swimmer-readiness gate');
 assert.ok(coach.includes('pathwaysForAthlete'),'secure payload is not using the forward-looking performance engine');
 assert.ok(coach.includes("schema:'msos-swimmer-portal-v5'"),'secure payload schema did not advance with session workflow');
-assert.ok(coach.includes('session:safeSession(a)'),'secure payload lost current athlete session projection');
+assert.ok(coach.includes('session:safeSession(a,s)'),'secure payload lost explicitly selected athlete session projection');
+assert.ok(coach.includes('history:[]')&&coach.includes('buildHistory'),'secure payload lost swimmer session history');
+assert.ok(coach.includes('data-bn-publish'),'existing authorised swimmer device cannot be updated without a new QR');
 assert.ok(coach.includes('pathway:{SCM:scm,LCM:lcm}'),'secure payload lost both pathway tracks');
 assert.ok(coach.includes('tests:safeTests(a)')&&coach.includes('meet:safeMeet(a)'),'secure payload must contain swimmer-only tests and meet data');
 assert.ok(context.includes('disabled:true'),'legacy swimmer experience layer must remain retired');
