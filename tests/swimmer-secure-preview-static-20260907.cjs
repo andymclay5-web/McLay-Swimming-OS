@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'..'),read=f=>fs.readFileSync(path.join(root,f),'utf8');
-const invite=read('engines/swimmer-invite-bn.js'),portal=read('swimmer-portal.js'),sql=read('supabase/20260824_secure_swimmer_portal.sql'),qr=read('vendor/qrcode.min.js');
+const invite=read('engines/swimmer-invite-bn.js'),portal=read('swimmer-portal.js'),html=read('swimmer-portal.html'),sql=read('supabase/20260824_secure_swimmer_portal.sql'),qr=read('vendor/qrcode.min.js');
 assert.doesNotMatch(invite,/cdn\.jsdelivr|unpkg|cdnjs/i,'QR generation must not depend on a third-party CDN');
 assert.match(invite,/vendor\/qrcode\.min\.js\?v=20260907a/,'invite owner must load the bundled QR renderer');
 assert.doesNotMatch(invite,/date_of_birth\s*:/,'published swimmer payload must not include DOB');
@@ -10,6 +10,7 @@ assert.match(invite,/coachPreview/,'coach preview route must be explicit');
 assert.match(invite,/p_minutes:15/,'real invite must remain 15 minutes');
 assert.match(invite,/data-bn-publish/,'existing swimmer devices must have a publish/update path separate from QR onboarding');
 assert.match(invite,/buildHistory/);assert.match(invite,/action_type!=='finish'/);assert.match(invite,/Attended at AquaGym/);assert.match(invite,/Completed remotely/);
+assert.match(html,/swimmer-portal\.js\?v=20260907b/,'portal shell must request the current latest-plus-history renderer');
 assert.match(portal,/PREVIEW=PARAMS\.get\('coachPreview'\)==='1'/);
 assert.match(portal,/if\(PREVIEW\)throw new Error\('Coach preview is read-only\. Nothing was sent\.'/,'preview RPC writes must fail closed');
 assert.match(portal,/if\(PREVIEW\)\{startPreview\(\);return;\}/,'preview must exit before device-token/localStorage boot');
