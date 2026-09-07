@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
-  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-training-calendar-authority-20260907b'};
+  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-session-selection-authority-20260901'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const MEET_SHELVED=true;
   const normalView=view=>MEET_SHELVED&&view==='meet'?'board':views.has(view)?view:'board';
