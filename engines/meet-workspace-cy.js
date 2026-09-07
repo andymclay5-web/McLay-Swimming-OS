@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260828de-same-competition-authority';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260907-empty-first';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -130,7 +130,11 @@
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
       let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
-      M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();closeModal();renderIntentionalEmpty(m.id,m.title);M.toast?.(`${m.title} ready · add Session 1 programme`);
+      M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();
+      // Establish the new competition's empty authority before dismissing the modal.
+      // dismissLayer can trigger a Meet render; if the previous deck is still live at
+      // that instant it can be re-adopted and steal current-meet authority back.
+      renderIntentionalEmpty(m.id,m.title);closeModal();M.toast?.(`${m.title} ready · add Session 1 programme`);
     };
   }
 
