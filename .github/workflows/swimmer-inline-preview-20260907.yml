@@ -1,0 +1,33 @@
+name: Swimmer Inline Preview
+on:
+  pull_request:
+    paths:
+      - 'engines/swimmer-invite-bn.js'
+      - 'swimmer-portal.js'
+      - 'swimmer-portal.html'
+      - 'tests/swimmer-portal-preview-browser-20260907.cjs'
+      - 'tests/swimmer-secure-preview-static-20260907.cjs'
+      - 'tests/swimmer-preview-session-preservation-static-20260907.cjs'
+      - '.github/workflows/swimmer-inline-preview-20260907.yml'
+jobs:
+  inline-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check engines/swimmer-invite-bn.js
+          node --check swimmer-portal.js
+      - name: Static popup-free preview contract
+        run: |
+          node tests/swimmer-secure-preview-static-20260907.cjs
+          node tests/swimmer-preview-session-preservation-static-20260907.cjs
+      - name: Install browser runtime
+        run: npm install --no-save playwright@1.54.2 && npx playwright install --with-deps chromium
+      - name: Start candidate
+        run: python3 -m http.server 8765 >/tmp/msos-inline-preview-server.log 2>&1 &
+      - name: Android-shaped embedded swimmer preview
+        run: MSOS4_TEST_URL=http://127.0.0.1:8765/ node tests/swimmer-portal-preview-browser-20260907.cjs

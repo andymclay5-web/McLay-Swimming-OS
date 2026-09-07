@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,R=g.MSOSArchitecture?.AthleteReport,C=g.MSOSEngines?.Coordinator;if(!M?.ui||!M?.state)return;
-  const X=M.swimmerInviteBN={build:'v4-swimmer-history-preview-20260907b'};
+  const X=M.swimmerInviteBN={build:'v4-swimmer-history-preview-20260907c'};
   const esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??''),text=v=>String(v??'').replace(/\s+/g,' ').trim(),norm=v=>text(v).toLowerCase();
   const selected=()=>{const id=M.state?.settings?.selectedAthleteId;return(M.state?.athletes||[]).find(a=>a.id===id)||null;};
   const cfg=()=>M.store?.config?.()||g.MCLAY_CONFIG||{},auth=()=>M.store?.auth?.()||{};
@@ -85,11 +85,16 @@
   async function acknowledgeSessionAction(id){return rpc('msos_ack_swimmer_session_action',{p_action_id:id});}
   async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;if(X.qrPromise)return X.qrPromise;X.qrPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='vendor/qrcode.min.js?v=20260907a';s.onload=()=>typeof g.QRCode==='function'?resolve(g.QRCode):reject(new Error('Bundled QR renderer did not load'));s.onerror=()=>reject(new Error('Bundled QR renderer could not load'));document.head.appendChild(s)});return X.qrPromise;}
   async function openPreview(a,s,setStatus){
-    const url=new URL('swimmer-portal.html',location.href);url.searchParams.set('coachPreview','1');
-    const w=window.open(url.toString(),'msos-swimmer-coach-preview');if(!w)throw new Error('Preview window was blocked. Allow pop-ups for MSOS and try again.');
-    const origin=location.origin,portal=await portalForPublish(a,s,{strictHistory:false});let sent=false;
-    const handler=e=>{if(sent||e.origin!==origin||e.source!==w||e.data?.type!=='msos-swimmer-preview-ready')return;sent=true;w.postMessage({type:'msos-swimmer-preview-payload',payload:portal},origin);removeEventListener('message',handler);setStatus?.(`Preview open · ${sessionLabel(s)} · ${portal.history.length} past session${portal.history.length===1?'':'s'} · no swimmer access issued.`,'ok');};
-    addEventListener('message',handler);setTimeout(()=>{if(!sent){removeEventListener('message',handler);setStatus?.('Preview did not connect. Close it and try again.','error');}},5500);return w;
+    document.querySelector('[data-bn-preview-shell]')?.remove();
+    const portal=await portalForPublish(a,s,{strictHistory:false}),origin=location.origin,scrollX=window.scrollX,scrollY=window.scrollY,selectedSessionBefore=String(M.state?.settings?.selectedSessionId||M.currentSession?.()?.id||''),oldOverflow=document.documentElement.style.overflow;
+    const shell=document.createElement('div');shell.dataset.bnPreviewShell='1';shell.style.cssText='position:fixed;inset:0;z-index:100000;background:#eaf3f6;display:grid;grid-template-rows:auto minmax(0,1fr);';
+    shell.innerHTML=`<div style="display:flex;gap:10px;align-items:center;padding:10px 12px;background:#0d4566;color:#fff;box-shadow:0 1px 6px #0003"><button data-bn-preview-close style="border:0;border-radius:10px;padding:9px 12px;font-weight:900">← Back to coach</button><div style="min-width:0"><b>${esc(a.preferred_name||a.full_name||'Swimmer')} · preview</b><div style="font-size:11px;opacity:.85">Read-only · same swimmer view · no access issued</div></div></div><iframe data-bn-preview-frame title="Swimmer preview" style="width:100%;height:100%;border:0;background:#eef6f8"></iframe>`;
+    document.body.append(shell);document.documentElement.style.overflow='hidden';
+    const frame=shell.querySelector('[data-bn-preview-frame]'),url=new URL('swimmer-portal.html',location.href);url.searchParams.set('coachPreview','1');url.searchParams.set('embedded','1');url.searchParams.set('v','20260907c');
+    let sent=false,closed=false;
+    const cleanup=()=>{if(closed)return;closed=true;removeEventListener('message',handler);shell.remove();document.documentElement.style.overflow=oldOverflow;requestAnimationFrame(()=>window.scrollTo(scrollX,scrollY));const now=String(M.state?.settings?.selectedSessionId||M.currentSession?.()?.id||'');if(selectedSessionBefore&&now!==selectedSessionBefore)setStatus?.(`Preview closed · Training session changed unexpectedly (${selectedSessionBefore} → ${now}). Do not continue until checked.`,'error');};
+    const handler=e=>{if(sent||e.origin!==origin||e.source!==frame.contentWindow||e.data?.type!=='msos-swimmer-preview-ready')return;sent=true;frame.contentWindow.postMessage({type:'msos-swimmer-preview-payload',payload:portal},origin);setStatus?.(`Preview open in MSOS · ${sessionLabel(s)} · ${portal.history.length} past session${portal.history.length===1?'':'s'} · Training stays on the same session.`,'ok');};
+    addEventListener('message',handler);shell.querySelector('[data-bn-preview-close]').onclick=cleanup;frame.src=url.toString();setTimeout(()=>{if(!sent&&!closed)setStatus?.('Preview did not connect inside MSOS. Close it and try again.','error');},5500);return shell;
   }
   async function preparePortal(a,s,setStatus){
     setStatus?.(`Checking ${sessionLabel(s)}…`);
