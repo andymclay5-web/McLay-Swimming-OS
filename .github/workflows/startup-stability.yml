@@ -1,0 +1,21 @@
+name: Startup Stability Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startup-stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check startup owner
+        run: node --check engines/startup-gate.js
+      - name: Startup session and evidence contract
+        run: node tests/startup-times-session-stability-20260907.cjs
