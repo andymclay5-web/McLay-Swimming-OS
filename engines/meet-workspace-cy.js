@@ -2,9 +2,9 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260907-cross-meet-authority';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260907-projection-authority';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
-  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
   const now=()=>U.now?U.now():new Date().toISOString();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -49,6 +49,13 @@
     return ws[id];
   }
   function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}}
+  function restoreWorkspaceProjection(ws){
+    if(!ws)return;
+    M.state.meetOps=clone(ws.ops||blankOps());
+    applyProgram(ws.program||{});
+    M.state.meetFieldDeck=ws.deck?clone(ws.deck):null;
+    save();
+  }
   function renderIntentionalEmpty(id,title){
     M.state.meetFieldDeck=emptyDeck(id,title);save();
     M.ui.renderMeet?.();
@@ -82,15 +89,16 @@
     const title=sourceTitleForDeck(d),rows=meets(),ws=workspaces(),cur=currentMeet(),curWs=cur?ws[cur.id]:null;
     if(title&&(!txt(d.title)||norm(d.title)==='meet programme'))d.title=title;
 
-    // An explicitly selected managed competition outranks a stale field deck from
-    // another meet. This prevents delayed render/adoption work from switching the
-    // coach away from a newly created empty meet or a deliberately restored meet.
+    // A managed current competition is authoritative over a foreign stale deck.
+    // Restore its saved projection as well as preserving the meet selection, then
+    // repaint once so stale programme/field DOM cannot survive the rejected deck.
     const belongsToCurrent=!!(cur&&(d.meet_id===cur.id||sameCompetition(cur.title,title)));
-    if(cur&&curWs&&!belongsToCurrent)return cur;
+    if(cur&&curWs&&!belongsToCurrent){
+      restoreWorkspaceProjection(curWs);
+      queueMicrotask(()=>{if(currentId()===cur.id&&M.state?.settings?.view==='meet')M.ui.renderMeet?.()});
+      return cur;
+    }
 
-    // Competition identity outranks a stale meet_id when there is no explicit
-    // conflicting managed workspace. This allows a newly loaded programme to create
-    // or reconnect to its own competition without hijacking another selected meet.
     let m=rows.find(x=>sameCompetition(x.title,title)&&ws[x.id]);
     if(!m)m=rows.find(x=>sameCompetition(x.title,title));
     const tagged=rows.find(x=>x.id===d.meet_id);
@@ -117,9 +125,8 @@
     const ws=workspaces()[id];if(!ws)return;
     try{M.meet.setCurrent(id)}catch{M.state.settings.currentMeetId=id}
     const m=currentMeet();
-    M.state.meetOps=clone(ws.ops||blankOps());
-    applyProgram(ws.program||{});
-    if(ws.deck){M.state.meetFieldDeck=clone(ws.deck);tagActiveMeet(id);save();M.ui.renderMeet?.();}
+    restoreWorkspaceProjection(ws);
+    if(ws.deck){tagActiveMeet(id);M.ui.renderMeet?.();}
     else renderIntentionalEmpty(id,m?.title||ws.title||'Swim meet');
   }
 
@@ -135,7 +142,7 @@
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
       let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
-      M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();
+      restoreWorkspaceProjection(workspaces()[m.id]);
       renderIntentionalEmpty(m.id,m.title);closeModal();M.toast?.(`${m.title} ready · add Session 1 programme`);
     };
   }
@@ -156,8 +163,6 @@
   function bindIntakeHandoff(){
     document.addEventListener('click',e=>{
       if(!e.target?.closest?.('[data-mfa-use]'))return;
-      // Run after the native Use handler has committed meetFieldDeck. Capture-phase
-      // microtasks can observe the click before the target handler has written it.
       setTimeout(()=>{
         if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
         adoptLoadedProgramme();
