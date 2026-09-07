@@ -48,8 +48,8 @@
     if(!ath||!state)return{stroke:'',source:'No athlete evidence',confidence:'none'};
     const course=session?.identity?.course||'',deckFast=['board','tv'].includes(String(M.state?.settings?.view||'')),key=`${revision(state)}|${ath.id||E.Evidence.key?.(ath.full_name)||ath.full_name}|${course}|${session?.id||''}|${formOnly?'F':'A'}|${scoreSystem(ath)}|${deckFast?'deck':'deep'}`,cache=mapFor(contextCache,state);
     if(cache.has(key))return cache.get(key);
-    const event=bestEvent(ath,state,course),system=scoreSystem(ath),ranked=bestStroke(ath,state,course,formOnly);let out;
-    if(!event)out={stroke:'',source:rows(ath,state,course).length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};
+    const event=bestEvent(ath,state,''),system=scoreSystem(ath),ranked=bestStroke(ath,state,'',formOnly);let out;
+    if(!event)out={stroke:'',source:rows(ath,state,'').length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};
     else if(!ranked)out={stroke:'',source:`No ranked ${system} stroke PB evidence`,confidence:'none',bestEvent:event};
     else out={stroke:ranked.stroke,source:deckFast?`Highest ranked ${system} stroke PB · deck fast path`:`Highest ranked ${system} stroke PB`,confidence:'high',bestEvent:event,event:ranked};
     cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
