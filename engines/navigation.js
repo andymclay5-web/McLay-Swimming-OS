@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
-  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-training-chrome-isolation-20260907'};
+  const N=M.nav,UI=M.ui,V=M.navigationEngine={build:'v4-navigation-session-selection-authority-20260901'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const clearMeetChrome=()=>{
     document.body.classList.remove('meet-program-ba-active');
