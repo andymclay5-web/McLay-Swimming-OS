@@ -23,5 +23,21 @@ jobs:
           node --check engines/swimmer-invite-bn.js
           node --check engines/swimmer-instant-open-cn.js
           node --check swimmer-portal.js
+          node --check vendor/qrcode.min.js
+          node --check tests/swimmer-secure-preview-static-20260907.cjs
+          node --check tests/swimmer-portal-preview-browser-20260907.cjs
       - name: Swimmer surface contract
         run: node tests/swimmer-surface-co.cjs
+      - name: Secure preview and invite contract
+        run: node tests/swimmer-secure-preview-static-20260907.cjs
+      - name: Install browser runtime
+        run: npm install --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Start candidate
+        run: |
+          python3 -m http.server 8765 >/tmp/msos-swimmer-preview-http.log 2>&1 &
+          sleep 1
+      - name: Coach preview uses exact swimmer renderer without writes
+        run: node tests/swimmer-portal-preview-browser-20260907.cjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/msos-swimmer-preview-http.log || true
