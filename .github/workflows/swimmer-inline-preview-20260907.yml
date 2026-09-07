@@ -7,6 +7,7 @@ on:
       - 'swimmer-portal.html'
       - 'tests/swimmer-portal-preview-browser-20260907.cjs'
       - 'tests/swimmer-secure-preview-static-20260907.cjs'
+      - 'tests/swimmer-preview-session-preservation-static-20260907.cjs'
       - '.github/workflows/swimmer-inline-preview-20260907.yml'
 jobs:
   inline-preview:
@@ -21,7 +22,9 @@ jobs:
           node --check engines/swimmer-invite-bn.js
           node --check swimmer-portal.js
       - name: Static popup-free preview contract
-        run: node tests/swimmer-secure-preview-static-20260907.cjs
+        run: |
+          node tests/swimmer-secure-preview-static-20260907.cjs
+          node tests/swimmer-preview-session-preservation-static-20260907.cjs
       - name: Install browser runtime
         run: npm install --no-save playwright@1.54.2 && npx playwright install --with-deps chromium
       - name: Start candidate
