@@ -9,7 +9,6 @@ jobs:
   swimmer-surface:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,13 +31,10 @@ jobs:
       - name: Secure preview and invite contract
         run: node tests/swimmer-secure-preview-static-20260907.cjs
       - name: Install browser runtime
-        run: |
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install chromium --with-deps >/dev/null 2>&1
+        run: npm install --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
       - name: Start candidate
         run: |
           python3 -m http.server 8765 >/tmp/msos-swimmer-preview-http.log 2>&1 &
-          echo $! >/tmp/msos-swimmer-preview-http.pid
           sleep 1
       - name: Coach preview uses exact swimmer renderer without writes
         run: node tests/swimmer-portal-preview-browser-20260907.cjs
