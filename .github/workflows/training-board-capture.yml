@@ -1,0 +1,42 @@
+name: Training Board Capture
+
+on:
+  push:
+    branches:
+      - fix/training-board-capture-20260907
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  training-board-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check engines/navigation.js
+          node --check tests/training-board-capture-after-meet-20260907.cjs
+      - name: Calendar coverage
+        run: node tests/calendar-coverage-regression.cjs
+      - name: Live training authority
+        run: node tests/live-training-state-authority-20260901.cjs
+      - name: Install browser runtime
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Start candidate
+        run: |
+          python3 -m http.server 8765 >/tmp/msos-training-http.log 2>&1 &
+          echo $! >/tmp/msos-training-http.pid
+          sleep 1
+      - name: Training capture survives stale Meet chrome and reload
+        run: node tests/training-board-capture-after-meet-20260907.cjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/msos-training-http.log || true
