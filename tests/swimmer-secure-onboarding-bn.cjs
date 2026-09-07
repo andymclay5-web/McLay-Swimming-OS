@@ -6,7 +6,7 @@ const cp=require('node:child_process');
 const root=path.resolve(__dirname,'..');
 const text=f=>fs.readFileSync(path.join(root,f),'utf8');
 const html=text('swimmer-portal.html'),portal=text('swimmer-portal.js'),coach=text('engines/swimmer-invite-bn.js'),context=text('engines/swimmer-experience-cl.js'),instant=text('engines/swimmer-instant-open-cn.js'),sql=text('supabase/20260824_secure_swimmer_portal.sql'),interactionSql=text('supabase/20260824_swimmer_session_interactions.sql'),index=text('index.html'),sw=text('sw.js');
-assert.ok(html.includes('swimmer-portal.js?v=20260907b'),'secure portal shell is not wired to the current swimmer release');
+assert.ok(html.includes('swimmer-portal.js?v=20260907c'),'secure portal shell is not wired to the current swimmer release');
 assert.ok(!html.includes('seed.js'),'swimmer portal must never load coach seed/roster data');
 assert.ok(!html.includes('app.js'),'swimmer portal must not load coach application shell');
 assert.ok(!html.includes('v4-poolside-core.js'),'swimmer portal must not load coach canonical runtime');
