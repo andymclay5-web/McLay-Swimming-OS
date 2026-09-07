@@ -15,7 +15,9 @@ jobs:
         with:
           node-version: 22
       - name: Syntax
-        run: node --check engines/meet-sisc-format-dz.js
+        run: |
+          node --check engines/meet-sisc-format-dz.js
+          node --check engines/meet-workspace-cy.js
       - name: Install browser runtime
         run: |
           npm init -y >/dev/null 2>&1
@@ -26,5 +28,7 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-diag-http.log 2>&1 &
           echo $! >/tmp/msos-diag-http.pid
           sleep 1
-      - name: Empty meet workspace handoff diagnostic
-        run: node tests/meet-sisc-intel-diagnostic-20260907.cjs
+      - name: Exact SISC swimmer persistence regression
+        run: node tests/meet-sisc-swimmer-persist-20260828.cjs
+      - name: Exact SISC programme authority regression
+        run: node tests/meet-sisc-programme-authority-20260827.cjs
