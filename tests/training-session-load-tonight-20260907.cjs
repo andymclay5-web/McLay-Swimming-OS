@@ -24,8 +24,18 @@ WARM-DOWN
     await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
     await page.evaluate(()=>MSOS4.navigationEngine.go('board',{push:false,restore:false}));
 
+    const beforeNew=await page.evaluate(()=>({role:MSOS4.access?.role?.(),canCreate:MSOS4.access?.can?.('session.create'),openType:typeof MSOS4.actions?.openNewSession,hasOnclick:typeof document.querySelector('#newSessionBtn')?.onclick,buttonHidden:document.querySelector('#newSessionBtn')?.hidden,buttonDisabled:document.querySelector('#newSessionBtn')?.disabled,view:MSOS4.state.settings.view}));
+    console.log('NEW_SESSION_AUTH '+JSON.stringify(beforeNew));
     await page.click('#newSessionBtn');
-    await page.waitForSelector('#newDate',{timeout:3000});
+    await page.waitForTimeout(250);
+    const afterNew=await page.evaluate(()=>({role:MSOS4.access?.role?.(),canCreate:MSOS4.access?.can?.('session.create'),modalHtml:(document.querySelector('#modalHost')?.innerHTML||'').slice(0,300),newDate:!!document.querySelector('#newDate'),historyLayer:history.state?.layer||null}));
+    console.log('NEW_SESSION_AFTER_CLICK '+JSON.stringify(afterNew));
+    assert.equal(beforeNew.role,'owner','clean coach boot must resolve to Owner for session authoring');
+    assert.equal(beforeNew.canCreate,true,'Owner must retain session.create');
+    assert.equal(beforeNew.openType,'function','New Session action must exist');
+    assert.equal(beforeNew.hasOnclick,'function','New Session button must be bound after boot');
+    assert.equal(afterNew.newDate,true,`New Session button must open authoring modal: ${JSON.stringify({beforeNew,afterNew})}`);
+
     await page.fill('#newDate','2026-09-07');
     await page.dispatchEvent('#newDate','change');
     await page.waitForFunction(()=>[...document.querySelectorAll('#newSlot option')].some(o=>o.value!=='CUSTOM'),{timeout:5000});
@@ -49,7 +59,7 @@ WARM-DOWN
       const s=MSOS4.currentSession();
       const cap=document.querySelector('[data-sticky-note]'),sticky=document.querySelector('.sticky-actions');
       const visible=n=>{if(!n)return false;const r=n.getBoundingClientRect(),cs=getComputedStyle(n);return !n.hidden&&cs.display!=='none'&&cs.visibility!=='hidden'&&r.width>0&&r.height>0};
-      return {id:s?.id||'',date:s?.identity?.date||'',part:s?.identity?.dayPart||'',source:s?.currentSource?.text||s?.source||'',view:document.body.dataset.msosView,surface:document.body.dataset.msosSurface,capture:visible(cap),sticky:visible(sticky),meetClass:document.body.classList.contains('meet-program-ba-active')};
+      return {id:s?.id||'',date:s?.identity?.date||'',part:s?.identity?.dayPart||'',view:document.body.dataset.msosView,surface:document.body.dataset.msosSurface,capture:visible(cap),sticky:visible(sticky),meetClass:document.body.classList.contains('meet-program-ba-active')};
     });
     assert.ok(created.id,'created session must become selected current session');
     assert.equal(created.date,'2026-09-07');
