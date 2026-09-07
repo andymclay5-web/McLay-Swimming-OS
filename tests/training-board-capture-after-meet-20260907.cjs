@@ -17,7 +17,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     const sessionId=await page.evaluate(()=>{
       const M=MSOS4;
-      const identity={date:'2026-09-07',dayPart:'PM',title:'Sunday PM Training Capture Acceptance',squads:['National'],venue:'AquaGym',course:'SCM',start:'18:30',end:'20:00',calendarSlotId:'acceptance-20260907-pm',calendarSource:'acceptance'};
+      const identity={date:'2026-09-07',dayPart:'PM',title:'Monday PM Training Capture Acceptance',squads:['National'],venue:'AquaGym',course:'SCM',start:'18:30',end:'20:00',calendarSlotId:'acceptance-20260907-pm',calendarSource:'acceptance'};
       const id=M.util.stableId('session',identity.date,identity.dayPart,identity.start,identity.end,identity.squads.join('+'),identity.venue);
       const source='WARM-UP\n4 x 100 Free @ 1:30\nMAIN SET\n8 x 50 #1 Stroke @ 1:00\nWARM-DOWN\n200 Easy';
       const session=M.parser.parse(source,{...identity,id});
