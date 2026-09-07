@@ -26,5 +26,5 @@ jobs:
           python3 -m http.server 8765 >/tmp/msos-diag-http.log 2>&1 &
           echo $! >/tmp/msos-diag-http.pid
           sleep 1
-      - name: Existing SISC swimmer persistence regression
-        run: node tests/meet-sisc-swimmer-persist-20260828.cjs
+      - name: Empty meet workspace handoff diagnostic
+        run: node tests/meet-sisc-intel-diagnostic-20260907.cjs
