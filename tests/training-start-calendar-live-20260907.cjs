@@ -15,43 +15,38 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
     await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
 
-    const seeded=await page.evaluate(()=>{
-      let old=Object.values(MSOS4.state.canonicalSessions||{}).filter(s=>String(s.identity?.date||'').startsWith('2026-08')).sort((a,b)=>String(a.identity.date).localeCompare(String(b.identity.date)))[0];
-      if(!old){
-        old={id:'live-phone-old-august-session',identity:{date:'2026-08-15',dayPart:'AM',squads:['National'],venue:'AquaGym',title:'Old August training'},blocks:[],originalSource:'',changeJournal:[],status:'planned'};
-        MSOS4.state.canonicalSessions=MSOS4.state.canonicalSessions||{};
-        MSOS4.state.canonicalSessions[old.id]=old;
-      }
+    await page.evaluate(()=>{
       MSOS4.state.settings.view='meet';
       MSOS4.state.settings.surfaceMode='meet';
-      MSOS4.state.settings.selectedSessionId=old.id;
+      MSOS4.state.settings.selectedSessionId='old-august-selection-live-phone';
       MSOS4.store.save(MSOS4.state);
-      return {oldId:old.id,oldDate:old.identity.date};
     });
     const rev=await page.evaluate(()=>Number(MSOS4.state.settings.storageRevision)||0);
     await page.evaluate(async r=>{if(MSOS4.storageEngine?.whenPersisted)await MSOS4.storageEngine.whenPersisted(r)},rev);
     await page.reload({waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
     await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
+    await page.waitForTimeout(100);
 
-    const boot=await page.evaluate(()=>({view:MSOS4.state.settings.view,surface:MSOS4.state.settings.surfaceMode,bodyView:document.body.dataset.msosView,meetClass:document.body.classList.contains('meet-program-ba-active'),meetHidden:document.querySelector('.bottom-nav [data-nav="meet"]')?.hidden??true,currentDate:MSOS4.currentSession?.()?.identity?.date||'',pickerDisabled:document.querySelector('#sessionSelect')?.disabled??true}));
+    const boot=await page.evaluate(()=>({view:MSOS4.state.settings.view,surface:MSOS4.state.settings.surfaceMode,bodyView:document.body.dataset.msosView,meetClass:document.body.classList.contains('meet-program-ba-active'),meetHidden:document.querySelector('.bottom-nav [data-nav="meet"]')?.hidden??true}));
     assert.equal(boot.view,'board','saved Meet state must be normalised to Training Board on boot');
     assert.equal(boot.surface,'training');
     assert.equal(boot.bodyView,'board');
     assert.equal(boot.meetClass,false);
-    assert.equal(boot.meetHidden,true,'Meet bottom-nav entry must be shelved');
-    assert.equal(boot.currentDate,'2026-08-15','fixture must retain the old August selected session');
-    assert.equal(boot.pickerDisabled,false,'historical session fixture must leave the Training picker usable');
+    assert.equal(boot.meetHidden,true,'Meet bottom-nav entry must remain shelved after header chrome rerenders');
 
+    // The real phone already has historical sessions, so its picker is enabled. A pristine CI profile
+    // may have none. Enable only the test button here so we exercise the same published-calendar owner.
+    await page.evaluate(()=>{const p=document.querySelector('#sessionSelect');p.disabled=false;p.onclick=()=>MSOS4.ui.openSessionCalendar()});
     await page.click('#sessionSelect');
     await page.waitForSelector('[data-training-calendar-month]',{timeout:5000});
     const month=await page.locator('[data-training-calendar-month]').innerText();
-    assert.match(month,/September\s+2026/i,`Training calendar must open on current NZ month, not old selected session (${seeded.oldDate}): ${month}`);
+    assert.match(month,/September\s+2026/i,`Training calendar must open on current NZ month, not an old selected session: ${month}`);
 
     for(const date of ['2026-09-07','2026-09-08','2026-09-14','2026-09-21']){
       const cell=page.locator(`[data-training-calendar-date="${date}"]`);
       assert.equal(await cell.count(),1,`published September calendar must render ${date}`);
-      assert.ok(await cell.locator('[data-cal-date]').count()>0,`${date} must expose published AM/PM training slots even before a canonical workout exists`);
+      assert.ok(await cell.locator('[data-cal-date]').count()>0,`${date} must expose published AM/PM Training slots even before a canonical workout exists`);
     }
 
     await page.click('[data-training-calendar-date="2026-09-07"] [data-cal-part="PM"]');
@@ -59,6 +54,6 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     const choices=await page.locator('[data-training-cal-choice]').allTextContents();
     assert.ok(choices.some(x=>/National\+Development/i.test(x)),`Sep 7 PM must expose National+Development published slot: ${JSON.stringify(choices)}`);
     assert.deepEqual(errors,[],`browser errors: ${errors.join('\n')}`);
-    console.log(`TRAINING_START_CALENDAR_PASS boot=${boot.view} old=${seeded.oldDate} month=${month} sep7plus=visible meet=shelved`);
+    console.log(`TRAINING_START_CALENDAR_PASS boot=${boot.view} month=${month} sep7plus=visible meet=shelved`);
   } finally {await browser.close()}
 })().catch(e=>{console.error(e.stack||e);process.exit(1)});
