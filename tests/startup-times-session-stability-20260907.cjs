@@ -5,19 +5,21 @@ let resolveReady;const readyPromise=new Promise(r=>resolveReady=r);
 let baseRenderCount=0,saveUiCount=0,networkPulls=0,applies=0,invalidates=0;
 let idleCallbacks=[];
 const listeners={};
+const work=(id,identity)=>({id,identity,blocks:[{id:`${id}-b`,items:[{id:`${id}-i`,kind:'set',reps:1,distance:100}]}]});
 const state={
   canonicalSessions:{
-    sat:{id:'sat',identity:{date:'2026-09-05',dayPart:'AM',start:'05:30'}},
-    sunam:{id:'sunam',identity:{date:'2026-09-06',dayPart:'AM',start:'07:00'}},
-    sunpm:{id:'sunpm',identity:{date:'2026-09-06',dayPart:'PM',start:'16:00'}},
-    monam:{id:'monam',identity:{date:'2026-09-07',dayPart:'AM',start:'05:30'}},
-    mondayFuture:{id:'mondayFuture',identity:{date:'2026-09-07',dayPart:'PM',start:'19:30'}}
+    sat:work('sat',{date:'2026-09-05',dayPart:'AM',start:'05:30'}),
+    sunam:work('sunam',{date:'2026-09-06',dayPart:'AM',start:'07:00'}),
+    sunpm:work('sunpm',{date:'2026-09-06',dayPart:'PM',start:'16:00'}),
+    monam:work('monam',{date:'2026-09-07',dayPart:'AM',start:'05:30'}),
+    emptyShell:{id:'emptyShell',identity:{date:'2026-09-07',dayPart:'PM',start:'12:00'},blocks:[]},
+    mondayFuture:work('mondayFuture',{date:'2026-09-07',dayPart:'PM',start:'19:30'})
   },
   settings:{selectedSessionId:'sat',view:'board'},_evidenceBridge:{}
 };
 const board={innerHTML:''};
 const document={
-  hidden:false,
+  hidden:false,readyState:'loading',
   querySelector(sel){return sel==='#boardView'?board:null;},
   addEventListener(name,fn){listeners[name]=fn;},
   removeEventListener(name,fn){if(listeners[name]===fn)delete listeners[name];}
@@ -50,7 +52,8 @@ vm.runInNewContext(source,context,{filename:'startup-gate.js'});
 const G=MSOS4.startupGate;
 assert(G,'startup gate missing');
 assert.strictEqual(G.sessionStartKey(state.canonicalSessions.sunpm),'2026-09-06T16:00');
-assert.strictEqual(G.latestStartedSession('2026-09-07T18:00').id,'monam','latest already-started Monday AM session should win while later Monday PM remains future');
+assert.strictEqual(G.latestStartedSession('2026-09-07T18:00').id,'monam','latest worked Monday AM session should win while an empty shell and later Monday PM are excluded');
+assert.strictEqual(G.hasWorkout(state.canonicalSessions.emptyShell),false,'empty canonical shell must not become startup session');
 assert.strictEqual(G.latestStartedSession('2026-09-06T12:00').id,'sunam','latest already-started session should win');
 
 (async()=>{
