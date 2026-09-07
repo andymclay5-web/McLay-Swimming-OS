@@ -20,8 +20,12 @@ jobs:
       - name: Syntax
         run: |
           node --check engines/navigation.js
+          node --check engines/release-authority.js
+          node --check sw.js
           node --check tests/training-board-capture-after-meet-20260907.cjs
           node --check tests/training-session-load-tonight-20260907.cjs
+      - name: Release package coherence
+        run: node tests/release-package.test.js
       - name: Calendar coverage
         run: node tests/calendar-coverage-regression.cjs
       - name: Live training authority
