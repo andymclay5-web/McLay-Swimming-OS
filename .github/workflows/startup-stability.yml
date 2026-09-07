@@ -1,0 +1,32 @@
+name: Startup Stability Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startup-stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check startup owner
+        run: node --check engines/startup-gate.js
+      - name: Startup session and evidence contract
+        run: node tests/startup-times-session-stability-20260907.cjs
+      - name: Install browser regression runtime
+        run: |
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium --with-deps >/dev/null 2>&1
+      - name: Existing boot evidence authority regression
+        run: |
+          python3 -m http.server 8765 >/tmp/msos-startup-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 1
+          node tests/evidence-refresh-authority-20260904.cjs
