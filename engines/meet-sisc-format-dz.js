@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.meetProgramBA)return;
-  const BUILD='v4-meet-sisc-format-20260828dz9-visible-fallback';
+  const BUILD='v4-meet-sisc-format-20260907-intake-handoff';
   const txt=v=>M.util?.text?M.util.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??'');
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -45,6 +45,7 @@
   function afterRender(){if(rerendering||M.state?.settings?.view!=='meet')return;repair();const src=selectedSource(),heats=src?.parsed?.heats||[];if(!heats.length)return;ensureDeckRaces();if(programmeRender){rerendering=true;try{programmeRender()}finally{rerendering=false}}queueMicrotask(()=>{if(!visibleProgramme())emergency()})}
   if(previousUiRender)M.ui.renderMeet=()=>{const out=previousUiRender();queueMicrotask(afterRender);return out};
   if(programmeRender)M.meetProgramBA.render=()=>{const out=programmeRender();queueMicrotask(afterRender);return out};
+  document.addEventListener('click',e=>{if(!e.target?.closest?.('[data-mfa-use]'))return;setTimeout(()=>{if(M.state?.settings?.view==='meet')afterRender()},0)},false);
   M.storageEngine?.readyPromise?.then?.(()=>{if(M.state?.settings?.view==='meet')afterRender()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&M.state?.settings?.view==='meet')afterRender()});setTimeout(()=>{if(M.state?.settings?.view==='meet')afterRender()},250);
   M.meetSiscFormat={build:BUILD,parse,repair,isAQ,ensureDeckRaces,emergency};
 })(globalThis);
