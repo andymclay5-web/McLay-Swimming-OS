@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M||!E?.Evidence||!E?.RacePace)return;
-  const P=M.performanceEngine={build:'v4-performance-20260826-deck-fast-a'};
+  const P=M.performanceEngine={build:'v4-performance-20260907-number-one-points-authority'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const STROKES=['Freestyle','Backstroke','Breaststroke','Butterfly'];
   const FORMS=['Backstroke','Breaststroke','Butterfly'];
@@ -48,10 +48,10 @@
     if(!ath||!state)return{stroke:'',source:'No athlete evidence',confidence:'none'};
     const course=session?.identity?.course||'',deckFast=['board','tv'].includes(String(M.state?.settings?.view||'')),key=`${revision(state)}|${ath.id||E.Evidence.key?.(ath.full_name)||ath.full_name}|${course}|${session?.id||''}|${formOnly?'F':'A'}|${scoreSystem(ath)}|${deckFast?'deck':'deep'}`,cache=mapFor(contextCache,state);
     if(cache.has(key))return cache.get(key);
-    const event=bestEvent(ath,state,course),system=scoreSystem(ath);let out;
-    if(!event)out={stroke:'',source:rows(ath,state,course).length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};
-    else if(event.stroke==='IM'&&!deckFast&&M.strokeBalance?.recommendStroke){const r=M.strokeBalance.recommendStroke(ath,state,session,{formOnly});out=r?.stroke?{...r,bestEvent:event}:null;}
-    if(!out){const ranked=bestStroke(ath,state,course,formOnly);if(!ranked)out={stroke:'',source:`No ranked ${system} stroke PB evidence`,confidence:'none',bestEvent:event};else{const coach=selectedCoachStroke(ath,state);out=coach&&(!formOnly||coach!=='Freestyle')?{stroke:coach,source:deckFast?'Recent coach stroke selections · deck fast path':'Recent coach stroke selections',confidence:'medium',bestEvent:event,event:ranked}:{stroke:ranked.stroke,source:deckFast?`Highest ranked ${system} stroke PB · deck fast path`:`Highest ranked ${system} stroke PB`,confidence:'high',bestEvent:event,event:ranked};}}
+    const event=bestEvent(ath,state,''),system=scoreSystem(ath),ranked=bestStroke(ath,state,'',formOnly);let out;
+    if(!event)out={stroke:'',source:rows(ath,state,'').length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};
+    else if(!ranked)out={stroke:'',source:`No ranked ${system} stroke PB evidence`,confidence:'none',bestEvent:event};
+    else out={stroke:ranked.stroke,source:deckFast?`Highest ranked ${system} stroke PB · deck fast path`:`Highest ranked ${system} stroke PB`,confidence:'high',bestEvent:event,event:ranked};
     cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
   }
   function profile(ath,state=M.state,course=''){const ev=bestEvent(ath,state,course),st=bestStroke(ath,state,course,false),form=bestFormStroke(ath,state,course),all=rows(ath,state,course),tests=t400s(ath,state),recent=timed(ath,state),wa=M.waPointsEngine?.tableInfo?.(state)||{active:false,rows:0,version:''},para=isPara(ath),system=scoreSystem(ath),medley=ev?.stroke==='IM',context=medley?selectStrokeForContext(ath,null,state,{identity:{course}},{}):null;return{athlete:ath,course,bestEvent:ev,bestStroke:st,bestFormStroke:form,medleyPrimary:medley,contextStroke:context,pbs:all,t400:tests,timedSets:recent,hasRankedEvidence:!!ev,waPoints:wa,pointStatus:ev?'ranked':all.length?'pbs_without_rank':'no_pbs',isPara:para,scoreSystem:system};}

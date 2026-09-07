@@ -1,0 +1,47 @@
+name: Calendar Board Race Pace Repair
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'engines/navigation.js'
+      - 'engines/performance.js'
+      - 'engines/coordinator.js'
+      - 'engines/race-pace.js'
+      - 'engines/modification.js'
+      - 'engines/training-prescription-policy.js'
+      - 'monthly_calendar.json'
+      - 'SHA256SUMS.txt'
+      - 'app.js'
+      - 'styles.css'
+      - 'tests/navigation-calendar-board-20260907.cjs'
+      - 'tests/number-one-points-authority-20260907.cjs'
+      - 'tests/modified-race-pace-wiring-20260907.cjs'
+  workflow_dispatch:
+
+jobs:
+  repair-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check changed owners
+        run: |
+          node --check engines/navigation.js
+          node --check engines/performance.js
+          node --check engines/coordinator.js
+          node --check engines/race-pace.js
+          node --check engines/modification.js
+          node --check engines/training-prescription-policy.js
+      - name: Run repair regressions
+        run: |
+          node tests/navigation-calendar-board-20260907.cjs
+          node tests/number-one-points-authority-20260907.cjs
+          node tests/modified-race-pace-wiring-20260907.cjs
+      - name: Audit protected release hashes
+        run: |
+          sha256sum app.js styles.css monthly_calendar.json
+          printf '%s\n' '--- locked rows ---'
+          grep -E '  (app\.js|styles\.css|monthly_calendar\.json)$' SHA256SUMS.txt

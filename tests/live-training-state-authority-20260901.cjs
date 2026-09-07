@@ -21,8 +21,8 @@ M.state.settings.view='tv';const fresh={...stale,from:'coach-board',session:{id:
 assert.equal(L.apply(fresh),true);assert.equal(M.state.canonicalSessions.s.blocks[0].items.length,3);assert.equal(M.state.attendance.length,2);assert.equal(M._tv,1);
 M.state.settings.view='swimmer';M.state.settings.activeRole='swimmer';assert.equal(L.apply({...fresh,from:'meet-screen',surfaceMode:'meet'}),false);
 const nav=fs.readFileSync(path.resolve(__dirname,'../engines/navigation.js'),'utf8');
-const applyHistory=nav.match(/N\.applyHistory=state=>\{([\s\S]*?)\};\n\n  let rootBackArmed/)?.[1]||'';
+const applyHistory=nav.match(/N\.applyHistory=state=>\{([^\n]*)\};/)?.[1]||'';
 assert.ok(applyHistory,'navigation history owner must exist');
 assert.doesNotMatch(applyHistory,/selectedSessionId\s*=/,'Android/browser Back must never select a different session');
-assert.match(nav,/v4-navigation-session-selection-authority-20260901/,'session-selection authority build missing');
+assert.match(nav,/v4-navigation-session-selection-authority-20260907/,'session-selection authority build missing');
 console.log('LIVE_TRAINING_STATE_AUTHORITY_PASS meet-tab-allowed history-cannot-switch-session');
