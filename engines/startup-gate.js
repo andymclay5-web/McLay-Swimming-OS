@@ -18,8 +18,14 @@
     if(!time)time=/\bPM\b/i.test(text(i.dayPart||i.day_part))?'12:00':'00:00';
     return`${date}T${time}`;
   }
+  function hasWorkout(session){
+    if(Number(session?.metadata?.parsedTotal)>0)return true;
+    if((session?.blocks||[]).some(block=>(block?.items||[]).length>0))return true;
+    return !!text(session?.currentSource?.text||session?.originalPlan?.text||session?.workout||session?.source);
+  }
   function latestStartedSession(now=new Date(),sessions=Object.values(M.state?.canonicalSessions||{})){
-    const nowKey=nzNowKey(now);return(sessions||[]).map(session=>({session,key:sessionStartKey(session)})).filter(x=>x.key&&x.key<=nowKey).sort((a,b)=>b.key.localeCompare(a.key)||String(b.session?.id||'').localeCompare(String(a.session?.id||'')))[0]?.session||null;
+    const nowKey=nzNowKey(now),rows=(sessions||[]).map(session=>({session,key:sessionStartKey(session)})).filter(x=>x.key&&x.key<=nowKey&&hasWorkout(x.session)).sort((a,b)=>b.key.localeCompare(a.key)||String(b.session?.updatedAt||b.session?.updated_at||'').localeCompare(String(a.session?.updatedAt||a.session?.updated_at||''))||String(b.session?.id||'').localeCompare(String(a.session?.id||'')));
+    if(!rows.length)return null;const topKey=rows[0].key,selected=M.state?.settings?.selectedSessionId||'',keep=rows.find(x=>x.key===topKey&&x.session?.id===selected);return keep?.session||rows[0].session;
   }
   function selectLatestStarted(now=new Date()){
     const best=latestStartedSession(now);if(!best?.id)return null;
@@ -45,11 +51,13 @@
     G.runDeferredEvidenceNow=execute;G.deferredEvidenceAttempts=()=>attempts;queue();
     return{execute,cancel:cleanup};
   }
+  let startupWindowOpen=true;
+  if(document.readyState==='loading')document.addEventListener?.('DOMContentLoaded',()=>setTimeout(()=>{startupWindowOpen=false;},0),{once:true});else startupWindowOpen=false;
   function installCloudEvidenceDeferral(){
     const C=M.cloud;if(!C?.pullEvidence||G.cloudEvidenceDeferralInstalled)return false;
     const pull=C.pullEvidence.bind(C),apply=typeof C.applyEvidence==='function'?C.applyEvidence.bind(C):null;let first=true;
     C.pullEvidence=(...args)=>{
-      if(!first)return pull(...args);first=false;G.bootEvidenceDeferred=true;
+      if(!first||!startupWindowOpen)return pull(...args);first=false;G.bootEvidenceDeferred=true;
       scheduleDeferredEvidence(async()=>{const payload=await pull(...args);if(apply)apply(payload);M.state._evidenceBridge={...(M.state._evidenceBridge||{}),contentRevision:Number(M.state?._evidenceBridge?.contentRevision||0)+1,hydratedAt:new Date().toISOString(),reason:'deferred-cloud-evidence'};g.MSOSEvidenceIndex?.invalidate?.(M.state);g.MSOSEngines?.Coordinator?.clearCache?.();M.performanceEngine?.invalidate?.(M.state);M.waPointsEngine?.invalidate?.();return payload;});
       return Promise.resolve({tables:{},deferredByStartupGate:true});
     };
@@ -58,6 +66,6 @@
   }
 
   installCloudEvidenceDeferral();
-  S.readyPromise.finally(()=>{released=true;clearTransient();selectLatestStarted();raf(()=>{if(!G.rendered)UI.renderCurrent();M.nav?.activateView?.(M.state?.settings?.view||'board');});pending=false;});
-  G.pending=()=>pending;G.ready=()=>released;G.nzNowKey=nzNowKey;G.sessionStartKey=sessionStartKey;G.latestStartedSession=latestStartedSession;G.selectLatestStarted=selectLatestStarted;G.installCloudEvidenceDeferral=installCloudEvidenceDeferral;
+  S.readyPromise.finally(()=>{released=true;clearTransient();selectLatestStarted();const selectionChanged=G.startupSelection?.changed===true;raf(()=>{if(!G.rendered||selectionChanged)UI.renderCurrent();M.nav?.activateView?.(M.state?.settings?.view||'board');});pending=false;});
+  G.pending=()=>pending;G.ready=()=>released;G.nzNowKey=nzNowKey;G.sessionStartKey=sessionStartKey;G.hasWorkout=hasWorkout;G.latestStartedSession=latestStartedSession;G.selectLatestStarted=selectLatestStarted;G.installCloudEvidenceDeferral=installCloudEvidenceDeferral;
 })(globalThis);
