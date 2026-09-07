@@ -4,8 +4,8 @@ const athlete={id:'mck',full_name:'McKenzie Drage',sex:'F'};
 const state={settings:{storageRevision:1,view:'board'},adaptationOverrides:[{athleteId:'mck',active:true,patch:{stroke:'Breaststroke'},updatedAt:new Date().toISOString()}],timedSets:[]};
 const ranked=[
   {row:{id:'im'},distance:200,stroke:'IM',course:'SCM',seconds:160,score:760},
+  {row:{id:'fly'},distance:100,stroke:'Butterfly',course:'LCM',seconds:67,score:740},
   {row:{id:'free'},distance:100,stroke:'Freestyle',course:'SCM',seconds:60,score:710},
-  {row:{id:'fly'},distance:100,stroke:'Butterfly',course:'SCM',seconds:67,score:680},
   {row:{id:'breast'},distance:100,stroke:'Breaststroke',course:'SCM',seconds:78,score:620}
 ];
 global.MSOSEngines={
@@ -19,7 +19,7 @@ const P=global.MSOS4.performanceEngine;
 assert.ok(P);
 const session={id:'s1',identity:{course:'SCM'}};
 const one=P.selectStrokeForContext(athlete,{raw:'4x50 #1 @100p'},state,session,{formOnly:false});
-assert.equal(one.stroke,'Freestyle','#1 must be the highest-WA ranked stroke PB, excluding IM as a stroke choice');
+assert.equal(one.stroke,'Butterfly','#1 must be the highest-WA stroke across valid PB evidence, even when that PB is from another course');
 assert.match(one.source,/Highest ranked WA stroke PB/);
 const oneF=P.selectStrokeForContext(athlete,{raw:'4x50 #1F @100p'},state,session,{formOnly:true});
 assert.equal(oneF.stroke,'Butterfly','#1F must take the highest-WA non-Freestyle stroke');
