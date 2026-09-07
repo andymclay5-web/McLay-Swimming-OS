@@ -5,6 +5,7 @@
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
   const MEET_SHELVED=true;
   const normalView=view=>MEET_SHELVED&&view==='meet'?'board':views.has(view)?view:'board';
+  const applySurfaceMode=view=>{const surfaceMode=view==='meet'?'meet':'training';M.state.settings=M.state.settings||{};M.state.settings.surfaceMode=surfaceMode;document.body.dataset.msosSurface=surfaceMode;return surfaceMode};
   const clearMeetChrome=()=>{
     document.body.classList.remove('meet-program-ba-active');
     document.querySelector('[data-ba-talkbar]')?.remove();
@@ -16,7 +17,7 @@
     const nav=document.querySelector('.bottom-nav');
     if(nav){const visible=[...nav.querySelectorAll('[data-nav]')].filter(x=>!x.hidden);if(visible.length)nav.style.gridTemplateColumns=`repeat(${visible.length},1fr)`}
   };
-  const active=view=>{view=normalView(view);document.querySelectorAll('.view').forEach(x=>{const on=x.id===`${view}View`;x.classList.toggle('active',on);x.hidden=!on;if('inert'in x)x.inert=!on});document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;document.body.dataset.msosSurface='training';clearMeetChrome();hideShelvedMeet();};
+  const active=view=>{view=normalView(view);applySurfaceMode(view);document.querySelectorAll('.view').forEach(x=>{const on=x.id===`${view}View`;x.classList.toggle('active',on);x.hidden=!on;if('inert'in x)x.inert=!on});document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));document.body.dataset.msosView=view;clearMeetChrome();hideShelvedMeet();};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
   const scrollKey=view=>`${M.state?.settings?.selectedSessionId||'none'}:${view||M.state?.settings?.view||'board'}`;
   const rememberScroll=()=>{try{M.state.settings=M.state.settings||{};M.state.settings.viewScroll=M.state.settings.viewScroll||{};M.state.settings.viewScroll[scrollKey()]=Math.max(0,Math.round(window.scrollY||0));saveUi()}catch{}};
@@ -61,7 +62,7 @@
     const coverageEnd=published.coverage_end||Object.keys(scheduleByDate).sort().at(-1)||'';
     if(coverageStart&&coverageEnd&&(todayStr<coverageStart||todayStr>coverageEnd))baseDate=current?.identity?.date||coverageEnd||todayStr;
     let[vy,vm]=baseDate.split('-').map(Number);
-    const choose=id=>{M.selectSession(id);M.actions.closeModal();M.state.settings.view='board';M.state.settings.surfaceMode='training';UI.renderCurrent();active('board')};
+    const choose=id=>{M.selectSession(id);M.actions.closeModal();M.state.settings.view='board';applySurfaceMode('board');UI.renderCurrent();active('board')};
     const openDayPicker=(dateStr,part)=>{
       const canon=(byDate[dateStr]||[]).filter(x=>String(x.identity?.dayPart||'').toUpperCase()===part);
       const scheduled=(scheduleByDate[dateStr]||[]).filter(x=>String(x.day_part||'').toUpperCase()===part).filter(slot=>!canon.some(s=>canonicalMatchesSlot(s,dateStr,slot)));
@@ -88,7 +89,7 @@
   V.go=(view,{push=true,restore=true,restoreScroll:restoreOpt}={})=>{
     view=normalView(view);
     M.boardStateEngine?.cancelWork?.();rememberScroll();closeTransient();
-    M.state.settings=M.state.settings||{};M.state.settings.view=view;M.state.settings.surfaceMode='training';
+    M.state.settings=M.state.settings||{};M.state.settings.view=view;applySurfaceMode(view);
     paint(view);
     if(push){try{history.pushState(N.state?.(view)||{msos:true,msosView:view},'',`#${view}`)}catch{}}
     saveUi();
@@ -98,13 +99,13 @@
 
   N.show=V.go;N.rememberScroll=rememberScroll;N.restoreScroll=restoreScroll;N.clearTransient=closeTransient;N.activateView=active;
   N.dismissLayer=()=>{const layer=history.state?.layer;if(layer){closeTransient();history.back();return true}closeTransient();M.boardStateEngine?.cancelWork?.();paint(normalView(M.state?.settings?.view||'board'));saveUi();return false;};
-  N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=normalView(state?.msosView);M.state.settings=M.state.settings||{};M.state.settings.view=view;M.state.settings.surfaceMode='training';if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
+  N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=normalView(state?.msosView);M.state.settings=M.state.settings||{};M.state.settings.view=view;applySurfaceMode(view);if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
 
   let rootBackArmed=false;
-  N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=normalView(M.state?.settings?.view||'board');M.state.settings.view=initial;M.state.settings.surfaceMode='training';active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(N.state?.(initial)||{msos:true,msosView:initial},'',`#${initial}`)}catch{}
+  N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=normalView(M.state?.settings?.view||'board');M.state.settings.view=initial;applySurfaceMode(initial);active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(N.state?.(initial)||{msos:true,msosView:initial},'',`#${initial}`)}catch{}
     addEventListener('popstate',e=>{if(e.state?.exitGuard){if(rootBackArmed){history.back();return}rootBackArmed=true;M.toast?.('Press back again to exit');try{history.pushState(N.state?.(M.state.settings.view)||{msos:true,msosView:M.state.settings.view},'',`#${M.state.settings.view}`)}catch{}setTimeout(()=>rootBackArmed=false,1800);return}if(e.state?.msos)N.applyHistory(e.state)});
     addEventListener('pagehide',rememberScroll);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')rememberScroll();else if(document.visibilityState==='visible')restoreScroll(M.state.settings.view)});renderExtra(initial);hideShelvedMeet();
-    queueMicrotask(()=>{M.state.settings.view=normalView(M.state.settings.view);M.state.settings.surfaceMode='training';active(M.state.settings.view);saveUi()});
+    queueMicrotask(()=>{M.state.settings.view=normalView(M.state.settings.view);applySurfaceMode(M.state.settings.view);active(M.state.settings.view);saveUi()});
     requestAnimationFrame(()=>hideShelvedMeet());
   };
 
