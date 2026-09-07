@@ -1,0 +1,1 @@
+Field failure reproduced 2026-09-07 Android coach phone: tapping swimmer preview opened a second browser context, coach app appeared frozen, and returning to MSOS restored stale Sat AM 5,450m Training state. Release contract: preview remains inside MSOS, uses same swimmer renderer read-only, and closing preview returns to the unchanged coach Training context.
