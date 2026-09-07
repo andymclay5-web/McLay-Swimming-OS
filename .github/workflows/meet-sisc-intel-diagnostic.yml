@@ -1,0 +1,28 @@
+name: SISC Intel Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/meet-sisc-intel-20260907
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser runtime
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Start candidate
+        run: |
+          python3 -m http.server 8765 >/tmp/msos-diag-http.log 2>&1 &
+          echo $! >/tmp/msos-diag-http.pid
+          sleep 1
+      - name: Run SISC intel diagnostic
+        run: node tests/meet-sisc-intel-diagnostic-20260907.cjs
