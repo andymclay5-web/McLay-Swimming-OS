@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M?.ui||!M?.meet)return;
-  const U=M.util||{},BUILD='v4-meet-workspace-20260907-projection-authority';
+  const U=M.util||{},BUILD='v4-meet-workspace-20260907-bounded-projection-authority';
   const txt=v=>U.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone=v=>{try{return structuredClone(v)}catch{try{return JSON.parse(JSON.stringify(v))}catch{return v}}};
@@ -56,6 +56,13 @@
     M.state.meetFieldDeck=ws.deck?clone(ws.deck):null;
     save();
   }
+  function clearRejectedDeckProjection(){
+    const h=host();if(!h)return;
+    h.querySelector('[data-meet-program-ba]')?.remove();
+    h.querySelector('[data-meet-field-deck-au]')?.remove();
+    document.body.classList.remove('meet-program-ba-active');
+    try{M.meetFieldPatch?.install?.()}catch{}
+  }
   function renderIntentionalEmpty(id,title){
     M.state.meetFieldDeck=emptyDeck(id,title);save();
     M.ui.renderMeet?.();
@@ -89,13 +96,10 @@
     const title=sourceTitleForDeck(d),rows=meets(),ws=workspaces(),cur=currentMeet(),curWs=cur?ws[cur.id]:null;
     if(title&&(!txt(d.title)||norm(d.title)==='meet programme'))d.title=title;
 
-    // A managed current competition is authoritative over a foreign stale deck.
-    // Restore its saved projection as well as preserving the meet selection, then
-    // repaint once so stale programme/field DOM cannot survive the rejected deck.
     const belongsToCurrent=!!(cur&&(d.meet_id===cur.id||sameCompetition(cur.title,title)));
     if(cur&&curWs&&!belongsToCurrent){
       restoreWorkspaceProjection(curWs);
-      queueMicrotask(()=>{if(currentId()===cur.id&&M.state?.settings?.view==='meet')M.ui.renderMeet?.()});
+      clearRejectedDeckProjection();
       return cur;
     }
 
