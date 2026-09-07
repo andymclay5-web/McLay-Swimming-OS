@@ -19,3 +19,5 @@ jobs:
         run: node --check engines/startup-gate.js
       - name: Startup session and evidence contract
         run: node tests/startup-times-session-stability-20260907.cjs
+      - name: Existing boot evidence authority regression
+        run: node tests/evidence-refresh-authority-20260904.cjs
