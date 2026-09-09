@@ -1,0 +1,267 @@
+'use strict';
+/*
+ McLay Swimming OS — Correct Version 4
+ Consolidation / recovery layer over the proven v4.0.1 shadow architecture.
+ User-facing version remains "Version 4". Internal build id exists only for cache
+ invalidation / Guardian identity.
+*/
+(function(g){
+  const M=g.MSOS4;
+  if(!M) throw new Error('MSOS v4 base app must load before v4-correct.js');
+  const U=M.util;
+  const C=M.correct=M.correct||{};
+  const BASE_BUILD=M.BUILD;
+  const EXPECTED_BASE_BUILD='4.0.1-shadow-tv-individual-foundation-20260816';
+  C.baseBuild={expected:EXPECTED_BASE_BUILD,loaded:BASE_BUILD,match:BASE_BUILD===EXPECTED_BASE_BUILD};
+  if(!C.baseBuild.match)console.warn('[MSOS v4] Base build differs from validated baseline',C.baseBuild);
+
+  M.VERSION='4';
+  M.BUILD='v4-correct-20260819f-targettruth';
+  M.CORE='20260819-v4-targettruth';
+
+  // Keep production cloud cutover locked until the corrected bytes pass the real-phone gate.
+  M.RELEASE_ATTESTATION=Object.freeze({
+    build:M.BUILD,
+    softwareReady:C.baseBuild.match,
+    generatedAt:'2026-08-19T16:30:00+12:00',
+    suiteDigest:'v4-contract-20260819f-targettruth',
+    packageDigest:'see-SHA256SUMS',
+    note:'Correct Version 4 software-attested; physical Android acceptance, production schema probe and remaining release gates are still required before production cutover.'
+  });
+
+
+  // The v4.0.1 base already contains substantive TV, Individual Device,
+  // Assistant and Meet Deck implementations plus Guardian coverage. In Correct
+  // Version 4 these are no longer treated as future placeholders. The only
+  // parity item deliberately left non-implemented is packaged Android acceptance.
+  if(Array.isArray(M.PARITY_REQUIREMENTS)){
+    const completed=new Set(['PARITY-33','PARITY-34','PARITY-35','PARITY-36']);
+    M.PARITY_REQUIREMENTS=M.PARITY_REQUIREMENTS.map(x=>completed.has(x.id)?{...x,status:'implemented'}:x);
+  }
+
+  const text=v=>U?.text?U.text(v):String(v??'').replace(/\s+/g,' ').trim();
+  const esc=v=>U?.escape?U.escape(v):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const clock=v=>U?.clock?U.clock(v):String(v??'—');
+  const now=()=>U?.now?U.now():new Date().toISOString();
+  const uid=p=>U?.uid?U.uid(p):`${p}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const athleteKey=a=>text(a?.full_name).toLowerCase().replace(/[^a-z0-9]+/g,'');
+  const isSophie=a=>/^sophie?newlove$/.test(athleteKey(a));
+
+  function normaliseStroke(stroke){
+    const s=text(stroke).toLowerCase();
+    if(!s) return 'Freestyle';
+    if(/^(?:free|freestyle|fr)$/.test(s)) return 'Freestyle';
+    if(/^(?:back|backstroke|bk)$/.test(s)) return 'Backstroke';
+    if(/^(?:breast|breaststroke|br)$/.test(s)) return 'Breaststroke';
+    if(/^(?:fly|butterfly)$/.test(s)) return 'Butterfly';
+    if(/^(?:im|medley|individual medley)$/.test(s)) return 'IM';
+    return text(stroke);
+  }
+  function strokeSlug(stroke){
+    return normaliseStroke(stroke).toLowerCase().replace(/\s+/g,'_');
+  }
+  function practicalSendOff(targetSeconds,restSeconds){
+    const t=Number(targetSeconds),r=Math.max(0,Number(restSeconds)||0);
+    if(!Number.isFinite(t)) return null;
+    const raw=Math.floor(t)+r;
+    return Math.ceil(raw/5)*5;
+  }
+  function descriptorParts(state,row){
+    const types=state?.trainingTestTypes||state?.training_test_types||[];
+    const type=types.find(x=>x.id===row?.test_type_id)||{};
+    return [
+      type.test_key,type.name,type.label,type.test_name,type.test_type,
+      row?.test_key,row?.name,row?.label,row?.test_name,row?.test_type,
+      row?.source_label,row?.metadata?.test_key,row?.metadata?.test_name,row?.metadata?.test_type
+    ].map(text).filter(Boolean);
+  }
+  function typeKey(state,row){
+    return descriptorParts(state,row).join(' ');
+  }
+  function isT400Row(state,row){
+    const k=typeKey(state,row).toLowerCase().replace(/[_-]+/g,' ');
+    return /\bt\s*400\b/.test(k)||/\b400\s*m?\s*(?:time\s*trial|tt)\b/.test(k);
+  }
+  function testStroke(state,row){
+    const k=typeKey(state,row).toLowerCase();
+    if(!isT400Row(state,row)) return '';
+    const explicit=text(row?.stroke||row?.event_stroke||row?.metadata?.stroke);
+    if(explicit) return normaliseStroke(explicit);
+    if(/(?:^|[_\s-])(?:free|freestyle)(?:$|[_\s-])/.test(k)) return 'Freestyle';
+    if(/back/.test(k)) return 'Backstroke';
+    if(/breast/.test(k)) return 'Breaststroke';
+    if(/(?:fly|butterfly)/.test(k)) return 'Butterfly';
+    if(/(?:^|[_\s-])im(?:$|[_\s-])|medley/.test(k)) return 'IM';
+    // Historical generic T400 records were Freestyle. Named-stroke records
+    // must still identify their stroke explicitly and never borrow this anchor.
+    return 'Freestyle';
+  }
+  function resultSeconds(row){
+    return Number(row?.result_seconds||row?.time_seconds||row?.seconds||row?.result_time_seconds);
+  }
+  function t400Course(row){
+    return text(row?.pool_course||row?.course||row?.metadata?.pool_course||row?.metadata?.course||'SCM').toUpperCase();
+  }
+  function legacyPaceSeconds(value){
+    if(Number.isFinite(Number(value))&&Number(value)>0)return Number(value);
+    const seconds=U?.seconds?.(value);
+    return Number.isFinite(Number(seconds))&&Number(seconds)>0?Number(seconds):NaN;
+  }
+  function legacyPaceRows(state){
+    const rows=[];
+    for(const athlete of state?.athletes||[]){
+      const pace=athlete?.legacy_pace;
+      if(pace==null||pace==='')continue;
+      const value=typeof pace==='object'
+        ? pace.t400??pace.t400_time??pace.t400_seconds??pace.freestyle??pace.free
+        : pace;
+      const seconds=legacyPaceSeconds(value);
+      if(!Number.isFinite(seconds))continue;
+      const meta=typeof pace==='object'?pace:{};
+      rows.push({
+        id:U.stableId('legacy-athlete-t400',athlete.id,'Freestyle'),
+        athlete_id:athlete.id,
+        test_type_id:U.stableId('legacy-athlete-t400-type','Freestyle'),
+        result_seconds:seconds,
+        result_date:text(meta.t400_date||meta.test_date||meta.result_date||meta.date||athlete.updated_at||athlete.created_at).slice(0,10),
+        date_precision:text(meta.t400_date||meta.test_date||meta.result_date||meta.date)?'day':'unknown',
+        pool_course:text(meta.pool_course||meta.course||meta.t400_course||'SCM').toUpperCase(),
+        start_type:text(meta.start_type||'Push'),
+        valid_for_anchor:true,
+        source_type:'training',
+        source_label:'Legacy swimmer T400 reference',
+        metadata:{stroke:'Freestyle',migrated_from:'athlete.legacy_pace'}
+      });
+    }
+    return rows;
+  }
+
+  function evidenceIdentity(row,kind){
+    return text(row?.id)||`${kind}|${[
+      row?.athlete_id,row?.test_type_id,row?.result_date,resultSeconds(row),typeKey({},row)
+    ].map(text).join('|')}`;
+  }
+  function mergeMissingEvidence(dest,src,kind){
+    const seen=new Set((dest||[]).map(x=>evidenceIdentity(x,kind)));
+    let added=0;
+    for(const raw of src||[]){
+      if(!raw||typeof raw!=='object')continue;
+      const key=evidenceIdentity(raw,kind);if(seen.has(key))continue;
+      dest.push(U.clone(raw));seen.add(key);added++;
+    }
+    return added;
+  }
+
+  C.hydrateT400Evidence=(state=M.state,legacy=M.store?.legacy?.()||null)=>{
+    if(!state)return 0;
+    state.trainingTestTypes=Array.isArray(state.trainingTestTypes)?state.trainingTestTypes:[];
+    state.trainingTestResults=Array.isArray(state.trainingTestResults)?state.trainingTestResults:[];
+    let changed=0;
+    if(legacy){
+      changed+=mergeMissingEvidence(state.trainingTestTypes,legacy.training_test_types||legacy.trainingTestTypes,'type');
+      changed+=mergeMissingEvidence(state.trainingTestResults,legacy.training_test_results||legacy.trainingTestResults,'result');
+    }
+    const paceRows=legacyPaceRows(state);
+    if(paceRows.length){
+      changed+=mergeMissingEvidence(state.trainingTestTypes,[{
+        id:U.stableId('legacy-athlete-t400-type','Freestyle'),
+        test_key:'t400_freestyle',
+        name:'T400 Freestyle',
+        active:true,
+        source_label:'Legacy swimmer pace reference'
+      }],'type');
+      changed+=mergeMissingEvidence(state.trainingTestResults,paceRows,'result');
+    }
+    for(const row of state.trainingTestResults){
+      if(!isT400Row(state,row)||text(row.pool_course))continue;
+      // Club T400 evidence is SCM unless the source explicitly says otherwise.
+      row.pool_course=t400Course(row);changed++;
+    }
+    return changed;
+  };
+
+  C._internals={normaliseStroke,strokeSlug,practicalSendOff,typeKey,testStroke,isT400Row,t400Course,legacyPaceSeconds,legacyPaceRows,isSophie,athleteKey};
+
+  C.hydratePlanning=()=>{
+    if(!M.state)return;
+    const legacy=M.store?.legacy?.()||{};
+    if(!(M.state.seasonPlans||[]).length){
+      const x=legacy.season_plans||legacy.seasonPlans||[];
+      if(x.length)M.state.seasonPlans=JSON.parse(JSON.stringify(x));
+    }
+    if(!(M.state.weeklyPlans||[]).length){
+      const x=legacy.weekly_plans||legacy.weeklyPlans||[];
+      if(x.length)M.state.weeklyPlans=JSON.parse(JSON.stringify(x));
+    }
+  };
+
+  C.ensureSettings=(state=M.state)=>{
+    if(!state?.settings) return;
+    const s=state.settings;
+    if(!s.boardBlockBySession||typeof s.boardBlockBySession!=='object') s.boardBlockBySession={};
+    if(s.boardFocusMode===undefined) s.boardFocusMode=true;
+    if(!s.t400Stroke) s.t400Stroke='Freestyle';
+    if(!s.v4TimingMode) s.v4TimingMode='t400';
+    if(!Number.isFinite(Number(s.t400HeatIndex)))s.t400HeatIndex=0;
+    if(!s.finishDrafts||typeof s.finishDrafts!=='object')s.finishDrafts={};
+    if(!s.t400RosterBySession||typeof s.t400RosterBySession!=='object')s.t400RosterBySession={};
+  };
+
+  C.enforceRoster=()=>{
+    if(!M.state) return false;
+    let changed=false;
+    for(const a of M.state.athletes||[]){
+      if(isSophie(a) && a.active!==false){a.active=false;changed=true;}
+    }
+    if(M.state.settings){
+      const activeIds=new Set((M.state.athletes||[]).filter(a=>a.active!==false).map(a=>a.id));
+      const next=(M.state.settings.timingRoster||[]).filter(id=>activeIds.has(id));
+      if(next.length!==(M.state.settings.timingRoster||[]).length){
+        M.state.settings.timingRoster=next;changed=true;
+      }
+      for(const [sid,ids] of Object.entries(M.state.settings.t400RosterBySession||{})){
+        const clean=(Array.isArray(ids)?ids:[]).filter(id=>activeIds.has(id));
+        if(clean.length!==(Array.isArray(ids)?ids:[]).length){M.state.settings.t400RosterBySession[sid]=clean;changed=true;}
+      }
+      if(isSophie((M.state.athletes||[]).find(a=>a.id===M.state.settings.selectedAthleteId))){
+        M.state.settings.selectedAthleteId='';changed=true;
+      }
+    }
+    return changed;
+  };
+
+  // Run roster enforcement every time state is established, not only on first boot.
+  if(M.ensureState){
+    const baseEnsureState=M.ensureState;
+    M.ensureState=function(){
+      const out=baseEnsureState.apply(this,arguments);
+      C.ensureSettings();
+      C.hydratePlanning();
+      const changed=C.hydrateT400Evidence()+Number(C.enforceRoster());
+      if(changed) try{M.store?.save?.(M.state)}catch{}
+      return out;
+    };
+  }
+
+  // ---------- Athlete modification parity ----------
+  if(M.adapt){
+    M.adapt.profile=(athlete,state=M.state)=>{
+      const rows=state?.adaptationProfiles||state?.athlete_adaptation_profiles||[];
+      const p=rows.find(x=>x.athlete_id===athlete.id&&x.active!==false);
+      let ratio=Number(p?.default_volume_ratio);
+      if(!Number.isFinite(ratio)||ratio<=0) ratio=1;
+      const key=athleteKey(athlete);
+      const fallbacks={
+        charlottemurphy:.50,
+        conorfischer:.50,
+        mckenziedrage:2/3,
+        amberproudfoot:2/3,
+        matthewkofoed:2/3,
+        rubystace:2/3
+      };
+      if(ratio===1&&fallbacks[key]) ratio=fallbacks[key];
+      // Sophie is intentionally absent: history may remain, but no active programme rule.
+      const returnToStart=p?.return_to_starting_end===true||key==='charlottemurphy';
+      return{
+        ratio:Math.max(.25,Math.min(1,ratio)),
+        la
