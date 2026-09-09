@@ -1,0 +1,102 @@
+nst epoch=Date.parse(s.metadata?.rollEpoch||0)||0;return row&&(!epoch||attendanceTime(row)>=epoch)?row:null};
+  UI.presentAthletes=()=>UI.currentAthletes().filter(a=>['present','modified','late'].includes(txt(UI.attendanceFor(a.id)?.status).toLowerCase()));
+  UI.initials=ath=>UI.identifier?UI.identifier(ath,UI.presentAthletes()):txt(ath?.full_name).split(/\s+/).map(x=>x[0]).join('').slice(0,3).toUpperCase();
+
+  function sameWork(a,b){
+    const eq=x=>(x||[]).map(txt).sort().join('|').toLowerCase();
+    return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&txt(a?.stroke).toLowerCase()===txt(b?.stroke).toLowerCase()&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&eq(a?.equipment)===eq(b?.equipment);
+  }
+  function modifiedFor(item,s){return UI.presentAthletes().map(ath=>({ath,actual:A.item(item,ath,M.state,s)})).filter(x=>!sameWork(item,x.actual))}
+  function workHead(i){return `${Math.max(1,Number(i.reps)||1)} × ${Number(i.distance)||0}${i.stroke?` ${i.stroke}`:''}${i.equipment?.length?` · ${i.equipment.join(' + ')}`:''}`}
+  function meta(i){const b=[];if(i.zone)b.push(i.zone);if(i.restSeconds)b.push(`${i.restSeconds}s rest`);if(i.cycleSeconds)b.push(`@ ${U.clock(i.cycleSeconds)}`);if(i.composition?.length)b.push(i.composition.map(x=>`${x.distance} ${x.text}`.trim()).join(' / '));if(i.pattern?.length)b.push(i.pattern.map(x=>`${x.count} ${x.text}`).join(' · '));if(i.repPattern?.length)b.push(i.repPattern.map(x=>`#${x.rep} ${x.zone}`).join(' · '));if(i.cues?.length)b.push(i.cues.join(' · '));return [...new Set(b.filter(Boolean))].join(' · ')}
+  function targetDriven(i){return !!(i.targetSeconds||i.zone||i.raceIntent||i.repPattern?.length||i.repInstructions?.some(x=>x.raceIntent)||targetCueLines(i).some(x=>cueRaceIntent(x)||(hashRange(x,i.reps)&&cueZone(x))))}
+  function repRange(a,b){return a===b?`#${a}`:`#${a}–${b}`}
+  function groupedRows(rows,key){
+    const out=[];for(const row of rows||[]){const k=key(row),last=out.at(-1);if(last&&last.key===k&&Number(row.rep)===last.end+1){last.end=Number(row.rep);continue}out.push({key:k,start:Number(row.rep)||1,end:Number(row.rep)||1,row})}return out;
+  }
+  function patternTargetBody(rows){
+    return groupedRows(rows,x=>`${x.zone}|${Number(x.seconds)}|${Number(x.sendOff)}`).map(g=>`<span><strong>${repRange(g.start,g.end)} ${esc((g.row.zone||'').slice(0,3))} ${U.clock(g.row.seconds)}</strong><small>on ${U.clock(g.row.sendOff)}</small></span>`).join('');
+  }
+  function raceTargetBody(rows){
+    return groupedRows(rows,x=>x.status==='ok'?`ok|${Number(x.seconds)}|${Number(x.sendOff)}`:`${x.status}|${x.label||x.message||'No pace'}`).map(g=>g.row.status==='ok'?`<span><strong>${repRange(g.start,g.end)} ${U.clock(g.row.seconds)}</strong>${g.row.sendOff?`<small>on ${U.clock(g.row.sendOff)}</small>`:''}</span>`:`<span>${repRange(g.start,g.end)} ${esc(g.row.label||g.row.message||'No pace')}</span>`).join('');
+  }
+  function targetRows(s,item){
+    const swimmers=UI.presentAthletes();if(!swimmers.length)return '<div class="pool-target-empty">Mark swimmers Here in Roll to load targets.</div>';
+    const rows=[];
+    for(const ath of swimmers){
+      const actual=A.item(item,ath,M.state,s),r=T.forItem(s,actual,ath,M.state);
+      let sort=99999,body='';
+      if(r.status==='ok'){sort=Number(r.seconds)||99999;body=`<strong>${U.clock(r.seconds)}</strong>${r.sendOff?` <small>on ${U.clock(r.sendOff)}</small>`:''}<em>${esc(r.source||'')}</em>`}
+      else if(r.status==='pattern'){const good=(r.rows||[]).filter(x=>Number.isFinite(Number(x.seconds)));sort=Number(good[0]?.seconds)||99999;body=patternTargetBody(r.rows)+`<em>${esc(r.source||'')}</em>`}
+      else if(r.status==='rep_race'){const good=(r.rows||[]).filter(x=>x.status==='ok');sort=Number(good[0]?.seconds)||99999;body=raceTargetBody(r.rows)}
+      else if(r.status==='missing')body=`<span class="missing">${esc(r.message||'Target needed')}</span>`;else continue;
+      rows.push({sort,html:`<div class="pool-target-row"><b>${esc(UI.initials(ath))}</b><span>${body}</span></div>`});
+    }
+    rows.sort((a,b)=>a.sort-b.sort);return rows.map(x=>x.html).join('')||'<div class="pool-target-empty">No target needed for this set.</div>';
+  }
+  function targetLeaves(item){
+    if(item?.kind==='set')return targetDriven(item)?[item]:[];
+    if(item?.kind==='group')return (item.items||[]).flatMap(targetLeaves);
+    return [];
+  }
+  function targetDetails(s,items,label=''){
+    const sets=(items||[]).filter(targetDriven);if(!sets.length)return'';
+    return `<details class="pool-targets"><summary>Targets${sets.length>1?` · ${sets.length} sets`:''}</summary><div class="pool-target-body">${label?`<div class="pool-target-parent">${esc(label)}</div>`:''}${sets.map(item=>{const m=meta(item);return `<section class="pool-target-set" data-target-item="${esc(item.id)}"><header><strong>${esc(workHead(item))}</strong>${m?`<small>${esc(m)}</small>`:''}</header><div class="pool-target-rows">${targetRows(s,item)}</div></section>`}).join('')}</div></details>`;
+  }
+  function bindTargetDetails(host,s){
+    host.querySelectorAll('details.pool-targets').forEach(details=>details.addEventListener('toggle',()=>{if(!details.open)return;for(const section of details.querySelectorAll('[data-target-item]')){const item=S.findItem(s,section.dataset.targetItem)?.item,rows=section.querySelector('.pool-target-rows');if(item&&rows)rows.innerHTML=targetRows(s,item)}}));
+  }
+  function renderNode(s,b,item,suppressTargets=false){
+    if(item.kind==='cue')return `<div class="cue-line">${esc(item.text)}</div>`;
+    if(item.kind==='group'){
+      const leaves=targetLeaves(item),label=`${Number(item.rounds)||1} rounds · ${S.itemDistance(item).toLocaleString()}m`;
+      return `<section class="pool-group"><header><b>${Number(item.rounds)||1} ROUNDS</b><strong>${S.itemDistance(item).toLocaleString()}m</strong></header>${(item.items||[]).map(x=>renderNode(s,b,x,true)).join('')}${!suppressTargets?targetDetails(s,leaves,label):''}</section>`;
+    }
+    const m=meta(item),mods=modifiedFor(item,s),targets=targetDriven(item);
+    return `<article class="pool-line" data-item-id="${esc(item.id)}"><div class="pool-work"><div class="pool-work-head"><strong>${esc(workHead(item))}</strong>${M.access?.can?.('session.edit')?`<button data-pool-edit="${esc(item.id)}">Edit</button>`:''}</div>${m?`<div class="pool-meta">${esc(m)}</div>`:''}</div>${mods.length?`<div class="pool-mods">${mods.map(x=>`<div class="pool-mod"><b>${esc(UI.initials(x.ath))}</b><span>${esc(workHead(x.actual))}${meta(x.actual)?` · ${esc(meta(x.actual))}`:''}</span></div>`).join('')}</div>`:''}${targets&&!suppressTargets?targetDetails(s,[item]):''}</article>`;
+  }
+  function quickActions(here){
+    const swimmers=M.access?.can?.('pathway.read_all')?'<button data-pool-swimmers>Swimmers / Pathway</button>':'';
+    return `<button data-pool-roll>Roll · ${here} here</button><button data-pool-times>T400 / Times</button>${swimmers}`;
+  }
+
+  UI.renderBoard=()=>{
+    const h=document.querySelector('#boardView'),s=M.currentSession();if(!h)return;
+    if(!s){h.innerHTML='<section class="empty-card"><h2>No session selected</h2></section>';return}
+    const here=UI.presentAthletes().length,total=S.total(s);
+    h.innerHTML=`<section class="session-summary pool-summary"><div><span>WHOLE SESSION · ${esc(s.identity.date)} ${esc(s.identity.dayPart)}</span><h1>${esc(s.identity.title||'Session')}</h1><div class="pool-quick">${quickActions(here)}</div></div><strong>${total.toLocaleString()}m</strong></section>${(s.blocks||[]).map((b,i)=>`<section class="block-card pool-block" data-block-id="${esc(b.id)}"><header><div><small>${i+1}. ${esc(b.title.toUpperCase())}</small><h2>${esc(b.title)}</h2></div><strong>${S.blockDistance(b).toLocaleString()}m</strong></header><div class="block-items">${(b.items||[]).map(x=>renderNode(s,b,x)).join('')}</div>${M.access?.can?.('session.finish')?`<footer><button class="finish-here" data-pool-finish="${esc(b.id)}">Finish here — after ${esc(b.title)}</button></footer>`:''}</section>`).join('')}`;
+    h.querySelector('[data-pool-roll]')?.addEventListener('click',()=>M.nav.show('roll',{restoreScroll:false}));
+    h.querySelector('[data-pool-times]')?.addEventListener('click',()=>M.nav.show('times',{restoreScroll:false}));
+    h.querySelector('[data-pool-swimmers]')?.addEventListener('click',()=>M.nav.show('athletes',{restoreScroll:false}));
+    bindTargetDetails(h,s);
+    h.querySelectorAll('[data-pool-edit]').forEach(x=>x.onclick=()=>M.actions.openEdit(x.dataset.poolEdit));
+    h.querySelectorAll('[data-pool-finish]').forEach(x=>x.onclick=()=>M.actions.finishBlock(x.dataset.poolFinish));
+  };
+
+  function structuredSession(tr,identity){
+    if(!Array.isArray(tr?.structuredBlocks)||!tr.structuredBlocks.length)return null;
+    const s=S.empty(identity,tr.rawText||'');s.blocks=[];
+    const typeMap={warmup:'warm_up',warm_up:'warm_up',preset:'pre_set',pre_set:'pre_set',main:'main_set',main_set:'main_set',postset:'post_set',post_set:'post_set',warmdown:'warm_down',warm_down:'warm_down',test:'test'};
+    for(let bi=0;bi<tr.structuredBlocks.length;bi++){
+      const b=tr.structuredBlocks[bi],type=typeMap[txt(b.block_type||b.type).toLowerCase()]||U.blockType(b.block_type||b.type),children=[];let order=0;
+      for(const x of b.items||[]){
+        const raw=txt(x.raw||x.text||x.instruction||x.cue);if(!raw)continue;
+        const counted=x.counts_distance!==false&&txt(x.kind).toLowerCase()!=='cue'&&Number(x.distance)>0;
+        if(counted)children.push({id:U.stableId('item',s.id,type,order,raw),kind:'set',order:++order,reps:Math.max(1,Number(x.reps)||1),distance:Number(x.distance)||0,stroke:txt(x.stroke),zone:txt(x.zone),restSeconds:Number(x.rest_seconds||b.common_rest_seconds)||null,cycleSeconds:U.seconds(txt(x.cycle).replace(/^@\s*/,'')),equipment:Array.isArray(x.equipment)?x.equipment.map(txt).filter(Boolean):[],raw,text:raw,composition:[],pattern:[],repPattern:(x.rep_pattern||[]).map(p=>({rep:Number(p.rep)||1,zone:txt(p.zone),text:txt(p.instruction)})),cues:[],repInstructions:[],raceIntent:M.parser.raceIntent?.(raw)||null,targetSeconds:null});
+        else if(children.length){const p=children.at(-1);p.cues=p.cues||[];p.cues.push(raw)}else children.push({id:U.stableId('cue',s.id,type,order,raw),kind:'cue',order:++order,text:raw,raw});
+      }
+      const rounds=Math.max(1,Number(b.repeat_count)||1),items=rounds>1?[{id:U.stableId('group',s.id,type,bi,rounds),kind:'group',order:1,rounds,text:`${rounds} Rounds`,items:children}]:children;
+      s.blocks.push({id:U.stableId('block',s.id,type,bi),type,title:txt(b.title)||U.blockTitle(type),order:bi+1,items});
+    }
+    s.metadata={...s.metadata,primarySystem:txt(tr.structuredData?.primary_system),technicalFocus:txt(tr.structuredData?.technical_focus),sourceAuthority:'structured_transcript'};
+    return compactSession(s);
+  }
+  async function refreshAuth(){
+    const c=M.store.config(),old=M.store.auth()||safeJson(localStorage.getItem(M.AUTH_KEY),{});
+    if(!old?.refresh_token)throw new Error('Transcription sign-in expired — open Connection and sign in once');
+    const r=await fetch(`${String(c.supabaseUrl||'').replace(/\/$/,'')}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:c.supabaseAnonKey||'','Content-Type':'application/json'},body:JSON.stringify({refresh_token:old.refresh_token})});
+    const data=await r.json().catch(()=>({}));if(!r.ok||!data.access_token)throw new Error(data.error_description||data.msg||data.error||`Auth refresh failed (${r.status})`);localStorage.setItem(M.AUTH_KEY,JSON.stringify({...old,...data}));
+  }
+  async function transcribe(blob,type){try{return await M.intake.transcribe(blob,type)}catch(e){if(!/\b401\b|jwt|unauthori[sz]ed|access.?token/i.test(String(e?.message||e)))throw e;await refreshAuth();return M.intake.transcribe(blob,type)}}
+
+  function modalHtml(){return `<div cl
