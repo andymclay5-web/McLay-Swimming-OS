@@ -1,0 +1,6 @@
+ce-between;background:#edf6fa;padding:9px 13px}.tv-round-group>header b{font-size:20px}
+@media(max-width:700px){#tvView{padding:10px 8px 24px}.tv-hero{grid-template-columns:1fr auto;padding:16px}.tv-hero>button{grid-column:1/-1}.tv-assignment-grid{grid-template-columns:1fr}.tv-assignment.group-all{grid-column:auto}.tv-block>header{padding:12px}.tv-line{padding:10px 9px 13px}}
+
+/* v4 visibility is a security/UX invariant: author CSS must never override hidden. */
+[hidden]{display:none!important}
+.meet-plan{color:#365f70!important}.meet-next{color:#2b6d54!important;font-weight:800}.meet-result{color:#173f59!important;font-weight:900}.meet-entry-state{align-content:start}.meet-entry-state button{white-space:nowrap}
