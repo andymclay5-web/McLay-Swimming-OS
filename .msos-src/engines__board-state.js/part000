@@ -1,0 +1,79 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4,E=g.MSOSEngines;if(!M?.ui||!E?.Coordinator||!E?.Modification||!E?.Evidence)return;
+  const S=M.boardStateEngine={build:'v4-board-state-20260826-instant-times-b'},U=M.util;
+  const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{}};
+  const saveData=()=>{try{M.store?.save?.(M.state)}catch{}};
+  const esc=v=>U?.escape?U.escape(String(v??'')):String(v??''),short=v=>String(v??'').replace('Freestyle','Fr').replace('Backstroke','Bk').replace('Breaststroke','Br').replace('Butterfly','Fly');
+  const clock=s=>U?.clock?U.clock(Number(s)):String(s??'');
+  function findItem(session,id){let hit=null;const walk=items=>{for(const n of items||[]){if(n?.id===id){hit=n;return;}if(n?.kind==='group')walk(n.items);if(hit)return;}};for(const b of session?.blocks||[]){walk(b.items);if(hit)break;}return hit;}
+  function present(){return M.ui.presentAthletes?.()||[];}
+  function mods(){const p=present(),ids=new Set(p.map(a=>a.id)),m=M.ui.modifiedAthletes?.();if(Array.isArray(m)&&m.length)return m.filter(a=>ids.has(a.id));return p.filter(a=>Number(E.Modification.profile(a,M.state).ratio)<.98||String(a.modifications||'').trim());}
+  function groupAthletes(){const m=new Set(mods().map(a=>a.id));return present().filter(a=>!m.has(a.id));}
+  function needsPerformanceEvidence(item){return !!(item?.raceIntent||(item?.repInstructions||[]).some(x=>x?.raceIntent));}
+  function evidenceUnavailable(session,item,a){return needsPerformanceEvidence(item)&&!!M.engineBridge?.evidenceUnavailable?.(a,session?.identity?.course||'');}
+  function targetText(B,r){const s=B?.targetSummary?.(r)||'',modeled=!!(r?.modeled||(r?.rows||[]).some(x=>x?.modeled));return modeled&&s?`≈ ${s}`:s;}
+  function strokeLabel(B,session,item,a){const labelled=B?.strokeLabel?.(session,item,a);if(labelled)return labelled;const stroke=B?.displayStroke?.(session,item,a)||E.Evidence.stroke(item?.stroke||'')||'Auto';return stroke==='Auto'?'Auto':short(stroke);}
+  function selectedStroke(session,item,a){return M.boardEngine?.selectedStroke?.(session,item,a)||'';}
+  function timingFallback(session,item,a){const actual=E.Modification.adaptItem(item,a,M.state,session),selected=selectedStroke(session,item,a),ev=actual?.relativeStimulusEvidence;if(selected&&!ev?.referenceSeconds){const st=short(E.Evidence.stroke(selected)||selected);return ev?.athleteSeconds?`No squad ${st} reference`:`No ${st} evidence`;}if(Number(actual?.cycleSeconds)>0)return `@ ${clock(actual.cycleSeconds)}`;return '—';}
+  function targetCard(session,item,a){const B=M.boardEngine,name=B?.name?.(a,present())||String(a.full_name||'').split(' ')[0]||'?',label=strokeLabel(B,session,item,a);if(evidenceUnavailable(session,item,a))return `<div class="msos-target-card"><div><button class="msos-name" data-msos-ath="${esc(a.id)}">${esc(name)}</button><button class="msos-stroke-pill" data-msos-fast-stroke="${esc(item.id)}:${esc(a.id)}">${esc(label)}</button></div><span>PB evidence unavailable</span></div>`;const r=E.Coordinator.prescription(session,item,a,M.state).target,summary=targetText(B,r)||timingFallback(session,item,a);return `<div class="msos-target-card"><div><button class="msos-name" data-msos-ath="${esc(a.id)}">${esc(name)}</button><button class="msos-stroke-pill" data-msos-fast-stroke="${esc(item.id)}:${esc(a.id)}">${esc(label)}</button></div><span>${esc(summary)}</span></div>`;}
+  function panelShell(item,message='Loading targets…'){return `<div class="msos-target-panel" data-msos-panel="${esc(item.id)}"><section><label>TIMES</label><div class="msos-target-matrix" data-msos-target-matrix><span class="msos-none">${esc(message)}</span></div></section></div>`;}
+  let modToken=0,prewarmToken=0,prewarmTimer=0,pendingStrokeAnchor=null;
+  const targetJobs=new Map();
+  function activeDeckView(){const v=M.state?.settings?.view||'';return v==='board'||v==='tv';}
+  function cancelWork(){modToken++;prewarmToken++;if(prewarmTimer){clearTimeout(prewarmTimer);prewarmTimer=0;}}
+  // Real coaching failure this pins: a race-pace target that could be computed immediately from evidence already
+  // held locally (already-hydrated resultsPbBoard rows -- e.g. from a prior session, an import, or an earlier
+  // cloud sync this same visit) sat behind "Loading PB / race evidence..." for up to ~20s, because this function
+  // gated on the CLOUD roster-sync status (pbRosterSync.status==='idle' + canAttemptCloudRead) without ever
+  // checking whether local evidence already made that sync irrelevant for this item. engines/bridge.js's own
+  // whenRaceEvidenceReady() already established the correct precedent -- check localPbReferenceCount() first and
+  // treat evidence as ready immediately when it is nonzero, only falling back to the cloud-sync-status check when
+  // there is no local evidence at all. See architecture/RUNTIME_AUDIT_20260909.md §3 and
+  // tests/race-evidence-local-first-20260909.cjs.
+  function raceEvidencePending(item){if(!needsPerformanceEvidence(item))return false;if(M.engineBridge&&!M.engineBridge.hydrated)return true;if((M.engineBridge?.localPbReferenceCount?.()||0)>0)return false;const s=M.engineBridge?.pbRosterSync?.status||'idle';return s==='running'||(s==='idle'&&!!M.engineBridge?.canAttemptCloudRead?.());}
+  function rowForItem(id){const safe=g.CSS?.escape?g.CSS.escape(id):String(id).replace(/["\\]/g,'\\$&');return document.querySelector(`#boardView [data-item="${safe}"],#tvView [data-item="${safe}"]`);}
+  function rememberRowAnchor(item){if(!item)return;const row=rowForItem(item.id),panel=row?.querySelector?.('.msos-target-panel');pendingStrokeAnchor={itemId:item.id,top:row?.getBoundingClientRect?.().top??null,y:g.scrollY||0,panelHeight:panel?.getBoundingClientRect?.().height||0};}
+  function restorePendingRowAnchor(itemId='',final=false){const a=pendingStrokeAnchor;if(!a||(itemId&&String(a.itemId)!==String(itemId)))return;const row=rowForItem(a.itemId);if(!row){if(final)pendingStrokeAnchor=null;return;}const panel=row.querySelector('.msos-target-panel');if(panel&&a.panelHeight>0){if(final)panel.style.minHeight='';else panel.style.minHeight=`${Math.ceil(a.panelHeight)}px`;}
+    requestAnimationFrame(()=>{if(pendingStrokeAnchor!==a)return;if(row.isConnected&&Number.isFinite(Number(a.top)))g.scrollBy(0,row.getBoundingClientRect().top-Number(a.top));else g.scrollTo(0,Number(a.y)||0);if(final||!panel)pendingStrokeAnchor=null;});}
+  function finishPanelAnchor(item){if(pendingStrokeAnchor?.itemId===item?.id)restorePendingRowAnchor(item.id,true);}
+  function evidenceRevision(){const s=M.state||{},e=s._evidenceBridge||{};return [Number(e.contentRevision)||0,s.resultsPbBoard?.length||s.results_pb_board?.length||0,s.resultsEventHistory?.length||s.results_event_history?.length||0,s.coachResults?.length||s.coach_results?.length||0].join('|');}
+  function overrideRevision(session,item){return (M.state?.adaptationOverrides||[]).filter(x=>x?.sessionId===session?.id&&x?.itemId===item?.id).map(x=>[x.athleteId,x.active!==false?1:0,x.patch?.stroke||'',x.updatedAt||x.createdAt||''].join(':')).sort().join(',');}
+  function targetJobKey(session,item,group){return [session?.id||'',item?.id||'',session?.currentSource?.hash||'',evidenceRevision(),overrideRevision(session,item),group.map(a=>a.id).join(',')].join('||');}
+  function currentTargetPanel(itemId){return rowForItem(itemId)?.querySelector?.('.msos-target-panel')||null;}
+  function markPanelJob(panel,key){if(panel?.dataset)panel.dataset.msosTargetJob=key;}
+  function paintJob(job){if(!job||job.status!=='done')return false;const panel=currentTargetPanel(job.itemId);if(!panel||M.state?.settings?.boardExpandedTargetId!==job.itemId)return false;if(!panel.dataset.msosTargetJob)panel.dataset.msosTargetJob=job.key;if(panel.dataset.msosTargetJob!==job.key)return false;const box=panel.querySelector('[data-msos-target-matrix]');if(!box)return false;box.innerHTML=job.cards.join('');box.dataset.msosTargetElapsed=String(Math.round(job.elapsedMs||0));finishPanelAnchor({id:job.itemId});return true;}
+  function trimJobs(){if(targetJobs.size<=48)return;const rows=[...targetJobs.values()].sort((a,b)=>(a.finishedAt||a.startedAt)-(b.finishedAt||b.startedAt));for(const j of rows.slice(0,targetJobs.size-48))targetJobs.delete(j.key);}
+  function ensureTargetJob(session,item,group=groupAthletes()){
+    if(!session||!item||!group.length||raceEvidencePending(item))return null;
+    const key=targetJobKey(session,item,group);let job=targetJobs.get(key);if(job)return job;
+    let resolveJob;const promise=new Promise(resolve=>{resolveJob=resolve;});
+    job={key,itemId:item.id,sessionId:session.id,status:'running',cards:[],i:0,group:[...group],startedAt:performance?.now?.()??Date.now(),reattachments:0,promise,resolve:resolveJob};targetJobs.set(key,job);trimJobs();
+    const step=()=>{if(job.status!=='running')return;const end=Math.min(job.group.length,job.i+2);for(;job.i<end;job.i++){try{job.cards.push(targetCard(session,item,job.group[job.i]));}catch{job.cards.push('<div class="msos-target-card"><span>Target unavailable</span></div>');}}if(job.i<job.group.length){requestAnimationFrame(step);return;}job.status='done';job.finishedAt=performance?.now?.()??Date.now();job.elapsedMs=Math.max(0,job.finishedAt-job.startedAt);S.lastTargetTiming={itemId:item.id,status:'done',startedAt:job.startedAt,finishedAt:job.finishedAt,elapsedMs:job.elapsedMs,cards:job.cards.length,group:job.group.length,reattachments:job.reattachments,prewarmed:!currentTargetPanel(item.id)};job.resolve?.(job);paintJob(job);};
+    requestAnimationFrame(step);return job;
+  }
+  function fillPanel(panel,session,item,group=groupAthletes()){
+    const box=panel?.querySelector?.('[data-msos-target-matrix]');if(!box)return;
+    if(raceEvidencePending(item)){box.innerHTML='<span class="msos-none">Loading PB / race evidence…</span>';return;}
+    if(!group.length){box.innerHTML='<span class="msos-none">Modified swimmers are shown beside their own work.</span>';finishPanelAnchor(item);return;}
+    const key=targetJobKey(session,item,group);markPanelJob(panel,key);const job=ensureTargetJob(session,item,group);
+    if(job?.status==='done'){paintJob(job);return;}
+    if(job?.status==='running'){job.reattachments=Number(job.reattachments||0)+1;S.lastTargetTiming={itemId:item.id,status:'running',startedAt:job.startedAt,group:group.length,reattachments:job.reattachments};box.innerHTML='<span class="msos-none">Loading targets…</span>';return;}
+    box.innerHTML='<span class="msos-none">Target unavailable</span>';
+  }
+  function deckTargetItems(session){const ids=[...new Set([...document.querySelectorAll('#boardView [data-msos-times],#tvView [data-msos-times]')].map(b=>b.dataset.msosTimes).filter(Boolean))];return ids.map(id=>findItem(session,id)).filter(Boolean);}
+  function idleTick(){return new Promise(resolve=>{if(typeof g.requestIdleCallback==='function')g.requestIdleCallback(()=>resolve(),{timeout:120});else setTimeout(resolve,0);});}
+  async function prewarmSessionTargets(){
+    const session=M.currentSession?.();if(!session||!activeDeckView())return{ready:0,total:0};
+    const token=++prewarmToken,group=groupAthletes(),items=deckTargetItems(session);let ready=0;
+    S.prewarmStatus={sessionId:session.id,status:'running',ready,total:items.length,startedAt:performance?.now?.()??Date.now()};
+    for(const item of items){
+      if(token!==prewarmToken||!activeDeckView()||M.currentSession?.()?.id!==session.id)break;
+      if(raceEvidencePending(item)){await idleTick();continue;}
+      const job=ensureTargetJob(session,item,group);if(job){try{await job.promise;}catch{}if(job.status==='done')ready++;}
+      S.prewarmStatus={...S.prewarmStatus,ready,itemId:item.id};
+      await idleTick();
+    }
+    const complete=token===prewarmToken&&activeDeckView()&&M.currentSession?.()?.id===session.id;
+    if(complete)S.prewarmStatus={...S.prewarmStatus,status:'done',ready,total:items.length,finishedAt:performance?.now?.()??Date.now()};
+    return{ready,total:items.length,compl
