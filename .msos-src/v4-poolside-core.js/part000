@@ -1,0 +1,177 @@
+'use strict';
+(function(g){
+  const M=g.MSOS4;
+  if(!M) throw new Error('MSOS4 missing');
+  const U=M.util,S=M.session,A=M.adapt,T=M.targets,UI=M.ui=M.ui||{};
+  const BUILD='v4-poolside-core-20260819f-targettruth';
+  M.BUILD=BUILD; M.CORE='20260819-v4-poolside-core-targettruth';
+  M.RELEASE_ATTESTATION=Object.freeze({
+    ...(M.RELEASE_ATTESTATION||{}),
+    build:BUILD,
+    softwareReady:M.RELEASE_ATTESTATION?.softwareReady===true&&M.correct?.baseBuild?.match===true,
+    generatedAt:'2026-08-19T16:30:00+12:00',
+    suiteDigest:'v4-contract-20260819f-targettruth',
+    packageDigest:'SHA256SUMS.txt'
+  });
+  const BASE_PARSE=M.parser.parse.bind(M.parser);
+  const DRAFT_KEY='mclay_swimming_os_v4_poolside_draft_e';
+  const txt=v=>U.text(v), esc=v=>U.escape(v);
+  const nzToday=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});
+  const safeJson=(s,f=null)=>{try{return JSON.parse(s||'')||f}catch{return f}};
+
+  function isHeading(s){return /^(?:warm\s*up|pre\s*set|main\s*set|post\s*set|warm\s*down|cool\s*down|test)\b/i.test(String(s||'').trim())}
+  function normaliseCycle(line){
+    return String(line||'')
+      .replace(/\bon\s+(\d{2,3})\s*$/i,(_,n)=>{n=Number(n);return n>=20&&n<=599?`@ ${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`:_})
+      .replace(/\bon\s+(\d{1,2})[.:]([0-5]\d)\s*$/i,'@ $1:$2');
+  }
+  function headingRounds(line){
+    const m=String(line||'').trim().match(/^(warm\s*up|pre\s*set|main\s*set|post\s*set|warm\s*down|cool\s*down|test)\s*(?:[-—–:·]\s*)?(\d{1,2})\s*rounds?\s*:?(.*)$/i);
+    return m?{heading:m[1],rounds:Number(m[2]),tail:String(m[3]||'').trim()}:null;
+  }
+  function repeatLine(s){const m=String(s||'').trim().match(/^(\d{1,3})\s*[x×]\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);return m?{reps:Number(m[1]),distance:Number(m[2]),tail:String(m[3]||'').trim()}:null}
+  function singleLine(s){const m=String(s||'').trim().match(/^(\d{1,4}(?:\.5)?)\s+(.+)$/);return m?{distance:Number(m[1]),tail:String(m[2]||'').trim()}:null}
+  function targetCueLines(item){
+    return [...new Set([
+      item?.raw,item?.text,
+      ...(item?.cues||[]),
+      ...(item?.repPattern||[]).map(x=>x.text),
+      ...(item?.repInstructions||[]).map(x=>x.label)
+    ].map(txt).filter(Boolean))];
+  }
+  function authoredCueLines(item){
+    return [...new Set([item?.raw,item?.text,...(item?.cues||[]),...(item?.repPattern||[]).map(x=>x.text)].map(txt).filter(Boolean))];
+  }
+  function hashRange(line,reps){
+    const m=txt(line).match(/^#\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?\s*(.*)$/i);
+    if(!m)return null;
+    const start=Math.max(1,Number(m[1])||1),end=Math.max(start,Math.min(Math.max(1,Number(reps)||1),Number(m[2]||m[1])||start));
+    return start>Math.max(1,Number(reps)||1)?null:{start,end,label:txt(m[3])};
+  }
+  function zoneValue(v){const k=txt(v).toLowerCase();if(/^reg/.test(k))return'Regeneration';if(/^dev/.test(k))return'Development';if(/^(?:over|ol)/.test(k))return'Overload';if(/^(?:thr|threshold)/.test(k))return'Threshold';if(/^(?:cl|clearance)/.test(k))return'Clearance';return'';}
+  function cueZone(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);return m?zoneValue(m[1]):'';}
+  function zoneProgression(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b\s*(?:to|→|->)\s*\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(!m)return null;const from=zoneValue(m[1]),to=zoneValue(m[2]);return from&&to&&from!==to?{from,to,text:txt(line)}:null;}
+  function cueStroke(line){
+    const t=txt(line);if(/\b(?:individual\s+medley|medley|IM)\b/i.test(t))return'IM';if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';return'';
+  }
+  function cueRaceIntent(line){
+    const raw=txt(line),normal=raw.replace(/\b(50|100|200|400|800|1500)\s*m\b/gi,'$1');
+    const direct=M.parser.raceIntent?.(normal);if(direct)return direct;
+    const segment=normal.match(/\b(first|1st|second|2nd|last|final)\s+(\d{2,4})\s+(?:of\s+(?:the\s+)?)?(\d{2,4})\s*(?:race|event|pace)\b/i);
+    return segment?{distance:Number(segment[3]),eventStroke:cueStroke(normal)||null,workingStroke:cueStroke(normal)||null,segmentDistance:Number(segment[2]),segmentPosition:segment[1].toLowerCase()}:null;
+  }
+  function cueCycle(line){
+    const m=txt(line).match(/^@\s*(\d{1,3})(?::([0-5]\d(?:\.\d+)?))?$/);
+    if(!m)return null;return m[2]==null?Number(m[1]):Number(m[1])*60+Number(m[2]);
+  }
+  function inlineCycle(line){const m=txt(line).match(/(?:@|on)\s*(\d{1,3})(?::|\.)([0-5]\d(?:\.\d+)?)\b/i);return m?Number(m[1])*60+Number(m[2]):null;}
+  function sameJson(a,b){return JSON.stringify(a??null)===JSON.stringify(b??null)}
+  function enhanceSetTargets(item){
+    if(item?.kind!=='set')return 0;
+    const reps=Math.max(1,Number(item.reps)||1),lines=authoredCueLines(item);let changed=0;
+    if(!Number(item.cycleSeconds)){
+      const cycle=lines.map(cueCycle).find(Number.isFinite);if(cycle){item.cycleSeconds=cycle;changed++}
+    }
+    const zones=new Map();
+    for(const line of lines){const range=hashRange(line,reps),zone=cueZone(line);if(!range||!zone)continue;for(let n=range.start;n<=range.end;n++)zones.set(n,{rep:n,zone,text:line})}
+    if(zones.size){const next=[...zones.values()].sort((a,b)=>a.rep-b.rep);if(!sameJson(item.repPattern,next)){item.repPattern=next;changed++}}
+    else{
+      const progression=lines.map(zoneProgression).find(Boolean);
+      if(progression&&reps>1){const firstCount=Math.max(1,Math.floor(reps/2)),next=Array.from({length:reps},(_,i)=>({rep:i+1,zone:i<firstCount?progression.from:progression.to,text:progression.text}));if(!sameJson(item.repPattern,next)){item.repPattern=next;changed++}}
+    }
+    const instructions=new Map();let hasRace=false;
+    for(const line of lines){const range=hashRange(line,reps);if(!range)continue;const race=cueRaceIntent(line);if(race)hasRace=true;for(let n=range.start;n<=range.end;n++)instructions.set(n,{rep:n,label:range.label||`#${n}`,raceIntent:race,drill:/\bdrill\b/i.test(range.label)})}
+    if(hasRace){
+      const next=Array.from({length:reps},(_,i)=>instructions.get(i+1)||{rep:i+1,label:`#${i+1}`,raceIntent:null,drill:false});
+      if(!sameJson(item.repInstructions,next)){item.repInstructions=next;changed++}
+    }
+    if(!item.raceIntent){
+      const whole=lines.filter(line=>!hashRange(line,reps)).map(cueRaceIntent).find(Boolean);
+      if(whole){item.raceIntent=whole;changed++}
+    }
+    return changed;
+  }
+  function enhanceTargetSemantics(session){let changed=0;S.walkSets(session,item=>{changed+=enhanceSetTargets(item)});return changed}
+
+  function normaliseText(source){
+    const input=String(source??'').replace(/\r/g,'').split('\n');
+    const stage=[];
+    for(let line of input){
+      line=line.replace(/\b(\d{1,2})\s*x\s*10p\s+i[’']?m\b/gi,'$1 x 100 IM');
+      const hr=headingRounds(line);
+      if(hr){stage.push(hr.heading,`${hr.rounds} Rounds:`);if(hr.tail)stage.push(hr.tail);continue}
+      stage.push(normaliseCycle(line));
+    }
+    const out=[];
+    for(let i=0;i<stage.length;i++){
+      const line=stage[i],parent=repeatLine(line);
+      out.push(line);
+      if(!parent||parent.reps<2)continue;
+      const kids=[];let j=i+1,sumReps=0;
+      while(j<stage.length&&kids.length<12){
+        const s=String(stage[j]||'').trim();if(!s||isHeading(s)||/^\d{1,2}\s+Rounds?\b/i.test(s))break;
+        const c=repeatLine(s);if(!c||c.distance!==parent.distance||c.reps>=parent.reps)break;
+        kids.push(c);sumReps+=c.reps;j++;
+      }
+      if(kids.length>=2&&sumReps>0&&parent.reps%sumReps===0){
+        for(const c of kids)out.push(`${c.reps} ${c.tail||'Choice'}`);
+        i=j-1;continue;
+      }
+      const parts=[];let k=i+1,sum=0;
+      while(k<stage.length&&parts.length<8){
+        const s=String(stage[k]||'').trim();if(!s||isHeading(s)||/^\d{1,2}\s+Rounds?\b/i.test(s))break;
+        const c=singleLine(s);if(!c||c.distance<=0||c.distance>=parent.distance)break;
+        parts.push(c);sum+=c.distance;k++;if(sum>=parent.distance)break;
+      }
+      if(parts.length>=2&&Math.abs(sum-parent.distance)<.001){
+        out.push(`Makeup: ${parts.map(c=>`${c.distance} ${c.tail}`).join(' / ')}`);
+        i=k-1;
+      }
+    }
+    for(let i=out.length-1;i>=0;i--){
+      const s=String(out[i]||'').trim();if(!s)continue;
+      const m=s.match(/^([\d,]{3,6})\s*m$/i);if(m)out[i]=`TOTAL ${m[1]}m`;break;
+    }
+    return out.join('\n');
+  }
+
+  function strippedWork(set){return txt(set?.raw||set?.text).replace(/^\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\s*/i,'')}
+  function promoteExplicitCycleComponent(item){
+    if(item?.kind!=='component')return item;
+    const raw=txt(item.raw||item.text),cycle=inlineCycle(raw);if(!cycle)return item;
+    return {...item,kind:'set',reps:1,stroke:cueStroke(raw),zone:cueZone(raw),restSeconds:null,cycleSeconds:cycle,equipment:[],raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:[],raceIntent:cueRaceIntent(raw),targetSeconds:null,unclassifiedTerms:[]};
+  }
+  function compactItems(items){
+    const a=(items||[]).map(x=>{let c=U.clone(x);if(c.kind==='group')c.items=compactItems(c.items||[]);c=promoteExplicitCycleComponent(c);return c});
+    for(let i=0;i<a.length;i++){
+      const p=a[i];if(p?.kind!=='set'||Number(p.reps)<2)continue;
+      let j=i+1,kids=[],sumReps=0;
+      while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)!==Number(p.distance)||Number(c.reps)>=Number(p.reps))break;kids.push(c);sumReps+=Number(c.reps)||1;j++}
+      if(kids.length>=2&&sumReps>0&&Number(p.reps)%sumReps===0){p.pattern=p.pattern||[];for(const c of kids)p.pattern.push({count:Number(c.reps)||1,text:strippedWork(c)});a.splice(i+1,kids.length);continue}
+      j=i+1;let parts=[],sum=0;
+      while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.reps)!==1||Number(c.distance)<=0||Number(c.distance)>=Number(p.distance))break;parts.push(c);sum+=Number(c.distance);j++;if(sum>=Number(p.distance))break}
+      if(parts.length>=2&&Math.abs(sum-Number(p.distance))<.001){p.composition=p.composition||[];for(const c of parts)p.composition.push({distance:Number(c.distance),text:strippedWork(c)});a.splice(i+1,parts.length)}
+    }
+    return a;
+  }
+  function compactSession(s){for(const b of s?.blocks||[])b.items=compactItems(b.items||[]);enhanceTargetSemantics(s);s.metadata=s.metadata||{};s.metadata.parsedTotal=S.total(s);return s}
+
+  function repairKnownSavedSessions(){
+    if(!M.state?.canonicalSessions)return 0;
+    const selected=M.state.settings?.selectedSessionId||'';let repaired=0;
+    for(const [id,session] of Object.entries(M.state.canonicalSessions)){
+      const next=U.clone(session),semantic=enhanceTargetSemantics(next);
+      if(!semantic)continue;
+      next.metadata=next.metadata||{};next.metadata.targetSemanticRepair={build:BUILD,at:U.now()};
+      M.state.canonicalSessions[id]=next;repaired++;
+    }
+    if(repaired){M.state.settings.selectedSessionId=selected;M.store.save(M.state)}
+    return repaired;
+  }
+
+  M.parser.parse=(source,identity={})=>compactSession(BASE_PARSE(normaliseText(source),identity));
+  M.poolsideCore={BUILD,normaliseText,compactSession,enhanceTargetSemantics,repairKnownSavedSessions,renderNode,targetDetails,quickActions};
+
+  function attendanceTime(row){return Date.parse(row?.updated_at||row?.updatedAt||row?.created_at||row?.createdAt||0)||0}
+  UI.currentAthletes=()=>{const s=M.currentSession();if(!s)return[];const squads=new Set((s.identity?.squads||[]).map(x=>txt(x).toLowerCase()));return (M.state.athletes||[]).filter(a=>a.active!==false&&(!squads.size||squads.has(txt(a.squad).toLowerCase())))};
+  UI.attendanceFor=id=>{const s=M.currentSession();if(!s)return null;const row=(M.state.attendance||[]).find(a=>a.session_id===s.id&&a.athlete_id===id);co
