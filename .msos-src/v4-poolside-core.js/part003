@@ -1,0 +1,12 @@
+urphy'},md={id:'md-phase',full_name:'McKenzie Drage'},state={adaptationProfiles:[],adaptationOverrides:[],trainingTestTypes:[{id:'phase-t400',test_key:'t400_freestyle'}],trainingTestResults:[{athlete_id:'cm-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true},{athlete_id:'md-phase',test_type_id:'phase-t400',result_seconds:300,pool_course:'SCM',valid_for_anchor:true}]},a=M.adapt.item(item,cm,state,s),b=M.adapt.item(item,md,state,s),ta=T.forItem(s,a,cm,state),tb=T.forItem(s,b,md,state);
+        if(a.reps!==2||a.distance!==200||b.reps!==2||b.distance!==275)throw new Error(`modified shapes ${a.reps}x${a.distance} / ${b.reps}x${b.distance}`);
+        if(ta.status!=='pattern'||tb.status!=='pattern'||ta.rows.length!==2||tb.rows.length!==2)throw new Error('individual phase targets were not retained');
+        return `CM ${a.reps} × ${a.distance} · MD ${b.reps} × ${b.distance} · Reg + Dev retained`;
+      });
+      check('Board exposes direct Swimmers and Performance Pathway access',()=>{const html=quickActions(1);if(!/data-pool-swimmers/.test(html)||!/Swimmers \/ Pathway/.test(html))throw new Error('direct poolside swimmer route missing');return 'Board → Swimmers / Pathway'});
+      const passed=tests.filter(x=>x.ok===true).length;
+      return {...result,build:M.BUILD,tests,passed,total:tests.length,ok:tests.length>0&&passed===tests.length};
+    };
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{const known=repairKnownSavedSessions();if(known||M.state?.settings?.view==='board')UI.renderCurrent()},0),{once:true});
+})(globalThis);
