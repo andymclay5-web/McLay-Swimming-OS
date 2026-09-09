@@ -1,0 +1,213 @@
+bel:p?.profile_label||athlete.modifications||'',
+        key,
+        returnToStart
+      };
+    };
+  }
+
+
+  C.ACTIVE_MODIFICATION_DEFAULTS=Object.freeze({
+    charlottemurphy:{ratio:.50,label:'~½ volume when condensation is needed · preserve theme/quality · return to starting end'},
+    conorfischer:{ratio:.50,label:'~½ volume when condensation is needed · preserve theme/quality'},
+    mckenziedrage:{ratio:2/3,label:'~⅔ volume when condensation is needed · practical independent rest for fast 75s'},
+    amberproudfoot:{ratio:2/3,label:'~⅔ volume when condensation is needed · upper-body equivalent where athlete constraint applies'},
+    matthewkofoed:{ratio:2/3,label:'~⅔ volume when condensation is needed'},
+    rubystace:{ratio:2/3,label:'~⅔ volume when condensation is needed'}
+  });
+
+  function profileDistance(distance,ratio,session,returnToStart){
+    const pool=/LCM/i.test(text(session?.identity?.course))?50:25;
+    const unit=returnToStart?pool*2:pool;
+    const target=Math.max(pool,Number(distance||0)*Number(ratio||1));
+    return Math.max(unit,Math.round(target/unit)*unit);
+  }
+  function condensedRepPattern(pattern,reps){
+    const expanded=(pattern||[]).filter(x=>text(x.zone));
+    const count=Math.max(1,Number(reps)||1);
+    if(!expanded.length)return[];
+    if(count>=expanded.length)return expanded.slice(0,count).map((x,i)=>({...U.clone(x),rep:i+1}));
+    return Array.from({length:count},(_,i)=>{
+      const source=expanded[Math.min(expanded.length-1,Math.floor(i*expanded.length/count))];
+      return{...U.clone(source),rep:i+1};
+    });
+  }
+  function rewriteAdaptedShape(out,reps,distance){
+    const lead=`${Math.max(1,Number(reps)||1)} × ${Number(distance)||0}`;
+    const raw=text(out?.raw||out?.text);
+    out.raw=/^\s*\d+\s*[x×]\s*\d+(?:\.\d+)?/i.test(raw)?raw.replace(/^\s*\d+\s*[x×]\s*\d+(?:\.\d+)?/i,lead):`${lead}${raw?` · ${raw}`:''}`;
+    out.text=out.raw;
+  }
+
+  if(M.adapt?.item){
+    const baseAdaptItem=M.adapt.item.bind(M.adapt);
+    M.adapt.item=(item,athlete,state=M.state,session=null)=>{
+      const out=baseAdaptItem(item,athlete,state,session);
+      const key=athleteKey(athlete),raw=text(out?.raw||out?.text||item?.raw||item?.text),profile=M.adapt.profile(athlete,state);
+      const hasExplicit=(state?.adaptationOverrides||[]).some(x=>x.sessionId===session?.id&&x.itemId===item?.id&&x.athleteId===athlete?.id&&x.active!==false);
+      const phases=[...new Set((item?.repPattern||[]).map(x=>text(x.zone)).filter(Boolean))];
+      if(!hasExplicit&&profile.ratio<.98&&phases.length>1&&Number(out?.reps)<phases.length&&Number(item?.distance)>=100){
+        out.reps=Math.max(1,Number(item.reps)||1);
+        out.distance=profileDistance(item.distance,profile.ratio,session,profile.returnToStart);
+        out.repPattern=(item.repPattern||[]).slice(0,out.reps).map((x,i)=>({...U.clone(x),rep:i+1}));
+        rewriteAdaptedShape(out,out.reps,out.distance);
+        out.adaptationReason=[`${Math.round(profile.ratio*100)}% current profile`,'every authored aerobic phase retained',profile.returnToStart?'return to start end':''].filter(Boolean).join(' · ');
+      }else if(!hasExplicit&&item?.repPattern?.length&&Number(out?.reps)<Number(item?.reps)){
+        out.repPattern=condensedRepPattern(item.repPattern,out.reps);
+        out.adaptationReason=[out.adaptationReason,'every authored aerobic phase retained'].filter(Boolean).join(' · ');
+      }
+      if(!hasExplicit&&key==='mckenziedrage'&&Number(out?.distance)===75&&/\b(?:fast|max|race|quality|pace)\b/i.test(raw)){
+        const current=Number(out.cycleSeconds)||0;
+        if(current<115) out.cycleSeconds=115;
+        out.adaptationReason=[out.adaptationReason,'McKenzie fast 75 · independent practical rest · 1:55 minimum'].filter(Boolean).join(' · ');
+      }
+      return out;
+    };
+  }
+
+  // ---------- T400 / aerobic target truth ----------
+  if(M.targets){
+    const T=M.targets;
+
+    T.t400=(athlete,state=M.state,course='',stroke='Freestyle')=>{
+      const wanted=normaliseStroke(stroke||'Freestyle');
+      const rows=state?.trainingTestResults||state?.training_test_results||[];
+      return rows
+        .filter(r=>r.athlete_id===athlete?.id)
+        .filter(r=>isT400Row(state,r))
+        .filter(r=>testStroke(state,r)===wanted)
+        .filter(r=>r.valid_for_anchor!==false)
+        .filter(r=>!course||t400Course(r)===String(course).toUpperCase())
+        .filter(r=>Number.isFinite(resultSeconds(r)))
+        // Owner behaviour (evidence.js / evidence-index.js): newest valid like-for-like test
+        // is the current anchor, not the fastest ever recorded. A swimmer who has slowed since
+        // a taper-week PB must still see their present-day pace, not a stale fast number.
+        .sort((a,b)=>String(b.result_date||'').localeCompare(String(a.result_date||''))||resultSeconds(a)-resultSeconds(b))[0]||null;
+    };
+
+    T.aerobic=(anchor,distance,zone,authoredRest=10)=>{
+      const d=Number(distance),baseDistance=[50,100,200,400].includes(d)?d:d<50?50:d<100?100:d<200?200:400;
+      const table=T.AEROBIC?.[baseDistance];
+      if(!table||!zone||!Number.isFinite(d)||d<=0||d>400) return null;
+      const rest=Math.max(0,Number(authoredRest)||0);
+      const modelRest=rest>=20?30:10;
+      const coef=table[modelRest]?.[zone];
+      if(!coef) return null;
+      const baseSeconds=(Number(anchor)/table.divisor)*coef,seconds=baseSeconds*(d/baseDistance);
+      return{
+        seconds,
+        sendOff:practicalSendOff(seconds,rest),
+        modelRest,
+        authoredRest:rest,
+        method:baseDistance===d
+          ?`T400 ${d}m ${zone} (${modelRest}s coefficient; ${rest}s authored rest; practical 5s deck cycle)`
+          :`T400 ${baseDistance}m ${zone} speed scaled to ${d}m (${rest}s authored rest; practical 5s deck cycle)`
+      };
+    };
+
+    function aerobicStroke(item){
+      const source=text(item?.stroke);
+      if(/^Choice$/i.test(source))return '';
+      if(source){
+        const raw=normaliseStroke(source);
+        if(['Freestyle','Backstroke','Breaststroke','Butterfly','IM'].includes(raw))return raw;
+      }
+      return 'Freestyle';
+    }
+
+    function pbPools(state){
+      const refs=M.refs?.data||{};
+      return [
+        ...(state?.coachResults||state?.coach_results||[]),
+        ...(state?.resultsEventHistory||state?.results_event_history||[]),
+        ...(state?.resultsPbBoard||state?.results_pb_board||[]),
+        ...(refs.coach_results||[]),
+        ...(refs.results_event_history||[]),
+        ...(refs.results_pb_board||[])
+      ];
+    }
+    function pbCourse(row){return text(row?.pool_course||row?.course).toUpperCase();}
+    function pbDistance(row){return Number(row?.distance||row?.event_distance);}
+    function pbStroke(row){return normaliseStroke(row?.stroke||row?.event_stroke||'');}
+    function rawExactPb(ath,state,{distance,stroke,course}){
+      const wanted=normaliseStroke(stroke),wantedCourse=text(course).toUpperCase();
+      return pbPools(state)
+        .filter(r=>r.athlete_id===ath?.id)
+        .filter(r=>pbDistance(r)===Number(distance))
+        .filter(r=>!wanted||pbStroke(r)===wanted)
+        .filter(r=>!wantedCourse||!pbCourse(r)||pbCourse(r)===wantedCourse)
+        .filter(r=>Number.isFinite(resultSeconds(r)))
+        .sort((a,b)=>resultSeconds(a)-resultSeconds(b))[0]||null;
+    }
+    T.pb=(ath,state,spec)=>{
+      const wanted={...spec,stroke:normaliseStroke(spec.stroke)};
+      const exact=rawExactPb(ath,state,wanted);
+      if(exact)return{...exact,_anchor_seconds:resultSeconds(exact),_anchor_source:`${wanted.course} ${wanted.distance} ${wanted.stroke} PB`};
+      const other=wanted.course==='SCM'?'LCM':wanted.course==='LCM'?'SCM':'';
+      if(!other)return null;
+      const p=rawExactPb(ath,state,{...wanted,course:other});
+      if(!p)return null;
+      const c=T.convert?.(resultSeconds(p),other,wanted.course,wanted.distance,wanted.stroke,state);
+      return c?{...p,_anchor_seconds:c.seconds,_anchor_source:`${other} PB → ${wanted.course} · ${c.source}`} : null;
+    };
+    C.bestStroke=(ath,state=M.state,course='',nonFree=false)=>{
+      const profile=M.pathway?.profile?.(ath,course);
+      const candidates=(profile?.events||[]).map(ev=>{
+        const st=normaliseStroke(ev?.pb?.stroke||'');
+        const points=Number(ev?.points?.value??ev?.pb?.wa_points??ev?.pb?.para_points??ev?.pb?.points);
+        return{stroke:st,points,pb:ev?.pb};
+      }).filter(x=>['Freestyle','Backstroke','Breaststroke','Butterfly'].includes(x.stroke))
+        .filter(x=>!nonFree||x.stroke!=='Freestyle')
+        .filter(x=>Number.isFinite(x.points)&&x.points>0)
+        .sort((a,b)=>b.points-a.points||Number(a.pb?.result_seconds||Infinity)-Number(b.pb?.result_seconds||Infinity));
+      return candidates[0]?.stroke||'';
+    };
+    function raceStroke(item,ath,state,explicit=''){
+      if(explicit)return normaliseStroke(explicit);
+      const raw=text(item?.raw||item?.text);
+      if(/#\s*1F\b/i.test(raw))return C.bestStroke(ath,state,item?._course||'',true);
+      if(/#\s*1\b/i.test(raw))return C.bestStroke(ath,state,item?._course||'',false);
+      const sourceStroke=text(item?.stroke);
+      if(sourceStroke){
+        const st=normaliseStroke(sourceStroke);
+        return ['Freestyle','Backstroke','Breaststroke','Butterfly','IM'].includes(st)?st:'';
+      }
+      return C.bestStroke(ath,state,item?._course||'',false);
+    }
+
+    T.suppressPace=item=>{
+      const raw=[item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' ');
+      const hasRace=!!item?.raceIntent||item?.repInstructions?.some(x=>x.raceIntent);
+      if(/\bHR\s*Gauge\b/i.test(raw))return'HR Gauge';
+      if(hasRace)return'';
+      if(/^Choice$/i.test(text(item?.stroke))||/\bChoice\b/i.test(raw))return'Choice work';
+      if(/\b(?:Drill|Scull|Technique)\b/i.test(raw))return'Skill / drill';
+      if(/\b(?:Easy|Recovery|Reset|Warm\s*-?\s*down|Cool\s*-?\s*down|5HR)\b/i.test(raw))return'Recovery / reset';
+      if(/\bKick\b/i.test(raw))return'Kick';
+      if(/\b(?:Paddles?|Bands?\s*Only)\b/i.test(raw)&&!item?.zone)return'Equipment / non-pace';
+      if(/\b(?:Underwater|Dive|Start|Finish|Last\s*\d+\s*m|Max|Sprint)\b/i.test(raw)&&!item?.zone)return'Quality / skill';
+      return'';
+    };
+
+    function racePaceTarget(pbSeconds,eventDistance,workDistance,{item,athlete,stroke}={}){
+      const total=Number(pbSeconds),event=Number(eventDistance),work=Number(workDistance);
+      if(!Number.isFinite(total)||!event||!work)return null;
+      const raw=text(item?.raw||item?.text);
+      const workStroke=text(item?.stroke);
+      if(stroke==='IM'&&workStroke&&normaliseStroke(workStroke)!=='IM')return{missing:true,message:'Exact IM leg race model not loaded · target needed'};
+      if(item?.raceIntent?.segmentPosition||item?.raceIntent?.segmentDistance)return{missing:true,message:'Exact race-model segment not loaded · target needed'};
+      const sex=text(athlete?.sex||athlete?.gender).toUpperCase();
+      if(event===100&&stroke==='Freestyle'&&/^M(?:ALE)?$/.test(sex)){
+        if(/\b(?:first|1st)\s*50\b/i.test(raw))return{seconds:total*.4754,source:'John Pike SCM · Male 100 Free first 50'};
+        if(/\b(?:second|2nd|last)\s*50\b/i.test(raw))return{seconds:total*.5246,source:'John Pike SCM · Male 100 Free second 50'};
+        if(/\b(?:dive|race\s*start|start)\b/i.test(raw)&&work<=25){
+          const first50=total*.4754,dive25=first50*.4554;
+          return{seconds:dive25*(work/25),source:'John Pike start-shape · Male 100 Free'};
+        }
+        if(/\bpush\b/i.test(raw)&&work===50){
+          const first50=total*.4754,dive25=first50*.4554;
+          return{seconds:(first50-dive25)*2,source:'John Pike push-first-50 estimate · Male 100 Free'};
+        }
+      }
+      const asksNamed=/\b(?:first|1st|second|2nd|last|final|dive|race\s*start|start|push|turn|finish)\b/i.test(raw);
+      if(asksNamed)return{missing:true,message:'Exact race-model segment not loaded · target needed'};
+      return{seconds:total*(work/ev
