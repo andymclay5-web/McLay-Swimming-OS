@@ -75,9 +75,19 @@
   }
   function standardApplies(r,ath,e){
     if(!active(r)||!defaultStandard(r))return false;
-    if(courseOf(r)!==e.course||distanceOf(r)!==e.distance||strokeKey(strokeOf(r))!==strokeKey(e.stroke))return false;
+    const rCourse=courseOf(r);
+    if(rCourse&&rCourse!=='BOTH'&&rCourse!==e.course)return false;
+    if(distanceOf(r)!==e.distance||strokeKey(strokeOf(r))!==strokeKey(e.stroke))return false;
     const req=sexKey(r?.sex),actual=sexKey(ath?.sex);if(req&&req!=='OPEN'&&req!==actual)return false;
-    if(text(r?.para_class||r?.classification))return false;
+    // A row carrying a para classification (S13/SB13/SM13/...) is a real national standard for a swimmer
+    // in that exact class -- not something to blanket-reject. Only exclude it when it does NOT match this
+    // athlete's own classification for this event's stroke (which also correctly excludes every para
+    // standard for a non-classified/able-bodied athlete, since their class is then empty).
+    const rowClass=text(r?.para_class||r?.classification);
+    if(rowClass){
+      const athClass=text(M.pathway?.paraClass?.(ath,e.stroke)).toUpperCase().replace(/\s/g,'');
+      if(!athClass||athClass!==rowClass.toUpperCase().replace(/\s/g,''))return false;
+    }
     const {min,max}=ageBounds(r);if(min==null&&max==null)return true;
     const d=targetDate(r);if(!d)return false;
     const age=ageOn(ath?.date_of_birth,d);if(age==null)return false;
