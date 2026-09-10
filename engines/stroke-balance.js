@@ -7,6 +7,17 @@
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const dayMs=86400000;
   const dateOf=s=>Date.parse(`${s?.identity?.date||''}T12:00:00`)||0;
+  // Real coaching failure this fixes: performance.js's selectStrokeForContext used to skip this medley
+  // "which stroke needs work" logic entirely on the Board/TV view ('deckFast' mode) because summary()'s
+  // 7-day session/block/item walk was uncached and too expensive to redo per stroke pill per swimmer on a
+  // roster of 20-30 -- so on the one screen Andy actually coaches from every day, a medley swimmer's #1-stroke
+  // pill silently fell back to a plain highest-ranked single-stroke PB (or nothing at all -- "Auto" -- for a
+  // swimmer whose only strong ranked PB was Freestyle), never the real training-volume-based recommendation.
+  // Caching summary()/weeklyEmphasis() per athlete+day+state-revision (same WeakMap+revision pattern
+  // performance.js already uses for its own caches) makes repeat calls across many pills on the same render
+  // pass free after the first, so the deckFast bypass is no longer needed for performance and can be removed.
+  const summaryCache=new WeakMap(),emphasisCache=new WeakMap();
+  const mapFor=(cache,state)=>{let m=cache.get(state);if(!m){m=new Map();cache.set(state,m);}return m;};
   function attendance(session,ath,state){const rows=(state?.attendance||[]).filter(x=>x.session_id===session?.id||x.sessionId===session?.id);if(rows.length){const r=rows.find(x=>(x.athlete_id||x.athleteId)===ath?.id);return{included:!!r&&['present','modified','late'].includes(String(r.status||'').toLowerCase()),source:'attendance',status:r?.status||'absent'};}const squads=session?.identity?.squads||[];return{included:!!ath?.squad&&squads.includes(ath.squad),source:'squad_assumption',status:'assumed'};}
   function weight(item){const raw=text([item?.zone,item?.raw,item?.text,...(item?.cues||[]),...(item?.repInstructions||[]).map(x=>x.label||'')].join(' ')).toLowerCase();if(/\b(?:max|sprint)\b/.test(raw))return WEIGHTS.sprint;if(/race\s*(?:pace|quality)|\b(?:50|100|200|400|800|1500)\s*(?:m\s*)?(?:race\s*)?pace\b/.test(raw))return WEIGHTS.race;if(/clearance|\bcl\b/.test(raw))return WEIGHTS.clearance;if(/threshold|\bthr\b|\bat\b/.test(raw))return WEIGHTS.threshold;if(/overload|\bol\b/.test(raw))return WEIGHTS.overload;if(/development|\bdev\b/.test(raw))return WEIGHTS.development;if(/regeneration|\bregen\b|\breg\b|\beasy\b|recovery|reset|warm.?down|cool.?down/.test(raw))return WEIGHTS.easy;if(/drill|scull|technique|skill|stroke count/.test(raw))return WEIGHTS.technical;const st=E.Evidence.stroke(item?.stroke||'');if(st==='Freestyle')return WEIGHTS.incidentalFree;return WEIGHTS.default;}
   function strokeInText(value){const s=text(value),exact=E.Evidence.stroke(s);if(STROKES.includes(exact)||exact==='IM')return exact;if(/\b(?:free|freestyle|fr)\b/i.test(s))return'Freestyle';if(/\b(?:back|backstroke|bk)\b/i.test(s))return'Backstroke';if(/\b(?:breast|breaststroke|br)\b/i.test(s))return'Breaststroke';if(/\b(?:fly|butterfly)\b/i.test(s))return'Butterfly';if(/\bIM\b|individual medley/i.test(s))return'IM';return'';}
@@ -16,13 +27,47 @@
   function walk(items,mult,fn){for(const n of items||[]){if(n?.kind==='group'){walk(n.items||[],mult*Math.max(1,Number(n.rounds)||1),fn);continue;}if(n?.kind==='set')fn(n,mult);}}
   function sessionDose(session,ath,state=M.state){const att=attendance(session,ath,state),raw=Object.fromEntries(STROKES.map(s=>[s,0])),weighted=Object.fromEntries(STROKES.map(s=>[s,0]));if(!att.included)return{included:false,raw,weighted,totalRaw:0,totalWeighted:0,attendance:att};for(const block of session?.blocks||[])walk(block.items||[],1,(item,mult)=>{let actual=item;try{actual=E.Modification.adaptItem(item,ath,state,session)||item}catch{}const metres=Math.max(1,Number(actual.reps)||1)*Math.max(0,Number(actual.distance)||0)*mult,w=weight(actual);for(const x of splitStroke(actual,metres)){raw[x.stroke]+=x.metres;weighted[x.stroke]+=x.metres*w;}});return{included:true,raw,weighted,totalRaw:Object.values(raw).reduce((a,b)=>a+b,0),totalWeighted:Object.values(weighted).reduce((a,b)=>a+b,0),attendance:att};}
   function rangeSessions(state,days=7,anchorDate=''){const all=Object.values(state?.canonicalSessions||{}),anchor=anchorDate?Date.parse(`${anchorDate}T23:59:59`):Date.now();if(!days)return all.filter(s=>{const d=dateOf(s);return d&&d<=anchor;});const cut=anchor-days*dayMs;return all.filter(s=>{const d=dateOf(s);return d&&d<=anchor&&d>cut;});}
-  function summary(ath,state=M.state,{days=7,anchorDate=''}={}){const raw=Object.fromEntries(STROKES.map(s=>[s,0])),weighted=Object.fromEntries(STROKES.map(s=>[s,0]));let sessions=0,assumedSessions=0;for(const s of rangeSessions(state,days,anchorDate)){const d=sessionDose(s,ath,state);if(!d.included)continue;sessions++;if(d.attendance.source==='squad_assumption')assumedSessions++;for(const st of STROKES){raw[st]+=d.raw[st];weighted[st]+=d.weighted[st];}}const tr=Object.values(raw).reduce((a,b)=>a+b,0),tw=Object.values(weighted).reduce((a,b)=>a+b,0),share=Object.fromEntries(STROKES.map(s=>[s,tw?weighted[s]/tw*100:0]));return{athleteId:ath?.id,days,sessions,assumedSessions,raw,weighted,share,totalRaw:tr,totalWeighted:tw,weights:WEIGHTS};}
-  function weeklyEmphasis(state=M.state,anchorDate=''){const scores=new Map(),sessions=rangeSessions(state,7,anchorDate).sort((a,b)=>dateOf(b)-dateOf(a));for(const s of sessions){const meta=text([s?.metadata?.technicalFocus,s?.metadata?.planCue,s?.metadata?.primarySystem,s?.metadata?.strokeEmphasis,s?.identity?.title].join(' '));for(const st of STROKES){const re=st==='Freestyle'?/\b(?:free|freestyle)\b/i:st==='Backstroke'?/\bback/i:st==='Breaststroke'?/\bbreast/i:/\b(?:fly|butterfly)\b/i;if(re.test(meta))scores.set(st,(scores.get(st)||0)+1);}}return[...scores].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';}
+  function summary(ath,state=M.state,{days=7,anchorDate=''}={}){
+    const key=`${Number(state?.settings?.storageRevision||0)}|${ath?.id||''}|${days}|${anchorDate}`,cache=mapFor(summaryCache,state);
+    if(cache.has(key))return cache.get(key);
+    const raw=Object.fromEntries(STROKES.map(s=>[s,0])),weighted=Object.fromEntries(STROKES.map(s=>[s,0]));let sessions=0,assumedSessions=0;for(const s of rangeSessions(state,days,anchorDate)){const d=sessionDose(s,ath,state);if(!d.included)continue;sessions++;if(d.attendance.source==='squad_assumption')assumedSessions++;for(const st of STROKES){raw[st]+=d.raw[st];weighted[st]+=d.weighted[st];}}const tr=Object.values(raw).reduce((a,b)=>a+b,0),tw=Object.values(weighted).reduce((a,b)=>a+b,0),share=Object.fromEntries(STROKES.map(s=>[s,tw?weighted[s]/tw*100:0]));
+    const out={athleteId:ath?.id,days,sessions,assumedSessions,raw,weighted,share,totalRaw:tr,totalWeighted:tw,weights:WEIGHTS};
+    cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
+  }
+  function weeklyEmphasis(state=M.state,anchorDate=''){
+    const key=`${Number(state?.settings?.storageRevision||0)}|${anchorDate}`,cache=mapFor(emphasisCache,state);
+    if(cache.has(key))return cache.get(key);
+    const scores=new Map(),sessions=rangeSessions(state,7,anchorDate).sort((a,b)=>dateOf(b)-dateOf(a));for(const s of sessions){const meta=text([s?.metadata?.technicalFocus,s?.metadata?.planCue,s?.metadata?.primarySystem,s?.metadata?.strokeEmphasis,s?.identity?.title].join(' '));for(const st of STROKES){const re=st==='Freestyle'?/\b(?:free|freestyle)\b/i:st==='Backstroke'?/\bback/i:st==='Breaststroke'?/\bbreast/i:/\b(?:fly|butterfly)\b/i;if(re.test(meta))scores.set(st,(scores.get(st)||0)+1);}}
+    const out=[...scores].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
+  }
   function recommendStroke(ath,state=M.state,session=null,{formOnly=false}={}){const perf=M.performanceEngine,course=session?.identity?.course||'',event=perf?.bestEvent?.(ath,state,course),ranked=perf?.rankedEvents?.(ath,state,course)||[],rankedAllowed=(formOnly?['Backstroke','Breaststroke','Butterfly']:STROKES).filter(st=>ranked.some(r=>r.stroke===st));if(!event)return{stroke:'',source:'No ranked PB evidence for #1 event',confidence:'none'};if(event.stroke!=='IM'){if(!rankedAllowed.length)return{stroke:'',source:'No ranked PB evidence for an applicable stroke',confidence:'none'};const best=ranked.find(r=>rankedAllowed.includes(r.stroke));return best?{stroke:best.stroke,source:'Highest ranked stroke PB',confidence:'high',bestEvent:event}:null;}
     const allowed=formOnly?['Backstroke','Breaststroke','Butterfly']:STROKES;
     const emphasis=weeklyEmphasis(state,session?.identity?.date||'');if(emphasis&&allowed.includes(emphasis))return{stroke:emphasis,source:`IM balance · weekly ${emphasis} emphasis`,confidence:'high',bestEvent:event};
     const coach=perf?.selectedCoachStroke?.(ath,state,14);if(coach&&allowed.includes(coach))return{stroke:coach,source:`IM balance · recent coach ${coach} selections`,confidence:'medium',bestEvent:event};
     const bal=summary(ath,state,{days:7,anchorDate:session?.identity?.date||''}),ordered=allowed.map(st=>({stroke:st,share:bal.share[st]||0,ranked:ranked.some(r=>r.stroke===st)})).sort((a,b)=>a.share-b.share||Number(b.ranked)-Number(a.ranked));return{stroke:ordered[0].stroke,source:`IM balance · lowest 7-day weighted exposure (${ordered[0].share.toFixed(0)}%)`,confidence:bal.sessions>=2?'medium':'low',bestEvent:event,balance:bal};
   }
-  B.STROKES=STROKES;B.WEIGHTS=WEIGHTS;B.weight=weight;B.strokeInText=strokeInText;B.sessionDose=sessionDose;B.summary=summary;B.weeklyEmphasis=weeklyEmphasis;B.recommendStroke=recommendStroke;B.rangeSessions=rangeSessions;
+  // Real coaching failure this fixes (Andy's own voice-memo spec, build-list item 8): a swimmer training alone
+  // ("Matthew will be doing his sessions when I'm not thinking about swimming") needs an evidence-checked
+  // answer to a stroke challenge instantly, on their own device -- not only later when Andy opens his feedback
+  // inbox. Neither the swimmer portal nor a Supabase function has access to the live coach-app engines, so the
+  // ONE safe way to give an instant answer without duplicating this logic a second time (the constitution's own
+  // "no competing sources of truth" rule) is to publish the RAW EVIDENCE this function already computes
+  // (engines/swimmer-invite-bn.js does this at QR-publish time) and let a small, dumb comparison run wherever
+  // the instant answer is needed. This is that shared evidence computation -- the single owner for "what does
+  // the evidence say a swimmer's #1 stroke should be" -- used by both engines/swimmer-feedback-cu.js's coach-
+  // side review (evaluateStrokeChallenge) and swimmer-invite-bn.js's publish-time snapshot.
+  function challengeEvidence(ath,state=M.state,session=null){
+    const perf=M.performanceEngine,course=session?.identity?.course||'',event=perf?.bestEvent?.(ath,state,course);
+    if(!event)return{hasEvidence:false,isMedley:false,needsWorkStrokes:[],shares:{},topStroke:'',rankedPoints:{}};
+    if(event.stroke==='IM'){
+      const sum=summary(ath,state,{days:7,anchorDate:session?.identity?.date||''});
+      const ordered=STROKES.map(s=>({stroke:s,share:sum.share?.[s]||0})).sort((a,b)=>a.share-b.share);
+      return{hasEvidence:true,isMedley:true,needsWorkStrokes:ordered.slice(0,2).map(x=>x.stroke),shares:Object.fromEntries(ordered.map(x=>[x.stroke,Math.round(x.share*10)/10])),topStroke:'',rankedPoints:{}};
+    }
+    const ranked=perf?.rankedEvents?.(ath,state,course)||[],top=ranked[0]||null;
+    const rankedPoints=Object.fromEntries(ranked.filter(r=>STROKES.includes(r.stroke)).map(r=>[r.stroke,Math.round(r.points||0)]));
+    return{hasEvidence:!!top,isMedley:false,needsWorkStrokes:[],shares:{},topStroke:top?.stroke||'',rankedPoints};
+  }
+  B.STROKES=STROKES;B.WEIGHTS=WEIGHTS;B.weight=weight;B.strokeInText=strokeInText;B.sessionDose=sessionDose;B.summary=summary;B.weeklyEmphasis=weeklyEmphasis;B.recommendStroke=recommendStroke;B.rangeSessions=rangeSessions;B.challengeEvidence=challengeEvidence;
 })(globalThis);
