@@ -118,7 +118,7 @@
 
   async function cloudPages(path){if(M.cloudSessionEngine?.fetchPages)return M.cloudSessionEngine.fetchPages(path);if(M.cloud?.ready?.()&&M.cloud?.fetchPages)return M.cloud.fetchPages(path);throw new Error('Connected swimmer evidence is unavailable.');}
   async function mergeRows(refKey,stateKey,rows){if(!Array.isArray(rows)||!rows.length)return 0;M.refs?.merge?.(refKey,rows);M.state[stateKey]=E.merge(M.state[stateKey]||[],rows);return rows.length;}
-  async function completeEvidence(ath){
+  async function completeEvidence(ath,onJob){
     if(!ath)return{ok:false,rows:0,error:'No swimmer selected'};
     if(!(M.engineBridge?.canAttemptCloudRead?.()||M.cloud?.ready?.()))return{ok:false,rows:0,error:'Connected swimmer evidence is unavailable'};
     const id=encodeURIComponent(String(ath.id||'')),org=encodeURIComponent(String(ath.organisation_id||M.cloud?.org?.()||M.state?.settings?.organisationId||''));let added=0,errors=[];
@@ -127,13 +127,20 @@
     if(org)jobs.push(['training_test_types','trainingTestTypes',`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}`]);
     if(!(standardRows().length))jobs.push(['pathway_standards','pathwayStandards','/rest/v1/pathway_standards?select=*']);
     if(!(meetRows().length))jobs.push(['pathway_meets','pathwayMeets','/rest/v1/pathway_meets?select=*']);
-    for(const [rk,sk,path] of jobs){try{added+=await mergeRows(rk,sk,await withTimeout(cloudPages(path),X.EVIDENCE_JOB_TIMEOUT_MS,rk));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}}
+    // A stalled request can still take up to EVIDENCE_JOB_TIMEOUT_MS to give up, and there are up to
+    // seven of these run one after another -- with no visible feedback that was indistinguishable from a
+    // true hang. Report which check is running (and how many are left) so a slow-but-working pass never
+    // looks identical to a frozen one.
+    for(const [i,[rk,sk,path]] of jobs.entries()){
+      try{onJob?.(rk,i+1,jobs.length);}catch{}
+      try{added+=await mergeRows(rk,sk,await withTimeout(cloudPages(path),X.EVIDENCE_JOB_TIMEOUT_MS,rk));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}
+    }
     try{await M.refs?.save?.()}catch{}
     try{M.correct?.hydrateT400Evidence?.(M.state,M.store?.legacy?.()||null)}catch{}
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
     X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors};
   }
-  async function prepareAthlete(ath,{course=currentCourse()}={}){const completion=await completeEvidence(ath);return{completion,model:buildModel(ath,course)};}
+  async function prepareAthlete(ath,{course=currentCourse(),onJob}={}){const completion=await completeEvidence(ath,onJob);return{completion,model:buildModel(ath,course)};}
   function readinessFor(ath,{course=currentCourse()}={}){
     const model=buildModel(ath,course),issues=[];
     if(!ath?.date_of_birth)issues.push('Date of birth is required for age-specific pathway standards.');
