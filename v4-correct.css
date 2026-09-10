@@ -40,7 +40,11 @@
   .mod-chip.compact{min-height:34px!important}
   .block-card>footer{padding:7px 10px!important}
   .v4-block-nav{top:82px}
-  .sticky-actions{z-index:40}
+  /* Was z-index:40 -- below .bottom-nav's z-index:49 (styles.css), only on this <=700px mobile media query.
+     That let the bottom nav bar occlude Capture/Edit/Finish on exactly the phones coaches actually use it on.
+     Restored to styles.css's own base .sticky-actions z-index (50), so it stays above the nav bar on mobile too.
+     See architecture/RUNTIME_AUDIT_20260909.md §4 and tests/board-chrome-stability-20260909.cjs. */
+  .sticky-actions{z-index:50}
   body{scroll-padding-top:136px}
 }
 @media (min-width:701px){

@@ -1337,9 +1337,21 @@
     M.nav?.openLayer?.('modal');
     const m=host.querySelector('.modal');
     const values=()=>({wentWell:text(m.querySelector('#v4FinishWell')?.value),reinforce:text(m.querySelector('#v4FinishReinforce')?.value),athleteNotes:text(m.querySelector('#v4FinishAthletes')?.value),carryForward:text(m.querySelector('#v4FinishCarry')?.value)});
-    m.querySelectorAll('textarea').forEach(x=>x.addEventListener('input',()=>C.saveFinishDraft(session,values())));
-    m.querySelector('[data-close-v4-finish]').onclick=()=>{C.saveFinishDraft(session,values());M.actions.closeModal?.()};
+    // Real coaching failure this fixes: every keystroke in these textareas called C.saveFinishDraft directly,
+    // which calls the shared M.store.save -- a full-app-state serialize + IndexedDB write, itself only debounced
+    // 40ms (engines/storage.js's scheduleFull). That 40ms window is deliberately short so a genuinely urgent
+    // write (attendance, a capture) survives an abrupt background/close -- widening it globally would risk
+    // losing THAT data instead, a worse failure. So this is fixed locally: a short, LOCAL debounce here means a
+    // full state write only fires once the coach pauses typing (or closes/finishes, which flush immediately),
+    // not once per character -- without touching the shared persistence layer's own safety-net timing at all.
+    // See architecture/RUNTIME_AUDIT_20260909.md §5 and tests/finish-review-typing-debounce-20260909.cjs.
+    let draftSaveTimer=0;
+    const flushDraftSave=()=>{clearTimeout(draftSaveTimer);draftSaveTimer=0;C.saveFinishDraft(session,values())};
+    const scheduleDraftSave=()=>{clearTimeout(draftSaveTimer);draftSaveTimer=setTimeout(flushDraftSave,400)};
+    m.querySelectorAll('textarea').forEach(x=>x.addEventListener('input',scheduleDraftSave));
+    m.querySelector('[data-close-v4-finish]').onclick=()=>{flushDraftSave();M.actions.closeModal?.()};
     m.querySelector('[data-v4-finish-confirm]').onclick=()=>{
+      clearTimeout(draftSaveTimer);draftSaveTimer=0;
       const v=values(),observations=[v.wentWell&&`Went well: ${v.wentWell}`,v.reinforce&&`Reinforce: ${v.reinforce}`,v.athleteNotes&&`Athlete notes: ${v.athleteNotes}`].filter(Boolean).join('\n');
       const next=M.changes.finishAtBlock(session,blockId,{observations,carryForward:v.carryForward});
       next.finish={...next.finish,review:{...v},attendanceCount:here,plannedDistance:M.session.total(session),actualDistance:calc.total};
