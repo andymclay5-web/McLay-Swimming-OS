@@ -4,7 +4,7 @@
   if(!M?.state||!M?.pathway||!M?.performanceEngine||!E)return;
 
   const BUILD='v4-swimmer-performance-integrity-20260824co';
-  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false,EVIDENCE_JOB_TIMEOUT_MS:12000};
+  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false,EVIDENCE_JOB_TIMEOUT_MS:12000,REFS_SAVE_TIMEOUT_MS:5000};
   function withTimeout(promise,ms,label){
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>reject(new Error(`${label} timed out after ${Math.round(ms/1000)}s — check your connection and try again.`)),ms);
@@ -135,7 +135,14 @@
       try{onJob?.(rk,i+1,jobs.length);}catch{}
       try{added+=await mergeRows(rk,sk,await withTimeout(cloudPages(path),X.EVIDENCE_JOB_TIMEOUT_MS,rk));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}
     }
-    try{await M.refs?.save?.()}catch{}
+    // Real coaching failure this guards against: Andy reported the QR-generate modal frozen on the last
+    // "Checking swimmer evidence..." message for several literal minutes with no further status change and
+    // no error, even though the per-job evidence timeout above had already correctly reached its final
+    // job. M.refs.save() (an IndexedDB write) runs immediately after the loop with no timeout of its own --
+    // exactly the kind of silent, unbounded step that would freeze the status text forever while looking
+    // identical to the evidence check itself still "in progress". Bound it so a stuck local write can never
+    // hang the whole flow again.
+    try{await withTimeout(M.refs?.save?.()||Promise.resolve(),X.REFS_SAVE_TIMEOUT_MS,'Saving evidence to local cache')}catch{}
     try{M.correct?.hydrateT400Evidence?.(M.state,M.store?.legacy?.()||null)}catch{}
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
     X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors};
