@@ -27,8 +27,9 @@ assert.ok(coach.includes('msos_revoke_swimmer_devices'),'coach revoke control mi
 assert.ok(coach.includes('prepareAthlete'),'QR publish no longer verifies complete athlete evidence');
 assert.ok(coach.includes('readinessFor'),'QR publish no longer has a swimmer-readiness gate');
 assert.ok(coach.includes('pathwaysForAthlete'),'secure payload is not using the forward-looking performance engine');
-assert.ok(coach.includes("schema:'msos-swimmer-portal-v5'"),'secure payload schema did not advance with session workflow');
-assert.ok(coach.includes('session:safeSession(a)'),'secure payload lost current athlete session projection');
+assert.ok(coach.includes("schema:'msos-swimmer-portal-v6'"),'secure payload schema did not advance with the calendar session picker');
+assert.ok(coach.includes('function sessionsFor(a)')&&coach.includes('candidateSessionsFor'),'secure payload lost the calendar session picker list');
+assert.ok(coach.includes('session=sessions.find(s=>s.id===currentId)||safeSession(a)'),'secure payload lost current athlete session projection (or its calendar-picker fallback to safeSession(a))');
 assert.ok(coach.includes('pathway:{SCM:scm,LCM:lcm}'),'secure payload lost both pathway tracks');
 assert.ok(coach.includes('tests:safeTests(a)')&&coach.includes('meet:safeMeet(a)'),'secure payload must contain swimmer-only tests and meet data');
 assert.ok(context.includes('disabled:true'),'legacy swimmer experience layer must remain retired');
