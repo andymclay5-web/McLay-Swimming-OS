@@ -4,7 +4,13 @@
   if(!M?.state||!M?.pathway||!M?.performanceEngine||!E)return;
 
   const BUILD='v4-swimmer-performance-integrity-20260824co';
-  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false};
+  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false,EVIDENCE_JOB_TIMEOUT_MS:12000};
+  function withTimeout(promise,ms,label){
+    return new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(new Error(`${label} timed out after ${Math.round(ms/1000)}s — check your connection and try again.`)),ms);
+      Promise.resolve(promise).then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});
+    });
+  }
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const courseOf=r=>text(E.course?.(r)||r?.course||r?.pool_course).toUpperCase();
@@ -111,7 +117,7 @@
     if(org)jobs.push(['training_test_types','trainingTestTypes',`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}`]);
     if(!(standardRows().length))jobs.push(['pathway_standards','pathwayStandards','/rest/v1/pathway_standards?select=*']);
     if(!(meetRows().length))jobs.push(['pathway_meets','pathwayMeets','/rest/v1/pathway_meets?select=*']);
-    for(const [rk,sk,path] of jobs){try{added+=await mergeRows(rk,sk,await cloudPages(path));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}}
+    for(const [rk,sk,path] of jobs){try{added+=await mergeRows(rk,sk,await withTimeout(cloudPages(path),X.EVIDENCE_JOB_TIMEOUT_MS,rk));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}}
     try{await M.refs?.save?.()}catch{}
     try{M.correct?.hydrateT400Evidence?.(M.state,M.store?.legacy?.()||null)}catch{}
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
