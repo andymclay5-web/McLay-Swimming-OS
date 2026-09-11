@@ -30,7 +30,12 @@
   const role=()=>{ensure();return text(M.state.settings.activeRole||'owner').toLowerCase();};
   const caps={
     owner:new Set(['display.tv','session.view','session.create','session.edit','session.finish','attendance.read','attendance.write','timing.read','timing.write','capture.read','capture.write','athlete.read_all','athlete.private_notes','pathway.read_all','pathway.admin','meet.view','meet.manage','cloud.sync','cloud.repair','settings.admin','release.guardian']),
-    assistant:new Set(['display.tv','session.view','attendance.read','attendance.write','timing.read','timing.write','capture.read','capture.write','athlete.read_assigned','pathway.read_assigned','meet.view']),
+    // 10 Sept 2026: extended for real, per-person assistant coach access (engines/team-access.js) -- Andy's own
+    // words: Jordan should have "basically the same version I've got" for running sessions day to day, so
+    // session.create/edit/finish moved from owner-only to the assistant set. Still withheld: athlete.read_all
+    // (assistant stays scoped to assigned squads only), athlete.private_notes, pathway.admin, meet.manage,
+    // cloud.repair, settings.admin, release.guardian -- the system-level/cross-squad tools Andy keeps for himself.
+    assistant:new Set(['display.tv','session.view','session.create','session.edit','session.finish','attendance.read','attendance.write','timing.read','timing.write','capture.read','capture.write','athlete.read_assigned','pathway.read_assigned','meet.view']),
     swimmer:new Set(['session.view_own','timing.read_own','capture.write_own','athlete.read_own','pathway.read_own','meet.view_own'])
   };
   function assignedSquads(){ensure();return new Set((M.state.settings.assistantSquads||[]).map(x=>text(x).toLowerCase()).filter(Boolean));}
