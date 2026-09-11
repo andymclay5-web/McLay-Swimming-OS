@@ -1,0 +1,54 @@
+name: Apply root app exact
+on:
+  push:
+    branches:
+      - apply/root-app-20260911
+    paths:
+      - '.root-app-transfer/GO'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild and verify app
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/app.b64
+          for i in $(seq 0 11); do
+            f=$(printf '.root-app-transfer/chunk%02d.b64' "$i")
+            if [ "$i" -lt 11 ]; then
+              test "$(wc -c < "$f")" -eq 10000
+            else
+              test "$(wc -c < "$f")" -eq 492
+            fi
+            cat "$f" >> /tmp/app.b64
+          done
+          echo "80d3d205a25b97d48af4682d79a9846d0653c25055e87a92d7defccd404f6c11  /tmp/app.b64" | sha256sum -c -
+          base64 -d /tmp/app.b64 > /tmp/app.js.gz
+          echo "54f0039379ceea4ad06f6ed00e3ca4d45f43adbe26b576bfec2955dc47b50f2b  /tmp/app.js.gz" | sha256sum -c -
+          gzip -dc /tmp/app.js.gz > /tmp/app.js
+          echo "97b97368198b40d3547a3b5e28be4804375b8578e7547bc1bef27a571430413e  /tmp/app.js" | sha256sum -c -
+          node --check /tmp/app.js
+      - name: Build clean candidate from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout --detach origin/main
+          cp /tmp/app.js app.js
+          test "$(git hash-object app.js)" = "27086c00fd68fa6bc123778f5364b1dc2edfbabd"
+          git add app.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: update root app for remote alerts"
+          git push --force origin HEAD:refs/heads/candidate/root-app-20260911
