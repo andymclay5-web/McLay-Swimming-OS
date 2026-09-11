@@ -11,7 +11,11 @@ global.MSOS4={
 };
 require(path.resolve(__dirname,'../engines/live-training-authority.js'));
 const M=global.MSOS4,L=M.live;
-assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260904a-meet-tab-allowed');
+// Build tag bumped 10 Sept 2026 (Phase 4 -- cross-device TV live-times broadcast added to this same file:
+// L.publishCloud/L.pullCloud plus a `timedSets` field on L.payload/L.apply). This assertion is intentionally
+// updated to the new tag rather than left pointing at the pre-Phase-4 build -- see the Phase 4 commit and
+// tests/live-broadcast-tv-20260910.cjs for coverage of the new behavior itself.
+assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260910a-cloud-broadcast');
 assert.equal(M.liveTrainingAuthority.mode,'derived-displays-only');
 assert.equal(M.liveTrainingAuthority.stripMeetChrome,undefined,'Meet is now an owned bottom-nav tab; training authority must not strip its chrome');
 const payload=L.payload(M.state);assert.equal(payload.authority,'coach-operational');assert.equal(payload.sourceView,'board');

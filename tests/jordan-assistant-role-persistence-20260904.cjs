@@ -105,7 +105,11 @@ const NEW_COACH_RESULT={id:'jordan-evid-1',athlete_id:'nat-1',organisation_id:'o
     assert.equal(snap.devAllowed,false,`Development swimmer must stay hidden ${where}`);
     assert.equal(snap.natSessionAllowed,true,`National session must stay selectable ${where}`);
     assert.equal(snap.devSessionAllowed,false,`Development session must stay blocked ${where}`);
-    assert.equal(snap.canEditSession,false,`assistant must never gain session.edit ${where}`);
+    // 10 Sept 2026: assistant caps deliberately extended (engines/access-authority.js) so a real
+    // assistant coach like Jordan can run/edit/finish sessions day to day -- this must now be true,
+    // not false, while remaining squad-scoped (see the athlete/session-scoping assertions above,
+    // which are the actual security boundary this test protects).
+    assert.equal(snap.canEditSession,true,`assistant must be able to edit sessions ${where}`);
     assert.equal(snap.canWriteAttendance,true,`assistant must keep deck capability ${where}`);
   };
 
