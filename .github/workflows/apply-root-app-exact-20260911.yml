@@ -1,0 +1,56 @@
+name: Apply exact root app
+on:
+  push:
+    branches:
+      - apply/root-app-exact-20260911
+    paths:
+      - '.root-app-transfer/GO'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild exact app.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/app.b64
+          for i in $(seq -w 0 10); do
+            f=".root-app-transfer/chunk${i}.b64"
+            test "$(wc -c < "$f")" -eq 10000
+            cat "$f" >> /tmp/app.b64
+          done
+          test "$(wc -c < .root-app-transfer/chunk11.b64)" -eq 348
+          cat .root-app-transfer/chunk11.b64 >> /tmp/app.b64
+          echo "714a574349ad81c627f6ce4cb3e9ef682e90d4510d3738ebc687c5e724c3cf3b  /tmp/app.b64" | sha256sum -c -
+          base64 -d /tmp/app.b64 > /tmp/app.js.gz
+          echo "958e365d51b6e45904e1ea8e633f2cc52e6c83abf3a572293cd8dae379771c02  /tmp/app.js.gz" | sha256sum -c -
+          gunzip -c /tmp/app.js.gz > /tmp/app.js
+          test "$(wc -c < /tmp/app.js)" -eq 289230
+          echo "97b973bbaafc91a9530b1d8d0cccc4b745479b8ccc720cde48d92da0a100e008  /tmp/app.js" | sha256sum -c -
+          node --check /tmp/app.js
+
+      - name: Commit only app.js onto current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/app.js app.js
+          test "$(git hash-object app.js)" = "27086c00fd68fa6bc123778f5364b1dc2edfbabd"
+          git add app.js
+          test "$(git diff --cached --name-only)" = "app.js"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: update root app for remote alerts"
+          git push origin main
