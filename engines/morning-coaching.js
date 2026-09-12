@@ -20,7 +20,6 @@
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
   const clock=sec=>{sec=Number(sec);if(!Number.isFinite(sec))return'—';const m=Math.floor(sec/60),s=sec-m*60,txt=s.toFixed(Math.abs(s-Math.round(s))>.0001?1:0);return m?`${m}:${txt.padStart(txt.includes('.')?4:2,'0')}`:txt};
-  const isSophie=a=>/^sophie?newlove$/.test(key(a?.full_name));
   const normaliseStroke=s=>{const x=text(s).toLowerCase();if(!x)return'Freestyle';if(/^(?:free|freestyle|fr)$/.test(x))return'Freestyle';if(/^(?:back|backstroke|bk)$/.test(x))return'Backstroke';if(/^(?:breast|breaststroke|br)$/.test(x))return'Breaststroke';if(/^(?:fly|butterfly)$/.test(x))return'Butterfly';if(/^(?:im|medley|individual medley)$/.test(x))return'IM';return text(s)};
   const resultSeconds=row=>Number(row?.result_seconds||row?.time_seconds||row?.seconds||row?.result_time_seconds||row?.pb_seconds||row?.best_time_seconds);
   const pbCourse=row=>text(row?.pool_course||row?.course).toUpperCase();
@@ -70,10 +69,13 @@
     state.coachResults=mergeRows(state.coachResults||state.coach_results,refs.coach_results);
     state.resultsEventHistory=mergeRows(state.resultsEventHistory||state.results_event_history,refs.results_event_history);
     state.resultsPbBoard=mergeRows(state.resultsPbBoard||state.results_pb_board,refs.results_pb_board);
-    state.athletes=(state.athletes||[]).filter(a=>a&&a.active!==false&&!isSophie(a));
+    // Relies purely on the active flag now -- no name-hardcoded exclusion. A swimmer who has left is
+    // just an inactive athlete like any other; see v4-correct.js's migrateLegacyDeactivations for how
+    // that flag gets set the one time it needed correcting.
+    state.athletes=(state.athletes||[]).filter(a=>a&&a.active!==false);
     return state;
   }
-  function activeAthletes(state){return(state?.athletes||[]).filter(a=>a.active!==false&&!isSophie(a)).sort((a,b)=>text(a.squad).localeCompare(text(b.squad))||text(a.full_name).localeCompare(text(b.full_name)))}
+  function activeAthletes(state){return(state?.athletes||[]).filter(a=>a.active!==false).sort((a,b)=>text(a.squad).localeCompare(text(b.squad))||text(a.full_name).localeCompare(text(b.full_name)))}
 
   function profile(athlete,state){
     const rows=state?.adaptationProfiles||state?.athlete_adaptation_profiles||[],p=rows.find(x=>x.athlete_id===athlete.id&&x.active!==false);

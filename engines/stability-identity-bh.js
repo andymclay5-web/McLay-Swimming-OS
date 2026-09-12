@@ -7,7 +7,24 @@
   const saveUi=()=>{try{if(M.storageEngine?.saveUi)M.storageEngine.saveUi(M.state);else M.store?.save?.(M.state)}catch{}};
   const saveFull=()=>{try{M.store?.save?.(M.state)}catch{}};
   const athlete=id=>(M.state.athletes||[]).find(x=>x.id===id&&x.active!==false)||null;
-  const placeholderName=name=>/^swimmer\s+[a-z0-9]+$/i.test(String(name||'').replace(/\s+/g,' ').trim());
+  // Names that only ever exist as synthetic fixtures inside app.js's own embedded guardian tests
+  // (M.guardian.run's legacy test suite, still shipped in the browser bundle). Those tests mutate
+  // M.state.athletes directly and restore it in a `finally` block, but that restore is in-memory only --
+  // if anything inside the test causes a real save to storage first (e.g. a helper like M.meet.create
+  // persisting as a side effect), the fixture athletes land in real storage and stay there even after the
+  // in-memory state is put back. The 'Swimmer <x>' pattern below was added after exactly that leak was
+  // caught in the field (see M.state.guardian.fieldIncidents); 'Meet A'/'Meet B' (from the Meet Deck
+  // guardian test) is the same bug, just never patched here. This is an EXACT-match list on purpose, not
+  // a broad pattern -- do not add short or plausible-as-real names (e.g. 'Nat', 'Dev', 'Alex Auer') even
+  // though they appear in the same tests, since a real swimmer could plausibly carry a name like that.
+  // Real athlete names already known to exist in this app (Charlotte, Conor, McKenzie, Amber, Matthew,
+  // Ruby, Sophie) must never appear here even if a future test fixture reuses one.
+  const EXACT_PLACEHOLDER_NAMES=new Set(['Meet A','Meet B','Nat Swimmer','Intermediate Swimmer','Standard Swimmer','Para Swimmer','A One','B Two'].map(n=>n.toLowerCase()));
+  const placeholderName=name=>{
+    const n=String(name||'').replace(/\s+/g,' ').trim();
+    if(/^swimmer\s+[a-z0-9]+$/i.test(n))return true;
+    return EXACT_PLACEHOLDER_NAMES.has(n.toLowerCase());
+  };
   const isPlaceholderAthlete=a=>placeholderName(a?.full_name||a?.name||'');
   const validLinkedAthlete=id=>{const a=athlete(id);return !!a&&!isPlaceholderAthlete(a)};
 
