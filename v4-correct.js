@@ -210,9 +210,6 @@
   C.enforceRoster=()=>{
     if(!M.state) return false;
     let changed=false;
-    for(const a of M.state.athletes||[]){
-      if(isSophie(a) && a.active!==false){a.active=false;changed=true;}
-    }
     if(M.state.settings){
       const activeIds=new Set((M.state.athletes||[]).filter(a=>a.active!==false).map(a=>a.id));
       const next=(M.state.settings.timingRoster||[]).filter(id=>activeIds.has(id));
@@ -223,10 +220,31 @@
         const clean=(Array.isArray(ids)?ids:[]).filter(id=>activeIds.has(id));
         if(clean.length!==(Array.isArray(ids)?ids:[]).length){M.state.settings.t400RosterBySession[sid]=clean;changed=true;}
       }
-      if(isSophie((M.state.athletes||[]).find(a=>a.id===M.state.settings.selectedAthleteId))){
+      // Generalised from a Sophie-specific check: clear the selected swimmer whenever they're no
+      // longer active, for any athlete, not just one hardcoded name.
+      if(M.state.settings.selectedAthleteId&&!activeIds.has(M.state.settings.selectedAthleteId)){
         M.state.settings.selectedAthleteId='';changed=true;
       }
     }
+    return changed;
+  };
+
+  // One-time data migration, deliberately NOT an ongoing rule: a swimmer who has left the squad is
+  // just an inactive athlete like any other, not a name that should live in the app's code forever.
+  // This used to re-force Sophie Newlove to active:false on every single state load/render (see the
+  // git history of this function) -- fine while nothing else could ever change her flag, but it meant
+  // there was no way to reactivate her later without editing code. Now it runs once, guarded by
+  // M.state.migrations.deactivatedLegacyAthletes, sets the flag if it isn't already set, and then gets
+  // out of the way -- from then on she's just an athlete with active:false, editable like any other.
+  C.migrateLegacyDeactivations=()=>{
+    if(!M.state)return false;
+    M.state.migrations=M.state.migrations||{};
+    if(M.state.migrations.deactivatedLegacyAthletes)return false;
+    let changed=false;
+    for(const a of M.state.athletes||[]){
+      if(isSophie(a)&&a.active!==false){a.active=false;changed=true;}
+    }
+    M.state.migrations.deactivatedLegacyAthletes={at:now(),reason:'left-squad-one-time-migration'};
     return changed;
   };
 
@@ -237,7 +255,7 @@
       const out=baseEnsureState.apply(this,arguments);
       C.ensureSettings();
       C.hydratePlanning();
-      const changed=C.hydrateT400Evidence()+Number(C.enforceRoster());
+      const changed=C.hydrateT400Evidence()+Number(C.migrateLegacyDeactivations())+Number(C.enforceRoster());
       if(changed) try{M.store?.save?.(M.state)}catch{}
       return out;
     };
@@ -566,7 +584,7 @@
       const squads=new Set((session.identity?.squads||[]).map(x=>text(x).toLowerCase()));
       const status=new Map((state.attendance||[]).filter(x=>x.session_id===session.id).map(x=>[x.athlete_id,text(x.status).toLowerCase()]));
       return (state.athletes||[])
-        .filter(a=>a.active!==false&&!isSophie(a))
+        .filter(a=>a.active!==false)
         .filter(a=>!squads.size||squads.has(text(a.squad).toLowerCase()))
         .filter(a=>['present','modified'].includes(status.get(a.id)))
         .map(a=>a.id);
@@ -576,10 +594,10 @@
       const sid=session?.id||'';
       const stored=sid?state.settings?.t400RosterBySession?.[sid]:null;
       return (Array.isArray(stored)?stored:presentRosterIds(state,session))
-        .filter(id=>(state.athletes||[]).some(a=>a.id===id&&a.active!==false&&!isSophie(a)));
+        .filter(id=>(state.athletes||[]).some(a=>a.id===id&&a.active!==false));
     };
     X.add=(athleteId,state=M.state,session=M.currentSession?.())=>{
-      if(!(state.athletes||[]).some(a=>a.id===athleteId&&a.active!==false&&!isSophie(a))) return false;
+      if(!(state.athletes||[]).some(a=>a.id===athleteId&&a.active!==false)) return false;
       state.settings=state.settings||{};C.ensureSettings(state);
       const sid=session?.id||'';
       const base=X.t400RosterIds(state,session);
@@ -608,7 +626,7 @@
 
     X.T400_LANE_ORDER=Object.freeze([4,5,3,6,2,7,1,8]);
     X.t400Seed=(state=M.state,session=M.currentSession?.(),stroke='Freestyle')=>{
-      const roster=X.t400RosterIds(state,session).map(id=>(state.athletes||[]).find(a=>a.id===id)).filter(a=>a&&a.active!==false&&!isSophie(a));
+      const roster=X.t400RosterIds(state,session).map(id=>(state.athletes||[]).find(a=>a.id===id)).filter(a=>a&&a.active!==false);
       return roster.map(a=>({athlete:a,anchor:M.targets.t400(a,state,session?.identity?.course||'',stroke)}))
         .sort((a,b)=>{
           const av=resultSeconds(a.anchor),bv=resultSeconds(b.anchor);
@@ -983,7 +1001,7 @@
     const h=document.querySelector('#swimmerView');if(!h)return;
     h.querySelector('#v4IndividualContext')?.remove();
     const aid=M.state?.settings?.activeUserAthleteId;
-    const ath=(M.state?.athletes||[]).find(a=>a.id===aid&&a.active!==false&&!isSophie(a));
+    const ath=(M.state?.athletes||[]).find(a=>a.id===aid&&a.active!==false);
     const session=M.currentSession?.();
     if(!ath||!session||!M.access?.sessionAllowed?.(session))return;
     const course=session.identity?.course||'SCM';
@@ -1025,7 +1043,7 @@
   C.targetLaneGroups=(session,item,state=M.state)=>{
     const derived=M.teamDisplay?.presentAthletes?.(session,state)||[];
     const athletes=((derived.length?derived:M.ui?.presentAthletes?.())||[])
-      .filter(a=>a&&a.active!==false&&!isSophie(a));
+      .filter(a=>a&&a.active!==false);
     const rows=athletes.map(athlete=>{
       const actual=M.adapt?.item?M.adapt.item(item,athlete,state,session):item;
       const result=M.targets?.forItem?M.targets.forItem(session,actual,athlete,state):{status:'none'};
@@ -1144,7 +1162,9 @@
     const wanted=normaliseStroke(stroke);
     return (M.state?.trainingTestResults||[])
       .filter(r=>isT400Row(M.state,r)&&testStroke(M.state,r)===wanted)
-      .filter(r=>!isSophie((M.state.athletes||[]).find(a=>a.id===r.athlete_id)))
+      // Generalised from a Sophie-specific name check: hide T400 history for any inactive athlete,
+      // not just one hardcoded name (an unknown/deleted athlete_id still shows, same as before).
+      .filter(r=>{const a=(M.state.athletes||[]).find(x=>x.id===r.athlete_id);return !a||a.active!==false;})
       .sort((a,b)=>String(b.result_date||b.created_at||'').localeCompare(String(a.result_date||a.created_at||'')));
   }
   function renderT400Live(live){
@@ -1186,7 +1206,7 @@
     const allSeed=t400Roster(s,stroke),heatCount=Math.max(1,Math.ceil(allSeed.length/8));
     M.state.settings.t400HeatIndex=Math.min(Number(M.state.settings.t400HeatIndex||0),heatCount-1);
     const heat=t400Heat(s,stroke),athletes=heat.map(x=>x.athlete),ids=new Set(allSeed.map(a=>a.id));
-    const addable=(M.state.athletes||[]).filter(a=>a.active!==false&&!isSophie(a)&&!ids.has(a.id)).sort((a,b)=>String(a.full_name).localeCompare(String(b.full_name)));
+    const addable=(M.state.athletes||[]).filter(a=>a.active!==false&&!ids.has(a.id)).sort((a,b)=>String(a.full_name).localeCompare(String(b.full_name)));
     hydrateT400Live();
     const live=C.t400Live;
     h.innerHTML=`
@@ -1639,6 +1659,6 @@
   }
 
   // Guarantee correction settings/roster are present before the base boot handler runs.
-  if(M.state){C.ensureSettings();C.hydratePlanning();C.hydrateT400Evidence();C.enforceRoster();}
+  if(M.state){C.ensureSettings();C.hydratePlanning();C.hydrateT400Evidence();C.migrateLegacyDeactivations();C.enforceRoster();}
   if(typeof document!=='undefined'&&document.body)C.renderBaseMismatch();
 })(globalThis);
