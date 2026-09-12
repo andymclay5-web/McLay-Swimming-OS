@@ -78,7 +78,26 @@
   // nothing blocked touches to the page behind it (exactly "I can move around as usual"), and removing an
   // in-flow block on Close reflows/scrolls the page in a way that can look like nothing happened. Using the
   // one real, already-correct class fixes both.
-  function modal(a){const host=document.querySelector('#modalHost')||document.body,wrap=document.createElement('div');wrap.className='modal-backdrop';wrap.dataset.bnAccess='1';wrap.innerHTML=`<div class="bn-access-modal"><div class="eyebrow">SECURE SWIMMER ACCESS</div><h2>${esc(a.full_name)}</h2><p class="muted">Private swimmer-only access. MSOS verifies performance, the current individual session and the Challenge / Edit / Finish link back to your coach before it issues the QR.</p><div class="bn-qr" data-bn-qr><span class="muted">QR appears here</span></div><div class="bn-access-url" data-bn-url hidden></div><div class="bn-access-actions"><button class="primary" data-bn-generate>Generate 15-minute QR</button><button data-bn-copy hidden>Copy link</button><button class="danger" data-bn-revoke>Revoke swimmer devices</button><button data-bn-close>Close</button></div><p class="bn-access-status" data-bn-status></p></div>`;host.append(wrap);const status=wrap.querySelector('[data-bn-status]'),qr=wrap.querySelector('[data-bn-qr]'),urlBox=wrap.querySelector('[data-bn-url]'),copy=wrap.querySelector('[data-bn-copy]');let activeUrl='';const setStatus=(msg,kind='')=>{status.textContent=msg;status.className=`bn-access-status ${kind}`};wrap.querySelector('[data-bn-close]').onclick=()=>wrap.remove();const genBtn=wrap.querySelector('[data-bn-generate]');genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{let step='Checking swimmer evidence',tickTimer=null;
+  function modal(a){const host=document.querySelector('#modalHost')||document.body,wrap=document.createElement('div');wrap.className='modal-backdrop';wrap.dataset.bnAccess='1';wrap.innerHTML=`<div class="bn-access-modal"><div class="eyebrow">SECURE SWIMMER ACCESS</div><h2>${esc(a.full_name)}</h2><p class="muted">Private swimmer-only access. MSOS verifies performance, the current individual session and the Challenge / Edit / Finish link back to your coach before it issues the QR.</p><div class="bn-qr" data-bn-qr><span class="muted">QR appears here</span></div><div class="bn-access-url" data-bn-url hidden></div><div class="bn-access-actions"><button class="primary" data-bn-generate>Generate 15-minute QR</button><button data-bn-copy hidden>Copy link</button><button class="danger" data-bn-revoke>Revoke swimmer devices</button><button data-bn-close>Close</button></div><p class="bn-access-status" data-bn-status></p></div>`;host.append(wrap);
+    // Real coaching failure this fixes: fixing the missing backdrop class (above) surfaced a second, deeper
+    // bug -- Andy reported that even with the screen now properly dimmed/locked, tapping the on-screen
+    // "Close" button did nothing, and the only way out was pressing the phone's back button several times
+    // in a row. Root cause: every OTHER modal in the app (app.js, attendance-roster.js, and others) calls
+    // `M.nav.openLayer('modal')` the moment it opens, which pushes one browser-history entry tagged as a
+    // dismissable "layer" -- that's what lets a single back-press (or this file's own Close button, once it
+    // also routes through `M.nav.dismissLayer()`) cleanly pop exactly that one entry and close just the
+    // modal. This file never called openLayer at all, so opening it left the coach's EXISTING navigation
+    // history untouched -- pressing back just walked back through whatever screens the coach had already
+    // visited, with the modal still sitting on top the whole time, until enough presses happened to land on
+    // a history entry with no "layer" tag, which is the one specific case navigation.js's own popstate
+    // handler clears #modalHost as a side effect. That accidental clear is why it eventually worked, and why
+    // it took several presses instead of one. Routing both the Close button and the browser back button
+    // through the exact same `M.nav.openLayer`/`dismissLayer` pair every other modal already uses fixes both
+    // in one place, with no special-case logic of its own.
+    M.nav?.openLayer?.('modal');
+    const status=wrap.querySelector('[data-bn-status]'),qr=wrap.querySelector('[data-bn-qr]'),urlBox=wrap.querySelector('[data-bn-url]'),copy=wrap.querySelector('[data-bn-copy]');let activeUrl='';const setStatus=(msg,kind='')=>{status.textContent=msg;status.className=`bn-access-status ${kind}`};
+    const closeModal=()=>{wrap.remove();M.nav?.dismissLayer?.();};
+    wrap.querySelector('[data-bn-close]').onclick=closeModal;const genBtn=wrap.querySelector('[data-bn-generate]');genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{let step='Checking swimmer evidence',tickTimer=null;
       // Real coaching failure this guards against: Andy reported the modal frozen on the exact same status
       // text for a full minute even with every step now individually bounded well under that -- with no way
       // for either of us to tell, from the screenshot alone, whether the app was still legitimately working
