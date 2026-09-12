@@ -46,7 +46,7 @@ assert.ok(sql.includes('revoked_at is null'),'revoked device protection missing'
 assert.ok(sql.includes("encode(digest(raw_device,'sha256'),'hex')"),'raw device token is stored server-side');
 assert.ok(interactionSql.includes('enable row level security')&&interactionSql.includes('msos_swimmer_submit_session_action'),'swimmer interaction layer is not server-protected');
 assert.ok(interactionSql.includes("action_type in ('challenge','edit_request','finish')"),'swimmer interaction action allow-list missing');
-assert.ok(/engines\/swimmer-invite-bn\.js\?v=20260824(?:bn|ci|cp|cu)/.test(index),'coach QR engine not loaded');
+assert.ok(/engines\/swimmer-invite-bn\.js\?v=20260824(?:bn|ci|cp|cu)|engines\/swimmer-invite-bn\.js\?v=20260912b/.test(index),'coach QR engine not loaded');
 assert.ok(index.includes('engines/swimmer-performance-ci.js?v=20260824ci'),'swimmer integrity model not loaded');
 assert.ok(index.includes('engines/swimmer-experience-cl.js?v=20260824cp'),'retired swimmer compatibility shim is not loaded safely');
 assert.ok(/engines\/swimmer-instant-open-cn\.js\?v=20260824(?:cp|ct|cu)/.test(index),'unified swimmer surface is not loaded');
