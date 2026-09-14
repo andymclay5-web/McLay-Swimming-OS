@@ -147,7 +147,16 @@
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
     X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors};
   }
-  async function prepareAthlete(ath,{course=currentCourse(),onJob}={}){const completion=await completeEvidence(ath,onJob);return{completion,model:buildModel(ath,course)};}
+  // Real coaching failure this guards against: Andy repeatedly reported the QR-generate modal "stopping at
+  // 5/5 0s" -- frozen on the LAST evidence-job status text with the elapsed-seconds ticker itself not moving,
+  // even after the per-job/refs-save timeouts above were already in place. Every prior status update in this
+  // flow comes from onJob(), which only fires from inside the network-jobs loop above -- buildModel() below
+  // runs synchronously immediately afterwards, with no status update of its own, so any time it takes (it
+  // ranks every event against every national standard/meet for this athlete) was invisible and silently
+  // misattributed to whichever job happened to run last. Firing one more onJob() call here, before buildModel
+  // starts, gives it a status line of its own so a slow or stuck pass here is no longer indistinguishable from
+  // the evidence-fetch step that already finished.
+  async function prepareAthlete(ath,{course=currentCourse(),onJob}={}){const completion=await completeEvidence(ath,onJob);try{onJob?.('pathway_model')}catch{}return{completion,model:buildModel(ath,course)};}
   function readinessFor(ath,{course=currentCourse()}={}){
     const model=buildModel(ath,course),issues=[];
     if(!ath?.date_of_birth)issues.push('Date of birth is required for age-specific pathway standards.');
