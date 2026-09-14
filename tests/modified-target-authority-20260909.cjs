@@ -19,11 +19,14 @@
 //    path (E.Coordinator.prescription?.(...)).
 //
 // 2. engines/modification.js's adaptItem() correctly makes zero structural change for short race-pace/quality
-//    work (protecting the stimulus, per policy) and records why in `out.adaptationReason` -- but
-//    engines/board.js's modCell() never rendered that reason anywhere. A coach watching a genuinely-modified
-//    swimmer's short race-pace rep sit at the identical number to the mainstream squad had no way to tell
-//    "correctly protected" apart from "modification pipeline did nothing." Fixed by rendering
-//    `actual.adaptationReason` as a visible `.msos-mod-reason` line on every modified row that has one.
+//    work (protecting the stimulus, per policy) and records why in `out.adaptationReason` -- board.js's
+//    modCell() originally rendered that reason as a visible `.msos-mod-reason` line on every modified row
+//    that had one (9 Sept), so "correctly protected" read differently from "modification pipeline did
+//    nothing." Andy later asked (13 Sept, verbatim: "all the explanation of why on the mod side don't need to
+//    show n the board") for that explanation text removed from the live Board -- too much reading for a
+//    coach poolside. adaptItem() still computes and attaches adaptationReason exactly as before (still
+//    checked below); only board.js's rendering of it on the Board changed. See
+//    tests/board-mod-reason-not-on-board-20260913.cjs for the removal itself.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -70,11 +73,9 @@ assert.ok(shortAdapted.reps===shortQualityItem.reps&&shortAdapted.distance===sho
 assert.ok(text(shortAdapted.adaptationReason),'fixture sanity: adaptItem must still record a reason even when it makes no structural change');
 function text(v){return String(v??'').replace(/\s+/g,' ').trim()}
 
+// board.js's modCell no longer renders adaptationReason on the Board (see the 13 Sept removal above) -- this
+// is now checked by tests/board-mod-reason-not-on-board-20260913.cjs, not here.
 const board=fs.readFileSync(path.join(root,'engines','board.js'),'utf8');
-assert.match(board,/actual\?\.adaptationReason/,'board.js\'s modCell must read adaptationReason off the adapted item');
-assert.match(board,/msos-mod-reason/,'board.js must render adaptationReason in a visible element (msos-mod-reason), not compute it and discard it');
-const css=fs.readFileSync(path.join(root,'engines','board.css'),'utf8');
-assert.match(css,/\.msos-mod-reason\{/,'board.css must style .msos-mod-reason so the reason text is actually visible, not an unstyled/invisible span');
 
 // 3. The dead duplicate `targetCard` in board.js (zero callers, never exported) is confirmed gone -- it was
 // an identical un-adapted landmine one wiring accident away from becoming live a second time.
