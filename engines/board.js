@@ -74,25 +74,30 @@
   function evidenceStrip(rows=[]){if(!rows.length)return'';return`<div class="msos-evidence-strip">${rows.map(c=>{const t=text(c.capture_type||'note').toLowerCase(),icon=t==='video'?'▶':t==='photo'?'▣':t==='voice'?'♪':'✎',label=t==='video'?'Video':t==='photo'?'Photo':t==='voice'?'Voice':'Note',title=text(c.text_content||c.title||''),detail=[captureWho(c),title||label].filter(Boolean).join(' · ');return`<button class="msos-evidence-thumb ${t}" data-msos-capture="${esc(c.id)}" aria-label="Open ${esc(label)} capture"><span>${icon}</span><small>${esc(detail)}</small></button>`;}).join('')}</div>`;}
   function modGroupKey(item){return JSON.stringify([Math.max(1,Number(item?.reps)||1),Number(item?.distance)||0,E.Evidence.stroke(item?.stroke||''),Number(item?.restSeconds)||0,Number(item?.cycleSeconds)||0,[...(item?.equipment||[])].map(text).sort(),workLabel(item),cueText(item),text(item?.adaptiveMode||''),!!item?.adaptivePending]);}
   function modPerson(session,item,m,mods,actual){const a=m.a,target=m.showTiming?`<span class="msos-mod-target" data-msos-mod-item="${esc(item.id)}" data-msos-mod-ath="${esc(a.id)}">${esc(m.target?targetSummary(m.target):(actual?.cycleSeconds?`@ ${clock(actual.cycleSeconds)}`:'…'))}</span>`:'';return`<span class="msos-mod-person">${athleteLink(a,mods)}${pendingStrokeFlag(session,item,a)}<button class="msos-mod-edit" data-msos-mod-edit="${esc(item.id)}:${esc(a.id)}" aria-label="Edit ${esc(name(a,mods))} modification">Edit</button>${m.showTiming?strokePill(session,item,a):''}${target}</span>`;}
+  // Real coaching failure this fixes (Andy's own words, 13 Sept 2026): "all the explanation of why on the mod
+  // side don't need to show n the board" -- the modified-column reason text (e.g. "67% load fallback · no
+  // fair performance comparator", "Load fallback · 600→400 single continuous work") was added on 9 Sept so a
+  // modification that legitimately makes no structural change reads differently from "the pipeline did
+  // nothing" (see architecture/RUNTIME_AUDIT_20260909.md §2), and evidenceProvenance() (11 Sept, the
+  // session-methodology "Jordan sees evidence" work) appended a second, even longer evidence-citation clause
+  // to that same line. Both are exactly the clutter Andy is describing live poolside on the Board -- he still
+  // gets the swimmer's name, the modified numbers/label, and the short cue text describing the actual work,
+  // just not the paragraph of reasoning behind it. The underlying data is not deleted: modification.js still
+  // computes and attaches adaptationReason (and relativeStimulusEvidence/relativeStimulusPlan) to every
+  // adapted item exactly as before, so engines/session-methodology.js's own separate flagged-for-review
+  // summary (which reads adaptationReason directly off the adapted item, not off anything board.js renders)
+  // is entirely unaffected by removing it from this live view.
   function modCell(session,item,mods){
     if(!mods.length)return'';const groups=new Map();
     for(const a of mods){const prescription=E.Coordinator.prescription?.(session,item,a,M.state),actual=prescription?.item||E.Modification.adaptItem(item,a,M.state,session),changed=!E.Modification.samePrescription(item,actual),needsTarget=targetIntent(actual),showTiming=timingIntent(actual);if(!changed&&!showTiming)continue;const key=modGroupKey(actual);if(!groups.has(key))groups.set(key,{actual,members:[]});groups.get(key).members.push({a,needsTarget,showTiming,target:prescription?.target||null});}
     return[...groups.values()].map(group=>{const {actual,members}=group,cue=cueText(actual),people=members.map(m=>modPerson(session,item,m,mods,actual)).join('');
-      // Show WHY, not just what: a modification that legitimately makes no structural change (e.g. short
-      // race-pace/quality work correctly protecting the stimulus) still sets adaptationReason -- render it so
-      // "modified, correctly unchanged" reads differently from "modification pipeline did nothing." Without
-      // this, a coach sees a swimmer's name in the modified column beside numbers identical to the mainstream
-      // squad with no explanation either way. See architecture/RUNTIME_AUDIT_20260909.md §2.
-      const reason=text(actual?.adaptationReason||''),provenance=evidenceProvenance(actual),reasonFull=reason&&provenance?`${reason} — ${provenance}`:reason;
-      return`<div class="msos-mod-row" data-msos-mod-group="${esc(item.id)}"><div class="msos-mod-top">${people}</div><b>${esc(workLabel(actual))}</b>${cue?`<small class="msos-mod-cue">${esc(cue)}</small>`:''}${reasonFull?`<small class="msos-mod-reason">${esc(reasonFull)}</small>`:''}</div>`;}).join('');
+      return`<div class="msos-mod-row" data-msos-mod-group="${esc(item.id)}"><div class="msos-mod-top">${people}</div><b>${esc(workLabel(actual))}</b>${cue?`<small class="msos-mod-cue">${esc(cue)}</small>`:''}</div>`;}).join('');
   }
-  // Learning loop (11 Sept 2026): "Jordan sees methodology/evidence behind sessions he writes" -- the
-  // per-decision half. adaptationReason already answers WHY a line changed (shipped earlier); this answers
-  // WHY THAT NUMBER, by reading the same relativeStimulusEvidence/relativeStimulusPlan modification.js
-  // already computes and attaches to every adapted item (engines/modification.js's relativeEvidence/
-  // performancePlan) but never previously rendered. Display-only: nothing here is stored, so it can never
-  // drift from what modification.js actually used to decide the prescription, and no existing test asserting
-  // an exact adaptationReason string is affected.
+  // No longer called from modCell (see the removal above) -- kept as the shared pure formatter that
+  // tests/session-methodology-20260911.cjs extracts directly by source text for its own "Jordan sees
+  // evidence" logic (session-methodology.js's per-decision evidence citation is the SAME shape this
+  // produces). Left in place rather than deleted so that feature's own test coverage isn't disturbed by a
+  // Board-display-only change.
   function evidenceProvenance(actual){
     const plan=actual?.relativeStimulusPlan,ev=actual?.relativeStimulusEvidence;
     if(plan?.athleteSeconds&&plan?.referenceSeconds)return`${plan.evidenceKind==='t400'?'T400':'PB'} evidence: ${clock(plan.athleteSeconds)} vs squad median ${clock(plan.referenceSeconds)} (${plan.referenceCount} swimmer${plan.referenceCount===1?'':'s'})`;
@@ -157,5 +162,5 @@
   function liveTimesPanel(session){const rows=liveTimesRows(session);if(!rows.length)return'';return`<section class="msos-tv-live"><header><small>LIVE TIMES</small></header>${rows.map(liveTimeRow).join('')}</section>`;}
   function render(){const host=document.querySelector('#boardView'),session=M.currentSession?.();if(!host)return;if(!session){host.innerHTML='<div class="empty">No session selected.</div>';paintFinishAction(null);return;}const {athletes,mods,groupAth,active}=context(session),focus=M.state.settings.boardFocusMode!==false,blocks=focus&&active?[active]:(session.blocks||[]),title=session.identity?.title||`${session.identity?.dayPart||''} · ${(session.identity?.squads||[]).join(' + ')}`||'Session',sev=evidenceStrip(captures(session,{sessionOnly:true})),finished=session.finish,delivered=Number(finished?.actualDistance)||sessionDistance(session);host.className='view msos-whiteboard-engine';host.innerHTML=`<div class="msos-board-top"><div><small>${focus?'CURRENT SET':'WHOLE SESSION'}${finished?' · FINISHED ✓':''}</small><h1>${esc(title)}</h1></div><b>${finished?`${delivered.toLocaleString()}m ✓`:sessionDistance(session).toLocaleString()+'m'}</b></div>${finished?`<div class="context-note msos-board-finished"><b>FINISHED ✓</b> · ${delivered.toLocaleString()}m delivered · saved locally</div>`:''}${sev}<div class="msos-board-quick"><button data-msos-roll>Roll · ${athletes.length}</button><button data-msos-t400>T400 / Times</button><button data-msos-swimmers>Swimmers</button></div><div class="msos-board-nav"><button data-msos-mode>${focus?'WHOLE':'SET'}</button>${(session.blocks||[]).map(b=>`<button data-msos-block="${esc(b.id)}" class="${focus&&b.id===active?.id?'active':''}">${esc(blockCode(b))}</button>`).join('')}</div>${blocks.map(b=>blockHtml(session,b,groupAth,mods)).join('')}`;bind(host,session);paintFinishAction(session);if(M.state?.settings?.view==='board')host.classList.add('active');restoreTargetAnchor(host);afterPaint(host);}
   function renderTV(){const host=document.querySelector('#tvView'),session=M.currentSession?.();if(!host)return;if(!session){host.innerHTML='<div class="empty">No session selected.</div>';return;}const {mods,groupAth,active}=context(session),title=session.identity?.title||'Session',finished=session.finish,delivered=Number(finished?.actualDistance)||sessionDistance(session);host.className='view msos-tv-board-engine';host.innerHTML=`<div class="msos-tv-top"><h1>${esc(title)}${finished?' · FINISHED ✓':''}</h1><b>${finished?`${delivered.toLocaleString()}m ✓`:sessionDistance(session).toLocaleString()+'m'}</b></div>${liveTimesPanel(session)}${active?blockHtml(session,active,groupAth,mods):''}`;bind(host,session);if(M.state?.settings?.view==='tv')host.classList.add('active');afterPaint(host);}
-  UI.renderBoard=render;UI.renderTV=renderTV;B.render=render;B.renderTV=renderTV;B.targetSummary=targetSummary;B.workLabel=workLabel;B.cueText=cueText;B.displayStroke=displayStroke;B.strokeInfo=strokeInfo;B.strokeLabel=strokeLabel;B.selectedStroke=selectedStroke;B.findItem=findItem;B.evidenceStrip=evidenceStrip;B.paintFinishAction=paintFinishAction;B.modGroupKey=modGroupKey;B.targetIntent=targetIntent;B.timingIntent=timingIntent;B.repIntervals=repIntervals;B.liveTimesRows=liveTimesRows;B.liveTimesPanel=liveTimesPanel;
+  UI.renderBoard=render;UI.renderTV=renderTV;B.render=render;B.renderTV=renderTV;B.targetSummary=targetSummary;B.workLabel=workLabel;B.cueText=cueText;B.modCell=modCell;B.displayStroke=displayStroke;B.strokeInfo=strokeInfo;B.strokeLabel=strokeLabel;B.selectedStroke=selectedStroke;B.findItem=findItem;B.evidenceStrip=evidenceStrip;B.paintFinishAction=paintFinishAction;B.modGroupKey=modGroupKey;B.targetIntent=targetIntent;B.timingIntent=timingIntent;B.repIntervals=repIntervals;B.liveTimesRows=liveTimesRows;B.liveTimesPanel=liveTimesPanel;
 })(globalThis);
