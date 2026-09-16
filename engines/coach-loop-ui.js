@@ -104,8 +104,28 @@
   function upcomingMeet(ctx,session){const today=session?.identity?.date||new Date().toISOString().slice(0,10),rows=[];for(const x of M.state?.meets||[])rows.push({id:x.id,date:text(x.date),title:text(x.title||x.name||'Meet'),venue:text(x.venue),course:text(x.course),raw:x});for(const raw of arr(ctx?.season?.meets||ctx?.season?.season_meets)){if(typeof raw==='object')rows.push({id:raw.id,date:text(raw.date),title:text(raw.title||raw.name||'Meet'),venue:text(raw.venue),course:text(raw.course),raw});else for(const line of String(raw||'').split(/\n+/)){const p=line.split('|').map(text);if(p[0])rows.push({date:p[0],title:p[1]||'Meet',course:p[2]||'',venue:p[4]||'',raw:{}})}}return rows.filter(x=>x.date&&x.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0]||null;}
   function recentCarry(session){return Object.values(M.state?.canonicalSessions||{}).filter(x=>x.id!==session?.id&&x.finish&&(x.identity?.squads||[]).some(s=>(session?.identity?.squads||[]).includes(s))&&(x.identity?.date||'')<=(session?.identity?.date||'')).sort((a,b)=>`${b.identity?.date||''}${b.identity?.dayPart||''}`.localeCompare(`${a.identity?.date||''}${a.identity?.dayPart||''}`)).map(x=>text(x.finish?.carryForward||x.finish?.review?.carryForward)).find(Boolean)||'';}
   function metricRows(rows){return rows.map(x=>`<div class="loop-metric"><span>${esc(x.label)}</span><b>${Math.round(x.metres).toLocaleString()}m</b><small>${x.pct.toFixed(0)}%</small></div>`).join('');}
+  // Andy (16 Sept 2026): "I hit coach hub and nothing happens, I click it again it freezes. Stays there
+  // till I back out." Coach Hub's render walks nearly all of M.state synchronously and with no caching --
+  // weekRows/seasonRows scan every weekly/season plan, recentCarry scans every canonicalSession looking
+  // for a match, sessionMix walks every block/item, plus captures/reflections/meetRaces lookups -- all on
+  // every single visit. As months of history accumulate (the same "state has grown large, cloud sync off"
+  // pattern behind the QR-freeze/background-save investigation), this can genuinely take long enough that
+  // nothing visibly happens on the first tap. The nav click handler (engines/navigation.js's V.go) has no
+  // guard against re-navigating to a view that's already active, so a second, impatient tap on "Coach Hub"
+  // queues a full SECOND run of this same expensive computation right behind the first (JS is
+  // single-threaded, so this isn't concurrent -- it's back-to-back), roughly doubling the wait and
+  // crossing into what reads as a genuine freeze. L.hubRenderRuns below counts only real (non-coalesced)
+  // runs, for tests; M.viewTimings.hub is a real duration in ms, surfaced on the Connection page and Copy
+  // Diagnostics (same pattern as the background-save timing) so the next report carries a number instead
+  // of another guess at the underlying render cost itself.
+  L.hubRenderRuns=0;
   function renderCoachHub(){
-    const h=document.querySelector('#hubView');if(!h)return;const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';return;}
+    const h=document.querySelector('#hubView');if(!h)return;
+    const rev=Number(M.state?.settings?.storageRevision)||0;
+    if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400)return;
+    const t0=Date.now();
+    const finish=()=>{h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
+    const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}
     const ctx=planContext(s),sum=M.analysis?.summary?.(s,M.state)||{},mix=sessionMix(s),meet=upcomingMeet(ctx,s),carry=ctx.carry||recentCarry(s),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
     const entries=meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[];
     h.innerHTML=`
@@ -133,6 +153,7 @@
     h.querySelector('[data-loop-data]')?.addEventListener('click',()=>go('data'));
     h.querySelector('[data-loop-guardian]')?.addEventListener('click',()=>go('guardian'));
     h.querySelector('[data-loop-connection]')?.addEventListener('click',()=>go('connection'));
+    finish();
   }
   L.renderCoachHub=renderCoachHub;
 
