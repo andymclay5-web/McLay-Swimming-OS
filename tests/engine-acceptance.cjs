@@ -42,7 +42,10 @@ x=Modification.adaptItem(phoneIm,cm,strokeOverrideState,session);assert.equal(x.
 
 // With no fair performance comparator, repeated work keeps the authored repeat distance and adjusts total load by reps.
 // Distance shortening remains available earlier in the engine when relative evidence shows it is needed to preserve the stimulus.
-const timed75=set('timed75',4,75,{raw:'4 x 75 Pull @ 1:45',cycleSeconds:105});x=Modification.adaptItem(timed75,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,105);assert.match(x.raw,/2 × 75/);
+// The interval is recalculated so the modified swimmer's total time still matches the main group's total time window
+// (Andy, 16 Sept 2026: reps dropping must never leave the send-off frozen -- see tests/send-off-window-match-20260916.cjs) --
+// 4x75 @1:45 is a 420s group window; 2 reps recalculates to 210s (3:30) so 2x210=420s still matches.
+const timed75=set('timed75',4,75,{raw:'4 x 75 Pull @ 1:45',cycleSeconds:105});x=Modification.adaptItem(timed75,cm,state,session);assert.equal(x.reps,2);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,210);assert.match(x.raw,/2 × 75.*3:30/);
 const timed25=set('timed25',4,25,{raw:'4 x 25 Max @ 0:45',cycleSeconds:45});x=Modification.adaptItem(timed25,cm,state,session);assert.equal(x.reps,4);assert.equal(x.distance,25);assert.equal(x.cycleSeconds,45);
 
 const desc=set('desc',4,100,{raw:'4 x 100 Freestyle Descend 1-4 @ 1:45',cues:['Descend 1-4'],cycleSeconds:105});x=Modification.adaptItem(desc,cm,state,session);assert.equal(x.reps,2);assert.match([x.raw,...x.cues].join(' '),/1 Build \/ 1 Fast/i);assert.deepEqual(x.repInstructions.map(v=>v.label),['Build','Fast']);
@@ -50,14 +53,20 @@ const pull=set('pull',3,200,{raw:'3 x 200 Pull',cues:['Descend Stroke Count 1-3'
 
 const fixedTarget=set('fixed-target',1,200,{stroke:'Freestyle',raw:'200 Freestyle target 2:00',targetSeconds:120,cycleSeconds:150});x=Modification.adaptItem(fixedTarget,cm,state,session);assert.equal(x.distance,100);assert.equal(x.targetMustRecalculate,true);assert.equal(x.targetSeconds,undefined);assert.equal(x.referenceTargetSeconds,120);
 
-const kick=set('kick',5,50,{raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build'],cycleSeconds:60});x=Modification.adaptItem(kick,cm,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,135);assert.equal(x.kickCycleRange?.min,130);assert.equal(x.kickCycleRange?.max,140);x=Modification.adaptItem(kick,cf,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,60);x=Modification.adaptItem(kick,ap,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,60);assert.equal(x.adaptivePending,true);assert.match(x.raw,/Upper-body choice/i);
+// cf/ap: baseDist=50 (<100) so this doesn't reach the >=100 timed-kick window helper; it falls through
+// to the generic no-comparator reps fallback, which (16 Sept 2026 fix) now recalculates the interval so
+// total time still matches the group's 5x60=300s window: 3 reps -> ceil5(300/3)=100s (1:40). Charlotte's
+// own fixed 50-kick base (130-140s) is applied afterwards regardless and still overrides to 135s.
+const kick=set('kick',5,50,{raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build'],cycleSeconds:60});x=Modification.adaptItem(kick,cm,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,135);assert.equal(x.kickCycleRange?.min,130);assert.equal(x.kickCycleRange?.max,140);x=Modification.adaptItem(kick,cf,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,100);x=Modification.adaptItem(kick,ap,state,session);assert.equal(x.reps,3);assert.equal(x.cycleSeconds,100);assert.equal(x.adaptivePending,true);assert.match(x.raw,/Upper-body choice/i);
 const repeat=set('repeat',12,50,{raw:'12 x 50 #1 Stroke',repeatBreakdown:{rounds:4,unitReps:3,unit:[{count:1,text:'Scull'},{count:1,text:'Drill'},{count:1,text:'Swim — Perfect Technique'}]},repeatBreakdownCue:'4 rounds · Scull / Drill / Swim — Perfect Technique',cues:['4 rounds · Scull / Drill / Swim — Perfect Technique']});x=Modification.adaptItem(repeat,cm,state,session);assert.equal(x.reps,6);assert.match(x.repeatBreakdownCue,/^2 rounds · Scull \/ Drill \/ Swim/);x=Modification.adaptItem(repeat,md,state,session);assert.equal(x.reps,8);assert.match(x.repeatBreakdownCue,/^2 rounds · Scull \/ Drill \/ Swim.*\+ Scull \/ Drill/);
 const quality=set('q',6,25,{raw:'6 x 25 #1 Stroke @ 1:00',cycleSeconds:60,repInstructions:[{rep:1,label:'Build',raceIntent:null},...Array.from({length:5},(_,i)=>({rep:i+2,label:'100m Race Pace',raceIntent:{distance:100}}))]});x=Modification.adaptItem(quality,cm,state,session);assert.equal(x.reps,6);assert.equal(x.distance,25);
 
 global.MSOS4={state,currentSession:()=>session,util:{clock:s=>`${Math.floor(Number(s||0)/60)}:${String(Math.round(Number(s||0)%60)).padStart(2,'0')}`},amberRatioAP:{evidenceMeasured:item=>Modification.targetDriven(item),independentSkill:item=>Modification.independentSkill(item)}};
 require('../engines/amber-alignment-at.js');
 const ActiveModification=global.MSOSEngines.Modification;
-const s75=set('s75',8,75,{raw:'8 x 75 with Fins 50 technique / 25 fast @ 1:45',cycleSeconds:105,equipment:['Fins']});x=ActiveModification.adaptItem(s75,md,state,session);assert.equal(x.reps,6);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,105);x=ActiveModification.adaptItem(s75,ap,state,session);assert.equal(x.reps,6);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,105);assert.equal(x.adaptivePending,true);assert.match(x.raw,/Upper-body choice/i);
+// 8x75 is a 840s group window; 6 reps recalculates to ceil5(840/6)=140s (2:20) for both md and ap
+// (16 Sept 2026 fix -- see the timed75/kick cases above for the same rule).
+const s75=set('s75',8,75,{raw:'8 x 75 with Fins 50 technique / 25 fast @ 1:45',cycleSeconds:105,equipment:['Fins']});x=ActiveModification.adaptItem(s75,md,state,session);assert.equal(x.reps,6);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,140);x=ActiveModification.adaptItem(s75,ap,state,session);assert.equal(x.reps,6);assert.equal(x.distance,75);assert.equal(x.cycleSeconds,140);assert.equal(x.adaptivePending,true);assert.match(x.raw,/Upper-body choice/i);
 const skill50=set('skill50',4,50,{raw:'4 x 50 Start Turn Finish @ 2:30',cycleSeconds:150});x=ActiveModification.adaptItem(skill50,ap,state,session);assert.equal(x.reps,4);assert.equal(x.distance,50);assert.equal(x.cycleSeconds,150);assert.doesNotMatch(x.raw,/Upper-body/i);
 
 let t=Aerobic.forItem(session,ActiveModification.adaptItem(a400,cm,state,session),cm,state);assert.equal(t.status,'pattern');assert.equal(t.rows.length,2);assert.ok(Number.isFinite(t.rows[0].seconds));
