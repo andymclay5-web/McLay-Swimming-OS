@@ -57,8 +57,21 @@ function run(){
 function runFailBefore(){
   // Fail-before: revert systemFrom to the exact pre-fix `v||raw` short-circuit and confirm the same "Easy"
   // item now wrongly reports Unclassified -- the exact bug Andy hit.
+  //
+  // NOTE (18 Sept 2026): systemFrom() was extended again on top of this fix (see tests/dosage-cue-
+  // classification-20260918.cjs) to also check item.cues, not just item.raw/item.text. fixedFn/buggyFn below
+  // were updated to match that current source so this test keeps proving ONLY the thing it's named for -- the
+  // 17 Sept single-sided `v||raw` OR-logic bug -- independent of the separate 18 Sept cues fix.
   const fixedFn=`  function systemFrom(value,item={}){
-    const v=txt(value),raw=txt(item.raw||item.text||v);
+    const v=txt(value),base=item.raw||item.text||'';
+    // 18 Sept 2026 (Andy, real session, "I don't see this as 72% unclassified do you?"): a genuine chunk of
+    // that 72% was a coach line like "4 x 25 Small Parachute" with its own real intensity word -- "15m MAX" --
+    // written as the very next line, which the parser correctly keeps as the item's own cue (item.cues), not
+    // as part of item.raw/item.text. systemFrom() never looked at cues at all, so "MAX" sitting one line down
+    // was invisible to the classifier even though it's unambiguously part of what that line means. Same root
+    // pattern as the 17 Sept zone/raw fix (real signal in a field the checker didn't look at) -- extended here
+    // to also check the item's authored cue text, not just its own raw/text.
+    const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);
     const either=re=>re.test(v)||re.test(raw);
     if(either(/\\b(?:regeneration|regen|\\breg\\b|easy|recovery|loosen|warm.?down|cool.?down)\\b/i))return'Regeneration';
     if(either(/\\b(?:development|\\bdev\\b)\\b/i))return'Development';
@@ -71,7 +84,8 @@ function runFailBefore(){
     return'Unclassified';
   }`;
   const buggyFn=`  function systemFrom(value,item={}){
-    const v=txt(value),raw=txt(item.raw||item.text||v);
+    const v=txt(value),base=item.raw||item.text||'';
+    const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);
     if(/\\b(?:regeneration|regen|\\breg\\b|easy|recovery|loosen|warm.?down|cool.?down)\\b/i.test(v||raw))return'Regeneration';
     if(/\\b(?:development|\\bdev\\b)\\b/i.test(v||raw))return'Development';
     if(/\\b(?:overload|\\bol\\b)\\b/i.test(v||raw))return'Overload';
