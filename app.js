@@ -247,7 +247,24 @@
    x=x.replace(/(^|[^\d\-\/])(\d{1,2})\s*(?:times|by)\s*(800|400|200|150|100|75|50|35|25)\b/gim,(m,pre,r,d)=>`${pre}${r} x ${d}`);
    return x;
  };
- function heading(line){const t=U.text(line).replace(/^\d+[.)]\s*/,'');const bt=U.blockType(t);if(bt!=='other'&&/^(?:warm.?up|pre.?set|main(?:\s+set)?|post.?set|reinforcement|warm.?down|cool.?down|test)\b/i.test(t))return bt;return null}
+ function heading(line){const t=U.text(line).replace(/^\d+[.)]\s*/,'');const bt=U.blockType(t);if(bt!=='other'&&/^(?:warm.?up|pre.?set|main(?:\s+set)?|post.?set|reinforcement|warm.?down|cool.?down|test)\b/i.test(t))return bt;
+   // Real coaching failure this fixes (Andy's real 18 Sept session, live Board screenshots): "RACE SIMULATION",
+   // "FINS" and "RACE QUALITY" are none of the 6 known block keywords above, so every one of them used to
+   // return null here and get silently swallowed as plain CONTENT into whichever block was already open
+   // (WARM-UP) -- the exact "unknown coaching language deleted" failure CLAUDE.md 2.26 warns against. Only 3
+   // Board tabs (SET/WU/WD) appeared instead of Andy's 5 authored sections, and Warm-up's displayed total
+   // matched the whole session because it had silently absorbed everything else. A standalone ALL-CAPS line
+   // names a genuinely distinct part of the session -- recognise it as its own block instead, UNLESS it's one
+   // of the specific phrases strongLocalBoundary already gives a different, tested, WITHIN-block meaning
+   // (aerobic reset, back/front-end work, quality/race finish, warm-down/cool-down, sharpeners, reset block) --
+   // those must keep closing/flagging content inside the CURRENT block, not spawn a new one. Also exclude
+   // anything starting "MSOS " -- engines/parser-semantics.js injects its own reserved ALL-CAPS sentinel line
+   // ('MSOS ROUND CHILD BREAK:') to preserve blank-line-separated children inside "N Rounds:" groups before
+   // handing text to this base parser; without this carve-out that internal marker itself got misread as a
+   // new block, silently splitting a Rounds group's own set into a separate, unmultiplied block.
+   if(/^[A-Z][A-Z\s/&-]{3,}:?$/.test(t)&&!/^msos\b/i.test(t)&&!/^(?:aerobic\s+reset|back[- ]?end(?:\s+work)?|front[- ]?end(?:\s+work)?|quality\s+finish|race\s+finish|warm.?down|cool.?down|sharpeners?|finish(?:ing)?\s+quality|reset\s+block)\s*:?$/i.test(t))return'other';
+   return null;
+ }
  function restSeconds(text){let m=String(text).match(/\b(\d{1,2})\s*(?:s|sec|seconds?)\s*(?:r|rest)\b/i);if(m)return Number(m[1]);m=String(text).match(/\b(\d{1,2})\s*SR\b/i);return m?Number(m[1]):null}
  function cycleSeconds(text){const m=String(text).match(/(?:@|on)\s*(\d+):(\d{1,2}(?:\.\d+)?)\b/i);return m?Number(m[1])*60+Number(m[2]):null}
  function stroke(text){const t=String(text);if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';if(/\bIM\b/i.test(t))return'IM';if(/\bchoice\b/i.test(t))return'Choice';return''}
@@ -259,9 +276,20 @@
  // for a different purpose (per-rep quality splitting) -- this list was simply missing them for labelling.
  function equipment(text){return ['Fins','Paddles','Pull','Bands','Snorkel','Parachute','Cords','Tether'].filter(x=>new RegExp(`\\b${x}\\b`,'i').test(text))}
  function explicitRepeat(line){let m=U.text(line).match(/^(\d{1,2})\s*x\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);if(!m)return null;return {reps:Number(m[1]),distance:Number(m[2]),tail:m[3]||''}}
- function singleDistance(line){const m=U.text(line).match(/^(\d{2,4}(?:\.5)?)\b\s*(.*)$/);return m?{distance:Number(m[1]),tail:m[2]||''}:null}
+ // Real coaching failure this fixes (Andy's real 18 Sept session): "75% of #1 Event" and "45 min Individual
+ // Race Warm-Up" were both read as plain distances (75m, 45m) purely because a number led the line -- a
+ // percentage-of-effort instruction and a time duration are neither one a metres figure. Treating "75%" as a
+ // distance let the modification engine individually "shorten" it like any other swim (Andy: "the modified
+ // swimmers shouldn't have been shortened from 75%"); treating "45 min" as a distance rendered a 45-MINUTE
+ // task as a bare, unit-less "45" indistinguishable from a real distance, and silently added 45 phantom
+ // metres to the block/session total. Also recognise "Dive"/"Push" (optionally "... Start") leading a
+ // distance -- Andy writes "Dive Start 50 #1 form" with the descriptive words before the number, not after;
+ // the existing race-pace engine (engines/race-pace.js) already understands "dive"/"push" as start-type
+ // keywords once the item's raw text carries them, so this is purely about the number reaching a real 'set'
+ // item at all.
+ function singleDistance(line){const m=U.text(line).match(/^(?:(?:dive|push)(?:\s*start)?\s+)?(\d{2,4}(?:\.5)?)\b(?!\s*%)(?!\s*min(?:ute)?s?\b)\s*(.*)$/i);return m?{distance:Number(m[1]),tail:m[2]||''}:null}
  function inlineComposition(line,parentDistance){const hits=[...String(line).matchAll(/(?:^|[\/·,+])\s*(\d{1,4}(?:\.5)?)\s*([^\/·,+]*)/g)].map(m=>({distance:Number(m[1]),text:U.text(m[2])})).filter(x=>x.distance>0&&x.distance<parentDistance);if(hits.length>=2&&Math.abs(hits.reduce((n,x)=>n+x.distance,0)-parentDistance)<.001)return hits;return null}
- function patternCue(line){const t=U.text(line);let m=t.match(/^#?(\d{1,2})\s*[-:.]?\s*(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(m)return {kind:'zone',count:Number(m[1]),zone:zoneName(m[2]),text:t};m=t.match(/^#?(\d{1,2})\s+(?!x\b)(.+)$/i);if(m&&!/^(?:\d+:\d+)/.test(t)&&!/^@/.test(U.text(m[2]))&&!singleDistance(t)?.tail.match(/^(?:m|metres?)/i))return {kind:'pattern',count:Number(m[1]),text:U.text(m[2])};return null}
+ function patternCue(line){const t=U.text(line);let m=t.match(/^#?(\d{1,2})\s*[-:.]?\s*(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(m)return {kind:'zone',count:Number(m[1]),zone:zoneName(m[2]),text:t};m=t.match(/^#?(\d{1,2})\s+(?!x\b)(.+)$/i);if(m&&!/^(?:\d+:\d+)/.test(t)&&!/^@/.test(U.text(m[2]))&&!/^min(?:ute)?s?\b/i.test(U.text(m[2]))&&!singleDistance(t)?.tail.match(/^(?:m|metres?)/i))return {kind:'pattern',count:Number(m[1]),text:U.text(m[2])};return null}
  function repInstructions(raw,reps){if(!/\bodd\b/i.test(raw)||!/\beven\b/i.test(raw))return[];const odd=raw.match(/\bOdd\b\s*([^/]*)/i)?.[1]||'',even=raw.match(/\bEven\b\s*(.*)$/i)?.[1]||'';const oddRace=P.raceIntent(odd),evenRace=P.raceIntent(even);return Array.from({length:reps},(_,i)=>({rep:i+1,label:(i+1)%2?U.text(odd):U.text(even),raceIntent:(i+1)%2?oddRace:evenRace,drill:/drill/i.test((i+1)%2?odd:even)}))}
  function makeSet(sessionId,blockType,order,line,reps,distance,tail){const raw=U.text(line),z=zoneName(raw),ri=P.raceIntent(raw),n=Math.max(1,reps||1);return {id:U.stableId('item',sessionId,blockType,order,raw),kind:'set',order,reps:n,distance:Number(distance)||0,stroke:stroke(raw),zone:z,restSeconds:restSeconds(raw),cycleSeconds:cycleSeconds(raw),equipment:equipment(raw),raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:repInstructions(raw,n),raceIntent:ri,targetSeconds:null,unclassifiedTerms:[]}}
  P.raceIntent=text=>{const t=U.text(text);let m=t.match(/\b(50|100|200|400|800|1500)\s*(IM|Free(?:style)?|Back(?:stroke)?|Breast(?:stroke)?|Fly|Butterfly)?\s*(?:race\s*)?pace\b/i);if(!m)m=t.match(/\b(?:race\s*pace|at)\s*(50|100|200|400|800|1500)\b/i);if(!m)return null;return {distance:Number(m[1]),eventStroke:m[2]?stroke(m[2]):null,workingStroke:stroke(t)||null}}
@@ -309,7 +337,17 @@
    const push=x=>{(currentGroup?currentGroup.items:items).push(x);if(x.kind==='set')current=x};
    for(let li=0;li<rawLines.length;li++){
      const original=rawLines[li],line=U.text(original),indent=lineIndent(original);if(!line){currentGroup=null;current=null;groupIndented=false;continue}
-     if(currentGroup){if(indent>groupIndent)groupIndented=true;else if((groupIndented&&indent<=groupIndent)||(!groupIndented&&currentGroup.items.length&&strongLocalBoundary(line))){currentGroup=null;current=null;groupIndented=false}}
+     let justClosedSet=null;
+     if(currentGroup){if(indent>groupIndent)groupIndented=true;else if((groupIndented&&indent<=groupIndent)||(!groupIndented&&currentGroup.items.length&&strongLocalBoundary(line))){
+       // Real coaching failure this fixes (Andy's real 18 Sept RACE SIMULATION/FINS session): a trailing
+       // descriptor written flush-left right where an "N Rounds:" group closes (e.g. "Descend 1-4" directly
+       // under an indented "4 x 50 @ 1:00") used to become an orphaned, disconnected top-level cue -- current
+       // was reset to null the instant the group closed, so the very line that closed it had nowhere left to
+       // attach even though it plainly describes the group's last rep. Remember that last set so this exact
+       // line can still reach it as a cue below if nothing more specific claims it first.
+       for(let k=currentGroup.items.length-1;k>=0;k--){if(currentGroup.items[k]?.kind==='set'){justClosedSet=currentGroup.items[k];break}}
+       currentGroup=null;current=null;groupIndented=false;
+     }}
      let gm=line.match(/^(\d{1,2})\s+Rounds?\s*:?(.*)$/i);if(gm){const group={id:U.stableId('group',sessionId,type,li,line),kind:'group',rounds:Number(gm[1]),text:line,items:[],order:++order};items.push(group);currentGroup=group;groupIndent=indent;groupIndented=false;current=null;continue}
      const rep=explicitRepeat(line);if(rep){const set=makeSet(sessionId,type,++order,line,rep.reps,rep.distance,rep.tail);push(set);continue}
      const rs=restSeconds(line);if(rs&&/^(?:\d+\s*SR|\d+\s*(?:s|sec|seconds?)\s*(?:R|rest))$/i.test(line)){if(current)current.restSeconds=rs;else push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});continue}
@@ -326,15 +364,31 @@
      const pc=patternCue(line);if(pc&&current){if(pc.kind==='zone'){for(let k=0;k<pc.count;k++)current.repPattern.push({rep:current.repPattern.length+1,zone:pc.zone,text:pc.text})}else current.pattern.push(pc);continue}
      const cs=cycleSeconds(line);if(cs&&current&&/^(?:@|on)\s*\d+:\d{1,2}(?:\.\d+)?$/i.test(line)){current.cycleSeconds=cs;continue}
      if(current){const inline=inlineComposition(line,current.distance);if(inline){current.composition.push(...inline);continue}}
-     if(current&&!strongLocalBoundary(line)){current.cues=current.cues||[];current.cues.push(line);continue}push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});current=null;
+     if(current&&!strongLocalBoundary(line)){
+       current.cues=current.cues||[];current.cues.push(line);
+       // Real coaching failure this fixes (Andy's real 18 Sept "Dive Start 50 #1 form" / "@100 pace" session):
+       // a race-target cue like "@100 pace" arriving on its OWN line, after the set's own raw text already
+       // produced no race intent, used to leave the item's raceIntent permanently null -- the already-correct
+       // downstream race-pace engine (dive/push/named-segment targets, engines/race-pace.js) never even got a
+       // chance to run. Backfill raceIntent from the cue line itself once, exactly like the item's own raw
+       // text would have produced it.
+       if(!current.raceIntent){const ri=P.raceIntent(line);if(ri)current.raceIntent=ri;}
+       continue;
+     }
+     if(justClosedSet&&!strongLocalBoundary(line)){justClosedSet.cues=justClosedSet.cues||[];justClosedSet.cues.push(line);continue}
+     push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});current=null;
    }
    attachPostCues(items);return items;
  }
  P.parse=(source,identity={})=>{
-   const raw=P.normalise(source),session=M.session.empty(identity,raw),lines=U.lines(raw);let currentType=null,current=[];const chunks=[];let explicitTotal=null,sessionNotes=[];
-   const flush=()=>{if(currentType){chunks.push({type:currentType,lines:current});current=[]}};
-   for(const rawLine of lines){const line=U.text(rawLine);const tm=line.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i);if(tm){explicitTotal=Number(tm[1].replace(/,/g,''));continue}const h=heading(line);if(h){flush();currentType=h;continue}if(!currentType){if(line)sessionNotes.push(line);continue}current.push(rawLine)}flush();
-   session.blocks=chunks.map((c,i)=>({id:U.stableId('block',session.id,c.type,i),type:c.type,title:U.blockTitle(c.type),order:i+1,items:parseBlock(session.id,c.type,c.lines)}));
+   const raw=P.normalise(source),session=M.session.empty(identity,raw),lines=U.lines(raw);let currentType=null,currentTitle='',current=[];const chunks=[];let explicitTotal=null,sessionNotes=[];
+   const flush=()=>{if(currentType){chunks.push({type:currentType,title:currentTitle,lines:current});current=[]}};
+   // A heading recognised only as the generic 'other' type (see heading()) carries no fixed U.blockTitle --
+   // use what the coach actually typed (Title Cased) so "RACE SIMULATION"/"FINS"/"RACE QUALITY" show up as
+   // their own named Board tabs instead of a generic "Other".
+   const titleFor=line=>U.text(line).replace(/^\d+[.)]\s*/,'').replace(/:$/,'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+   for(const rawLine of lines){const line=U.text(rawLine);const tm=line.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i);if(tm){explicitTotal=Number(tm[1].replace(/,/g,''));continue}const h=heading(line);if(h){flush();currentType=h;currentTitle=h==='other'?titleFor(line):'';continue}if(!currentType){if(line)sessionNotes.push(line);continue}current.push(rawLine)}flush();
+   session.blocks=chunks.map((c,i)=>({id:U.stableId('block',session.id,c.type,i),type:c.type,title:c.title||U.blockTitle(c.type),order:i+1,items:parseBlock(session.id,c.type,c.lines)}));
    session.metadata.sessionNotes=sessionNotes;session.metadata.explicitTotal=explicitTotal;session.currentSource={text:String(source||'').trim(),hash:U.hash(String(source||'').trim()),updatedAt:U.now()};
    const total=S.total(session);session.metadata.parsedTotal=total;session.metadata.totalMatches=explicitTotal==null?true:Math.abs(total-explicitTotal)<=1;
    return session;
