@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20260918a'};
+  const D=M.dosageEngine={build:'v4-dosage-20260918b'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -58,6 +58,33 @@
     if(item?.raceIntent||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
     if(either(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i))return'Speed / Max';
     if(either(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i))return'Skill / Technical';
+    // 18 Sept 2026 (Andy, answering the "should untagged sets get a default" question raised alongside the
+    // cues fix above): his own stated logic -- "all easy swimming would fit into Aerobic Capicity and/or
+    // aerobic development or regentration... a hard 400 prob is threashold, a hard 200 is prob cl, a hard 100
+    // is prob 400 to 200p... max is max, atp cp for short dist... through the other anaerobic zones based on
+    // dist and rest" -- and he explicitly chose inferring this from STRUCTURE (distance + rest), not requiring
+    // a keyword like "hard" to be typed. A real 'set' item always carries its own distance; whether it also
+    // carries a genuine authored rest (item.restSeconds, parsed from e.g. "Rest · 20 sec" -- NOT the same as
+    // a send-off/cycleSeconds interval) is what tells continuous/easy swimming apart from "worked" reps, per
+    // Andy's own words. No keyword anywhere matched at this point, so: an item with a real authored rest is
+    // "worked" -- Andy's named distance ladder decides which anaerobic-ish zone (400+->Threshold, 200-399->
+    // Clearance, 100-199->Race pace, <100->Speed/Max/ATP-CP); an item with NO authored rest at all is treated
+    // as continuous/easy swimming -> Development (his own "either Aerobic Capacity/Development/Regeneration is
+    // fine" latitude, picking the neutral middle one). Deliberately NOT touched, since there's no real
+    // calibration data for it yet: an "Overload" branch within this ladder (Andy named only the 4 anchors
+    // above) -- Overload stays reachable only via its own explicit keyword until he gives a concrete case.
+    // Items with no real distance at all (bare/synthetic fixtures, or a genuinely non-distance line) keep
+    // returning Unclassified exactly as before -- this default only ever fires for a real, distance-bearing set.
+    if(Number(item?.distance)>0){
+      if(item?.restSeconds!=null&&Number(item.restSeconds)>0){
+        const d=Number(item.distance);
+        if(d>=400)return'Threshold';
+        if(d>=200)return'Clearance';
+        if(d>=100)return'Race pace';
+        return'Speed / Max';
+      }
+      return'Development';
+    }
     return'Unclassified';
   }
   function strokeFrom(item){
