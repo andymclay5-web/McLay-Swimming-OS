@@ -21,7 +21,19 @@
   const NOTIFIED_KEY='msos_pwa_last_notified_build';
   function alreadyNotified(build){try{return localStorage.getItem(NOTIFIED_KEY)===String(build||'')}catch{return false}}
   function markNotified(build){try{localStorage.setItem(NOTIFIED_KEY,String(build||''))}catch{}}
-  function armReloadTap(){try{const el=document.querySelector('#toast');if(!el)return;el.style.cursor='pointer';el.title='Tap to reload now';const cleanup=()=>{el.removeEventListener('click',onClick);el.style.cursor='';el.title='';};const onClick=()=>{cleanup();P.apply();};el.addEventListener('click',onClick);setTimeout(cleanup,2200);}catch{}}
+  // 18 Sept 2026 (Andy, live: "I don't know where the reload now button is"): there is no separate button --
+  // the "tap to reload now" affordance IS the toast banner itself. But M.toast() (app.js, shared by every
+  // toast in the app) only ever shows a toast for its own generic 2200ms before fading it, and the original
+  // armReloadTap() detached its click listener on that exact same 2200ms -- so a coach had well under
+  // 2.2 seconds to notice a small banner AND tap it before it silently stopped responding, no different from
+  // it not being there at all. Fix: this specific update-ready toast now overrides M.toast's generic 2200ms
+  // hide timer with a much longer, purpose-specific hold (P.RELOAD_TAP_HOLD_MS, exported so a test can drop
+  // it for speed while exercising the identical code path) -- the banner stays visibly up AND tappable for
+  // the whole hold, not just the first 2.2 seconds of it. Every other toast in the app (unrelated to updates)
+  // is untouched -- this only re-arms the shared #toast element's own hide timer at the moment an update
+  // notice is shown, exactly the way M.toast itself already does on every call.
+  P.RELOAD_TAP_HOLD_MS=15000;
+  function armReloadTap(){try{const el=document.querySelector('#toast');if(!el)return;const hold=P.RELOAD_TAP_HOLD_MS;clearTimeout(M._toast);M._toast=setTimeout(()=>el.classList.remove('show'),hold);el.style.cursor='pointer';el.title='Tap to reload now';const cleanup=()=>{el.removeEventListener('click',onClick);el.style.cursor='';el.title='';};const onClick=()=>{cleanup();P.apply();};el.addEventListener('click',onClick);setTimeout(cleanup,hold);}catch{}}
   P.notify=build=>{if(alreadyNotified(build))return false;markNotified(build);M.toast?.(`MSOS ${String(build||'update').split('-').at(-1)} installed · tap to reload now, or reopen when ready`);armReloadTap();return true;};
   P.check=async()=>{try{const r=await fetch(`./VERSION.txt?build-check=${Date.now()}`,{cache:'no-store'});if(!r.ok)return false;const txt=(await r.text()).trim(),m=txt.match(/v4-[^\s]+/);P.remoteBuild=m?.[0]||txt;P.checkedAt=new Date().toISOString();P.stale=!!(P.remoteBuild&&M.BUILD&&P.remoteBuild!==M.BUILD);if(P.stale)P.notify(P.remoteBuild);return !P.stale}catch{return false}};
   if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('controllerchange',()=>{if(P.controllerChanged)return;P.controllerChanged=true;P.notify(P.remoteBuild||M.BUILD||'new')});
