@@ -47,7 +47,16 @@
   function isAerobic(item){return energyZones(item).length>0||/\b(?:aerobic|capacity|vo2)\b/i.test(rawOf(item));}
   function isIM(item){return E?.stroke?.(item?.stroke)==='IM'||/\bIM\b|individual\s+medley/i.test(rawOf(item));}
   function hasRaceIntent(item){return !!(item?.raceIntent||(item?.repInstructions||[]).some(x=>x?.raceIntent));}
-  function isQuality(item){return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|build|turn|finish)\b/i.test(rawOf(item));}
+  // Real coaching failure this fixes (Andy's real 18 Sept session): a "4 x 50 @ 1:00, Descend 1-4" set was
+  // never recognised as quality/effort work because "descend"/"descending" was missing from this keyword
+  // list -- so it fell all the way to the generic no-comparator reps-reduction fallback, which (correctly,
+  // for an aerobic/endurance set, per Andy's own 16 Sept guidance) stretches the interval to keep the
+  // swimmer's TOTAL time in the water matching the squad's window. Applied to a short descend/quality 50 that
+  // math gave Charlotte a 2:00 cycle on a set the main group swims at 1:00 -- far more rest, proportionally,
+  // than the squad ever gets, breaking the work:rest ratio the set is meant to deliver. Recognising "descend"
+  // here routes it through the quality-specific common-interval / evidence-based performance-plan paths
+  // instead, same as any other effort/quality set.
+  function isQuality(item){return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|build|turn|finish|desc(?:end|ending)?)\b/i.test(rawOf(item));}
   function isKick(item){return /\bkick\b/i.test(rawOf(item));}
   function independentSkill(item){return /\b(?:dive|start|turn|finish)\b/i.test(rawOf(item))&&!/\b(?:kick|fins?|underwater)\b/i.test(rawOf(item));}
   function targetDriven(item){return !!(item?.targetSeconds||hasRaceIntent(item)||item?.zone||(item?.repPattern||[]).length);}
