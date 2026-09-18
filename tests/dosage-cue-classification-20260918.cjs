@@ -129,16 +129,16 @@ function runEndToEndOnAndyRealSession(){
   const dose=D.session(parsed,{},{delivered:false});
   assert.equal(dose.rawMetres,4250,'sanity: Andy\'s real session must still total the same 4250m computed by S.total');
 
+  // NOTE (18 Sept 2026): a second, separate fix landed on top of this one the same day (tests/dosage-
+  // structural-default-20260918.cjs, a distance/rest structural default for items with NO keyword anywhere)
+  // -- so the session's overall Unclassified-% and top-2 banner are no longer THIS fix's own number to assert
+  // (see that other test for the full current picture). What stays specific to the cues fix, and is asserted
+  // here, is that the two "4 x 25 ... Parachute" lines' own cue-authored "15m MAX" is what puts them in Speed
+  // / Max -- that classification happens on the keyword-match path, before the structural default ever runs,
+  // so it is unaffected by anything added after it.
   const speedMax=dose.systems['Speed / Max'];
   assert.ok(speedMax,'dosage report must include a Speed / Max system entry once the Parachute lines are classified');
   assert.equal(speedMax.metres,450,'the two "4 x 25 ... Parachute" main-set lines (each followed by a "15m MAX" cue) across both rounds must contribute 450m to Speed / Max, recovered from Unclassified');
-
-  assert.equal(dose.unclassifiedMetres,3200,'Unclassified metres must drop from 3650m to 3200m once the 450m of cue-tagged Parachute work is correctly classified');
-
-  const ranked=Object.entries(dose.systems).filter(([,v])=>v.pctDose>0).sort((a,b)=>b[1].pctDose-a[1].pctDose);
-  const banner=ranked.slice(0,2).map(([l,v])=>`${l} ${Math.round(v.pctDose)}%`).join(' · ');
-  assert.equal(banner,'Unclassified 55% · Speed / Max 24%',
-    `the Coach Hub/Board "SESSION METHODOLOGY" banner must now read Unclassified 55% · Speed / Max 24% (was Unclassified 75% · Skill / Technical 25% before this fix): got "${banner}"`);
 
   console.log('DOSAGE_CUE_CLASSIFICATION_E2E_PASS');
 }
@@ -146,22 +146,14 @@ function runEndToEndOnAndyRealSession(){
 function runFailBefore(){
   // Fail-before: revert systemFrom to the exact pre-fix raw/zone-only source (ignoring cues entirely) and
   // confirm the same cue-only "MAX" item now wrongly reports Unclassified -- the exact bug Andy hit.
-  const fixedFn=`  function systemFrom(value,item={}){
-    const v=txt(value),base=item.raw||item.text||'';
-    // 18 Sept 2026 (Andy, real session, "I don't see this as 72% unclassified do you?"): a genuine chunk of
-    // that 72% was a coach line like "4 x 25 Small Parachute" with its own real intensity word -- "15m MAX" --
-    // written as the very next line, which the parser correctly keeps as the item's own cue (item.cues), not
-    // as part of item.raw/item.text. systemFrom() never looked at cues at all, so "MAX" sitting one line down
-    // was invisible to the classifier even though it's unambiguously part of what that line means. Same root
-    // pattern as the 17 Sept zone/raw fix (real signal in a field the checker didn't look at) -- extended here
-    // to also check the item's authored cue text, not just its own raw/text.
-    const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);
-    const either=re=>re.test(v)||re.test(raw);`;
-  const buggyFn=`  function systemFrom(value,item={}){
-    const v=txt(value),raw=txt(item.raw||item.text||v);
-    const either=re=>re.test(v)||re.test(raw);`;
-  assert.ok(dosageSrc.includes(fixedFn),'test setup error: could not locate the fixed systemFrom -- its wording changed in a way this test does not expect');
-  const buggySrc=dosageSrc.replace(fixedFn,buggyFn);
+  //
+  // NOTE (18 Sept 2026): rather than re-snapshotting the whole function (fragile -- a later same-day change,
+  // the structural default, was added below this one and would otherwise force yet another update here),
+  // this reverts ONLY the single line that IS this fix's claim: whether `raw` is built from cues or not.
+  const fixedLine=`const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);`;
+  const buggyLine=`const raw=txt(base||v);`;
+  assert.ok(dosageSrc.includes(fixedLine),'test setup error: could not locate the fixed `raw` computation -- its wording changed in a way this test does not expect');
+  const buggySrc=dosageSrc.replace(fixedLine,buggyLine);
   assert.notEqual(buggySrc,dosageSrc,'test setup error: could not construct the reverted buggy source');
 
   const tmpPath=dosagePath.replace(/\.js$/,'.cuefailbefore.tmp.js');
