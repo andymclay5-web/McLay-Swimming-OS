@@ -19,16 +19,37 @@
   const txt=v=>String(v??'').replace(/\s+/g,' ').trim();
   const clone=v=>U.clone?U.clone(v):JSON.parse(JSON.stringify(v));
   const nowDate=()=>new Date();
+  // Real coaching failure this fixes (Andy, 17 Sept 2026, looking at a real session's dosage/methodology
+  // report showing 93-95% "Unclassified"): every check below used to test `v||raw` -- a single string
+  // picked by which of the two was non-empty, NOT both. `v` is the item's own `zone` field; `raw` is its
+  // authored text. Whenever an item had ANY non-empty zone value that didn't happen to match one of these
+  // keywords exactly (a squad-authored zone tag spelled differently, a stray default, "Technical" as a
+  // zone label rather than a recognised keyword, an HR-range string, etc.), `v||raw` picked that zone value
+  // and `raw` -- the coach's own actual description, e.g. "150 Easy" or "4 x dive 15 max" -- was never even
+  // looked at, silently discarding real classification signal that was sitting right there in the item's
+  // own text. Now both `v` and `raw` are checked independently, so a real keyword in either one is enough --
+  // fixing this alone should recover a meaningful share of what's currently showing as "Unclassified" for
+  // items that already say "Easy"/"Max"/etc. in their own text but carry an unrecognised zone value.
+  // Two gaps NOT fixed here, deliberately, since they need Andy's own input rather than a guess: (1) plain
+  // HR-range text ("HR 170-180", "Heart Rate 170—180") still isn't recognised at all -- the Rushton Cone
+  // HR/SR reference (engines/aerobic.js's RUSHTON table) exists but currently only runs forward (an
+  // already-assigned zone -> HR/SR guidance to aim for), not in reverse (an authored HR figure -> which
+  // zone that implies), and the exact boundary rules for that reverse mapping are a coaching call, not a
+  // code one; (2) a descending set ("Desc 1-3") genuinely spans a RANGE of zones by its own nature, and a
+  // single classification for the whole item is inherently wrong for it -- proper handling needs per-rep
+  // zone data (dosage.js's addSet/repSystem already supports this via item.repPattern, if the parser
+  // populates it for descending sets) rather than a single system-wide label.
   function systemFrom(value,item={}){
     const v=txt(value),raw=txt(item.raw||item.text||v);
-    if(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i.test(v||raw))return'Regeneration';
-    if(/\b(?:development|\bdev\b)\b/i.test(v||raw))return'Development';
-    if(/\b(?:overload|\bol\b)\b/i.test(v||raw))return'Overload';
-    if(/\b(?:threshold|\bthr\b)\b/i.test(v||raw))return'Threshold';
-    if(/\b(?:clearance|\bcl\b)\b/i.test(v||raw))return'Clearance';
-    if(item?.raceIntent||/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i.test(v||raw))return'Race pace';
-    if(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i.test(v||raw))return'Speed / Max';
-    if(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i.test(v||raw))return'Skill / Technical';
+    const either=re=>re.test(v)||re.test(raw);
+    if(either(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i))return'Regeneration';
+    if(either(/\b(?:development|\bdev\b)\b/i))return'Development';
+    if(either(/\b(?:overload|\bol\b)\b/i))return'Overload';
+    if(either(/\b(?:threshold|\bthr\b)\b/i))return'Threshold';
+    if(either(/\b(?:clearance|\bcl\b)\b/i))return'Clearance';
+    if(item?.raceIntent||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
+    if(either(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i))return'Speed / Max';
+    if(either(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i))return'Skill / Technical';
     return'Unclassified';
   }
   function strokeFrom(item){

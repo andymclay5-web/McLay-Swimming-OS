@@ -51,6 +51,19 @@
   function isKick(item){return /\bkick\b/i.test(rawOf(item));}
   function independentSkill(item){return /\b(?:dive|start|turn|finish)\b/i.test(rawOf(item))&&!/\b(?:kick|fins?|underwater)\b/i.test(rawOf(item));}
   function targetDriven(item){return !!(item?.targetSeconds||hasRaceIntent(item)||item?.zone||(item?.repPattern||[]).length);}
+  // Andy (17 Sept 2026, coaching-judgment call, confirmed after comparing his own whiteboard to the Board):
+  // "They need to do the same as the main group but reduced dist to have it take the same time, reduced reps
+  // when set integrity can be maintained." Real case: a 4x400 with a per-round stroke rotation (#1 IM, #2 Fr,
+  // #3 IM, #4 Choice) gave a modified swimmer 2x400/3x400 -- fewer full-length rounds, silently DROPPING
+  // whole stroke exposures (e.g. losing the Choice round entirely) -- when his whiteboard wanted 4x200/4x300:
+  // every round kept, each one just shorter. A set where each rep/round carries genuinely different authored
+  // content (item.pattern with more than one distinct label -- exactly this "#1 IM / #2 Fr / #3 IM / #4
+  // Choice" shape) loses real, distinct, intended stimulus the moment a rep is dropped -- that is what "set
+  // integrity" means here. A set where every rep is the same content (plain "6x100 Threshold", or a uniform
+  // "4x200 IM" with no per-round breakdown) has no such risk, and reps CAN safely reduce there -- unaffected
+  // by this. Distance-reduction keeping the same reps and the same authored interval automatically preserves
+  // the group's total time (reps x interval is unchanged), which is exactly the other half of Andy's rule.
+  function hasDistinctRepPattern(item){const rows=(item?.pattern||[]).filter(x=>x?.text&&Number(x.count)>0);if(rows.length<2)return false;return new Set(rows.map(x=>text(x.text).toLowerCase())).size>1;}
   function sameTeamExposure(item){const d=Number(item?.distance)||0,r=Math.max(1,Number(item?.reps)||1),metres=d*r,kick=isKick(item);if(isAerobic(item)||d<=0||d>100||metres>300)return false;if(kick&&!(d<=25&&isQuality(item)))return false;return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|drill|scull|skill|build|turn|finish)\b/i.test(rawOf(item));}
 
   function safeReps(reps,distance,ratio,session,returnToStart){
@@ -174,6 +187,11 @@
         if(key==='charlottemurphy'&&baseDist===50&&isKick(item)){const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps)reshapeWithReps(out,item,reps);}
         const evidenceDistance=relativeDistance(item,evidence,session,p,{protectIM:im}),preservePattern=!!item?.repeatBreakdown||/\bdesc(?:end|ending)?(?:\s+stroke\s+count|\s+sc|\s+1\s*[-–—])/i.test(raw);
         if(evidenceDistance){reshapeWithDistance(out,item,evidenceDistance,session);if(individualStroke)out.stroke=individualStroke;preserveAuthoredTiming(out,item,'Distance adjusted from relative performance evidence so the swimmer can keep common starts');out.adaptationReason=`Relative ${evidence.kind} · ${Math.round(evidence.speedFactor*100)}% squad speed · ${baseDist}→${evidenceDistance} to preserve group rhythm`;out.adaptationConfidence=evidence.confidence;}
+        else if(baseReps>1&&hasDistinctRepPattern(item)){
+          const labels=[...new Set(item.pattern.filter(x=>x?.text).map(x=>text(x.text)))],desired=nearestPracticalDistance(baseDist*p.ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
+          if(desired<baseDist){reshapeWithDistance(out,item,desired,session);if(individualStroke)out.stroke=individualStroke;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke; dropping a round would drop that stimulus entirely, so distance is reduced instead and every round is kept at the squad send-off');out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · ${baseDist}→${desired} so every round stays represented at the squad's time`;out.adaptationConfidence='low';}
+          else{out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · no safe smaller distance available, authored distance kept`;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke and could not be safely shortened further; authored distance/interval kept so every round stays represented');}
+        }
         else if((im||hasRaceIntent(item)||quality||individualStroke)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){const plan=performancePlan(item,ath,state,session,evidence);applyPerformancePlan(out,item,plan,im?'Modified IM':individualStroke?`Modified ${individualStroke}`:'Relative quality');if(individualStroke)out.stroke=individualStroke;}
         else if(im){const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);alignIMTeamWindow(out,item,baseReps,reps);}else preserveAuthoredTiming(out,item,'Complete IM units retained; authored interval remains valid');out.adaptationReason='Complete IM units retained · load adjusted by reps while preserving the squad set window';out.adaptationConfidence='low';}
         else if(isKick(item)&&baseDist>=100&&Number(item.cycleSeconds)>0){const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);alignTimedKickWindow(out,item,baseReps,reps);out.adaptationReason=`Kick stimulus · ${baseReps}→${reps} reps · authored ${baseDist}m repeat retained · individual cycle aligned to squad window`;}}
