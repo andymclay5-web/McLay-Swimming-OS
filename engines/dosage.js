@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20260825a'};
+  const D=M.dosageEngine={build:'v4-dosage-20260918a'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -40,7 +40,15 @@
   // zone data (dosage.js's addSet/repSystem already supports this via item.repPattern, if the parser
   // populates it for descending sets) rather than a single system-wide label.
   function systemFrom(value,item={}){
-    const v=txt(value),raw=txt(item.raw||item.text||v);
+    const v=txt(value),base=item.raw||item.text||'';
+    // 18 Sept 2026 (Andy, real session, "I don't see this as 72% unclassified do you?"): a genuine chunk of
+    // that 72% was a coach line like "4 x 25 Small Parachute" with its own real intensity word -- "15m MAX" --
+    // written as the very next line, which the parser correctly keeps as the item's own cue (item.cues), not
+    // as part of item.raw/item.text. systemFrom() never looked at cues at all, so "MAX" sitting one line down
+    // was invisible to the classifier even though it's unambiguously part of what that line means. Same root
+    // pattern as the 17 Sept zone/raw fix (real signal in a field the checker didn't look at) -- extended here
+    // to also check the item's authored cue text, not just its own raw/text.
+    const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);
     const either=re=>re.test(v)||re.test(raw);
     if(either(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i))return'Regeneration';
     if(either(/\b(?:development|\bdev\b)\b/i))return'Development';
