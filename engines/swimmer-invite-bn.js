@@ -27,6 +27,11 @@
   const QR_ATTEMPT_KEY='msos_qr_last_attempt';
   function writeAttempt(patch){try{const cur=JSON.parse(localStorage.getItem(QR_ATTEMPT_KEY)||'null')||{};localStorage.setItem(QR_ATTEMPT_KEY,JSON.stringify({...cur,...patch}));}catch{}}
   X.lastAttemptStatus=()=>{try{return JSON.parse(localStorage.getItem(QR_ATTEMPT_KEY)||'null')}catch{return null}};
+  // 19 Sept 2026 (third same-day freeze on Matthew Robertson -- see the full account further down, at the
+  // point this is actually used): whichever "Generate" attempt is currently allowed to touch the screen or
+  // write msos_qr_last_attempt. Starting a new attempt, or closing its modal, cancels whatever this was
+  // previously pointing at, so at most one attempt's ticker/breadcrumb writes are ever live at once.
+  let activeGeneration=null;
   const esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??''),text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const selected=()=>{const id=M.state?.settings?.selectedAthleteId;return(M.state?.athletes||[]).find(a=>a.id===id)||null;};
   const cfg=()=>M.store?.config?.()||g.MCLAY_CONFIG||{},auth=()=>M.store?.auth?.()||{};
@@ -130,8 +135,32 @@
     // in one place, with no special-case logic of its own.
     M.nav?.openLayer?.('modal');
     const status=wrap.querySelector('[data-bn-status]'),qr=wrap.querySelector('[data-bn-qr]'),urlBox=wrap.querySelector('[data-bn-url]'),copy=wrap.querySelector('[data-bn-copy]');let activeUrl='';const setStatus=(msg,kind='')=>{status.textContent=msg;status.className=`bn-access-status ${kind}`};
-    const closeModal=()=>{wrap.remove();M.nav?.dismissLayer?.();};
-    wrap.querySelector('[data-bn-close]').onclick=closeModal;const genBtn=wrap.querySelector('[data-bn-generate]');genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{let wakeLock=null;writeAttempt({athleteId:String(a.id||''),athleteName:a.full_name||'',step:'starting',tickSeconds:0,startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),resolvedAt:null,outcome:null,message:''});
+    let myGeneration=null;
+    const closeModal=()=>{myGeneration?.cancel?.();wrap.remove();M.nav?.dismissLayer?.();};
+    wrap.querySelector('[data-bn-close]').onclick=closeModal;const genBtn=wrap.querySelector('[data-bn-generate]');genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;
+      // Real coaching failure this fixes (19 Sept 2026, third same-day freeze on Matthew Robertson): the ONLY
+      // guard against two "Generate" flows running at once was `genBtn.disabled`, scoped to THIS modal's one
+      // button element. Closing the modal (the Close button, or the phone's back button, which routes here
+      // via M.nav's layer system) never cancelled an in-flight generate() call -- its ticker, wake lock,
+      // visibility listener and pending network/RPC calls all kept running in the background for up to the
+      // full GENERATE_TIMEOUT_MS (2 minutes), completely invisibly. Re-opening "Give swimmer access" and
+      // tapping Generate again built a BRAND NEW modal with a freshly-enabled genBtn that had zero awareness
+      // of that still-running old attempt -- both then wrote to the SAME shared msos_qr_last_attempt
+      // breadcrumb key on every tick, so whichever one wrote last simply overwrote the other's real progress.
+      // A genuinely slow-but-working NEW attempt could have its status silently stomped by an OLD, already-
+      // abandoned attempt re-stamping its own frozen step every second -- making a real recovery look
+      // indistinguishable from an eternal freeze, and wasting a full duplicate evidence-fetch + RPC round
+      // trip every time Andy retried, which matches "same old shit" recurring same-day, same-build, same
+      // exact step far better than a fresh, unrelated freeze each time would. activeGeneration (declared
+      // above, module-level) is cancelled the instant a newer attempt starts or its own modal closes, and
+      // every write below now checks its own attempt is still the active one first -- a superseded attempt
+      // can never again touch the screen or corrupt a newer attempt's diagnostics.
+      activeGeneration?.cancel?.();
+      let wakeLock=null,tickTimer=null,onVisibilityChange=null;
+      const gen={cancelled:false};
+      gen.cancel=()=>{if(gen.cancelled)return;gen.cancelled=true;try{clearInterval(tickTimer)}catch{}try{onVisibilityChange&&document.removeEventListener('visibilitychange',onVisibilityChange)}catch{}try{wakeLock?.release?.()}catch{}wakeLock=null;};
+      activeGeneration=gen;myGeneration=gen;
+      try{writeAttempt({athleteId:String(a.id||''),athleteName:a.full_name||'',step:'starting',tickSeconds:0,startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),resolvedAt:null,outcome:null,message:''});
       // Confirmed root cause (19 Sept 2026): Andy's screenshot showed the modal frozen at "Checking swimmer
       // evidence... (5/5 * training_test_types) (0s)" for Matthew Robertson; live Supabase logs proved every
       // evidence job had already returned in under 2.5s and no RPC after that point ever reached the network,
@@ -164,11 +193,12 @@
       // moment(s) the tab's own visibility changed (hidden = truly backgrounded, not just screen dimming).
       const wakeLockSupported=!!(navigator.wakeLock&&typeof navigator.wakeLock.request==='function');
       try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch{}
+      if(gen.cancelled)return;
       writeAttempt({wakeLockSupported,wakeLockHeld:!!wakeLock,wakeLockReleasedEarly:false});
-      try{wakeLock?.addEventListener?.('release',()=>writeAttempt({wakeLockReleasedEarly:true,wakeLockReleasedAt:new Date().toISOString()}),{once:true});}catch{}
-      const onVisibilityChange=()=>writeAttempt({lastVisibilityState:document.visibilityState,lastVisibilityChangeAt:new Date().toISOString()});
+      try{wakeLock?.addEventListener?.('release',()=>{if(!gen.cancelled)writeAttempt({wakeLockReleasedEarly:true,wakeLockReleasedAt:new Date().toISOString()});},{once:true});}catch{}
+      onVisibilityChange=()=>{if(!gen.cancelled)writeAttempt({lastVisibilityState:document.visibilityState,lastVisibilityChangeAt:new Date().toISOString()});};
       try{document.addEventListener('visibilitychange',onVisibilityChange);}catch{}
-      let step='Checking swimmer evidence',tickTimer=null;
+      let step='Checking swimmer evidence';
       // Real coaching failure this guards against: Andy reported the modal frozen on the exact same status
       // text for a full minute even with every step now individually bounded well under that -- with no way
       // for either of us to tell, from the screenshot alone, whether the app was still legitimately working
@@ -177,8 +207,20 @@
       // and the step is just slow (and will still resolve or time out on its own bound); if the seconds
       // freeze too, that is a materially different, more serious problem than any of the timeouts above can
       // fix, and is itself the diagnostic we need.
-      const note=msg=>{clearInterval(tickTimer);step=msg;const t0=Date.now();const render=()=>{const secs=Math.max(0,Math.round((Date.now()-t0)/1000));setStatus(`${msg} (${secs}s)`);writeAttempt({step:msg,tickSeconds:secs,updatedAt:new Date().toISOString()});};render();tickTimer=setInterval(render,X.STATUS_TICK_MS);};
-      try{await withTimeout((async()=>{note('Checking swimmer evidence…');const prepared=await M.swimmerPerformanceBM?.prepareAthlete?.(a,{onJob:(name,i,total)=>note(i&&total?`Checking swimmer evidence… (${i}/${total} · ${name})`:`Building ${String(name||'').replace(/_/g,' ')}…`)});if(prepared?.completion&&prepared.completion.ok===false)throw new Error(`Could not verify complete swimmer evidence: ${(prepared.completion.errors||[prepared.completion.error]).filter(Boolean).join(' · ')||'connection unavailable'}`);note('Checking swimmer readiness…');const ready=M.swimmerPerformanceBM?.readinessFor?.(a)||{ok:true,issues:[]};if(!ready.ok)throw new Error(`Swimmer access held: ${ready.issues.join(' ')}`);note('Assembling private swimmer view…');const portal=payloadFor(a,name=>note(`Assembling private swimmer view… (${String(name||'').replace(/_/g,' ')})`));if(!portal.performance?.events?.length)throw new Error('Swimmer access held: no verified performance events are available.');if(!portal.session?.blocks?.length)throw new Error('Swimmer access held: no current individual session is published.');if(portal.session.blocks.some(b=>(b.items||[]).some(i=>!i.id)))throw new Error('Swimmer access held: one or more session lines do not have stable item identity for Challenge / Edit logging.');note('Establishing secure owner access…');await rpc('msos_bootstrap_owner',{});note('Checking Challenge / Edit / Finish link…');await verifySessionInteractionLayer(a,portal.session.id);note(`Verified ${portal.performance.events.length} events + current session + feedback link. Publishing private view…`);await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:portal});const inv=await rpc('msos_create_swimmer_invite',{p_athlete_id:String(a.id),p_minutes:15});activeUrl=new URL('swimmer-portal.html',location.href);activeUrl.searchParams.set('invite',inv.invite_token);activeUrl=activeUrl.toString();urlBox.textContent=activeUrl;urlBox.hidden=false;copy.hidden=false;qr.innerHTML='';note('Loading QR renderer…');const Q=await loadQr();new Q(qr,{text:activeUrl,width:240,height:240,correctLevel:Q.CorrectLevel?.M});setStatus(`Ready · session + ${portal.performance.events.length} events + feedback link verified · one scan only · expires ${new Date(inv.expires_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`,'ok');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'ok',step:'done',message:''});})(),X.GENERATE_TIMEOUT_MS,()=>step);}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){qr.innerHTML='<span class="muted">QR not generated</span>';setStatus(err?.message||String(err),'error');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'error',message:err?.message||String(err)});}finally{genBtn.disabled=false}};copy.onclick=async()=>{if(!activeUrl)return;try{await navigator.clipboard.writeText(activeUrl);setStatus('Link copied.','ok')}catch{setStatus('Copy failed — use the QR code.','error')}};const revokeBtn=wrap.querySelector('[data-bn-revoke]');revokeBtn.onclick=async()=>{if(revokeBtn.disabled)return;revokeBtn.disabled=true;try{const n=await rpc('msos_revoke_swimmer_devices',{p_athlete_id:String(a.id)});setStatus(`${Number(n)||0} swimmer device${Number(n)===1?'':'s'} revoked.`,'ok')}catch(err){setStatus(err?.message||String(err),'error')}finally{revokeBtn.disabled=false}};}
+      const note=msg=>{if(gen.cancelled)return;clearInterval(tickTimer);step=msg;const t0=Date.now();const render=()=>{if(gen.cancelled)return;const secs=Math.max(0,Math.round((Date.now()-t0)/1000));setStatus(`${msg} (${secs}s)`);writeAttempt({step:msg,tickSeconds:secs,updatedAt:new Date().toISOString()});};render();tickTimer=setInterval(render,X.STATUS_TICK_MS);};
+      // 19 Sept 2026 (third same-day freeze): every prior breadcrumb showed the SAME last step --
+      // "Checking swimmer evidence... (5/5 * training_test_types)" -- with every checkpoint after it
+      // (the reference-cache save, the T400 hydrate, the cache invalidation, the pathway model build, each
+      // of payloadFor's six sub-steps) never once appearing, across three separate occurrences. note() above
+      // writes the breadcrumb only via setStatus+render, so if a stale/cancelled attempt's ticker (the exact
+      // bug this whole change fixes) was overwriting a live attempt's step every second, or if setStatus
+      // itself ever threw for any reason, every write downstream of that point would silently vanish with
+      // no trace, indistinguishable from the app never reaching that line at all. lastCheckpoint is written
+      // directly here, before note() touches the screen at all, and does not depend on the ticker or on
+      // setStatus succeeding -- so if this same gap ever shows up again, we can finally tell whether the
+      // code genuinely never got there, or got there fine and only the on-screen status was lost.
+      const mark=name=>{if(gen.cancelled)return;try{writeAttempt({lastCheckpoint:String(name||''),lastCheckpointAt:new Date().toISOString()});}catch{}};
+      try{await withTimeout((async()=>{note('Checking swimmer evidence…');const prepared=await M.swimmerPerformanceBM?.prepareAthlete?.(a,{onJob:(name,i,total)=>{mark(name);note(i&&total?`Checking swimmer evidence… (${i}/${total} · ${name})`:`Building ${String(name||'').replace(/_/g,' ')}…`);}});if(gen.cancelled)return;if(prepared?.completion&&prepared.completion.ok===false)throw new Error(`Could not verify complete swimmer evidence: ${(prepared.completion.errors||[prepared.completion.error]).filter(Boolean).join(' · ')||'connection unavailable'}`);mark('readiness_check');note('Checking swimmer readiness…');const ready=M.swimmerPerformanceBM?.readinessFor?.(a)||{ok:true,issues:[]};if(!ready.ok)throw new Error(`Swimmer access held: ${ready.issues.join(' ')}`);note('Assembling private swimmer view…');const portal=payloadFor(a,name=>{mark(`payload:${name}`);note(`Assembling private swimmer view… (${String(name||'').replace(/_/g,' ')})`);});if(gen.cancelled)return;if(!portal.performance?.events?.length)throw new Error('Swimmer access held: no verified performance events are available.');if(!portal.session?.blocks?.length)throw new Error('Swimmer access held: no current individual session is published.');if(portal.session.blocks.some(b=>(b.items||[]).some(i=>!i.id)))throw new Error('Swimmer access held: one or more session lines do not have stable item identity for Challenge / Edit logging.');mark('bootstrap_owner');note('Establishing secure owner access…');await rpc('msos_bootstrap_owner',{});if(gen.cancelled)return;mark('interaction_layer');note('Checking Challenge / Edit / Finish link…');await verifySessionInteractionLayer(a,portal.session.id);if(gen.cancelled)return;mark('publish_payload');note(`Verified ${portal.performance.events.length} events + current session + feedback link. Publishing private view…`);await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:portal});if(gen.cancelled)return;mark('create_invite');const inv=await rpc('msos_create_swimmer_invite',{p_athlete_id:String(a.id),p_minutes:15});if(gen.cancelled)return;activeUrl=new URL('swimmer-portal.html',location.href);activeUrl.searchParams.set('invite',inv.invite_token);activeUrl=activeUrl.toString();urlBox.textContent=activeUrl;urlBox.hidden=false;copy.hidden=false;qr.innerHTML='';mark('load_qr');note('Loading QR renderer…');const Q=await loadQr();if(gen.cancelled)return;new Q(qr,{text:activeUrl,width:240,height:240,correctLevel:Q.CorrectLevel?.M});setStatus(`Ready · session + ${portal.performance.events.length} events + feedback link verified · one scan only · expires ${new Date(inv.expires_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`,'ok');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'ok',step:'done',message:''});})(),X.GENERATE_TIMEOUT_MS,()=>step);}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){if(!gen.cancelled){qr.innerHTML='<span class="muted">QR not generated</span>';setStatus(err?.message||String(err),'error');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'error',message:err?.message||String(err)});}}finally{if(activeGeneration===gen)activeGeneration=null;if(myGeneration===gen)myGeneration=null;genBtn.disabled=false}};copy.onclick=async()=>{if(!activeUrl)return;try{await navigator.clipboard.writeText(activeUrl);setStatus('Link copied.','ok')}catch{setStatus('Copy failed — use the QR code.','error')}};const revokeBtn=wrap.querySelector('[data-bn-revoke]');revokeBtn.onclick=async()=>{if(revokeBtn.disabled)return;revokeBtn.disabled=true;try{const n=await rpc('msos_revoke_swimmer_devices',{p_athlete_id:String(a.id)});setStatus(`${Number(n)||0} swimmer device${Number(n)===1?'':'s'} revoked.`,'ok')}catch(err){setStatus(err?.message||String(err),'error')}finally{revokeBtn.disabled=false}};}
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(installButton);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
