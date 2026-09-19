@@ -53,26 +53,35 @@ const X=global.MSOS4.swimmerPerformanceBM;
   ]);
 
   assert.ok(result?.model,'prepareAthlete must still return a built model');
-  assert.ok(calls.length>=2,`expected the six indexed evidence-job calls plus the new pathway_model call, got ${JSON.stringify(calls)}`);
+  // 19 Sept 2026: three more non-indexed checkpoint calls (refs_save/t400_hydrate/cache_invalidate) now
+  // fire between the indexed evidence-job calls and pathway_model -- see
+  // tests/swimmer-evidence-progress-callback-20260910.cjs for their own dedicated coverage. This test only
+  // cares that pathway_model is still the LAST call and still non-indexed, and that at least one genuinely
+  // indexed evidence-job call happened before the run of non-indexed checkpoint calls that precede it.
+  assert.ok(calls.length>=2,`expected the indexed evidence-job calls plus the new pathway_model call, got ${JSON.stringify(calls)}`);
 
   const last=calls[calls.length-1];
   assert.equal(last.name,'pathway_model','the final onJob call must be the new, distinctly-named pathway_model marker');
   assert.equal(last.i,undefined,'the pathway_model call must NOT carry an index -- that is what tells the UI to render it differently from an evidence-job step');
   assert.equal(last.total,undefined,'the pathway_model call must NOT carry a total -- same reasoning as the index check above');
 
-  const indexed=calls.slice(0,-1);
+  const indexed=calls.filter(c=>Number.isInteger(c.i)&&Number.isInteger(c.total));
   assert.ok(indexed.length>=1,'fixture sanity: at least one indexed evidence-job call must have happened before the pathway_model call');
-  indexed.forEach(c=>assert.ok(Number.isInteger(c.i)&&Number.isInteger(c.total),`every evidence-job call before pathway_model must still carry a numeric index/total, got ${JSON.stringify(c)}`));
+  assert.ok(calls.indexOf(indexed[indexed.length-1])<calls.length-1,'the last indexed evidence-job call must come before the pathway_model call');
 
   // The rendering side: engines/swimmer-invite-bn.js must format a non-indexed onJob call distinctly from an
   // indexed one, and must also bracket the payload-assembly step (which runs after prepareAthlete resolves,
   // and was previously invisible the same way buildModel used to be) with its own status line.
   const invitePath=path.join(__dirname,'..','engines','swimmer-invite-bn.js');
   const inviteSrc=fs.readFileSync(invitePath,'utf8');
-  assert.match(inviteSrc,/onJob:\(name,i,total\)=>note\(i&&total\?`Checking swimmer evidence…[^`]*`:`Building \$\{String\(name\|\|''\)\.replace\(\/_\/g,' '\)\}…`\)/,
+  // 19 Sept 2026 (third same-day freeze): onJob's callback now also fires a raw, note()/setStatus-independent
+  // `mark(name)` breadcrumb write first (see qr-generate-concurrent-attempt-guard-20260919.cjs and the
+  // adjacent comment in the real handler for why) -- the actual on-screen formatting rule this test pins
+  // (indexed evidence-job steps vs. a plain "Building <name>..." line) is unchanged and still checked here.
+  assert.match(inviteSrc,/onJob:\(name,i,total\)=>\{mark\(name\);note\(i&&total\?`Checking swimmer evidence…[^`]*`:`Building \$\{String\(name\|\|''\)\.replace\(\/_\/g,' '\)\}…`\);\}/,
     'swimmer-invite-bn.js must format a non-indexed onJob call as "Building <name>..." distinctly from the indexed evidence-job status');
-  assert.match(inviteSrc,/note\('Assembling private swimmer view…'\);const portal=payloadFor\(a\);/,
-    'swimmer-invite-bn.js must give the payload-assembly step (payloadFor) its own status line, right before it runs');
+  assert.match(inviteSrc,/note\('Assembling private swimmer view…'\);const portal=payloadFor\(a,name=>\{mark\(`payload:\$\{name\}`\);note\(/,
+    'swimmer-invite-bn.js must give the payload-assembly step (payloadFor) its own status line, right before it runs, and must wire a per-sub-step callback into it');
 
   console.log('SWIMMER_GENERATE_QR_MODEL_PROGRESS_PASS', JSON.stringify(calls.map(c=>c.name)));
 

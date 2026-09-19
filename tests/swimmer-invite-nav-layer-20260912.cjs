@@ -45,7 +45,11 @@ function checkNavLayerWiring(src){
   // 2. The Close button must dismiss through the same nav layer path (dismissLayer), not a bare wrap.remove()
   //    with no interaction with the nav/history system -- that leaves an orphaned history entry behind every
   //    time the modal is closed, which is exactly what forced Andy into pressing back several times.
-  assert.match(src,/const closeModal=\(\)=>\{wrap\.remove\(\);M\.nav\?\.dismissLayer\?\.\(\);\};/,
+  // 19 Sept 2026: closeModal now also cancels this modal's own in-flight generate() attempt first (see
+  // qr-generate-concurrent-attempt-guard-20260919.cjs) -- an unrelated, later fix that must not reopen the
+  // orphaned-history-entry bug this test exists to pin, so the actual remove()+dismissLayer() pairing is
+  // still checked exactly, just with that optional prefix allowed in front of it.
+  assert.match(src,/const closeModal=\(\)=>\{(?:myGeneration\?\.cancel\?\.\(\);)?wrap\.remove\(\);M\.nav\?\.dismissLayer\?\.\(\);\};/,
     'modal() must define a closeModal helper that removes the wrapper AND calls M.nav?.dismissLayer?.() -- a bare wrap.remove() with no dismissLayer call leaves a stray, un-popped history entry behind, which is what forced multiple back-button presses to actually escape the modal');
   assert.match(src,/\[data-bn-close\]'\)\.onclick=closeModal;/,
     'the Close button must be wired to the closeModal helper (not a bare wrap.remove()) so tapping it goes through the same dismissal path as every other modal in the app');

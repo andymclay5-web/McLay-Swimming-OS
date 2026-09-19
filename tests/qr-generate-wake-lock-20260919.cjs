@@ -276,26 +276,30 @@ async function runVisibilityChangeIsRecordedAndCleanedUp(){
 }
 
 function runFailBefore(){
-  // Fail-before: revert to the exact pre-instrumentation handler opening (no wake-lock request/release, no
-  // breadcrumb fields, no visibilitychange wiring at all) and confirm none of it is present -- this is what
-  // this test would have caught before today's two rounds of work existed.
-  const fixedOpen="genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{let wakeLock=null;writeAttempt(";
-  assert.ok(realSrc.includes(fixedOpen),'test setup error: could not locate the fixed genBtn.onclick opening in the real source -- its wording changed in a way this test does not expect');
-  const buggyOpen="genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{writeAttempt(";
-
-  const fixedAcquire="      const wakeLockSupported=!!(navigator.wakeLock&&typeof navigator.wakeLock.request==='function');\n      try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch{}\n      writeAttempt({wakeLockSupported,wakeLockHeld:!!wakeLock,wakeLockReleasedEarly:false});\n      try{wakeLock?.addEventListener?.('release',()=>writeAttempt({wakeLockReleasedEarly:true,wakeLockReleasedAt:new Date().toISOString()}),{once:true});}catch{}\n      const onVisibilityChange=()=>writeAttempt({lastVisibilityState:document.visibilityState,lastVisibilityChangeAt:new Date().toISOString()});\n      try{document.addEventListener('visibilitychange',onVisibilityChange);}catch{}\n      let step='Checking swimmer evidence',tickTimer=null;";
+  // Fail-before: revert to the exact pre-instrumentation handler (no wake-lock request/release, no breadcrumb
+  // fields, no visibilitychange wiring at all) and confirm none of it is present -- this is what this test
+  // would have caught before today's rounds of work existed. `wakeLock`/`tickTimer`/`onVisibilityChange` are
+  // now declared once, earlier, as part of the 19 Sept concurrency-guard fix (a separate, later change --
+  // see swimmer-invite-double-generate-20260907.cjs) rather than right before this block, so there is no
+  // longer a meaningful "buggyOpen" variant of that declaration to revert here; only the acquire/release
+  // logic itself is this fix's own responsibility.
+  const fixedAcquire="const wakeLockSupported=!!(navigator.wakeLock&&typeof navigator.wakeLock.request==='function');\n      try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch{}\n      if(gen.cancelled)return;\n      writeAttempt({wakeLockSupported,wakeLockHeld:!!wakeLock,wakeLockReleasedEarly:false});\n      try{wakeLock?.addEventListener?.('release',()=>{if(!gen.cancelled)writeAttempt({wakeLockReleasedEarly:true,wakeLockReleasedAt:new Date().toISOString()});},{once:true});}catch{}\n      onVisibilityChange=()=>{if(!gen.cancelled)writeAttempt({lastVisibilityState:document.visibilityState,lastVisibilityChangeAt:new Date().toISOString()});};\n      try{document.addEventListener('visibilitychange',onVisibilityChange);}catch{}\n      let step='Checking swimmer evidence';";
   assert.ok(realSrc.includes(fixedAcquire),'test setup error: could not locate the wake-lock acquisition + breadcrumb + visibilitychange block in the real source');
-  const buggyAcquire="      let step='Checking swimmer evidence',tickTimer=null;";
+  const buggyAcquire="let step='Checking swimmer evidence';";
 
   const fixedRelease="}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){";
   assert.ok(realSrc.includes(fixedRelease),'test setup error: could not locate the wake-lock/listener release block in the real source');
   const buggyRelease="}finally{clearInterval(tickTimer);}}catch(err){";
 
-  let buggySrc=realSrc.replace(fixedOpen,buggyOpen).replace(fixedAcquire,buggyAcquire).replace(fixedRelease,buggyRelease);
+  let buggySrc=realSrc.replace(fixedAcquire,buggyAcquire).replace(fixedRelease,buggyRelease);
   assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted buggy source');
   assert.ok(!buggySrc.includes("navigator.wakeLock?.request?.('screen')"),'test setup error: reverted source must not still request a wake lock');
-  assert.ok(!buggySrc.includes('wakeLock?.release?.()'),'test setup error: reverted source must not still release a wake lock');
-  assert.ok(!buggySrc.includes('visibilitychange'),'test setup error: reverted source must not still wire a visibilitychange listener');
+  // Checked against the handler's OWN release call specifically (it awaits the lock's release on every exit
+  // path) rather than the bare substring: the separate, later 19 Sept concurrency-guard fix added its own
+  // small, synchronous (non-awaited) `wakeLock?.release?.()`/`removeEventListener('visibilitychange',...)`
+  // cleanup inside gen.cancel() that is not part of THIS fix and must stay intact after reverting it.
+  assert.ok(!buggySrc.includes('await wakeLock?.release?.()'),'test setup error: reverted source must not still release a wake lock');
+  assert.ok(!buggySrc.includes("addEventListener('visibilitychange'"),'test setup error: reverted source must not still wire a visibilitychange listener');
 
   const tmpPath=invitePath.replace(/\.js$/,'.wakelockfailbefore.tmp.js');
   fs.writeFileSync(tmpPath,buggySrc);

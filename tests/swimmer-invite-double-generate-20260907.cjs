@@ -26,17 +26,35 @@ function assertGuarded(src,selector,varName){
   const declRe=new RegExp(`const ${varName}=wrap\\.querySelector\\('\\[${selector}\\]'\\);`);
   assert.match(src,declRe,`${varName} must be captured as its own reference (not re-queried inline) so the same element can be re-enabled later`);
 
-  const handlerRe=new RegExp(`${varName}\\.onclick=async\\(\\)=>\\{if\\(${varName}\\.disabled\\)return;${varName}\\.disabled=true;try\\{`);
-  assert.match(src,handlerRe,`${varName}'s click handler must bail out immediately when already disabled, then disable itself as the FIRST statement before any awaited work -- otherwise two taps in quick succession (or one delayed tap plus a retry) both start an independent request chain`);
+  const guardRe=new RegExp(`${varName}\\.onclick=async\\(\\)=>\\{if\\(${varName}\\.disabled\\)return;${varName}\\.disabled=true;`);
+  assert.match(src,guardRe,`${varName}'s click handler must bail out immediately when already disabled, then disable itself as the FIRST statement before any awaited work -- otherwise two taps in quick succession (or one delayed tap plus a retry) both start an independent request chain`);
+  const guardEnd=src.match(guardRe).index+src.match(guardRe)[0].length;
+
+  // 19 Sept 2026 (genBtn only, third same-day freeze fix): genBtn now runs some additional SYNCHRONOUS
+  // setup (cancelling a still-running previous attempt) between disabling the button and entering its try
+  // block, unlike the simpler revokeBtn. That's fine -- the double-submit guard only actually needs "no
+  // await happens before the button is disabled AND before the request chain starts", not "try{ is the very
+  // next token". Find where this handler's own try{ actually starts and assert nothing awaited sits in
+  // between, so a real window for a double-submit still can't reopen here.
+  // Search for the handler's own OUTER try{ (the one wrapping the actual request chain, starting with its
+  // first real statement) rather than the first literal "try{" after the guard -- genBtn's synchronous setup
+  // now includes a gen.cancel() helper with its own small try{}catch{} cleanup blocks inside it, which would
+  // otherwise false-match here.
+  const outerTryRe=varName==='genBtn'?/try\{writeAttempt\(/:new RegExp(`try\\{const`);
+  const tryMatch=outerTryRe.exec(src.slice(guardEnd));
+  assert.ok(tryMatch&&tryMatch.index<3000,`${varName}'s handler must reach its outer try{ block within a short, purely synchronous setup window`);
+  const tryIndex=guardEnd+tryMatch.index;
+  const setup=src.slice(guardEnd,tryIndex);
+  assert.ok(!/\bawait\b/.test(setup),`${varName}'s handler must not await anything between disabling the button and entering its try block -- an await there reopens the exact double-submit window this guard exists to close`);
 
   // The handler's try block must end in a finally that re-enables the button, so a thrown error (declined
   // evidence, a failed RPC) doesn't permanently lock the coach out of retrying.
-  const tryStart=src.indexOf(`${varName}.onclick=async()=>{if(${varName}.disabled)return;${varName}.disabled=true;try{`);
-  assert.ok(tryStart>=0);
-  // Window widened from 6000: the genBtn handler's own explanatory comments (status ticker, then the 19 Sept
-  // wake-lock fix) have grown past that since this test was written, pushing the real finally{} further out.
-  const nextChunk=src.slice(tryStart,tryStart+9000);
-  const finallyRe=new RegExp(`finally\\{${varName}\\.disabled=false\\}`);
+  const tryStart=tryIndex;
+  // Window widened from 6000, then again for the 19 Sept concurrency-guard comments/logic: the genBtn
+  // handler's own explanatory comments and checkpoints have grown past that since this test was written,
+  // pushing the real finally{} further out.
+  const nextChunk=src.slice(tryStart,tryStart+13000);
+  const finallyRe=new RegExp(`finally\\{(?:if\\(activeGeneration===gen\\)activeGeneration=null;if\\(myGeneration===gen\\)myGeneration=null;)?${varName}\\.disabled=false\\}`);
   assert.match(nextChunk,finallyRe,`${varName}'s handler must re-enable the button in a finally block so a failed attempt can be retried`);
 }
 
