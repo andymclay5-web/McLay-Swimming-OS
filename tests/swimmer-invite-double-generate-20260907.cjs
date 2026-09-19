@@ -33,7 +33,9 @@ function assertGuarded(src,selector,varName){
   // evidence, a failed RPC) doesn't permanently lock the coach out of retrying.
   const tryStart=src.indexOf(`${varName}.onclick=async()=>{if(${varName}.disabled)return;${varName}.disabled=true;try{`);
   assert.ok(tryStart>=0);
-  const nextChunk=src.slice(tryStart,tryStart+6000);
+  // Window widened from 6000: the genBtn handler's own explanatory comments (status ticker, then the 19 Sept
+  // wake-lock fix) have grown past that since this test was written, pushing the real finally{} further out.
+  const nextChunk=src.slice(tryStart,tryStart+9000);
   const finallyRe=new RegExp(`finally\\{${varName}\\.disabled=false\\}`);
   assert.match(nextChunk,finallyRe,`${varName}'s handler must re-enable the button in a finally block so a failed attempt can be retried`);
 }
