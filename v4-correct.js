@@ -1603,8 +1603,15 @@
         tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',answer?.steps.length===2&&Math.abs(answer.next.gapSeconds-1.2)<.001&&area?.sessions===1&&area.metres===500&&area.racePaceExposures===1,`${answer?.steps.length||0} steps · ${area?.metres||0}m`));
       }catch(e){tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',false,e.message));}
       try{
+        // Fixture bug fixed 19 Sept 2026: Sophie Newlove was accidentally seeded active:true here, when
+        // CLAUDE.md 4.33/6.9 both document her real recovered-roster status as correctly INACTIVE (do not
+        // auto-reactivate her). presentRosterIds() (v4-correct.js) filters on a.active!==false before
+        // anything else, so with the fixture's own accidental active:true her 'present' attendance row was
+        // legitimately roster-eligible and this check's own `!before.includes('soph')` assertion could never
+        // pass -- not a real roster bug, a stale fixture value that drifted from the documented real fact
+        // about this specific swimmer.
         const state={
-          athletes:[{id:'here',full_name:'Here Swimmer',active:true,squad:'National'},{id:'other',full_name:'Other Squad',active:true,squad:'Intermediate'},{id:'soph',full_name:'Sophie Newlove',active:true,squad:'National'}],
+          athletes:[{id:'here',full_name:'Here Swimmer',active:true,squad:'National'},{id:'other',full_name:'Other Squad',active:true,squad:'Intermediate'},{id:'soph',full_name:'Sophie Newlove',active:false,squad:'National'}],
           attendance:[{session_id:'gs',athlete_id:'here',status:'present'},{session_id:'gs',athlete_id:'soph',status:'present'}],
           settings:{timingRoster:[],t400RosterBySession:{}},trainingTestTypes:[],trainingTestResults:[]
         };
@@ -1612,7 +1619,7 @@
         const before=M.timing.t400RosterIds(state,session);
         M.timing.add('other',state,session);
         const after=M.timing.t400RosterIds(state,session);
-        tests.push(gtest('T400 roster starts from Here/Modified and cross-squad add appends',before.includes('here')&&!before.includes('soph')&&after.includes('here')&&after.includes('other')));
+        tests.push(gtest('T400 roster starts from Here/Modified and cross-squad add appends',before.includes('here')&&!before.includes('soph')&&after.includes('here')&&after.includes('other'),before.join(',')+' -> '+after.join(',')));
       }catch(e){tests.push(gtest('T400 roster starts from Here/Modified and cross-squad add appends',false,e.message));}
       try{
         const suppressed=['Choice','Kick','Drill','Easy','5HR Reset','HR Gauge'].every(raw=>!!M.targets.suppressPace?.({raw,stroke:raw}));
