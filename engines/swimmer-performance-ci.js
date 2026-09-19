@@ -140,7 +140,7 @@
   async function completeEvidence(ath,onJob){
     if(!ath)return{ok:false,rows:0,error:'No swimmer selected'};
     if(!(M.engineBridge?.canAttemptCloudRead?.()||M.cloud?.ready?.()))return{ok:false,rows:0,error:'Connected swimmer evidence is unavailable'};
-    const id=encodeURIComponent(String(ath.id||'')),org=encodeURIComponent(String(ath.organisation_id||M.cloud?.org?.()||M.state?.settings?.organisationId||''));let added=0,errors=[];
+    const id=encodeURIComponent(String(ath.id||'')),org=encodeURIComponent(String(ath.organisation_id||M.cloud?.org?.()||M.state?.settings?.organisationId||''));let added=0,errors=[],refsSaveOutcome='unknown',refsSaveMs=0;
     const jobs=[];
     if(id)jobs.push(['results_pb_board','resultsPbBoard',`/rest/v1/results_pb_board?select=*&athlete_id=eq.${id}`],['coach_results','coachResults',`/rest/v1/coach_results?select=*&athlete_id=eq.${id}`],['results_event_history','resultsEventHistory',`/rest/v1/results_event_history?select=*&athlete_id=eq.${id}`],['training_test_results','trainingTestResults',`/rest/v1/training_test_results?select=*&athlete_id=eq.${id}`]);
     if(org)jobs.push(['training_test_types','trainingTestTypes',`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}`]);
@@ -210,13 +210,26 @@
     // occurrence's breadcrumb pinpoints the exact stuck step instead of leaving the whole post-network tail
     // as one unaccounted-for gap, the same diagnostic-first approach that cracked the pathway_standards
     // staleness bug on the 18th.
+    // 19 Sept 2026 (fifth+ same-day occurrence): the newest breadcrumb finally showed a run that did NOT
+    // hang forever -- it settled after ~3 minutes with an honest error, driven by two real 12-second
+    // network timeouts (training_test_types, pathway_standards) -- but it also showed pathwayStandards/
+    // pathwayMeets sitting at 0 rows in local state, meaning neither had a usable cached copy going into
+    // this attempt. Whether that is because the fetch itself keeps failing (visible above, in `errors`) or
+    // because a fetch DOES succeed sometimes but the save below silently never persists it is exactly the
+    // one thing this whole diagnostic chase has never actually recorded: the line above already swallows
+    // every outcome of M.refs.save() -- success, timeout, and thrown error all look identical from outside
+    // (nothing changes, the flow just moves on). refsSaveOutcome/refsSaveMs make that outcome visible on
+    // the completion object (and, from there, on the breadcrumb) without changing what happens on failure
+    // in any way -- a failed or timed-out save still never blocks or fails the flow, exactly as before.
+    const refsSaveStartedAt=Date.now();
     try{onJob?.('refs_save')}catch{}
-    try{await withTimeout(M.refs?.save?.()||Promise.resolve(),X.REFS_SAVE_TIMEOUT_MS,'Saving evidence to local cache')}catch{}
+    try{const saved=await withTimeout(M.refs?.save?.()||Promise.resolve(true),X.REFS_SAVE_TIMEOUT_MS,'Saving evidence to local cache');refsSaveOutcome=saved===false?'failed':'ok';}catch(err){refsSaveOutcome=/timed out/.test(err?.message||'')?'timeout':'error';}
+    refsSaveMs=Date.now()-refsSaveStartedAt;
     try{onJob?.('t400_hydrate')}catch{}
     try{M.correct?.hydrateT400Evidence?.(M.state,M.store?.legacy?.()||null)}catch{}
     try{onJob?.('cache_invalidate')}catch{}
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
-    X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors};
+    X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,refsSaveOutcome,refsSaveMs,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors,refsSaveOutcome,refsSaveMs};
   }
   // Real coaching failure this guards against: Andy repeatedly reported the QR-generate modal "stopping at
   // 5/5 0s" -- frozen on the LAST evidence-job status text with the elapsed-seconds ticker itself not moving,
