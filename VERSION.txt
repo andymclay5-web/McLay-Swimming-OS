@@ -1,1 +1,1 @@
-McLay Swimming OS Version 4 · v4-board-real-session-vocabulary-20260918b
+McLay Swimming OS Version 4 · v4-qr-wake-lock-fix-20260919a
