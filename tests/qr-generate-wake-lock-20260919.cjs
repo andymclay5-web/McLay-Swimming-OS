@@ -1,26 +1,35 @@
 'use strict';
-// Real coaching failure this fixes (Andy, 19 Sept 2026): Matthew Robertson's "Give swimmer access" QR modal
-// froze again on the exact 16 Sept symptom text -- "Checking swimmer evidence... (5/5 * training_test_types)
-// (0s)", ticker apparently stuck at zero, never advancing, no error ever surfaced. Checked directly against
-// live Supabase edge logs for that exact minute (project cwoqjxiniuwmslltsfgi): every evidence job, INCLUDING
-// training_test_types, had already returned 200 in under 2.5 seconds, and no msos_bootstrap_owner /
-// msos_publish_swimmer_payload / msos_create_swimmer_invite RPC ever reached the network afterward -- so the
-// freeze was real but entirely client-side, with nothing running to throw an error or log anything. A
-// synchronous compute-cost check of the standards-matching work in that stretch (targetsFor/rowsByProgramme
-// against ~4400 pathway_standards rows, x2-3 over for Matthew's ~35 events) benchmarked at ~90ms for 300k+
-// iterations -- even derated 100x for a slow phone that's seconds, not the 2+ minutes reported. Asked Andy
-// directly rather than guessing: "did your screen lock or did you switch away from the app during that
-// wait?" -- his answer: "screen was locked, yeah". That confirms the root cause: Android suspends a
-// backgrounded/locked page's JavaScript entirely, which explains a frozen ticker (setInterval callbacks never
-// fire), zero further network traffic, and zero thrown errors, all at once, exactly as observed.
+// Real coaching failure this fixes/instruments (Andy, 19 Sept 2026, TWO occurrences the same day):
 //
-// The fix: acquire a screen wake lock (navigator.wakeLock.request('screen')) the moment Generate is tapped,
-// and release it in the handler's existing finally block so it releases on every exit path -- success, a
-// thrown error, or the overall GENERATE_TIMEOUT_MS firing. This test proves: (1) the lock is requested for
-// 'screen' as soon as Generate is tapped, (2) it is released once the flow settles successfully, (3) it is
-// released even when the flow fails partway through (a thrown error, not just the happy path), and (4) a
-// browser with no navigator.wakeLock at all (older browsers, or the API denied) must not throw or block QR
-// generation -- the flow must still complete exactly as before, just without the protection.
+// First occurrence: Matthew Robertson's "Give swimmer access" QR modal froze again on the exact 16 Sept
+// symptom text -- "Checking swimmer evidence... (5/5 * training_test_types) (0s)", ticker apparently stuck at
+// zero, never advancing, no error ever surfaced. Checked directly against live Supabase edge logs for that
+// exact minute: every evidence job, INCLUDING training_test_types, had already returned 200 in under 2.5
+// seconds, and no msos_bootstrap_owner / msos_publish_swimmer_payload / msos_create_swimmer_invite RPC ever
+// reached the network afterward -- so the freeze was real but entirely client-side. Asked Andy directly rather
+// than guessing: "did your screen lock or did you switch away from the app during that wait?" -- his answer:
+// "screen was locked, yeah". Shipped a fix (v4-qr-wake-lock-fix-20260919a): request a screen wake lock
+// (navigator.wakeLock.request('screen')) the moment Generate is tapped, release it in the handler's existing
+// finally block on every exit path.
+//
+// Second occurrence, same day, same build: it happened again, same exact symptom, same athlete, same step --
+// "hit 0s, whole screen froze again, could only get out by hard back". This DISPROVES treating the wake lock
+// as a confirmed fix. The likely reason, on reflection: the Wake Lock API only prevents the screen dimming
+// from ordinary INACTIVITY timeout -- it does NOT prevent a manual power-button press, and does NOT prevent
+// Android throttling/suspending a BACKGROUNDED tab if Andy switches to another app (a text message, phone in
+// pocket) even while the screen itself stays on. "Screen was locked" could have meant any of these, and only
+// the inactivity-timeout case is even theoretically fixable by holding a wake lock. Rather than guess a THIRD
+// time, this adds purely observational breadcrumb fields so the next occurrence proves which one actually
+// happened: whether the lock was even supported/held at all (wakeLockSupported/wakeLockHeld), whether the
+// BROWSER itself force-released it before we did (wakeLockReleasedEarly/wakeLockReleasedAt -- its own native
+// 'release' event, which fires when the OS reclaims the lock, e.g. a real hardware screen-off), and the exact
+// moment(s) the tab's own visibility changed (lastVisibilityState/lastVisibilityChangeAt -- hidden means truly
+// backgrounded, not just dimmed). This test proves: (1) the lock is requested and its supported/held state is
+// written to the breadcrumb immediately; (2) the lock is released on both the success and error paths; (3) a
+// browser-forced 'release' event mid-flow is captured in the breadcrumb, with a timestamp; (4) a
+// visibilitychange event mid-flow is captured in the breadcrumb, with a timestamp, and the listener is
+// correctly torn down once the flow ends; (5) a browser with no navigator.wakeLock at all must not throw or
+// block QR generation, with graceful support:false recorded instead.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -49,6 +58,27 @@ function makeNode(tag){
 }
 function makeLocalStorage(){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v))},removeItem:k=>{m.delete(k)},clear:()=>m.clear()};}
 
+// A document mock that actually tracks visibilitychange listeners (the base makeNode() stub is a no-op) so a
+// test can fire one mid-flow, and can assert the handler was torn down once the flow finishes.
+function makeDocument(modalHost,athletesHead){
+  const listeners={};
+  return{
+    readyState:'complete',
+    body:makeNode('body'),
+    visibilityState:'visible',
+    addEventListener(type,fn){(listeners[type]=listeners[type]||[]).push(fn);},
+    removeEventListener(type,fn){if(listeners[type])listeners[type]=listeners[type].filter(f=>f!==fn);},
+    createElement:tag=>makeNode(tag),
+    querySelector(sel){
+      if(sel==='#modalHost')return modalHost;
+      if(sel==='#athletesView .cn-owner-actions')return athletesHead;
+      return null;
+    },
+    _fire(type){(listeners[type]||[]).slice().forEach(fn=>fn());},
+    _listenerCount(type){return(listeners[type]||[]).length;},
+  };
+}
+
 const athlete={id:'ath-wake-lock-fixture',full_name:'Wake Lock Fixture Swimmer',date_of_birth:'2010-07-01',
   current_s_class:'',current_sb_class:'',current_sm_class:''};
 
@@ -64,20 +94,11 @@ function okFetch(){
   };
 }
 
-function bootFixture({navigatorValue}={}){
+function bootFixture({navigatorValue,slowRpc}={}){
   const modalHost=makeNode('div');
   const athletesHead=makeNode('div');
-  global.document={
-    readyState:'complete',
-    body:makeNode('body'),
-    addEventListener(){},
-    createElement:tag=>makeNode(tag),
-    querySelector(sel){
-      if(sel==='#modalHost')return modalHost;
-      if(sel==='#athletesView .cn-owner-actions')return athletesHead;
-      return null;
-    },
-  };
+  const doc=makeDocument(modalHost,athletesHead);
+  global.document=doc;
   global.window=global;
   global.location={href:'https://example.test/app.html'};
   global.requestAnimationFrame=fn=>fn();
@@ -101,14 +122,14 @@ function bootFixture({navigatorValue}={}){
     },
     performanceEngine:{pathwaysForAthlete:()=>({events:[{course:'SCM',distance:100,stroke:'Freestyle',seconds:60.5,points:500,ladder:{tracks:{SCM:[],LCM:[]},next:null},raw:{}}]})},
     swimmerPerformanceBM:{
-      prepareAthlete:(a,{onJob}={})=>{onJob?.('training_test_types',5,5);return Promise.resolve({completion:{ok:true}});},
+      prepareAthlete:(a,{onJob}={})=>{onJob?.('training_test_types',5,5);return slowRpc?new Promise(()=>{}):Promise.resolve({completion:{ok:true}});},
       readinessFor:()=>({ok:true,issues:[]}),
     },
   };
   global.fetch=okFetch();
   delete require.cache[require.resolve(invitePath)];
   require(invitePath);
-  return{M:global.MSOS4,modalHost,athletesHead};
+  return{M:global.MSOS4,modalHost,athletesHead,doc};
 }
 
 async function clickGenerate(athletesHead){
@@ -122,9 +143,9 @@ async function clickGenerate(athletesHead){
 
 async function runSuccessAcquiresAndReleases(){
   const requested=[],released=[];
-  const lock={release:async()=>{released.push(true);}};
+  const lock={release:async()=>{released.push(true);},addEventListener(){},removeEventListener(){}};
   const navigatorValue={wakeLock:{request:async(type)=>{requested.push(type);return lock;}},clipboard:{writeText:async()=>{}}};
-  const{athletesHead}=bootFixture({navigatorValue});
+  const{M,athletesHead}=bootFixture({navigatorValue});
 
   const generate=await clickGenerate(athletesHead);
   await Promise.race([
@@ -137,6 +158,13 @@ async function runSuccessAcquiresAndReleases(){
   const status=global.document.querySelector('#modalHost')._appended[0].querySelector('[data-bn-status]');
   assert.match(status.textContent,/^Ready/,`fixture sanity: the flow must actually reach success for this to prove anything, got status: ${JSON.stringify(status.textContent)}`);
 
+  // 19 Sept, second occurrence: the breadcrumb must record whether the lock was actually held, so the NEXT
+  // freeze tells us for certain instead of us re-guessing whether acquisition itself silently failed.
+  const attempt=M.swimmerInviteBN.lastAttemptStatus();
+  assert.equal(attempt.wakeLockSupported,true,'breadcrumb must record that navigator.wakeLock was supported');
+  assert.equal(attempt.wakeLockHeld,true,'breadcrumb must record that the lock was actually acquired');
+  assert.equal(attempt.wakeLockReleasedEarly,false,'a lock that lived until our own release must not be marked as released early');
+
   console.log('QR_WAKE_LOCK_SUCCESS_PASS');
 }
 
@@ -145,7 +173,7 @@ async function runErrorPathStillReleases(){
   // must still be released: a coach whose evidence isn't ready yet must not be stuck with the screen held
   // awake by a dead lock after the attempt fails.
   const requested=[],released=[];
-  const lock={release:async()=>{released.push(true);}};
+  const lock={release:async()=>{released.push(true);},addEventListener(){},removeEventListener(){}};
   const navigatorValue={wakeLock:{request:async(type)=>{requested.push(type);return lock;}},clipboard:{writeText:async()=>{}}};
   const{M,athletesHead}=bootFixture({navigatorValue});
   M.swimmerPerformanceBM.readinessFor=()=>({ok:false,issues:['Swimmer access held: fixture-forced decline.']});
@@ -166,8 +194,9 @@ async function runErrorPathStillReleases(){
 
 async function runGracefulDegradationWithoutWakeLockApi(){
   // No navigator.wakeLock at all -- an older browser, or one that never exposed the API. The flow must not
-  // throw or stall on this; it must complete exactly as it always did, just without the protection.
-  const{athletesHead}=bootFixture({navigatorValue:{clipboard:{writeText:async()=>{}}}});
+  // throw or stall on this; it must complete exactly as it always did, just without the protection, and the
+  // breadcrumb must honestly record wakeLockSupported:false rather than silently omitting the field.
+  const{M,athletesHead}=bootFixture({navigatorValue:{clipboard:{writeText:async()=>{}}}});
 
   const generate=await clickGenerate(athletesHead);
   await Promise.race([
@@ -177,41 +206,104 @@ async function runGracefulDegradationWithoutWakeLockApi(){
 
   const status=global.document.querySelector('#modalHost')._appended[0].querySelector('[data-bn-status]');
   assert.match(status.textContent,/^Ready/,`the flow must complete successfully even with no navigator.wakeLock present, got status: ${JSON.stringify(status.textContent)}`);
+  const attempt=M.swimmerInviteBN.lastAttemptStatus();
+  assert.equal(attempt.wakeLockSupported,false,'breadcrumb must honestly record wakeLockSupported:false rather than omitting the field');
+  assert.equal(attempt.wakeLockHeld,false,'breadcrumb must record wakeLockHeld:false when the API is unavailable');
 
   console.log('QR_WAKE_LOCK_GRACEFUL_DEGRADATION_PASS');
 }
 
+async function runBrowserForcedReleaseIsRecorded(){
+  // Simulates the exact forensic gap the second 19 Sept freeze exposed: the OS/browser can force-release a
+  // held wake lock on its own (its own native 'release' event) if it decides to reclaim it -- e.g. a real
+  // hardware screen-off overriding the lock. If that happens mid-flow, the breadcrumb must show it, with a
+  // timestamp, so the next real occurrence can tell "lock was force-released" apart from "lock was never
+  // touched at all" apart from "lock was held the whole time and something else still froze the page".
+  let releaseHandler=null;
+  const lock={release:async()=>{},addEventListener(type,fn){if(type==='release')releaseHandler=fn;},removeEventListener(){}};
+  const navigatorValue={wakeLock:{request:async()=>lock},clipboard:{writeText:async()=>{}}};
+  const{M,athletesHead}=bootFixture({navigatorValue,slowRpc:true}); // never settles on its own -- we inspect mid-flight
+  M.swimmerInviteBN.GENERATE_TIMEOUT_MS=300; // let the handler's own timeout close it out instead of hanging the process
+
+  const generate=await clickGenerate(athletesHead);
+  const clickPromise=generate.onclick().catch(()=>{}); // will settle via the overall timeout above
+  await new Promise(r=>setTimeout(r,20));
+
+  assert.ok(typeof releaseHandler==='function','test setup error: the handler must have registered a release listener on the lock');
+  releaseHandler(); // simulate the browser reclaiming the lock on its own, independent of our own release()
+
+  const attempt=M.swimmerInviteBN.lastAttemptStatus();
+  assert.equal(attempt.wakeLockReleasedEarly,true,'a browser-forced release must be recorded in the breadcrumb');
+  assert.ok(attempt.wakeLockReleasedAt,'a browser-forced release must be timestamped');
+
+  await clickPromise; // let the handler's own timeout settle before moving on, so no timer outlives this test
+
+  console.log('QR_WAKE_LOCK_FORCED_RELEASE_PASS');
+}
+
+async function runVisibilityChangeIsRecordedAndCleanedUp(){
+  // The other half of the same forensic gap: did the TAB itself go hidden (truly backgrounded -- a real
+  // app-switch or screen-off) during the freeze? This must show up in the breadcrumb with a timestamp, and
+  // the listener must be torn down once the flow ends so it can never write a stray breadcrumb from some
+  // later, unrelated tab-visibility change on the same page.
+  const lock={release:async()=>{},addEventListener(){},removeEventListener(){}};
+  const navigatorValue={wakeLock:{request:async()=>lock},clipboard:{writeText:async()=>{}}};
+  const{M,athletesHead,doc}=bootFixture({navigatorValue,slowRpc:true});
+  M.swimmerInviteBN.GENERATE_TIMEOUT_MS=300; // let the handler's own timeout close it out instead of hanging the process
+
+  const generate=await clickGenerate(athletesHead);
+  const clickPromise=generate.onclick().catch(()=>{});
+  await new Promise(r=>setTimeout(r,20));
+
+  assert.ok(doc._listenerCount('visibilitychange')>0,'test setup error: a visibilitychange listener must be registered while the flow is in flight');
+  doc.visibilityState='hidden';
+  doc._fire('visibilitychange');
+
+  const attempt=M.swimmerInviteBN.lastAttemptStatus();
+  assert.equal(attempt.lastVisibilityState,'hidden','a visibilitychange to hidden mid-flow must be recorded in the breadcrumb');
+  assert.ok(attempt.lastVisibilityChangeAt,'a recorded visibility change must be timestamped');
+
+  // Now let the handler's own (shortened) overall timeout end the flow, and confirm the listener is torn down
+  // in its finally -- a further visibility change afterward must not silently rewrite the breadcrumb.
+  await clickPromise;
+  const beforeStray=doc._listenerCount('visibilitychange');
+  assert.equal(beforeStray,0,'the visibilitychange listener must be removed once the flow settles, on the timeout path included');
+  const resolvedAttempt=M.swimmerInviteBN.lastAttemptStatus();
+  doc.visibilityState='visible';doc._fire('visibilitychange');
+  assert.deepEqual(M.swimmerInviteBN.lastAttemptStatus(),resolvedAttempt,'a visibility change AFTER the flow ends must not still be able to write to the breadcrumb -- confirms the listener was really torn down, not just uncounted');
+
+  console.log('QR_WAKE_LOCK_VISIBILITY_CHANGE_PASS');
+}
+
 function runFailBefore(){
-  // Fail-before: revert to the exact pre-fix handler opening (no wake-lock request/release at all) and
-  // confirm navigator.wakeLock.request is never called, even on a run that otherwise succeeds -- this is
-  // what this test would have caught before today's fix existed.
+  // Fail-before: revert to the exact pre-instrumentation handler opening (no wake-lock request/release, no
+  // breadcrumb fields, no visibilitychange wiring at all) and confirm none of it is present -- this is what
+  // this test would have caught before today's two rounds of work existed.
   const fixedOpen="genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{let wakeLock=null;writeAttempt(";
   assert.ok(realSrc.includes(fixedOpen),'test setup error: could not locate the fixed genBtn.onclick opening in the real source -- its wording changed in a way this test does not expect');
   const buggyOpen="genBtn.onclick=async()=>{if(genBtn.disabled)return;genBtn.disabled=true;try{writeAttempt(";
 
-  const fixedAcquire="      try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch{}\n      let step='Checking swimmer evidence',tickTimer=null;";
-  assert.ok(realSrc.includes(fixedAcquire),'test setup error: could not locate the wake-lock acquisition block in the real source');
+  const fixedAcquire="      const wakeLockSupported=!!(navigator.wakeLock&&typeof navigator.wakeLock.request==='function');\n      try{wakeLock=await navigator.wakeLock?.request?.('screen');}catch{}\n      writeAttempt({wakeLockSupported,wakeLockHeld:!!wakeLock,wakeLockReleasedEarly:false});\n      try{wakeLock?.addEventListener?.('release',()=>writeAttempt({wakeLockReleasedEarly:true,wakeLockReleasedAt:new Date().toISOString()}),{once:true});}catch{}\n      const onVisibilityChange=()=>writeAttempt({lastVisibilityState:document.visibilityState,lastVisibilityChangeAt:new Date().toISOString()});\n      try{document.addEventListener('visibilitychange',onVisibilityChange);}catch{}\n      let step='Checking swimmer evidence',tickTimer=null;";
+  assert.ok(realSrc.includes(fixedAcquire),'test setup error: could not locate the wake-lock acquisition + breadcrumb + visibilitychange block in the real source');
   const buggyAcquire="      let step='Checking swimmer evidence',tickTimer=null;";
 
-  const fixedRelease="}finally{clearInterval(tickTimer);try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){";
-  assert.ok(realSrc.includes(fixedRelease),'test setup error: could not locate the wake-lock release block in the real source');
+  const fixedRelease="}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){";
+  assert.ok(realSrc.includes(fixedRelease),'test setup error: could not locate the wake-lock/listener release block in the real source');
   const buggyRelease="}finally{clearInterval(tickTimer);}}catch(err){";
 
   let buggySrc=realSrc.replace(fixedOpen,buggyOpen).replace(fixedAcquire,buggyAcquire).replace(fixedRelease,buggyRelease);
   assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted buggy source');
   assert.ok(!buggySrc.includes("navigator.wakeLock?.request?.('screen')"),'test setup error: reverted source must not still request a wake lock');
   assert.ok(!buggySrc.includes('wakeLock?.release?.()'),'test setup error: reverted source must not still release a wake lock');
+  assert.ok(!buggySrc.includes('visibilitychange'),'test setup error: reverted source must not still wire a visibilitychange listener');
 
   const tmpPath=invitePath.replace(/\.js$/,'.wakelockfailbefore.tmp.js');
   fs.writeFileSync(tmpPath,buggySrc);
   try{
     const requested=[];
-    const navigatorValue={wakeLock:{request:async(type)=>{requested.push(type);return{release:async()=>{}};}},clipboard:{writeText:async()=>{}}};
+    const navigatorValue={wakeLock:{request:async(type)=>{requested.push(type);return{release:async()=>{},addEventListener(){},removeEventListener(){}};}},clipboard:{writeText:async()=>{}}};
     const modalHost=makeNode('div'),athletesHead=makeNode('div');
-    global.document={
-      readyState:'complete',body:makeNode('body'),addEventListener(){},createElement:tag=>makeNode(tag),
-      querySelector(sel){if(sel==='#modalHost')return modalHost;if(sel==='#athletesView .cn-owner-actions')return athletesHead;return null;},
-    };
+    global.document=makeDocument(modalHost,athletesHead);
     global.window=global;global.location={href:'https://example.test/app.html'};global.requestAnimationFrame=fn=>fn();
     Object.defineProperty(global,'navigator',{value:navigatorValue,configurable:true});
     global.localStorage=makeLocalStorage();
@@ -246,6 +338,8 @@ function runFailBefore(){
         new Promise((_,reject)=>setTimeout(()=>reject(new Error('TEST_HARNESS_GUARD: reverted handler did not settle')),3000)),
       ]);
       assert.deepEqual(requested,[],'pre-fix source must never call navigator.wakeLock.request -- confirms this test would have caught its absence');
+      const attempt=global.MSOS4.swimmerInviteBN.lastAttemptStatus();
+      assert.equal(attempt.wakeLockSupported,undefined,'pre-fix source must never write wakeLockSupported to the breadcrumb');
       console.log('QR_WAKE_LOCK_FAILBEFORE_PASS');
     })();
   }finally{
@@ -257,6 +351,8 @@ function runFailBefore(){
   await runSuccessAcquiresAndReleases();
   await runErrorPathStillReleases();
   await runGracefulDegradationWithoutWakeLockApi();
+  await runBrowserForcedReleaseIsRecorded();
+  await runVisibilityChangeIsRecordedAndCleanedUp();
   await runFailBefore();
   require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});
 })().catch(err=>{console.error(err);process.exit(1);});

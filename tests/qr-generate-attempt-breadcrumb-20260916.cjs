@@ -147,7 +147,11 @@ async function runFailBefore(){
   const endIdx=realSrc.indexOf(endMarker,startIdx);
   assert.ok(endIdx>=0,'test setup error: could not locate the end of the breadcrumb block');
   let buggySrc=realSrc.slice(0,startIdx)+realSrc.slice(endIdx+endMarker.length);
-  buggySrc=buggySrc.replace(/writeAttempt\(\{[^}]*\}\);/g,'');
+  // Neutralize every remaining writeAttempt(...) call by replacing just the call itself with a harmless
+  // no-op expression, leaving whatever surrounds it (a bare `;`, or -- since the 19 Sept wake-lock
+  // instrumentation added one nested inside an addEventListener('release', ...) callback -- trailing args
+  // like `,{once:true})` before the real semicolon) syntactically intact either way.
+  buggySrc=buggySrc.replace(/writeAttempt\(\{[^}]*\}\)/g,'(void 0)');
   assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted buggy source');
   assert.ok(!buggySrc.includes('writeAttempt'),'test setup error: reverted source must not still reference writeAttempt');
 
