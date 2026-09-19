@@ -4,7 +4,7 @@
   if(!M?.state||!M?.pathway||!M?.performanceEngine||!E)return;
 
   const BUILD='v4-swimmer-performance-integrity-20260824co';
-  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false,EVIDENCE_JOB_TIMEOUT_MS:12000,REFS_SAVE_TIMEOUT_MS:5000};
+  const X=M.swimmerPerformanceBM={build:BUILD,uiTakeover:false,EVIDENCE_JOB_TIMEOUT_MS:12000,REFS_SAVE_TIMEOUT_MS:5000,REF_FETCH_PAGE_SIZE:8000};
   function withTimeout(promise,ms,label){
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>reject(new Error(`${label} timed out after ${Math.round(ms/1000)}s — check your connection and try again.`)),ms);
@@ -116,8 +116,27 @@
     return{athlete:ath,course:c,events,closest:opportunities.slice(0,4),opportunities,achieved,targetMeet,allEvents:true};
   }
 
-  async function cloudPages(path){if(M.cloudSessionEngine?.fetchPages)return M.cloudSessionEngine.fetchPages(path);if(M.cloud?.ready?.()&&M.cloud?.fetchPages)return M.cloud.fetchPages(path);throw new Error('Connected swimmer evidence is unavailable.');}
+  async function cloudPages(path,pageSize){if(M.cloudSessionEngine?.fetchPages)return pageSize?M.cloudSessionEngine.fetchPages(path,pageSize):M.cloudSessionEngine.fetchPages(path);if(M.cloud?.ready?.()&&M.cloud?.fetchPages)return pageSize?M.cloud.fetchPages(path,pageSize):M.cloud.fetchPages(path);throw new Error('Connected swimmer evidence is unavailable.');}
   async function mergeRows(refKey,stateKey,rows){if(!Array.isArray(rows)||!rows.length)return 0;M.refs?.merge?.(refKey,rows);M.state[stateKey]=E.merge(M.state[stateKey]||[],rows);return rows.length;}
+  // 18 Sept 2026 (Andy, live: Matthew Robertson's swimmer-access QR held on "No upcoming verified SCM
+  // national benchmark is linked" for a fully-qualifying, real 16yo male swimmer): pathway_standards and
+  // pathway_meets -- the two reference tables readinessFor()'s targetsFor()/standardApplies() gate depends
+  // on -- were only ever (re)fetched from Supabase by this job list when the LOCAL cache was completely
+  // EMPTY (`if(!standardRows().length)`). Once any rows were cached even once, on any device, they were
+  // never refreshed again -- not on a schedule, not on demand -- however long ago that was or however much
+  // the live table changed since (e.g. a new meet's qualifying standards added centrally). Confirmed live
+  // against production Supabase: a real, current, exactly-matching NZSC standard (age 16, male, SCM, every
+  // one of Matthew's events, meet 2026-09-27) genuinely exists server-side -- his device's stale local copy
+  // simply never picked it up. Fixed: these two jobs now also re-run whenever the local copy was last
+  // confirmed synced more than X.REF_STALE_MS ago (24h in production, exported so a test can shrink it),
+  // not only when it is empty -- bounded staleness instead of "cached forever". A successful fetch of
+  // either records its own sync timestamp (msos_ref_last_synced__<key> in localStorage) independently, so a
+  // failure on one never wrongly marks the other fresh.
+  X.REF_STALE_MS=24*60*60*1000;
+  function refSyncKey(k){return`msos_ref_last_synced__${k}`;}
+  function refLastSyncedAt(k){try{const v=Number(localStorage.getItem(refSyncKey(k)));return Number.isFinite(v)&&v>0?v:0}catch{return 0}}
+  function markRefSynced(k){try{localStorage.setItem(refSyncKey(k),String(Date.now()))}catch{}}
+  function refStale(k){return(Date.now()-refLastSyncedAt(k))>X.REF_STALE_MS;}
   async function completeEvidence(ath,onJob){
     if(!ath)return{ok:false,rows:0,error:'No swimmer selected'};
     if(!(M.engineBridge?.canAttemptCloudRead?.()||M.cloud?.ready?.()))return{ok:false,rows:0,error:'Connected swimmer evidence is unavailable'};
@@ -125,15 +144,48 @@
     const jobs=[];
     if(id)jobs.push(['results_pb_board','resultsPbBoard',`/rest/v1/results_pb_board?select=*&athlete_id=eq.${id}`],['coach_results','coachResults',`/rest/v1/coach_results?select=*&athlete_id=eq.${id}`],['results_event_history','resultsEventHistory',`/rest/v1/results_event_history?select=*&athlete_id=eq.${id}`],['training_test_results','trainingTestResults',`/rest/v1/training_test_results?select=*&athlete_id=eq.${id}`]);
     if(org)jobs.push(['training_test_types','trainingTestTypes',`/rest/v1/training_test_types?select=*&organisation_id=eq.${org}`]);
-    if(!(standardRows().length))jobs.push(['pathway_standards','pathwayStandards','/rest/v1/pathway_standards?select=*']);
-    if(!(meetRows().length))jobs.push(['pathway_meets','pathwayMeets','/rest/v1/pathway_meets?select=*']);
+    // Andy, 18 Sept 2026: "Yea that needs to be fixed" -- confirming the QR-generate flow's overall ~3.5
+    // minute duration (even when it correctly resolves) still needs work. Checked directly against
+    // production Supabase rather than guessing: every other job here is scoped to one athlete or one
+    // organisation and returns well under 100 rows (single network round trip). pathway_standards is the
+    // one unscoped `select=*` fetch of the WHOLE table -- 4406 rows live, 18 Sept -- and C.fetchPages()
+    // paginates at 1000 rows/page, so this single job alone was up to 5 SEQUENTIAL round trips (each with
+    // its own real network latency + Postgres/PostgREST overhead), on top of the up-to-6 other sequential
+    // jobs in this same loop. That is a highly plausible dominant contributor to the overall slowness, and
+    // fetching it in fewer, larger pages changes nothing about WHICH rows are merged in (same data, same
+    // 8000-row maxRows ceiling, comfortably above the live 4406) -- purely a round-trip-count reduction.
+    // REF_FETCH_PAGE_SIZE is exported so a test can shrink it over the identical pagination code path.
+    if(!(standardRows().length)||refStale('pathway_standards'))jobs.push(['pathway_standards','pathwayStandards','/rest/v1/pathway_standards?select=*',X.REF_FETCH_PAGE_SIZE]);
+    if(!(meetRows().length)||refStale('pathway_meets'))jobs.push(['pathway_meets','pathwayMeets','/rest/v1/pathway_meets?select=*',X.REF_FETCH_PAGE_SIZE]);
     // A stalled request can still take up to EVIDENCE_JOB_TIMEOUT_MS to give up, and there are up to
     // seven of these run one after another -- with no visible feedback that was indistinguishable from a
     // true hang. Report which check is running (and how many are left) so a slow-but-working pass never
     // looks identical to a frozen one.
-    for(const [i,[rk,sk,path]] of jobs.entries()){
+    for(const [i,[rk,sk,path,pageSize]] of jobs.entries()){
       try{onJob?.(rk,i+1,jobs.length);}catch{}
-      try{added+=await mergeRows(rk,sk,await withTimeout(cloudPages(path),X.EVIDENCE_JOB_TIMEOUT_MS,rk));}catch(err){errors.push(`${rk}: ${err?.message||err}`)}
+      // 19 Sept 2026 (fourth+ same-day freeze, now confirmed reproducing on EVERY athlete, not just Matthew
+      // Robertson, and surviving a full app reload -- ruling out both the concurrency bug fixed earlier today
+      // and anything athlete-specific): every occurrence's lastCheckpoint still stops dead at this exact job
+      // (training_test_types, always last) with nothing beyond it ever written, even though live Supabase
+      // logs prove the network call itself succeeds every time. Andy separately found his browser is holding
+      // 223MB of site data for an app whose real per-athlete evidence should be a few MB at most -- far more
+      // consistent with something in LOCAL state/cache having silently grown unbounded than with a genuine
+      // infinite loop over the tiny (10-row) training_test_types payload itself. These two silent, index-free
+      // checkpoints (no `i`/`total`, so they render as their own "Building …" line rather than disturbing the
+      // existing indexed "Checking swimmer evidence… (i/total)" text) capture the in-memory array length for
+      // THIS job's own state slot immediately before and after the merge that already runs here -- if a
+      // future freeze's breadcrumb shows the "before" figure alone, the hang is inside cloudPages/withTimeout
+      // itself despite Supabase showing success; if it shows "before" but never "after", the hang is inside
+      // mergeRows (R.merge/E.merge) specifically, and the "before" count tells us whether that array was
+      // already the size of the problem before this run even started.
+      try{
+        const beforeLen=Array.isArray(M.state[sk])?M.state[sk].length:0;
+        const fetched=await withTimeout(cloudPages(path,pageSize),X.EVIDENCE_JOB_TIMEOUT_MS,rk);
+        try{onJob?.(`${rk}_fetched_rows${Array.isArray(fetched)?fetched.length:'x'}_existing${beforeLen}`);}catch{}
+        added+=await mergeRows(rk,sk,fetched);
+        try{onJob?.(`${rk}_merged_now${Array.isArray(M.state[sk])?M.state[sk].length:'x'}`);}catch{}
+        if(rk==='pathway_standards'||rk==='pathway_meets')markRefSynced(rk);
+      }catch(err){errors.push(`${rk}: ${err?.message||err}`)}
     }
     // Real coaching failure this guards against: Andy reported the QR-generate modal frozen on the last
     // "Checking swimmer evidence..." message for several literal minutes with no further status change and
@@ -142,8 +194,27 @@
     // exactly the kind of silent, unbounded step that would freeze the status text forever while looking
     // identical to the evidence check itself still "in progress". Bound it so a stuck local write can never
     // hang the whole flow again.
+    // 19 Sept 2026: this exact symptom recurred for Matthew Robertson (screenshot: "Checking swimmer
+    // evidence... (5/5 · training_test_types) (0s)", frozen). Checked directly against live Supabase edge
+    // logs for that exact minute: all 5 evidence jobs (including training_test_types) returned 200 in under
+    // 2.5 seconds total, and no bootstrap_owner/publish/create-invite RPC call ever fired afterward -- so the
+    // freeze is real but happens ENTIRELY client-side, somewhere between the job loop finishing and
+    // note('Establishing secure owner access...') further down in swimmer-invite-bn.js, none of which
+    // previously had its own breadcrumb. A synchronous compute-cost benchmark of the standards-matching this
+    // step and buildModel()/pathwaysForAthlete() do (targetsFor/rowsByProgramme against the ~4400-row
+    // pathway_standards table, x2-3 for Matthew's ~35 events) came back well under a second even generously
+    // derated for a slow device, so pure compute time is an unlikely sole explanation -- most likely the
+    // phone's screen locked/backgrounded and Android suspended the page's JS mid-flow (matching the
+    // already-tracked "phone-in-pocket/screen-off" freeze pattern). Not fixed here -- these two extra
+    // checkpoints (and the payloadFor sub-step breadcrumbs in swimmer-invite-bn.js) exist so the NEXT
+    // occurrence's breadcrumb pinpoints the exact stuck step instead of leaving the whole post-network tail
+    // as one unaccounted-for gap, the same diagnostic-first approach that cracked the pathway_standards
+    // staleness bug on the 18th.
+    try{onJob?.('refs_save')}catch{}
     try{await withTimeout(M.refs?.save?.()||Promise.resolve(),X.REFS_SAVE_TIMEOUT_MS,'Saving evidence to local cache')}catch{}
+    try{onJob?.('t400_hydrate')}catch{}
     try{M.correct?.hydrateT400Evidence?.(M.state,M.store?.legacy?.()||null)}catch{}
+    try{onJob?.('cache_invalidate')}catch{}
     M.performanceEngine?.invalidate?.(M.state);M.engineBridge?.pathwayPbCache?.clear?.();g.MSOSEvidenceIndex?.invalidate?.(M.state);try{dispatchEvent(new CustomEvent('msos:evidence-ready',{detail:{reason:'athlete-completion',athleteId:ath.id,rows:added}}))}catch{}
     X.lastCompletion={athleteId:ath.id,ok:errors.length===0,rows:added,errors,at:new Date().toISOString()};return{ok:errors.length===0,rows:added,errors};
   }
