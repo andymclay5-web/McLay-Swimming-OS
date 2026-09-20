@@ -137,13 +137,19 @@
   async function sessionActionsFor(a,sessionId=''){try{return await rpc('msos_owner_swimmer_session_actions',{p_athlete_id:String(a?.id||''),p_session_id:sessionId||null})}catch{return[]}}
   async function verifySessionInteractionLayer(a,sessionId){try{await rpc('msos_owner_swimmer_session_actions',{p_athlete_id:String(a?.id||''),p_session_id:String(sessionId||'')});return true;}catch(err){throw new Error(`Swimmer access held: session Challenge / Edit / Finish logging is not ready. ${err?.message||err}`);}}
   async function acknowledgeSessionAction(id){return rpc('msos_ack_swimmer_session_action',{p_action_id:id});}
-  // 20 Sept 2026 (Andy, live, twice on two different builds -- the exact same "QR renderer could not load"
-  // message both times): X.qrPromise used to be cached forever, success OR failure. Once the CDN script load
-  // failed even once, every later Generate attempt in that same page session replayed the identical stale
-  // rejected promise without ever touching the network again -- a real, if not always fatal, connection blip
-  // the first time became a permanent failure for the rest of the session. The cache is now cleared on
-  // failure so every attempt gets a genuine retry.
-  async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;if(X.qrPromise)return X.qrPromise;X.qrPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';s.referrerPolicy='no-referrer';s.onload=()=>typeof g.QRCode==='function'?resolve(g.QRCode):reject(new Error('QR renderer did not load'));s.onerror=()=>reject(new Error('QR renderer could not load'));document.head.appendChild(s)}).catch(err=>{X.qrPromise=null;throw err;});return X.qrPromise;}
+  // 20 Sept 2026 (Andy, live, THREE separate genuine attempts across three different builds tonight --
+  // 07:57, 08:39, 08:58 UTC -- every one showing the identical "QR renderer could not load" message, even
+  // after the loadQr() forever-cached-rejection bug and the QR-image/whole-attempt isolation were fixed and
+  // confirmed working earlier tonight): the QR image was the one remaining piece of this app that still
+  // depended on reaching a third-party CDN (cdn.jsdelivr.net) LIVE, at the exact moment a coach taps
+  // Generate, poolside, on whatever connection happens to be available right then. Every other script and
+  // asset here is already bundled same-origin and precached by sw.js at install time. That gap is now
+  // closed: engines/qrcode-local.js is a from-scratch, dependency-free QR encoder that ships as part of the
+  // app itself (same REQUIRED precache list, same defer-loaded <script> tag as everything else), so
+  // window.QRCode is already a real function long before a coach ever taps Generate -- there is no more live
+  // network request of any kind in this step, to any host, ever. loadQr() now only exists so the call site
+  // below doesn't have to change; it no longer loads, fetches, or caches anything.
+  async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;throw new Error('QR renderer is missing from this build (engines/qrcode-local.js did not load) -- reload the app.');}
   // Real coaching failure this fixes: Andy reported the "give swimmer access" QR modal never actually
   // locking the screen -- he could still tap around the rest of the app behind it -- and tapping Close
   // appeared to do nothing. Root cause: every OTHER modal in this app (app.js, attendance-roster.js,
