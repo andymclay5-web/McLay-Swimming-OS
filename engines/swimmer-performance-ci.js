@@ -241,11 +241,30 @@
   // starts, gives it a status line of its own so a slow or stuck pass here is no longer indistinguishable from
   // the evidence-fetch step that already finished.
   async function prepareAthlete(ath,{course=currentCourse(),onJob}={}){const completion=await completeEvidence(ath,onJob);try{onJob?.('pathway_model')}catch{}return{completion,model:buildModel(ath,course)};}
+  // 20 Sept 2026 (Andy, live, immediately after the same-day "give access from cache, refresh in background"
+  // redesign): Matthew Robertson's QR now generates instantly (the freeze is gone) but is immediately and
+  // unconditionally hard-blocked by what WAS a third check here -- "No upcoming verified SCM national
+  // benchmark is linked". Andy: "This is no help to me" / "If there's an issue with upcoming meets we need to
+  // sort that too". Root cause: that check could only ever pass once pathway_standards/pathway_meets (the two
+  // reference tables targetsFor()/standardApplies() above depend on) were already cached locally -- and the
+  // only thing that ever populated them, completeEvidence(), is no longer awaited before this runs (it is
+  // fire-and-forget in the background, precisely so a slow/failing network fetch can never freeze this button
+  // again). A synchronous gate that depends on data only an asynchronous, unawaited step can supply now fails
+  // on every first access, for every swimmer, on any device whose cache isn't already warm -- which is
+  // Andy's actual chronic real-world state (pathway_standards has sat at 0 rows all session, background
+  // fetches of the whole 4406-row table apparently never completing on his device). Confirmed safe to drop as
+  // a hard block: swimmer-portal.js already renders an event with no linked `.next` target gracefully ("Tap
+  // for pathway" in the event list summary, "No pathway marks loaded." in the expanded detail) -- nothing
+  // downstream assumes every event has one, so a swimmer with real races but no linked national standard yet
+  // still gets a correct, useful portal, just without that one benchmark line. Checks 1-2 stay hard blocks
+  // since they're about the swimmer's OWN evidence (a date of birth, at least one real race result), not a
+  // separate reference table's background sync state -- unlike the removed check, nothing async is needed to
+  // satisfy them, so they can't be starved by this same redesign. See
+  // tests/qr-generate-national-benchmark-not-blocking-20260920.cjs.
   function readinessFor(ath,{course=currentCourse()}={}){
     const model=buildModel(ath,course),issues=[];
     if(!ath?.date_of_birth)issues.push('Date of birth is required for age-specific pathway standards.');
     if(!model.events.length)issues.push(`No verified ${model.course} race events are loaded.`);
-    if(!model.events.some(e=>e.next))issues.push(`No upcoming verified ${model.course} national benchmark is linked.`);
     return{ok:issues.length===0,issues,model};
   }
 
