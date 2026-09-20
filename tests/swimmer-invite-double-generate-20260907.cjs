@@ -50,10 +50,13 @@ function assertGuarded(src,selector,varName){
   // The handler's try block must end in a finally that re-enables the button, so a thrown error (declined
   // evidence, a failed RPC) doesn't permanently lock the coach out of retrying.
   const tryStart=tryIndex;
-  // Window widened from 6000, then again for the 19 Sept concurrency-guard comments/logic: the genBtn
-  // handler's own explanatory comments and checkpoints have grown past that since this test was written,
-  // pushing the real finally{} further out.
-  const nextChunk=src.slice(tryStart,tryStart+13000);
+  // Window widened from 6000, then 13000 for the 19 Sept concurrency-guard comments/logic, then again 20
+  // Sept for the "give access from cache, refresh in background" redesign comments (Andy: "I just want to
+  // give them access ... this back and forth is wearing me down") -- the genBtn handler's own explanatory
+  // comments and checkpoints keep growing past whatever window was last set, pushing the real finally{}
+  // further out each time. Widened generously past the current ~13.3k measured distance to give more
+  // headroom before this needs bumping again.
+  const nextChunk=src.slice(tryStart,tryStart+20000);
   const finallyRe=new RegExp(`finally\\{(?:if\\(activeGeneration===gen\\)activeGeneration=null;if\\(myGeneration===gen\\)myGeneration=null;)?${varName}\\.disabled=false\\}`);
   assert.match(nextChunk,finallyRe,`${varName}'s handler must re-enable the button in a finally block so a failed attempt can be retried`);
 }

@@ -121,12 +121,19 @@ function bootFixture({navigatorValue,slowRpc}={}){
       candidateSessionsFor:()=>[],
     },
     performanceEngine:{pathwaysForAthlete:()=>({events:[{course:'SCM',distance:100,stroke:'Freestyle',seconds:60.5,points:500,ladder:{tracks:{SCM:[],LCM:[]},next:null},raw:{}}]})},
+    // 19 Sept 2026 redesign (Andy, direct: "I just want to give them access ... this back and forth is
+    // wearing me down"): the live evidence-check step this fixture used to slow down was removed from
+    // Generate's critical path entirely -- completeEvidence is now fire-and-forget in the background, never
+    // awaited here, so it can no longer be what keeps a flow "in flight" for these tests to inspect. The
+    // `slowRpc` fixture option now hangs the msos_bootstrap_owner RPC itself instead (still the first thing
+    // genuinely awaited in the flow), which is what these wake-lock/visibility tests actually need: something
+    // real to still be in flight when they check.
     swimmerPerformanceBM:{
-      prepareAthlete:(a,{onJob}={})=>{onJob?.('training_test_types',5,5);return slowRpc?new Promise(()=>{}):Promise.resolve({completion:{ok:true}});},
+      completeEvidence:()=>Promise.resolve({ok:true,rows:0,errors:[]}),
       readinessFor:()=>({ok:true,issues:[]}),
     },
   };
-  global.fetch=okFetch();
+  global.fetch=slowRpc?()=>new Promise(()=>{}):okFetch();
   delete require.cache[require.resolve(invitePath)];
   require(invitePath);
   return{M:global.MSOS4,modalHost,athletesHead,doc};

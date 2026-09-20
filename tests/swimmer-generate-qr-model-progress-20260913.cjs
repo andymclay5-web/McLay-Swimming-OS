@@ -20,6 +20,13 @@
 // This test proves prepareAthlete's new call fires, is named distinctly from the indexed evidence-job calls,
 // and comes after them -- reusing the exact fixture shape from
 // tests/swimmer-evidence-progress-callback-20260910.cjs (this file's own sibling test for the indexed calls).
+//
+// 19 Sept 2026 update: prepareAthlete()/completeEvidence() themselves are unchanged and still tested directly
+// below, but swimmer-invite-bn.js's Generate button no longer calls them live in its critical path (Andy,
+// direct: "I just want to give them access ... this back and forth is wearing me down" -- that live evidence
+// refresh was the root of every freeze chased today). The rendering-side assertions further down were updated
+// to match: the old per-job "Checking swimmer evidence..." progress rendering is asserted ABSENT from
+// Generate now, since nothing wires onJob into a live call there any more.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -74,12 +81,18 @@ const X=global.MSOS4.swimmerPerformanceBM;
   // and was previously invisible the same way buildModel used to be) with its own status line.
   const invitePath=path.join(__dirname,'..','engines','swimmer-invite-bn.js');
   const inviteSrc=fs.readFileSync(invitePath,'utf8');
-  // 19 Sept 2026 (third same-day freeze): onJob's callback now also fires a raw, note()/setStatus-independent
-  // `mark(name)` breadcrumb write first (see qr-generate-concurrent-attempt-guard-20260919.cjs and the
-  // adjacent comment in the real handler for why) -- the actual on-screen formatting rule this test pins
-  // (indexed evidence-job steps vs. a plain "Building <name>..." line) is unchanged and still checked here.
-  assert.match(inviteSrc,/onJob:\(name,i,total\)=>\{mark\(name\);note\(i&&total\?`Checking swimmer evidence…[^`]*`:`Building \$\{String\(name\|\|''\)\.replace\(\/_\/g,' '\)\}…`\);\}/,
-    'swimmer-invite-bn.js must format a non-indexed onJob call as "Building <name>..." distinctly from the indexed evidence-job status');
+  // 19 Sept 2026 (Andy, direct: "I just want to give them access ... this back and forth is wearing me
+  // down"): the live prepareAthlete()/completeEvidence() call -- and the onJob wiring that rendered its
+  // per-job/per-checkpoint progress during Generate -- was deliberately removed from the Generate button's
+  // critical path (every freeze chased all day traced back to that one live evidence refresh). prepareAthlete
+  // itself is unchanged (asserted above, called directly) and still fires these callbacks correctly when
+  // something DOES call it with an onJob -- it's just no longer Generate that does so live. Generate now
+  // calls completeEvidence() only as a fire-and-forget background refresh with no onJob at all, so the old
+  // "Checking swimmer evidence... (i/total)" / "Building <name>..." rendering rule genuinely has nothing left
+  // to render during Generate; asserting its absence here confirms the redesign actually took effect rather
+  // than silently leaving dead, misleading code behind.
+  assert.ok(!/onJob:\(name,i,total\)=>\{mark\(name\);note\(i&&total\?/.test(inviteSrc),
+    'swimmer-invite-bn.js should no longer wire a live per-job onJob progress callback into Generate -- that live evidence step was intentionally removed on 19 Sept');
   assert.match(inviteSrc,/note\('Assembling private swimmer view…'\);const portal=payloadFor\(a,name=>\{mark\(`payload:\$\{name\}`\);note\(/,
     'swimmer-invite-bn.js must give the payload-assembly step (payloadFor) its own status line, right before it runs, and must wire a per-sub-step callback into it');
 

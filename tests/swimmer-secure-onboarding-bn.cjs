@@ -24,7 +24,14 @@ assert.ok(coach.includes('Give swimmer access'),'coach access action missing');
 assert.ok(coach.includes('msos_publish_swimmer_payload'),'athlete-specific projection publish missing');
 assert.ok(coach.includes("['shared','swimmer']"),'coach-private captures are not explicitly excluded');
 assert.ok(coach.includes('msos_revoke_swimmer_devices'),'coach revoke control missing');
-assert.ok(coach.includes('prepareAthlete'),'QR publish no longer verifies complete athlete evidence');
+// 19 Sept 2026 (Andy, direct: "I just want to give them access ... this back and forth is wearing me down
+// for 1 simple task"): the live prepareAthlete()/completeEvidence() gate that used to run in the Generate
+// button's critical path -- the thing every freeze this whole day traced back to -- was deliberately removed.
+// Access is now built from whatever evidence is already cached locally; a background refresh is still kicked
+// off (fire-and-forget, never awaited) so the cache keeps improving for next time, but nothing it does can
+// hold up or fail the button again. This intentionally inverts the old assertion's intent.
+assert.ok(!coach.includes('prepareAthlete'),'coach access should no longer gate on the old prepareAthlete()/completeEvidence() live-evidence flow before issuing a QR (19 Sept redesign: build from cache, refresh in background)');
+assert.ok(/completeEvidence\?\.\(a\)\?\.then\?\./.test(coach),'coach access must still kick off a fire-and-forget background evidence refresh for next time');
 assert.ok(coach.includes('readinessFor'),'QR publish no longer has a swimmer-readiness gate');
 assert.ok(coach.includes('pathwaysForAthlete'),'secure payload is not using the forward-looking performance engine');
 assert.ok(coach.includes("schema:'msos-swimmer-portal-v6'"),'secure payload schema did not advance with the calendar session picker');

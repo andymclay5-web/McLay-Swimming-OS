@@ -199,34 +199,44 @@ async function clickGenerate(athletesHead){
   return wrap.querySelector('[data-bn-generate]');
 }
 
-async function runInviteWritesDiagFields(){
-  // Andy's exact real shape: the evidence check itself ultimately fails (two jobs timed out), but the local
-  // cache save was attempted and its own outcome/duration were captured regardless -- this is the case a
-  // future real breadcrumb needs the two diag fields present for most, since it is the one that is currently
-  // hardest to explain (does the cache ever actually get written to?).
+// 20 Sept 2026 superseding note: the two tests below used to prove the live prepareAthlete()-driven
+// diagRefsSaveOutcome/diagRefsSaveMs breadcrumb fields worked. That whole mechanism was removed the very
+// next morning (Andy, direct: "I just want to give them access ... this back and forth is wearing me down
+// for 1 simple task") -- the live evidence gate it depended on was the actual cause of every freeze chased
+// the night before, so Generate no longer awaits prepareAthlete()/completeEvidence() at all. What replaced
+// it: a fire-and-forget background completeEvidence() call (see engines/swimmer-invite-bn.js, right after
+// the storage-diagnostics snapshot) that can never block or fail Generate, whose eventual outcome is still
+// recorded on the breadcrumb as backgroundRefreshOutcome/backgroundRefreshAt purely for future
+// troubleshooting. These two tests now cover that replacement mechanism instead.
+async function runInviteWritesBackgroundRefreshOutcome(){
+  // Reuses this file's own empty-events fixture shape (performanceEngine.pathwaysForAthlete returns no
+  // events), so the foreground flow still genuinely errors out on "no verified performance events are
+  // available" exactly as it always has -- proving the background refresh's own outcome is recorded
+  // independently of whether the foreground attempt itself succeeds or fails.
   const{M,athletesHead}=bootInvite({
-    prepareAthlete:()=>Promise.resolve({completion:{ok:false,rows:0,errors:['training_test_types: timed out after 12s — check your connection and try again.','pathway_standards: timed out after 12s — check your connection and try again.'],refsSaveOutcome:'timeout',refsSaveMs:5001},model:{events:[]}}),
+    completeEvidence:()=>Promise.resolve({ok:false,rows:0,errors:['pathway_standards: timed out after 12s — check your connection and try again.']}),
     readinessFor:()=>({ok:true,issues:[]}),
   });
   const generate=await clickGenerate(athletesHead);
-  await generate.onclick().catch(()=>{}); // completion.ok===false throws -- caught by the handler's own outer catch
+  await generate.onclick().catch(()=>{});
+  await new Promise(r=>setTimeout(r,10)); // let the fire-and-forget background refresh's own .then() land
 
   const attempt=M.swimmerInviteBN.lastAttemptStatus();
   assert.ok(attempt,'a breadcrumb must exist after the attempt settles');
-  assert.equal(attempt.diagRefsSaveOutcome,'timeout',`breadcrumb must record the real refsSaveOutcome even when the overall attempt errors, got ${attempt.diagRefsSaveOutcome}`);
-  assert.equal(attempt.diagRefsSaveMs,5001,`breadcrumb must record the real refsSaveMs even when the overall attempt errors, got ${attempt.diagRefsSaveMs}`);
-  assert.equal(attempt.outcome,'error','fixture sanity: this scenario must still end in the same outcome:\'error\' Andy\'s real breadcrumb showed');
+  assert.equal(attempt.outcome,'error','fixture sanity: this fixture (empty performance events) must still fail the foreground flow the same way it always has');
+  assert.equal(attempt.backgroundRefreshOutcome,'errors',`breadcrumb must record the real background refresh outcome even when the foreground attempt errors, got ${attempt.backgroundRefreshOutcome}`);
+  assert.ok(attempt.backgroundRefreshAt,'background refresh outcome must be timestamped');
 
-  console.log('QR_REFS_SAVE_OUTCOME_INVITE_PASS',attempt.diagRefsSaveOutcome,attempt.diagRefsSaveMs);
+  console.log('QR_REFS_SAVE_OUTCOME_INVITE_PASS',attempt.backgroundRefreshOutcome);
 }
 
 async function runInviteFailBefore(){
-  const fixedBlock="if(gen.cancelled)return;try{if(prepared?.completion)writeAttempt({diagRefsSaveOutcome:prepared.completion.refsSaveOutcome,diagRefsSaveMs:prepared.completion.refsSaveMs});}catch{}if(prepared?.completion&&prepared.completion.ok===false)throw new Error(`Could not verify complete swimmer evidence: ${(prepared.completion.errors||[prepared.completion.error]).filter(Boolean).join(' · ')||'connection unavailable'}`);";
-  const buggyBlock="if(gen.cancelled)return;if(prepared?.completion&&prepared.completion.ok===false)throw new Error(`Could not verify complete swimmer evidence: ${(prepared.completion.errors||[prepared.completion.error]).filter(Boolean).join(' · ')||'connection unavailable'}`);";
-  assert.ok(inviteRealSrc.includes(fixedBlock),'test setup error: could not locate the diagRefsSaveOutcome/diagRefsSaveMs breadcrumb write in the real source -- its wording changed in a way this test does not expect');
+  const fixedBlock="try{M.swimmerPerformanceBM?.completeEvidence?.(a)?.then?.(c=>{try{writeAttempt({backgroundRefreshOutcome:c?.ok===false?'errors':'ok',backgroundRefreshAt:new Date().toISOString()});}catch{}},()=>{try{writeAttempt({backgroundRefreshOutcome:'threw',backgroundRefreshAt:new Date().toISOString()});}catch{}});}catch{}";
+  const buggyBlock="try{M.swimmerPerformanceBM?.completeEvidence?.(a);}catch{}";
+  assert.ok(inviteRealSrc.includes(fixedBlock),'test setup error: could not locate the fire-and-forget background-refresh breadcrumb write in the real source -- its wording changed in a way this test does not expect');
   const buggySrc=inviteRealSrc.replace(fixedBlock,buggyBlock);
   assert.notEqual(buggySrc,inviteRealSrc,'test setup error: could not construct the reverted buggy source');
-  assert.ok(!buggySrc.includes('diagRefsSaveOutcome'),'test setup error: reverted source must not still reference diagRefsSaveOutcome');
+  assert.ok(!buggySrc.includes('backgroundRefreshOutcome'),'test setup error: reverted source must not still reference backgroundRefreshOutcome');
 
   const tmpPath=invitePath.replace(/\.js$/,'.refssaveoutcomefailbefore.tmp.js');
   fs.writeFileSync(tmpPath,buggySrc);
@@ -250,7 +260,7 @@ async function runInviteFailBefore(){
       swimmerTrainingBG:{candidateSessionsFor:()=>[],viewFor:()=>null},
       performanceEngine:{pathwaysForAthlete:()=>({events:[]})},
       swimmerPerformanceBM:{
-        prepareAthlete:()=>Promise.resolve({completion:{ok:false,rows:0,errors:['x: timed out'],refsSaveOutcome:'timeout',refsSaveMs:5001},model:{events:[]}}),
+        completeEvidence:()=>Promise.resolve({ok:false,rows:0,errors:['x: timed out']}),
         readinessFor:()=>({ok:true,issues:[]}),
       },
     };
@@ -264,10 +274,11 @@ async function runInviteFailBefore(){
     const wrap=modalHost._appended[0];
     const generate=wrap.querySelector('[data-bn-generate]');
     await generate.onclick().catch(()=>{});
+    await new Promise(r=>setTimeout(r,10));
     const attempt=M.swimmerInviteBN.lastAttemptStatus();
     assert.ok(attempt,'fixture sanity: a breadcrumb must still exist (base attempt-tracking predates this diagnostic)');
-    assert.equal(attempt.diagRefsSaveOutcome,undefined,'pre-fix source must never write diagRefsSaveOutcome -- confirms this test would have caught its absence');
-    assert.equal(attempt.diagRefsSaveMs,undefined,'pre-fix source must never write diagRefsSaveMs -- confirms this test would have caught its absence');
+    assert.equal(attempt.backgroundRefreshOutcome,undefined,'pre-fix source must never write backgroundRefreshOutcome -- confirms this test would have caught its absence');
+    assert.equal(attempt.backgroundRefreshAt,undefined,'pre-fix source must never write backgroundRefreshAt -- confirms this test would have caught its absence');
   }finally{
     fs.unlinkSync(tmpPath);
   }
@@ -281,7 +292,7 @@ async function runInviteFailBefore(){
   await runOutcomeError();
   await runPropagatesThroughPrepareAthlete();
   await runCiFailBefore();
-  await runInviteWritesDiagFields();
+  await runInviteWritesBackgroundRefreshOutcome();
   await runInviteFailBefore();
   require('node:child_process').execFileSync(process.execPath,['--check',ciPath],{stdio:'pipe'});
   require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});

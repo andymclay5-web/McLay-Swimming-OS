@@ -88,6 +88,25 @@ function okFetch(){
     return{ok:true,text:async()=>text};
   };
 }
+// 19 Sept 2026 redesign (Andy, direct: "I just want to give them access ... this back and forth is wearing
+// me down"): the live prepareAthlete()/completeEvidence() call that used to be this fixture's "stuck" step
+// was removed from Generate's critical path entirely -- it's still real (just fire-and-forget in the
+// background now), so it can no longer be what a coach sees frozen on screen. The first genuinely awaited
+// network step left in the flow is the msos_bootstrap_owner RPC, so THAT is now the fixture's stuck point:
+// the very first fetch() call ever made (attempt 1's bootstrap_owner) never resolves, and every fetch call
+// after it succeeds normally -- reproducing "first attempt frozen, second attempt succeeds cleanly" under
+// the new architecture, which is exactly what this test needs to keep proving the concurrency guard itself.
+function hangFirstThenOkFetch(){
+  let callCount=0;
+  return async(url)=>{
+    callCount++;
+    if(callCount===1)return new Promise(()=>{});
+    const text=String(url).includes('msos_create_swimmer_invite')
+      ?JSON.stringify({invite_token:'tok-concurrent-fixture',expires_at:new Date(Date.now()+900000).toISOString()})
+      :JSON.stringify({});
+    return{ok:true,text:async()=>text};
+  };
+}
 
 function bootFixture(src){
   const modalHost=makeNode('div');
@@ -117,16 +136,13 @@ function bootFixture(src){
     },
     performanceEngine:{pathwaysForAthlete:()=>({events:[{course:'SCM',distance:100,stroke:'Freestyle',seconds:60.5,points:500,ladder:{tracks:{SCM:[],LCM:[]},next:null},raw:{}}]})},
     swimmerPerformanceBM:{
-      // The FIRST attempt's prepareAthlete never resolves -- a stuck evidence check, exactly like Matthew
-      // Robertson's real, still-unexplained freeze on "Checking swimmer evidence... (5/5 * training_test_
-      // types)". It still fires its one onJob checkpoint first (synchronously, before returning the pending
-      // promise) so the stuck attempt's ticker genuinely has that real status to keep re-stamping. Every
-      // later call resolves normally and fast, simulating a fresh retry succeeding cleanly.
-      prepareAthlete:(a,{onJob}={})=>{prepareCallCount++;onJob?.('training_test_types',5,5);if(prepareCallCount===1)return new Promise(()=>{});return Promise.resolve({completion:{ok:true}});},
+      // No longer awaited in Generate's critical path (19 Sept redesign) -- fire-and-forget background
+      // refresh only, so it resolving instantly or never makes no difference to this test's timing.
+      completeEvidence:()=>{prepareCallCount++;return Promise.resolve({ok:true,rows:0,errors:[]});},
       readinessFor:()=>({ok:true,issues:[]}),
     },
   };
-  global.fetch=okFetch();
+  global.fetch=hangFirstThenOkFetch();
   const loadPath=src?null:invitePath;
   if(src){
     const tmpPath=invitePath.replace(/\.js$/,'.concurrentfailbefore.tmp.js');
@@ -161,7 +177,7 @@ async function runStaleAttemptIsCancelledByANewOne(){
   await new Promise(r=>setTimeout(r,25)); // let its ticker write a few times
 
   const attemptWhileStuck=M.swimmerInviteBN.lastAttemptStatus();
-  assert.equal(attemptWhileStuck.step,'Checking swimmer evidence… (5/5 · training_test_types)','fixture sanity: the first attempt must actually be stuck on the real symptom step for this test to mean anything');
+  assert.equal(attemptWhileStuck.step,'Establishing secure owner access…','fixture sanity: the first attempt must actually be stuck on the real symptom step for this test to mean anything');
   assert.ok(storage._calls.length>2,"fixture sanity: the stuck first attempt's ticker must have written to the breadcrumb more than once");
 
   // Real coaching failure this reproduces: Andy closes/leaves the frozen modal and opens "Give swimmer
@@ -226,7 +242,7 @@ function runFailBefore(){
     const{generate:generate1}=await openModal(athletesHead,modalHost);
     generate1.onclick();
     await new Promise(r=>setTimeout(r,25));
-    assert.equal(M.swimmerInviteBN.lastAttemptStatus().step,'Checking swimmer evidence… (5/5 · training_test_types)','fixture sanity: the first attempt must be stuck on the real symptom step');
+    assert.equal(M.swimmerInviteBN.lastAttemptStatus().step,'Establishing secure owner access…','fixture sanity: the first attempt must be stuck on the real symptom step');
 
     const{generate:generate2}=await openModal(athletesHead,modalHost);
     await Promise.race([
@@ -242,7 +258,7 @@ function runFailBefore(){
     await new Promise(r=>setTimeout(r,60));
     const corrupted=M.swimmerInviteBN.lastAttemptStatus();
     assert.notDeepEqual(corrupted,rightAfterSecondSettles,'pre-fix source must let the stale first attempt keep writing and corrupt the breadcrumb after the second attempt already finished -- confirms this test would have caught the missing cancellation');
-    assert.equal(corrupted.step,'Checking swimmer evidence… (5/5 · training_test_types)','pre-fix source: the stale attempt\'s frozen step must be the thing that overwrote the real outcome');
+    assert.equal(corrupted.step,'Establishing secure owner access…','pre-fix source: the stale attempt\'s frozen step must be the thing that overwrote the real outcome');
 
     console.log('QR_CONCURRENT_GUARD_FAILBEFORE_PASS');
   })();

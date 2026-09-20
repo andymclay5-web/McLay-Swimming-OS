@@ -77,11 +77,14 @@ function bootFixture(){
       viewFor:()=>null,
     },
     performanceEngine:{pathwaysForAthlete:()=>({events:[{course:'SCM',distance:100,stroke:'Freestyle',seconds:60.5,points:500,ladder:{tracks:{SCM:[],LCM:[]},next:null},raw:{}}]})},
-    // The bug condition: evidence-checking itself never resolves -- exactly Andy's report of the flow
-    // stalling on the "Checking swimmer evidence..." step specifically, with onJob reporting the real
-    // "5/5 * training_test_types" shape before the hang.
+    // 19 Sept 2026 redesign (Andy, direct: "I just want to give them access ... this back and forth is
+    // wearing me down"): the live evidence-check step this fixture used to hang on was removed from
+    // Generate's critical path entirely (completeEvidence is now fire-and-forget in the background, never
+    // awaited here). The bug condition that reproduces a genuinely stuck attempt now lives one step later --
+    // the msos_bootstrap_owner RPC (global.fetch below hangs forever) -- so this fixture just needs
+    // completeEvidence/readinessFor to resolve normally and fast.
     swimmerPerformanceBM:{
-      prepareAthlete:(a,{onJob}={})=>{onJob?.('training_test_types',5,5);return new Promise(()=>{});},
+      completeEvidence:()=>Promise.resolve({ok:true,rows:0,errors:[]}),
       readinessFor:()=>({ok:true,issues:[]}),
     },
   };
@@ -115,7 +118,7 @@ async function run(){
   assert.ok(midFlight,'a breadcrumb must exist while the step is genuinely stuck, mid-flight, without waiting for the flow to settle');
   assert.equal(midFlight.athleteName,athlete.full_name,'breadcrumb must name the athlete the coach was generating access for');
   assert.equal(midFlight.resolvedAt,null,'a still-stuck attempt must not be marked resolved');
-  assert.match(midFlight.step,/Checking swimmer evidence.*5\/5.*training_test_types/,`breadcrumb must record the real stuck step, got: ${JSON.stringify(midFlight.step)}`);
+  assert.equal(midFlight.step,'Establishing secure owner access…',`breadcrumb must record the real stuck step, got: ${JSON.stringify(midFlight.step)}`);
   assert.ok(Number(midFlight.tickSeconds)>=0,'breadcrumb must record an elapsed-seconds figure for the stuck step');
 
   // Now let the flow actually settle (the overall timeout fires) and confirm the breadcrumb is updated to
@@ -175,7 +178,7 @@ async function runFailBefore(){
       currentSession:()=>({id:'sess-1',identity:{date:'2026-09-16',slot:'AM',course:'SCM'},title:'Threshold set',finish:false}),
       swimmerTrainingBG:{projectionFor:()=>({date:'2026-09-16',squad:'Development',course:'SCM',title:'Threshold set',metres:{recorded:4000},delivery:'',zones:{},strokes:{},tags:{},blocks:[]}),viewFor:()=>null},
       performanceEngine:{pathwaysForAthlete:()=>({events:[]})},
-      swimmerPerformanceBM:{prepareAthlete:(a,{onJob}={})=>{onJob?.('training_test_types',5,5);return new Promise(()=>{});},readinessFor:()=>({ok:true,issues:[]})},
+      swimmerPerformanceBM:{completeEvidence:()=>Promise.resolve({ok:true,rows:0,errors:[]}),readinessFor:()=>({ok:true,issues:[]})},
     };
     global.fetch=()=>new Promise(()=>{});
     delete require.cache[require.resolve(tmpPath)];
