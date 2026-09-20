@@ -93,8 +93,14 @@ const X=global.MSOS4.swimmerPerformanceBM;
   // than silently leaving dead, misleading code behind.
   assert.ok(!/onJob:\(name,i,total\)=>\{mark\(name\);note\(i&&total\?/.test(inviteSrc),
     'swimmer-invite-bn.js should no longer wire a live per-job onJob progress callback into Generate -- that live evidence step was intentionally removed on 19 Sept');
-  assert.match(inviteSrc,/note\('Assembling private swimmer view…'\);const portal=payloadFor\(a,name=>\{mark\(`payload:\$\{name\}`\);note\(/,
-    'swimmer-invite-bn.js must give the payload-assembly step (payloadFor) its own status line, right before it runs, and must wire a per-sub-step callback into it');
+  // 20 Sept 2026 update: the payload-assembly step Generate awaits live is now corePayloadFor (identity +
+  // session + squad sessions only, instantly bounded) rather than the full, analytical payloadFor -- see
+  // corePayloadFor's own comment in engines/swimmer-invite-bn.js for why (a real reported freeze traced to
+  // an unbounded analytical step in this same payload, so the analytical parts moved to a deferred
+  // background republish outside Generate's critical path entirely). The status-line/per-sub-step-callback
+  // wiring this test protects is unchanged -- only which function it wraps changed.
+  assert.match(inviteSrc,/note\('Assembling private swimmer view…'\);const portal=corePayloadFor\(a,name=>\{mark\(`payload:\$\{name\}`\);note\(/,
+    'swimmer-invite-bn.js must give the payload-assembly step (corePayloadFor) its own status line, right before it runs, and must wire a per-sub-step callback into it');
 
   console.log('SWIMMER_GENERATE_QR_MODEL_PROGRESS_PASS', JSON.stringify(calls.map(c=>c.name)));
 

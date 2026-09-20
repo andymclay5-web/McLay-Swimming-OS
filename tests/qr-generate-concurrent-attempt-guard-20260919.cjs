@@ -192,14 +192,34 @@ async function runStaleAttemptIsCancelledByANewOne(){
   assert.equal(finalAttempt.outcome,'ok','the second, retried attempt must be able to succeed cleanly even while the first is technically still alive in the background');
   assert.equal(finalAttempt.step,'done',"the breadcrumb must show the SECOND attempt genuinely finishing, not the first attempt's frozen step still sitting there");
 
-  // Confirm the stuck first attempt's ticker was actually torn down, not merely outraced this one time: let
-  // real time pass (well past its own 5ms tick interval) after the second attempt has finished, and prove no
-  // further write ever lands. A still-alive stray ticker would keep re-stamping its own frozen step forever,
-  // eventually overwriting the second attempt's genuine "done" outcome.
-  const writesAfterSecondSettles=storage._calls.length;
+  // 20 Sept 2026 architecture change (corePayloadFor + deferred background enrichment, added the same night
+  // as the training-history-view fix, for the same reason: Generate must never again be at the mercy of a
+  // slow analytical step): a REAL, WINNING attempt now legitimately keeps writing to this same breadcrumb key
+  // for a little while after 'done' -- its own fire-and-forget setTimeout(...,0) republishes the full,
+  // enriched payload and stamps enrichmentStep/enrichmentOutcome/enrichmentAt as it goes. That is expected,
+  // wanted behaviour, not the stray-ticker bug this test exists to catch. So: wait for that enrichment to
+  // actually finish (bounded poll, not a fixed sleep -- avoids a flaky race against however many steps
+  // payloadFor() happens to have), confirm it succeeded, and confirm the fields a stray FIRST-attempt ticker
+  // would corrupt (step/outcome/resolvedAt) survive it untouched -- THEN prove no further write of any kind
+  // ever lands, which is the real invariant: a still-alive stray ticker would keep re-stamping its own frozen
+  // step forever, even after the second attempt's own legitimate background work has long finished.
+  const enrichmentSettled=await(async()=>{
+    for(let i=0;i<50;i++){
+      const s=M.swimmerInviteBN.lastAttemptStatus();
+      if(s.enrichmentOutcome)return s;
+      await new Promise(r=>setTimeout(r,10));
+    }
+    throw new Error('TEST_HARNESS_GUARD: background enrichment never settled');
+  })();
+  assert.equal(enrichmentSettled.enrichmentOutcome,'ok','fixture sanity: background enrichment must succeed cleanly in this fixture');
+  assert.equal(enrichmentSettled.step,'done',"the second attempt's real 'done' step must survive the background enrichment writes that follow it");
+  assert.equal(enrichmentSettled.outcome,'ok',"the second attempt's real 'ok' outcome must survive the background enrichment writes that follow it");
+  assert.equal(enrichmentSettled.resolvedAt,finalAttempt.resolvedAt,"the second attempt's resolvedAt must not be re-stamped by anything after it, including its own background enrichment");
+
+  const writesAfterEnrichmentSettles=storage._calls.length;
   await new Promise(r=>setTimeout(r,60));
-  assert.equal(storage._calls.length,writesAfterSecondSettles,"the first, superseded attempt's ticker must be fully cancelled -- a still-running stray ticker would keep writing to the shared breadcrumb key forever");
-  assert.deepEqual(M.swimmerInviteBN.lastAttemptStatus(),finalAttempt,'no stray write from the superseded attempt may land after the real attempt has finished');
+  assert.equal(storage._calls.length,writesAfterEnrichmentSettles,"the first, superseded attempt's ticker must be fully cancelled -- a still-running stray ticker would keep writing to the shared breadcrumb key forever, and the second attempt's own background enrichment has already finished so nothing legitimate should write either");
+  assert.deepEqual(M.swimmerInviteBN.lastAttemptStatus(),enrichmentSettled,'no stray write from the superseded attempt may land after the real attempt -- including its own background enrichment -- has finished');
 
   console.log('QR_CONCURRENT_GUARD_SUPERSEDE_PASS');
 }
