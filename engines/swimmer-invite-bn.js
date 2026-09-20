@@ -287,14 +287,35 @@
       try{M.swimmerPerformanceBM?.completeEvidence?.(a)?.then?.(c=>{try{writeAttempt({backgroundRefreshOutcome:c?.ok===false?'errors':'ok',backgroundRefreshAt:new Date().toISOString()});}catch{}},()=>{try{writeAttempt({backgroundRefreshOutcome:'threw',backgroundRefreshAt:new Date().toISOString()});}catch{}});}catch{}
       if(gen.cancelled)return;
       try{await withTimeout((async()=>{mark('readiness_check');note('Checking swimmer readiness…');const ready=M.swimmerPerformanceBM?.readinessFor?.(a)||{ok:true,issues:[],model:{events:[]}};if(!ready.ok)throw new Error(`Swimmer access held: ${ready.issues.join(' ')}`);if(gen.cancelled)return;const eventCount=Number(ready.model?.events?.length)||0;note('Assembling private swimmer view…');const portal=corePayloadFor(a,name=>{mark(`payload:${name}`);note(`Assembling private swimmer view… (${String(name||'').replace(/_/g,' ')})`);});if(gen.cancelled)return;if(!portal.session?.blocks?.length)throw new Error('Swimmer access held: no current individual session is published.');if(portal.session.blocks.some(b=>(b.items||[]).some(i=>!i.id)))throw new Error('Swimmer access held: one or more session lines do not have stable item identity for Challenge / Edit logging.');mark('bootstrap_owner');note('Establishing secure owner access…');await rpc('msos_bootstrap_owner',{});if(gen.cancelled)return;mark('interaction_layer');note('Checking Challenge / Edit / Finish link…');await verifySessionInteractionLayer(a,portal.session.id);if(gen.cancelled)return;mark('publish_payload');note(`Verified ${eventCount} event${eventCount===1?'':'s'} + current session + feedback link. Publishing private view…`);await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:portal});if(gen.cancelled)return;mark('create_invite');const inv=await rpc('msos_create_swimmer_invite',{p_athlete_id:String(a.id),p_minutes:15});if(gen.cancelled)return;activeUrl=new URL('swimmer-portal.html',location.href);activeUrl.searchParams.set('invite',inv.invite_token);activeUrl=activeUrl.toString();urlBox.textContent=activeUrl;urlBox.hidden=false;copy.hidden=false;qr.innerHTML='';mark('load_qr');note('Loading QR renderer…');const Q=await loadQr();if(gen.cancelled)return;new Q(qr,{text:activeUrl,width:240,height:240,correctLevel:Q.CorrectLevel?.M});setStatus(`Ready · session + ${eventCount} event${eventCount===1?'':'s'} + feedback link verified · one scan only · expires ${new Date(inv.expires_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`,'ok');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'ok',step:'done',message:''});
-        // 20 Sept 2026: performance/training/tests/meet are deliberately NOT part of the payload published
-        // above -- see corePayloadFor's own comment for why. Build and publish the full, enriched payload
-        // now, but deferred via setTimeout so it runs AFTER this handler's own synchronous work (and the
-        // QR/"Ready" status the coach is actually watching) has already rendered, and entirely outside
-        // withTimeout/GENERATE_TIMEOUT_MS above -- however long this takes, or even if it never finishes,
-        // it can no longer delay or fail the access the coach already has in hand. Silent by design (writes
-        // only to the breadcrumb, never to setStatus/mark/note) so it can never overwrite the "Ready" status
-        // still on screen.
+        // 20 Sept 2026, DISABLED same night it shipped (Andy, live, right after this exact build reached
+        // William Callow's 'payload:performance' step cleanly in 2.5s: a LATER attempt for Matthew Robertson
+        // then locked the whole phone solid -- "I can't copy the link cause it's frozen, cant do anything but
+        // back back" -- unresponsive to every tap, not just the modal, until he force-backed out. That is a
+        // different, worse symptom than any of tonight's three earlier freezes (which always left the UI
+        // responsive even when a specific attempt was stuck) and it points squarely at THIS deferred block:
+        // moving payloadFor()'s slow analytical work later, via setTimeout, only delays WHEN it starts --
+        // JavaScript has one thread, so once a synchronous computation is running, deferring its start time
+        // does nothing to stop it from hogging that one thread for however long it takes, exactly like the
+        // athleteTrainingView() freeze earlier tonight did before it was bounded. The design comment this
+        // replaced argued the opposite ("it can no longer delay or fail the access... however long this
+        // takes") -- that was wrong about the phone staying usable, even though the access itself genuinely
+        // does stay safe. safePerformance()/buildAthletePathways() (the one analytical step not yet proven
+        // safe against Andy's real data volume -- performance-pathway-ck.js/race-pace.js/wa-points.js were
+        // read carefully earlier tonight without finding an unbounded loop, but that same "read it, find
+        // nothing" result is exactly what happened before both of tonight's other two real bugs were found by
+        // finally counting real operations against real data instead) is the leading suspect, but is NOT
+        // confirmed -- there was no time to reproduce it against Andy's actual data before he needed his
+        // phone back mid-session. Rather than ship a fourth guess, this deferred republish is disabled
+        // entirely for now: Generate publishes ONLY corePayloadFor's minimal, twice-proven-fast shape (this
+        // build's own instant success for William Callow, and the training-view-window build's fix before
+        // it), and nothing else runs afterward that could freeze the phone. Trade-off, stated plainly: a
+        // swimmer's performance/training/test/meet portal sections will stay empty (swimmer-portal.js already
+        // renders that gracefully) until this is re-enabled -- including for a swimmer who had richer data
+        // published before tonight, since every Generate republishes and overwrites their payload row. Do not
+        // re-enable this block without first proving, by counting real operations the way both earlier bugs
+        // tonight were actually confirmed, that payloadFor() cannot run long enough to matter -- reading the
+        // code and finding nothing has now failed to catch a real bug three times in one evening.
+        /*
         setTimeout(()=>{
           try{
             const full=payloadFor(a,name=>{try{writeAttempt({enrichmentStep:String(name||'')});}catch{}});
@@ -304,6 +325,7 @@
             );
           }catch(err){try{writeAttempt({enrichmentOutcome:'threw',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
         },0);
+        */
       })(),X.GENERATE_TIMEOUT_MS,()=>step);}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){if(!gen.cancelled){qr.innerHTML='<span class="muted">QR not generated</span>';setStatus(err?.message||String(err),'error');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'error',message:err?.message||String(err)});}}finally{if(activeGeneration===gen)activeGeneration=null;if(myGeneration===gen)myGeneration=null;genBtn.disabled=false}};copy.onclick=async()=>{if(!activeUrl)return;try{await navigator.clipboard.writeText(activeUrl);setStatus('Link copied.','ok')}catch{setStatus('Copy failed — use the QR code.','error')}};const revokeBtn=wrap.querySelector('[data-bn-revoke]');revokeBtn.onclick=async()=>{if(revokeBtn.disabled)return;revokeBtn.disabled=true;try{const n=await rpc('msos_revoke_swimmer_devices',{p_athlete_id:String(a.id)});setStatus(`${Number(n)||0} swimmer device${Number(n)===1?'':'s'} revoked.`,'ok')}catch(err){setStatus(err?.message||String(err),'error')}finally{revokeBtn.disabled=false}};}
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(installButton);}
