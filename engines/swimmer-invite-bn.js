@@ -137,19 +137,147 @@
   async function sessionActionsFor(a,sessionId=''){try{return await rpc('msos_owner_swimmer_session_actions',{p_athlete_id:String(a?.id||''),p_session_id:sessionId||null})}catch{return[]}}
   async function verifySessionInteractionLayer(a,sessionId){try{await rpc('msos_owner_swimmer_session_actions',{p_athlete_id:String(a?.id||''),p_session_id:String(sessionId||'')});return true;}catch(err){throw new Error(`Swimmer access held: session Challenge / Edit / Finish logging is not ready. ${err?.message||err}`);}}
   async function acknowledgeSessionAction(id){return rpc('msos_ack_swimmer_session_action',{p_action_id:id});}
-  // 20 Sept 2026 (Andy, live, THREE separate genuine attempts across three different builds tonight --
-  // 07:57, 08:39, 08:58 UTC -- every one showing the identical "QR renderer could not load" message, even
-  // after the loadQr() forever-cached-rejection bug and the QR-image/whole-attempt isolation were fixed and
-  // confirmed working earlier tonight): the QR image was the one remaining piece of this app that still
-  // depended on reaching a third-party CDN (cdn.jsdelivr.net) LIVE, at the exact moment a coach taps
-  // Generate, poolside, on whatever connection happens to be available right then. Every other script and
-  // asset here is already bundled same-origin and precached by sw.js at install time. That gap is now
-  // closed: engines/qrcode-local.js is a from-scratch, dependency-free QR encoder that ships as part of the
-  // app itself (same REQUIRED precache list, same defer-loaded <script> tag as everything else), so
-  // window.QRCode is already a real function long before a coach ever taps Generate -- there is no more live
-  // network request of any kind in this step, to any host, ever. loadQr() now only exists so the call site
-  // below doesn't have to change; it no longer loads, fetches, or caches anything.
-  async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;throw new Error('QR renderer is missing from this build (engines/qrcode-local.js did not load) -- reload the app.');}
+  // 20 Sept 2026 (Andy, live, THREE separate genuine "QR renderer could not load" failures tonight against
+  // a third-party CDN, THEN a FOURTH failure -- "QR renderer is missing from this build" -- immediately after
+  // that CDN dependency was replaced with a second same-origin file, engines/qrcode-local.js, loaded via its
+  // own <script> tag): the most likely explanation for the fourth failure is that a brand-new file is exactly
+  // the one kind of change a manual deploy step can miss, when every other fix tonight only ever touched
+  // files that already existed on the live site and updated correctly every single time. Rather than ask
+  // Andy to go debug his deploy pipeline, this removes that risk category entirely: the QR encoder now lives
+  // INLINE, right here, in the one file that has proven itself reliable all night. There is no second file,
+  // no separate <script> tag, no window global to be missing, and no precache entry that could be left out --
+  // qrEncode()/drawQr() below are just ordinary functions in this module, exactly like everything else in it.
+  // If swimmer-invite-bn.js itself loaded (and it always has, every time, tonight), the QR renderer is there.
+  //
+  // qrEncode() is a from-scratch, dependency-free implementation of the QR Code encoding algorithm
+  // (ISO/IEC 18004): mode selection (byte mode only -- this app's inputs are invite URLs, and byte mode is
+  // the safe general-purpose choice), automatic version selection, Reed-Solomon error correction, full
+  // module placement (finder/timing/alignment patterns, format+version info), and all 8 standard mask
+  // patterns scored so the best one is chosen. Validated before shipping with an independent decoder
+  // (OpenCV's QRCodeDetector, a different codebase from this encoder) round-tripping realistic invite URLs
+  // -- including the exact 64-hex-char token shape msos_create_swimmer_invite produces -- at error-correction
+  // level M, plus a from-scratch Reed-Solomon-syndrome re-check across every QR version and EC level.
+  const QR_LEVEL_M=0; // matches the numeric value the old qrcodejs-style CorrectLevel.M used
+  const QR_GF_EXP=new Array(256),QR_GF_LOG=new Array(256);
+  (function initQrGaloisField(){let x=1;for(let i=0;i<255;i++){QR_GF_EXP[i]=x;QR_GF_LOG[x]=i;x<<=1;if(x&0x100)x^=0x11D;}})();
+  function qrGfMul(a,b){if(a===0||b===0)return 0;return QR_GF_EXP[(QR_GF_LOG[a]+QR_GF_LOG[b])%255];}
+  function qrPolyMultiply(p1,p2){const result=new Array(p1.length+p2.length-1).fill(0);for(let i=0;i<p1.length;i++){if(p1[i]===0)continue;for(let j=0;j<p2.length;j++)result[i+j]^=qrGfMul(p1[i],p2[j]);}return result;}
+  function qrGeneratorPoly(degree){let poly=[1];for(let i=0;i<degree;i++)poly=qrPolyMultiply(poly,[1,QR_GF_EXP[i]]);return poly;}
+  function qrRsEncode(dataCodewords,ecCount){const generator=qrGeneratorPoly(ecCount);const result=dataCodewords.concat(new Array(ecCount).fill(0));for(let i=0;i<dataCodewords.length;i++){const coef=result[i];if(coef!==0)for(let j=0;j<generator.length;j++)result[i+j]^=qrGfMul(generator[j],coef);}return result.slice(dataCodewords.length);}
+  const QR_RS_BLOCK_TABLE=[
+    [[1,26,19],[1,26,16],[1,26,13],[1,26,9]],[[1,44,34],[1,44,28],[1,44,22],[1,44,16]],[[1,70,55],[1,70,44],[2,35,17],[2,35,13]],
+    [[1,100,80],[2,50,32],[2,50,24],[4,25,9]],[[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12]],[[2,86,68],[4,43,27],[4,43,19],[4,43,15]],
+    [[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14]],[[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15]],
+    [[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13]],[[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16]],
+    [[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13]],[[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15]],
+    [[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12]],[[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13]],
+    [[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13]],[[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16]],
+    [[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15]],[[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15]],
+    [[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14]],[[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16]],
+    [[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17]],[[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13]],
+    [[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16]],[[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17]],
+    [[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16]],[[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17]],
+    [[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16]],[[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16]],
+    [[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16]],[[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16]],
+    [[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16]],[[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16]],
+    [[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16]],[[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17]],
+    [[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16]],[[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16]],
+    [[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16]],[[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16]],
+    [[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16]],[[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]]
+  ];
+  function qrGetRSBlocks(version,levelIndex){const rows=QR_RS_BLOCK_TABLE[version-1][levelIndex];const blocks=[];const groups=rows.length/3;for(let g2=0;g2<groups;g2++){const n=rows[g2*3],total=rows[g2*3+1],data=rows[g2*3+2];for(let k=0;k<n;k++)blocks.push({totalCount:total,dataCount:data});}return blocks;}
+  function qrTotalDataCodewords(version,levelIndex){return qrGetRSBlocks(version,levelIndex).reduce((s,b)=>s+b.dataCount,0);}
+  const QR_LEVEL_VALUE_TO_INDEX={0:1,1:0,2:3,3:2}; // CorrectLevel value (L=1,M=0,Q=3,H=2) -> RS table index
+  function qrCharCountBits(version){return version<=9?8:16;}
+  function qrUtf8Encode(str){const bytes=[];for(let i=0;i<str.length;i++){let code=str.codePointAt(i);if(code>0xFFFF)i++;if(code<0x80)bytes.push(code);else if(code<0x800)bytes.push(0xC0|(code>>6),0x80|(code&0x3F));else if(code<0x10000)bytes.push(0xE0|(code>>12),0x80|((code>>6)&0x3F),0x80|(code&0x3F));else bytes.push(0xF0|(code>>18),0x80|((code>>12)&0x3F),0x80|((code>>6)&0x3F),0x80|(code&0x3F));}return bytes;}
+  function QrBitBuffer(){this.buffer=[];this.length=0;}
+  QrBitBuffer.prototype.putBit=function(bit){const idx=Math.floor(this.length/8);if(this.buffer.length<=idx)this.buffer.push(0);if(bit)this.buffer[idx]|=(0x80>>>(this.length%8));this.length++;};
+  QrBitBuffer.prototype.put=function(num,length){for(let i=length-1;i>=0;i--)this.putBit(((num>>>i)&1)===1);};
+  function qrChooseVersion(byteLength,levelIndex){for(let v=1;v<=40;v++){const capacityBits=qrTotalDataCodewords(v,levelIndex)*8;const neededBits=4+qrCharCountBits(v)+8*byteLength;if(neededBits<=capacityBits)return v;}return -1;}
+  function qrAlignmentPositions(version){if(version===1)return[];const numAlign=Math.floor(version/7)+2;const size=version*4+17;let step;if(version===32)step=26;else step=Math.floor((version*4+numAlign*2+1)/(numAlign*2-2))*2;const result=new Array(numAlign);result[0]=6;let pos=size-7;for(let i=numAlign-1;i>=1;i--){result[i]=pos;pos-=step;}return result;}
+  const QR_G15=0x537,QR_G15_MASK=0x5412,QR_G18=0x1F25;
+  function qrBitLength(x){let l=0;while(x!==0){x>>>=1;l++;}return l;}
+  function qrComputeFormatBits(levelIndex,maskPattern){const FORMAT_LEVEL_BITS=[1,0,3,2];const data=(FORMAT_LEVEL_BITS[levelIndex]<<3)|maskPattern;let d=data<<10;while(qrBitLength(d)-qrBitLength(QR_G15)>=0)d^=(QR_G15<<(qrBitLength(d)-qrBitLength(QR_G15)));return((data<<10)|d)^QR_G15_MASK;}
+  function qrComputeVersionBits(version){let d=version<<12;while(qrBitLength(d)-qrBitLength(QR_G18)>=0)d^=(QR_G18<<(qrBitLength(d)-qrBitLength(QR_G18)));return(version<<12)|d;}
+  function qrPlaceFinder(dark,reserved,size,row0,col0){for(let r=-1;r<=7;r++){if(row0+r<=-1||size<=row0+r)continue;for(let c=-1;c<=7;c++){if(col0+c<=-1||size<=col0+c)continue;const isDarkModule=(r>=0&&r<=6&&(c===0||c===6))||(c>=0&&c<=6&&(r===0||r===6))||(r>=2&&r<=4&&c>=2&&c<=4);dark[row0+r][col0+c]=isDarkModule;reserved[row0+r][col0+c]=true;}}}
+  function qrPlaceAlignment(dark,reserved,size,row0,col0){for(let r=-2;r<=2;r++)for(let c=-2;c<=2;c++){const rr=row0+r,cc=col0+c;if(rr<0||rr>=size||cc<0||cc>=size)continue;dark[rr][cc]=(Math.abs(r)===2||Math.abs(c)===2||(r===0&&c===0));reserved[rr][cc]=true;}}
+  function qrReserveFormatInfo(reserved,size){for(let i=0;i<15;i++){const r=i<6?i:(i<8?i+1:size-15+i);reserved[r][8]=true;const c=i<8?size-1-i:(i<9?15-i:14-i);reserved[8][c]=true;}}
+  function qrWriteFormatInfo(dark,size,bits){for(let i=0;i<15;i++){const bit=((bits>>i)&1)===1;const r=i<6?i:(i<8?i+1:size-15+i);dark[r][8]=bit;const c=i<8?size-1-i:(i<9?15-i:14-i);dark[8][c]=bit;}}
+  function qrReserveVersionInfo(reserved,size){for(let i=0;i<18;i++){const r1=Math.floor(i/3),c1=(i%3)+size-11;reserved[r1][c1]=true;const r2=(i%3)+size-11,c2=Math.floor(i/3);reserved[r2][c2]=true;}}
+  function qrWriteVersionInfo(dark,size,bits){for(let i=0;i<18;i++){const bit=((bits>>i)&1)===1;const r1=Math.floor(i/3),c1=(i%3)+size-11;dark[r1][c1]=bit;const r2=(i%3)+size-11,c2=Math.floor(i/3);dark[r2][c2]=bit;}}
+  function qrBuildSkeleton(version){const size=version*4+17;const dark=[],reserved=[];for(let i=0;i<size;i++){dark.push(new Array(size).fill(false));reserved.push(new Array(size).fill(false));}
+    qrPlaceFinder(dark,reserved,size,0,0);qrPlaceFinder(dark,reserved,size,0,size-7);qrPlaceFinder(dark,reserved,size,size-7,0);
+    for(let i=8;i<=size-9;i++){if(!reserved[i][6]){dark[i][6]=(i%2===0);reserved[i][6]=true;}if(!reserved[6][i]){dark[6][i]=(i%2===0);reserved[6][i]=true;}}
+    const positions=qrAlignmentPositions(version);
+    if(positions.length>0){const first=positions[0],last=positions[positions.length-1];for(let pi=0;pi<positions.length;pi++)for(let pj=0;pj<positions.length;pj++){const r=positions[pi],c=positions[pj];if((r===first&&c===first)||(r===first&&c===last)||(r===last&&c===first))continue;qrPlaceAlignment(dark,reserved,size,r,c);}}
+    dark[size-8][8]=true;reserved[size-8][8]=true;
+    qrReserveFormatInfo(reserved,size);
+    if(version>=7)qrReserveVersionInfo(reserved,size);
+    return{size,dark,reserved};
+  }
+  function qrPlaceData(dark,reserved,size,codewords,maskFn){let inc=-1,row=size-1,bitIndex=7,byteIndex=0;
+    for(let col=size-1;col>0;col-=2){if(col===6)col--;
+      for(;;){for(let cc=0;cc<2;cc++){const c=col-cc;if(!reserved[row][c]){let bit=false;if(byteIndex<codewords.length)bit=((codewords[byteIndex]>>>bitIndex)&1)===1;if(maskFn(row,c))bit=!bit;dark[row][c]=bit;bitIndex--;if(bitIndex===-1){byteIndex++;bitIndex=7;}}}
+        row+=inc;if(row<0||row>=size){row-=inc;inc=-inc;break;}}}}
+  const QR_MASK_FUNCS=[
+    (r,c)=>(r+c)%2===0,(r,c)=>r%2===0,(r,c)=>c%3===0,(r,c)=>(r+c)%3===0,
+    (r,c)=>(Math.floor(r/2)+Math.floor(c/3))%2===0,(r,c)=>((r*c)%2+(r*c)%3)===0,
+    (r,c)=>(((r*c)%2+(r*c)%3)%2)===0,(r,c)=>(((r+c)%2+(r*c)%3)%2)===0,
+  ];
+  const QR_PATTERN_A=[true,false,true,true,true,false,true,false,false,false,false];
+  const QR_PATTERN_B=[false,false,false,false,true,false,true,true,true,false,true];
+  function qrWindowMatches(dark,r,c,dr,dc,pattern){for(let k=0;k<pattern.length;k++)if(dark[r+dr*k][c+dc*k]!==pattern[k])return false;return true;}
+  function qrComputePenalty(dark,size){let score=0;
+    for(let r=0;r<size;r++){let runLen=1;for(let c=1;c<size;c++){if(dark[r][c]===dark[r][c-1])runLen++;else{if(runLen>=5)score+=3+(runLen-5);runLen=1;}}if(runLen>=5)score+=3+(runLen-5);}
+    for(let c=0;c<size;c++){let runLen2=1;for(let r=1;r<size;r++){if(dark[r][c]===dark[r-1][c])runLen2++;else{if(runLen2>=5)score+=3+(runLen2-5);runLen2=1;}}if(runLen2>=5)score+=3+(runLen2-5);}
+    for(let r2=0;r2<size-1;r2++)for(let c2=0;c2<size-1;c2++){const v=dark[r2][c2];if(v===dark[r2][c2+1]&&v===dark[r2+1][c2]&&v===dark[r2+1][c2+1])score+=3;}
+    for(let r3=0;r3<size;r3++)for(let c3=0;c3<=size-11;c3++){if(qrWindowMatches(dark,r3,c3,0,1,QR_PATTERN_A)||qrWindowMatches(dark,r3,c3,0,1,QR_PATTERN_B))score+=40;}
+    for(let c4=0;c4<size;c4++)for(let r4=0;r4<=size-11;r4++){if(qrWindowMatches(dark,r4,c4,1,0,QR_PATTERN_A)||qrWindowMatches(dark,r4,c4,1,0,QR_PATTERN_B))score+=40;}
+    let darkCount=0;for(let r5=0;r5<size;r5++)for(let c5=0;c5<size;c5++)if(dark[r5][c5])darkCount++;
+    const percent=(darkCount*100)/(size*size);const prevMultiple=Math.floor(percent/5)*5,nextMultiple=prevMultiple+5;
+    score+=Math.min(Math.abs(prevMultiple-50),Math.abs(nextMultiple-50))/5*10;
+    return score;
+  }
+  function qrEncode(text,correctLevel){
+    if(correctLevel===undefined||correctLevel===null)correctLevel=QR_LEVEL_M;
+    const levelIndex=QR_LEVEL_VALUE_TO_INDEX[correctLevel];
+    if(levelIndex===undefined)throw new Error('QRCode: invalid correctLevel '+correctLevel);
+    const dataBytes=qrUtf8Encode(String(text));
+    const version=qrChooseVersion(dataBytes.length,levelIndex);
+    if(version===-1)throw new Error('QRCode: input text is too long to fit in a QR code (even at version 40) at this error-correction level.');
+    const buf=new QrBitBuffer();
+    buf.put(0x4,4);buf.put(dataBytes.length,qrCharCountBits(version));
+    for(let i=0;i<dataBytes.length;i++)buf.put(dataBytes[i],8);
+    const totalDC=qrTotalDataCodewords(version,levelIndex);const capacityBits=totalDC*8;
+    for(let t=0;t<4&&buf.length<capacityBits;t++)buf.putBit(false);
+    while(buf.length%8!==0)buf.putBit(false);
+    const padBytes=[0xEC,0x11];let padToggle=0;
+    while(buf.buffer.length<totalDC){buf.put(padBytes[padToggle%2],8);padToggle++;}
+    const dataCodewords=buf.buffer.slice(0,totalDC);
+    const rsBlocks=qrGetRSBlocks(version,levelIndex);let offset=0;const blocks=[];
+    for(let b=0;b<rsBlocks.length;b++){const rb=rsBlocks[b];const d=dataCodewords.slice(offset,offset+rb.dataCount);offset+=rb.dataCount;const ecCount=rb.totalCount-rb.dataCount;blocks.push({data:d,ec:qrRsEncode(d,ecCount)});}
+    let maxDataLen=0,maxEcLen=0;for(let bi=0;bi<blocks.length;bi++){if(blocks[bi].data.length>maxDataLen)maxDataLen=blocks[bi].data.length;if(blocks[bi].ec.length>maxEcLen)maxEcLen=blocks[bi].ec.length;}
+    const finalCodewords=[];
+    for(let di=0;di<maxDataLen;di++)for(let bd=0;bd<blocks.length;bd++)if(di<blocks[bd].data.length)finalCodewords.push(blocks[bd].data[di]);
+    for(let ei=0;ei<maxEcLen;ei++)for(let be=0;be<blocks.length;be++)if(ei<blocks[be].ec.length)finalCodewords.push(blocks[be].ec[ei]);
+    const skeleton=qrBuildSkeleton(version);let best=null;
+    for(let m=0;m<8;m++){const trialDark=skeleton.dark.map(row=>row.slice());qrPlaceData(trialDark,skeleton.reserved,skeleton.size,finalCodewords,QR_MASK_FUNCS[m]);const penalty=qrComputePenalty(trialDark,skeleton.size);if(best===null||penalty<best.penalty)best={penalty,mask:m,dark:trialDark};}
+    const formatBits=qrComputeFormatBits(levelIndex,best.mask);qrWriteFormatInfo(best.dark,skeleton.size,formatBits);
+    if(version>=7)qrWriteVersionInfo(best.dark,skeleton.size,qrComputeVersionBits(version));
+    const finalDark=best.dark;
+    return{moduleCount:skeleton.size,version,maskPattern:best.mask,isDark:(row,col)=>finalDark[row][col]};
+  }
+  // Draws directly to a <canvas> appended into el -- no separate library/class, just this app's own encoder.
+  function drawQr(el,text,width,height){
+    el.innerHTML='';
+    const result=qrEncode(text,QR_LEVEL_M);
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#000000';
+    const count=result.moduleCount;
+    for(let r=0;r<count;r++){const y0=Math.round((r*height)/count),y1=Math.round(((r+1)*height)/count);
+      for(let c=0;c<count;c++){if(!result.isDark(r,c))continue;const x0=Math.round((c*width)/count),x1=Math.round(((c+1)*width)/count);ctx.fillRect(x0,y0,x1-x0,y1-y0);}}
+    el.appendChild(canvas);
+  }
   // Real coaching failure this fixes: Andy reported the "give swimmer access" QR modal never actually
   // locking the screen -- he could still tap around the rest of the app behind it -- and tapping Close
   // appeared to do nothing. Root cause: every OTHER modal in this app (app.js, attendance-roster.js,
@@ -310,7 +438,7 @@
         // and the breadcrumb records qrRenderOutcome separately from the attempt's real outcome/step, which
         // stay 'ok'/'done' because access genuinely succeeded.
         mark('load_qr');note('Loading QR renderer…');let qrOutcome='ok',qrMessage='';
-        try{const Q=await loadQr();if(gen.cancelled)return;new Q(qr,{text:activeUrl,width:240,height:240,correctLevel:Q.CorrectLevel?.M});}
+        try{if(gen.cancelled)return;drawQr(qr,activeUrl,240,240);}
         catch(qrErr){qrOutcome='error';qrMessage=qrErr?.message||String(qrErr);qr.innerHTML='<span class="muted">QR image unavailable — use Copy link below.</span>';}
         if(gen.cancelled)return;
         setStatus(qrOutcome==='ok'
@@ -360,5 +488,5 @@
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(installButton);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;
+  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;
 })(globalThis);
