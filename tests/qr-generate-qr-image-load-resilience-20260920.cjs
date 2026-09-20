@@ -8,27 +8,28 @@
 // to 'error', the status turned red, and the qr box was blanked to "QR not generated" -- with nothing on
 // screen distinguishing "access itself failed" from "access worked fine, only the picture didn't draw."
 //
-// UPDATED 20 Sept 2026, same evening (superseded build, kept as this same file rather than a new one since
-// it is the direct continuation of the same investigation): after this isolation fix shipped, Andy hit the
-// identical "QR renderer could not load" message a THIRD time -- proving the isolation and the loadQr()
-// retry fix below were both working exactly as designed (outcome/step still 'ok'/'done', a genuinely fresh
-// attempt, not a replayed cached rejection) while the underlying CDN dependency itself kept failing. Rather
-// than attempt a fourth CDN-retry guess, the CDN dependency was removed entirely: engines/qrcode-local.js is
-// now vendored same-origin and precached like every other script, so loadQr() no longer loads, fetches, or
-// caches anything from a network at all -- it just returns the already-present global. That makes most of
-// this file's original network-retry scenario impossible to construct any more (there is no network step left
-// to fail and retry), so those sub-tests are replaced below with tests of what the isolation now actually
-// guards against: SOME OTHER reason the QR image fails to draw (a draw-time exception, or the renderer global
-// somehow missing), which is still a real possibility worth isolating even though a network CDN blip no
-// longer is one. See tests/qr-generate-no-external-cdn-dependency-20260920.cjs for the CDN-removal fix itself.
+// UPDATED 20 Sept 2026, same evening, TWICE more (kept as this same file rather than a new one each time,
+// since each update is a direct continuation of the same investigation): (1) after the isolation fix below
+// shipped, Andy hit the identical CDN message a THIRD time, proving the isolation and retry logic both worked
+// while the CDN dependency itself kept failing -- so the CDN was replaced with a second same-origin FILE
+// (engines/qrcode-local.js); (2) that second file then failed to load too ("QR renderer is missing from this
+// build"), TWICE in a row, almost certainly because a brand-new file is exactly the kind of change a manual
+// deploy step can miss, when every other fix that night only touched files that already existed and deployed
+// correctly every time. The final fix removes the risk category entirely: there is no second file any more.
+// engines/swimmer-invite-bn.js now contains its own inline QR encoder (qrEncode()/drawQr()) -- no external
+// CDN, no separate file, no window global, nothing that can be missing independently of the one file that has
+// proven itself reliable on every single deploy that night. See
+// tests/qr-generate-no-external-cdn-dependency-20260920.cjs for the structural proof of that. This file now
+// covers what the isolation still guards against: a genuine draw-time exception (e.g. a canvas API failure),
+// which remains a real (if unlikely) possibility even though a missing renderer no longer is one.
 //
 // This test proves, against the real source: (1) if drawing the QR image throws for ANY reason, the overall
 // attempt still lands on outcome:'ok'/step:'done' (access is real) while qrRenderOutcome/qrRenderMessage
-// record the cosmetic failure separately, and the url box + Copy link remain visible and correct; (2) if the
-// renderer global is somehow missing entirely (e.g. a build where qrcode-local.js failed to load), the same
-// isolation still applies -- Generate does not fail outright; (3) a successful Generate attempt never touches
-// document.head.appendChild at all any more -- there is no dynamic script/network step left in this flow;
-// (4) fail-before/pass-after against the exact loadQr() source change.
+// record the cosmetic failure separately, and the url box + Copy link remain visible and correct; (2) a
+// successful Generate attempt never touches document.head.appendChild at all -- there is no dynamic
+// script/network step of any kind left in this flow; (3) fail-before/pass-after proving that if the QR draw
+// step ever again depended on an external global instead of this file's own inline encoder, that regression
+// would show up immediately as an isolated qrRenderOutcome:'error' rather than silently.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -55,10 +56,10 @@ function makeNode(tag){
   };
   return node;
 }
-// document.head.appendChild is only still simulated here so runFailBefore() can prove the OLD, reverted
-// source genuinely used it (a dynamic <script> load against an external CDN) -- the fixed source never calls
-// it at all, which is exactly what runNoNetworkOrExternalDependency() below proves.
-function makeDocument(modalHost,athletesHead,scriptOutcomes){
+// document.head.appendChild is only still simulated here so a fail-before against an OLD, superseded source
+// could prove it used a dynamic <script> load -- the current source never calls it at all, which is exactly
+// what runNoNetworkOrExternalDependency() below proves for every real attempt.
+function makeDocument(modalHost,athletesHead,canvasBehavior){
   const listeners={};
   let scriptAppendCount=0;
   return{
@@ -67,18 +68,15 @@ function makeDocument(modalHost,athletesHead,scriptOutcomes){
     visibilityState:'visible',
     addEventListener(type,fn){(listeners[type]=listeners[type]||[]).push(fn);},
     removeEventListener(type,fn){if(listeners[type])listeners[type]=listeners[type].filter(f=>f!==fn);},
-    createElement:tag=>makeNode(tag),
-    head:{
-      appendChild(node){
-        scriptAppendCount++;
-        const outcome=(scriptOutcomes&&scriptOutcomes.length)?scriptOutcomes.shift():'fail';
-        setTimeout(()=>{
-          if(outcome==='ok'){global.QRCode=function FakeQRCode(){};node.onload&&node.onload();}
-          else node.onerror&&node.onerror();
-        },0);
-        return node;
-      },
+    createElement(tag){
+      if(tag==='canvas'){
+        if(canvasBehavior==='throw')throw new Error('canvas 2d context unavailable');
+        const ctx={fillStyle:'',fillRect(){}};
+        return{width:0,height:0,getContext:()=>ctx};
+      }
+      return makeNode(tag);
     },
+    head:{appendChild(node){scriptAppendCount++;return node;}},
     querySelector(sel){
       if(sel==='#modalHost')return modalHost;
       if(sel==='#athletesView .cn-owner-actions')return athletesHead;
@@ -101,17 +99,17 @@ function okFetch(){
   };
 }
 
-function bootFixture(qrGlobal,src){
+function bootFixture(canvasBehavior,src){
   const modalHost=makeNode('div');
   const athletesHead=makeNode('div');
-  const doc=makeDocument(modalHost,athletesHead,[]);
+  const doc=makeDocument(modalHost,athletesHead,canvasBehavior);
   global.document=doc;
   global.window=global;
   global.location={href:'https://example.test/app.html'};
   global.requestAnimationFrame=fn=>fn();
   Object.defineProperty(global,'navigator',{value:{clipboard:{writeText:async()=>{}}},configurable:true});
   global.localStorage=makeLocalStorageSpy();
-  if(qrGlobal===undefined)delete global.QRCode;else global.QRCode=qrGlobal;
+  delete global.QRCode;
   global.MSOSEngines={Evidence:{t400Rows:()=>[],course:()=>'',seconds:()=>0}};
   global.MSOS4={
     ui:{},
@@ -156,12 +154,11 @@ async function openModal(athletesHead,modalHost){
 }
 
 async function runQrDrawThrowDoesNotFailTheAttempt(){
-  // The renderer global IS present (as it always will be now -- it's precached same-origin like every other
-  // script) but drawing throws for some other reason. The isolation added for the CDN-failure era must still
-  // catch this too, since a drawing exception is a real possibility independent of where the renderer came
-  // from.
-  function ThrowingQRCode(){throw new Error('canvas 2d context unavailable');}
-  const{M,athletesHead,modalHost,doc}=bootFixture(ThrowingQRCode);
+  // The QR encoder is this file's own inline code (no external global, no separate file to be missing) but
+  // drawing throws for some other genuine reason -- e.g. no canvas 2d context available. The isolation must
+  // still catch this, since a drawing exception remains a real possibility independent of where the encoder
+  // lives.
+  const{M,athletesHead,modalHost,doc}=bootFixture('throw');
   const{generate,urlBox,copy}=await openModal(athletesHead,modalHost);
   await Promise.race([
     generate.onclick(),
@@ -176,40 +173,16 @@ async function runQrDrawThrowDoesNotFailTheAttempt(){
   assert.equal(urlBox.hidden,false,'the real invite link must remain visible even though the QR image failed to draw');
   assert.ok(urlBox.textContent.includes('tok-qr-image-fixture'),'the url box must still hold the real, working invite link');
   assert.equal(copy.hidden,false,'Copy link must remain usable even though the QR image failed to draw');
-  assert.equal(doc._scriptAppendCount(),0,'no dynamic script/network load of any kind should ever be attempted any more');
+  assert.equal(doc._scriptAppendCount(),0,'no dynamic script/network load of any kind should ever be attempted -- the encoder is this file\'s own inline code');
 
   console.log('QR_IMAGE_DRAW_THROW_DOES_NOT_FAIL_ATTEMPT_PASS');
 }
 
-async function runRendererMissingIsAlsoIsolated(){
-  // Simulates a build where engines/qrcode-local.js somehow failed to load (window.QRCode never became a
-  // function) -- loadQr() must throw a clear, local, synchronous error, and that must be isolated exactly
-  // the same way as any other draw-time failure, never a bare crash of the whole attempt.
-  const{M,athletesHead,modalHost,doc}=bootFixture(undefined);
-  const{generate,urlBox,copy}=await openModal(athletesHead,modalHost);
-  await Promise.race([
-    generate.onclick(),
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('TEST_HARNESS_GUARD: generate did not settle')),3000)),
-  ]);
-
-  const attempt=M.swimmerInviteBN.lastAttemptStatus();
-  assert.equal(attempt.outcome,'ok');
-  assert.equal(attempt.step,'done');
-  assert.equal(attempt.qrRenderOutcome,'error');
-  assert.ok(/qrcode-local\.js did not load/.test(attempt.qrRenderMessage),'a missing renderer global must produce a clear, specific message naming the file that failed to load');
-  assert.equal(urlBox.hidden,false);
-  assert.equal(copy.hidden,false);
-  assert.equal(doc._scriptAppendCount(),0,'a missing renderer must never trigger a fallback network fetch of any kind');
-
-  console.log('QR_RENDERER_MISSING_IS_ALSO_ISOLATED_PASS');
-}
-
 async function runNoNetworkOrExternalDependency(){
-  // The ordinary, expected-every-time case: the renderer global is present (as it always is, same-origin
-  // precached) and drawing succeeds. Proves the happy path also never touches document.head.appendChild --
-  // there is no dynamic script/network step left in this flow at all, success or failure.
-  function WorkingQRCode(el,opts){this.el=el;this.opts=opts;}
-  const{M,athletesHead,modalHost,doc}=bootFixture(WorkingQRCode);
+  // The ordinary, expected-every-time case: drawing succeeds using this file's own inline encoder. Proves the
+  // happy path never touches document.head.appendChild -- there is no dynamic script/network step or
+  // external global lookup left in this flow at all, success or failure.
+  const{M,athletesHead,modalHost,doc}=bootFixture('ok');
   const{generate,urlBox,copy}=await openModal(athletesHead,modalHost);
   await Promise.race([
     generate.onclick(),
@@ -219,7 +192,7 @@ async function runNoNetworkOrExternalDependency(){
   const attempt=M.swimmerInviteBN.lastAttemptStatus();
   assert.equal(attempt.outcome,'ok');
   assert.equal(attempt.step,'done');
-  assert.equal(attempt.qrRenderOutcome,'ok','the QR image must draw successfully when the renderer is present and working');
+  assert.equal(attempt.qrRenderOutcome,'ok','the QR image must draw successfully using this file\'s own inline encoder, with no external dependency of any kind');
   assert.equal(urlBox.hidden,false);
   assert.equal(copy.hidden,false);
   assert.equal(doc._scriptAppendCount(),0,'a fully successful Generate attempt must never touch document.head.appendChild -- no external fetch of any kind belongs in this flow any more');
@@ -228,25 +201,36 @@ async function runNoNetworkOrExternalDependency(){
 }
 
 function runFailBefore(){
-  const fixedLoadQr=`async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;throw new Error('QR renderer is missing from this build (engines/qrcode-local.js did not load) -- reload the app.');}`;
-  const buggyLoadQr=`async function loadQr(){if(typeof g.QRCode==='function')return g.QRCode;if(X.qrPromise)return X.qrPromise;X.qrPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';s.referrerPolicy='no-referrer';s.onload=()=>typeof g.QRCode==='function'?resolve(g.QRCode):reject(new Error('QR renderer did not load'));s.onerror=()=>reject(new Error('QR renderer could not load'));document.head.appendChild(s)}).catch(err=>{X.qrPromise=null;throw err;});return X.qrPromise;}`;
-  assert.ok(realSrc.includes(fixedLoadQr),'test setup error: could not locate the fixed loadQr() in the real source -- its wording changed in a way this test does not expect');
-  const buggySrc=realSrc.replace(fixedLoadQr,buggyLoadQr);
-  assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted buggy loadQr()');
+  // Both superseded shapes (the original CDN load, and the second-same-origin-file load that replaced it)
+  // shared one trait this test can check for directly: they depended on SOME external global (window.QRCode)
+  // rather than this file's own inline encoder, so a build where that global is not yet present would fail
+  // outright instead of quietly using its own code. Constructing a minimal stand-in for that shape -- without
+  // needing the exact superseded source text, which has already changed twice tonight -- proves this file's
+  // fixture would have caught either one: with no inline encoder and no external global available, drawing
+  // must fail and be correctly isolated, exactly like today's real canvas-throw case above.
+  const fixedCallSite=`try{if(gen.cancelled)return;drawQr(qr,activeUrl,240,240);}`;
+  const buggyCallSite=`try{if(gen.cancelled)return;if(typeof g.QRCode!=='function')throw new Error('QR renderer is missing from this build (engines/qrcode-local.js did not load) -- reload the app.');new g.QRCode(qr,{text:activeUrl,width:240,height:240,correctLevel:0});}`;
+  assert.ok(realSrc.includes(fixedCallSite),'test setup error: could not locate the current drawQr() call site in the real source -- its wording changed in a way this test does not expect');
+  const buggySrc=realSrc.replace(fixedCallSite,buggyCallSite);
+  assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted, externally-dependent call site');
   require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});
 
   return(async()=>{
-    // On the pre-fix (CDN-based) source, even with the renderer already present as a global, a successful
-    // Generate attempt still goes through loadQr()'s `if(typeof g.QRCode==='function')return g.QRCode` fast
-    // path -- so to actually prove this test would have caught the CDN dependency, force the slow path by
-    // NOT pre-seeding the global, so the old source must fall through to its CDN script load.
-    const{M,athletesHead,modalHost,doc}=bootFixture(undefined,buggySrc);
-    const{generate}=await openModal(athletesHead,modalHost);
+    // No global.QRCode is ever defined in this fixture (bootFixture always deletes it) -- exactly the "brand
+    // new file didn't load" scenario from tonight. On the reverted, externally-dependent call site, that must
+    // surface as an isolated draw failure, not a silent success and not a crash of the whole attempt.
+    const{M,athletesHead,modalHost}=bootFixture('ok',buggySrc);
+    const{generate,urlBox,copy}=await openModal(athletesHead,modalHost);
     await Promise.race([
       generate.onclick(),
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('TEST_HARNESS_GUARD: generate did not settle')),3000)),
     ]);
-    assert.equal(doc._scriptAppendCount(),1,'pre-fix source: the QR-renderer-missing case must fall through to a live external CDN script load -- confirming this test would have caught the exact dependency this build removes');
+    const attempt=M.swimmerInviteBN.lastAttemptStatus();
+    assert.equal(attempt.qrRenderOutcome,'error','pre-fix (externally-dependent) source: with no external global present, drawing must fail -- confirming this test would have caught exactly the class of dependency this build removes');
+    assert.ok(/QR renderer is missing/.test(attempt.qrRenderMessage));
+    assert.equal(attempt.outcome,'ok','even on the reverted source, the isolation fix from earlier tonight must still keep the real access outcome intact');
+    assert.equal(urlBox.hidden,false);
+    assert.equal(copy.hidden,false);
 
     console.log('QR_IMAGE_LOAD_FAILBEFORE_PASS');
   })();
@@ -254,7 +238,6 @@ function runFailBefore(){
 
 (async()=>{
   await runQrDrawThrowDoesNotFailTheAttempt();
-  await runRendererMissingIsAlsoIsolated();
   await runNoNetworkOrExternalDependency();
   await runFailBefore();
   require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});
