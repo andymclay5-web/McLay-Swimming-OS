@@ -26,7 +26,18 @@
     for(const r of rawRows(a)){
       const cr=text(E.course(r)).toUpperCase();if(c&&cr&&cr!==c)continue;
       const d=Number(E.distance(r)),st=E.rowStroke(r),sec=Number(E.seconds(r));if(!d||!st||!Number.isFinite(sec)||sec<=0)continue;
-      const k=`${d}|${st}`,pts=Number(E.points(r)),old=map.get(k),row={raw:r,distance:d,stroke:st,course:cr||c,seconds:sec,points:Number.isFinite(pts)&&pts>0?Math.floor(pts):null,pointSystem:M.pathway?.isPara?.(a)?'WPS':'WA'};
+      // Real coaching failure this fixes (Andy, 18 Sept 2026, live): Charlotte Murphy's (S6/SB6/SM6, a real
+      // classified para swimmer) "My Swimming" Performance tab showed numeric point values labelled "WPS" that
+      // were actually her World Aquatics points -- because this "quick" path pulled the number straight off
+      // E.points(r), which checks row.wa_points BEFORE row.world_para_points, then stamped the label purely
+      // from isPara(a), regardless of which system the number actually came from. Confirmed live in production:
+      // Charlotte's coach_results rows all have world_para_points:null (no classified point system is loaded for
+      // ANY para swimmer yet) but several have a real wa_points value -- those were exactly what her screen
+      // showed under "WPS". M.performanceEngine.scoreForRow already gets this right (per-row, source-aware,
+      // never relabels a WA number as WPS) and is what the correct, slower P.rankedEvents() path already uses --
+      // this quick path must use the same per-row source, not its own separate WA-first extraction.
+      let score=null;try{score=P.scoreForRow?.(a,r,M.state)||null}catch{}
+      const pts=Number(score?.points),k=`${d}|${st}`,old=map.get(k),row={raw:r,distance:d,stroke:st,course:cr||c,seconds:sec,points:Number.isFinite(pts)&&pts>0?Math.floor(pts):null,pointSystem:score?.label||(M.pathway?.isPara?.(a)?'WPS':'WA')};
       if(!old||sec<old.seconds||(sec===old.seconds&&Number(row.points||-1)>Number(old.points||-1)))map.set(k,row);
     }
     let rows=[...map.values()];
@@ -72,7 +83,11 @@
     return `<section class="page-card"><div class="eyebrow">TRAINING · ${esc(a.full_name)}</div><div class="cn-training-title"><div><h2>${esc(p.title||'Current session')}</h2><p>${esc([p.date,p.squad,p.course].filter(Boolean).join(' · '))}</p></div><strong>${metres.toLocaleString()}m</strong></div><div class="cn-training-grid"><section><h3>Energy systems</h3><div class="cn-chip-row">${chips(p.zones,8)}</div></section><section><h3>Stroke mix</h3><div class="cn-chip-row">${chips(p.strokes,8)}</div></section><section><h3>Focus / makeup</h3><div class="cn-chip-row">${chips(p.tags,10)}</div></section></div><details class="cn-session-makeup"><summary>Session makeup · ${blocks.length} blocks</summary>${blocks.map(blockHtml).join('')}</details><p class="muted">${evidence?`${evidence} linked evidence entr${evidence===1?'y':'ies'} in this session.`:'Training truth comes from attendance + your individual prescription + the delivered session.'}</p></section>${accumulationHtml(a)}`;
   }
   function meetHtml(a){const entries=(M.state.meetEntries||[]).filter(x=>String(x.athlete_id||x.athleteId||'')===String(a.id));return `<section class="page-card"><div class="eyebrow">MEET · ${esc(a.full_name)}</div><h2>Your racing</h2>${entries.length?entries.slice(-20).map(x=>`<div class="cn-test"><b>${esc(x.event_name||x.event||`${x.distance||''} ${x.stroke||''}`)}</b><small>${esc(x.meet_name||x.meet||'')}</small></div>`).join(''):'<p class="muted">No meet entries currently loaded for this swimmer.</p>'}</section>`;}
-  function performanceHtml(a,c,rows){return `<section class="page-card cn-performance"><div class="eyebrow">${esc(c)} · PERFORMANCE ORDER</div><h2>${rows.length} events</h2><div class="cn-events">${rows.map((e,i)=>`<details class="cn-event" data-cn-event="${esc(keyOf(e))}"><summary><span class="cn-rank">#${i+1}</span><span class="cn-main"><b>${esc(`${e.distance} ${short(e.stroke)}`)}</b><small data-cn-next="${esc(keyOf(e))}">Tap for next step</small></span><strong>${clock(e.seconds)}</strong><em>${Number.isFinite(Number(e.points))?`${Math.floor(Number(e.points))} ${esc(e.pointSystem||'WA')}`:'—'}</em></summary><div class="cn-detail-host"><span class="muted">Tap to load pathway, PB race and splits.</span></div></details>`).join('')}</div></section>`;}
+  // e.points is legitimately null whenever no real point value exists for this row (e.g. a classified para
+  // swimmer with no World Para points loaded -- see quickRanked() above). Number(null) is 0, and 0 is finite,
+  // so the old `Number.isFinite(Number(e.points))` check rendered those as "0 WPS" instead of the correct
+  // "no data" dash -- indistinguishable from a genuine zero-point result. Must check for null/undefined first.
+  function performanceHtml(a,c,rows){return `<section class="page-card cn-performance"><div class="eyebrow">${esc(c)} · PERFORMANCE ORDER</div><h2>${rows.length} events</h2><div class="cn-events">${rows.map((e,i)=>`<details class="cn-event" data-cn-event="${esc(keyOf(e))}"><summary><span class="cn-rank">#${i+1}</span><span class="cn-main"><b>${esc(`${e.distance} ${short(e.stroke)}`)}</b><small data-cn-next="${esc(keyOf(e))}">Tap for next step</small></span><strong>${clock(e.seconds)}</strong><em>${e.points!=null&&Number.isFinite(Number(e.points))?`${Math.floor(Number(e.points))} ${esc(e.pointSystem||'WA')}`:'—'}</em></summary><div class="cn-detail-host"><span class="muted">Tap to load pathway, PB race and splits.</span></div></details>`).join('')}</div></section>`;}
   function bindPerformance(a,rows,c){const root=document.querySelector('#athletesView');root?.querySelectorAll('.cn-event').forEach(d=>d.addEventListener('toggle',()=>{if(!d.open||d.dataset.loaded)return;d.dataset.loaded='1';const e=rows.find(x=>keyOf(x)===d.dataset.cnEvent),h=d.querySelector('.cn-detail-host');if(e&&h)setTimeout(()=>{h.innerHTML=detailsHtml(a,e,c);},0);}));fillNextSteps(a,rows,c);}
   function renderPanel(tab,a,{persist=true}={}){const p=document.querySelector('[data-cn-panel]');if(!p)return;for(const b of document.querySelectorAll('#athletesView [data-cn-tab]'))b.classList.toggle('active',b.dataset.cnTab===tab);M.state.settings.loopAthleteTab=tab;if(persist)M.storageEngine?.saveUi?.(M.state);if(tab==='training')p.innerHTML=trainingHtml(a);else if(tab==='tests')p.innerHTML=testsHtml(a);else if(tab==='meet')p.innerHTML=meetHtml(a);else{const c=course(),rows=quickRanked(a,c);p.innerHTML=performanceHtml(a,c,rows);bindPerformance(a,rows,c);}}
   function fillNextSteps(a,rows,c){let i=0;const tick=()=>{if(M.state.settings.view!=='athletes'||selected()?.id!==a.id||i>=rows.length)return;const e=rows[i++],node=document.querySelector(`[data-cn-next="${CSS.escape(keyOf(e))}"]`);if(node){const s=nextStep(a,e,c);node.textContent=s?`${s.displayLabel||s.label}${s.targetSeason?` ${s.targetSeason}`:''} · ${clock(s.seconds)} · ${Number(s.gapSeconds||0).toFixed(2)}s`:'Tap for pathway';}const schedule=g.requestIdleCallback||((fn)=>setTimeout(fn,80));schedule(tick,{timeout:800});};const schedule=g.requestIdleCallback||((fn)=>setTimeout(fn,80));schedule(tick,{timeout:800});}
@@ -93,5 +108,5 @@
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
     g.addEventListener('pageshow',e=>{if(e.persisted&&M.state?.settings?.view==='athletes'&&!document.querySelector('#athletesView [data-cn-panel]'))renderFast();});
   }
-  X.renderFast=renderFast;X.splitPairs=splitPairs;X.quickRanked=quickRanked;X.trainingHtml=trainingHtml;X.pathwayFor=pathwayFor;
+  X.renderFast=renderFast;X.splitPairs=splitPairs;X.quickRanked=quickRanked;X.trainingHtml=trainingHtml;X.pathwayFor=pathwayFor;X.performanceHtml=performanceHtml;
 })(globalThis);

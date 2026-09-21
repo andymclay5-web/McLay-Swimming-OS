@@ -8,7 +8,12 @@
       row.stroke=st;row.valid_for_anchor=row.valid_for_anchor!==false;row.metadata={...(row.metadata||{}),t400_comparison:cmp.status,t400_delta_seconds:cmp.delta,t400_previous_best_seconds:Number.isFinite(priorSec)?priorSec:null,t400_compared_at:now()};row.t400_comparison=cmp.status;row.t400_delta_seconds=cmp.delta;
       // Guardian/regression fixtures deliberately pass isolated state objects. They may exercise
       // the capture logic, but they must never persist, publish or toast as if a coach saved a result.
-      if(liveState){M.store?.save?.(state);const who=M.boardEngine?.name?.(ath,state?.athletes||[])||String(ath?.full_name||'Swimmer').split(/\s+/)[0],label=cmp.status==='baseline'?`${who} · first ${st} T400 ${clock(current)}`:cmp.status==='improved'?`${who} · PB ${clock(current)} · ${Math.abs(cmp.delta).toFixed(1)}s faster`:cmp.status==='equal'?`${who} · ${clock(current)} · equals PB`:`${who} · ${clock(current)} · ${Math.abs(cmp.delta).toFixed(1)}s off PB`;M.toast?.(label);}
+      // meta.silent (11 Sept 2026, bulk T400 entry): a bulk save calls this once per row, skipping BOTH the
+      // per-row store.save and the per-row toast -- the bulk caller (X.saveT400Bulk) does exactly one
+      // store.save and fires one combined summary toast after the whole batch, rather than N of each stacking
+      // on top of each other. meta was already an accepted, previously-unused parameter here (base() never
+      // read it), so this is additive, not a signature change -- every existing single-entry caller is unaffected.
+      if(liveState&&!meta?.silent){M.store?.save?.(state);const who=M.boardEngine?.name?.(ath,state?.athletes||[])||String(ath?.full_name||'Swimmer').split(/\s+/)[0],label=cmp.status==='baseline'?`${who} · first ${st} T400 ${clock(current)}`:cmp.status==='improved'?`${who} · PB ${clock(current)} · ${Math.abs(cmp.delta).toFixed(1)}s faster`:cmp.status==='equal'?`${who} · ${clock(current)} · equals PB`:`${who} · ${clock(current)} · ${Math.abs(cmp.delta).toFixed(1)}s off PB`;M.toast?.(label);}
     }
     return row;
   };

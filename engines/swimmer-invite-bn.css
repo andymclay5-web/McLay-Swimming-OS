@@ -1,1 +1,20 @@
-.bn-access-btn{font-weight:800}.bn-access-modal{max-width:420px;margin:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 18px 70px rgba(0,0,0,.28)}.bn-access-modal h2{margin:.2rem 0 .45rem}.bn-access-modal .muted{color:#647985}.bn-qr{display:grid;place-items:center;background:#fff;border:1px solid #dce6eb;border-radius:16px;padding:14px;margin:14px 0;min-height:246px}.bn-qr canvas{max-width:100%;height:auto}.bn-access-actions{display:flex;flex-wrap:wrap;gap:8px}.bn-access-actions button{border:0;border-radius:11px;padding:10px 12px;font-weight:800}.bn-access-actions .primary{background:#0d4566;color:#fff}.bn-access-actions .danger{background:#fff0f0;color:#8f2525}.bn-access-url{word-break:break-all;font-size:.78rem;background:#f4f8fa;border-radius:10px;padding:9px}.bn-access-status{font-size:.85rem;margin-top:10px}.bn-access-status.ok{color:#1f6d45}.bn-access-status.error{color:#a22d2d}
+/* Real coaching failure this fixes (Andy, live, 20 Sept 2026, twice in a row -- Mackenzie, then a repeat on the
+   same flow): after a successful "Generate 15-minute QR" (confirmed working -- the code renders, Copy link
+   works), the WHOLE modal appeared to lock up: no visible/reachable Close, Copy link barely reachable. This
+   was never a JS freeze -- every button's click handler was firing exactly as written the whole time. Every
+   OTHER modal in this app (app.js's modal(), used by session edit/intake/new-session/mod-edit) wraps its
+   content in a `<section class="modal">`, and styles.css's `.modal{max-height:88vh;overflow:auto}` rule is
+   what caps its height and makes it internally scrollable inside the fixed, full-screen `.modal-backdrop`.
+   This file's modal() (swimmer-invite-bn.js) is the ONLY modal in the whole codebase that never used that
+   `.modal` class -- its content box is `.bn-access-modal`, which never had any height cap or overflow rule of
+   its own. Before tonight this never showed up because the QR image itself had never once actually rendered
+   (three straight CDN failures, then a fourth failure loading the replacement file -- see swimmer-invite-bn.js)
+   -- the modal only ever displayed short placeholder text, well short of one screen. Tonight, for the first
+   time, the QR encoder is fully inline and reliable, so a real ~240px canvas plus the revealed link box now
+   render every time -- pushing this modal's real content taller than the viewport for the first time ever.
+   `.modal-backdrop` bottom-anchors its single child (`display:grid;place-items:end center`) with no scroll
+   ability of its own, so once `.bn-access-modal` overflows, part of it becomes genuinely unreachable -- no
+   amount of tapping fixes that, only backing out of the whole modal does, which matches exactly what Andy
+   reported both times. Giving `.bn-access-modal` the same `max-height:88vh;overflow:auto` every other modal
+   in this app already relies on fixes it the same way, with no JS change and no risk to the QR encoder. */
+.bn-access-btn{font-weight:800}.bn-access-modal{max-width:420px;max-height:88vh;overflow:auto;margin:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 18px 70px rgba(0,0,0,.28)}.bn-access-modal h2{margin:.2rem 0 .45rem}.bn-access-modal .muted{color:#647985}.bn-qr{display:grid;place-items:center;background:#fff;border:1px solid #dce6eb;border-radius:16px;padding:14px;margin:14px 0;min-height:246px}.bn-qr canvas{max-width:100%;height:auto}.bn-access-actions{display:flex;flex-wrap:wrap;gap:8px}.bn-access-actions button{border:0;border-radius:11px;padding:10px 12px;font-weight:800}.bn-access-actions .primary{background:#0d4566;color:#fff}.bn-access-actions .danger{background:#fff0f0;color:#8f2525}.bn-access-url{word-break:break-all;font-size:.78rem;background:#f4f8fa;border-radius:10px;padding:9px}.bn-access-status{font-size:.85rem;margin-top:10px}.bn-access-status.ok{color:#1f6d45}.bn-access-status.error{color:#a22d2d}
