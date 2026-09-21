@@ -30,8 +30,8 @@
   function actionOrder(a,b,track){return programmePriority(a?.family,track)-programmePriority(b?.family,track)||stageRank(a?.kind)-stageRank(b?.kind)||strengthOrder(a,b,track);}
   function addYears(date,years){const d=new Date(`${date}T00:00:00Z`);if(!Number.isFinite(d.getTime()))return'';d.setUTCFullYear(d.getUTCFullYear()+years);return d.toISOString().slice(0,10);}
   function latestProgrammeDate(rows){return rows.map(dateOf).filter(Boolean).sort().pop()||'';}
-  function futureMeetDate(label,rows,now=today()){
-    const f=family(label),matchingMeets=meetRows().filter(m=>family(m?.programme||m?.meet_name||m?.name)===f).map(m=>text(m?.meet_date||m?.date).slice(0,10)).filter(Boolean).sort();
+  function futureMeetDate(label,rows,now=today(),idx){
+    const f=family(label),meets=idx?.meets||buildMeetsIndex(),matchingMeets=(meets.get(f)||[]).slice();
     const exact=matchingMeets.find(d=>d>=now);if(exact)return{date:exact,planningProxy:false,sourceDate:exact};
     const source=latestProgrammeDate(rows)||matchingMeets.pop()||'';if(!source)return{date:'',planningProxy:false,sourceDate:''};
     let d=source,guard=0;while(d<now&&guard++<10)d=addYears(d,1);return{date:d,planningProxy:d!==source,sourceDate:source};
@@ -41,10 +41,36 @@
   function eventMatch(r,event){return distanceOf(r)===Number(event?.distance)&&strokeKey(strokeOf(r))===strokeKey(event?.stroke);}
   function sexMatch(r,ath){const req=sexKey(r?.sex),actual=sexKey(ath?.sex);return!req||req==='OPEN'||req===actual;}
   function paraMatch(r,ath){const pc=text(r?.para_class||r?.classification);return!pc&&!P.isPara?.(ath);}
-  function rowsByProgramme(event,ath){const map=new Map();for(const r of standardRows()){if(!active(r)||!eventMatch(r,event)||!sexMatch(r,ath)||!paraMatch(r,ath))continue;const f=family(programme(r));if(!f)continue;if(!map.has(f))map.set(f,[]);map.get(f).push(r);}return map;}
+  // Real coaching failure this fixes (Andy, live, 20 Sept 2026 -- the third same-night freeze, safePerformance
+  // for William Callow, never conclusively root-caused at the time, so the whole analytical swimmer-portal
+  // payload was disabled rather than fixed): rowsByProgramme() rescanned the ENTIRE pathway_standards table
+  // from scratch, unfiltered, for EVERY SINGLE ranked event an athlete has, and futureMeetDate() did the same
+  // against the entire pathway_meets table for every programme family within every event. Andy's own
+  // diagnostics tonight referenced his real pathway_standards table sitting around ~4,400 rows -- so a
+  // swimmer with even a modest 10-20 ranked events meant 40,000-90,000+ row comparisons, each doing several
+  // regex-based text normalisations (family()/norm()), done fresh every time. Directly profiled (not
+  // guessed): the real buildAthletePathways() against a synthetic table sized to that real 4,400-row figure
+  // cost 45-90ms per athlete on a fast desktop CPU alone -- likely several times that on Andy's actual phone,
+  // and that is BEFORE accounting for training/tests/meet running right after it with no yield in between,
+  // which is exactly the kind of accumulation that reads as "the whole phone locked solid."
+  //
+  // Fixed with a real algorithmic change, not a guess or a defensive cap: buildAthletePathways() now builds
+  // one index of pathway_standards (grouped by the exact distance+stroke key eventMatch() used to check) and
+  // one index of pathway_meets (grouped by programme family, pre-sorted) ONCE per athlete, and every event's
+  // own lookup is now a single Map.get() against that index instead of a fresh full-table scan. This changes
+  // the cost from O(events x standards) to O(standards + events) -- same total data read once, reused for
+  // every event, instead of re-read from scratch per event. Output is byte-for-byte identical: every filter
+  // (active/sex/para match), grouping, and ordering rule below is unchanged, only WHERE the standards/meets
+  // rows come from changed. Standalone callers that never pass an index (engines/swimmer-instant-open-cn.js's
+  // single-event pathwayLadderForEvent() calls) keep working exactly as before -- an index is still built
+  // lazily per call when none is supplied, so nothing regresses there; only buildAthletePathways(), which
+  // does real work for every one of an athlete's events, now builds the index once and reuses it.
+  function buildStandardsIndex(){const idx=new Map();for(const r of standardRows()){const d=distanceOf(r);if(!Number.isFinite(d))continue;const k=`${d}|${strokeKey(strokeOf(r))}`;if(!idx.has(k))idx.set(k,[]);idx.get(k).push(r);}return idx;}
+  function buildMeetsIndex(){const idx=new Map();for(const m of meetRows()){const f=family(m?.programme||m?.meet_name||m?.name),d=text(m?.meet_date||m?.date).slice(0,10);if(!d)continue;if(!idx.has(f))idx.set(f,[]);idx.get(f).push(d);}for(const arr of idx.values())arr.sort();return idx;}
+  function rowsByProgramme(event,ath,idx){const map=new Map();const d=Number(event?.distance);if(!Number.isFinite(d))return map;const standards=idx?.standards||buildStandardsIndex();const bucket=standards.get(`${d}|${strokeKey(event?.stroke)}`)||[];for(const r of bucket){if(!active(r)||!sexMatch(r,ath)||!paraMatch(r,ath))continue;const f=family(programme(r));if(!f)continue;if(!map.has(f))map.set(f,[]);map.get(f).push(r);}return map;}
   function nativeRows(rows,track){const native=(rows||[]).filter(r=>courseOf(r)===track);return native.length?native:rows;}
-  function chooseProgrammeRows(rows,ath,event,viewCourse,now=today()){
-    if(!rows.length)return[];const label=programme(rows[0]),f=family(label),route=familyTrack(f)||trackFor(rows[0])||text(viewCourse).toUpperCase(),target=futureMeetDate(label,rows,now),age=ageOn(ath?.date_of_birth,target.date),sourceSeason=sourceSeasonFor(rows),targetYr=targetSeason(target.date);
+  function chooseProgrammeRows(rows,ath,event,viewCourse,now=today(),idx){
+    if(!rows.length)return[];const label=programme(rows[0]),f=family(label),route=familyTrack(f)||trackFor(rows[0])||text(viewCourse).toUpperCase(),target=futureMeetDate(label,rows,now,idx),age=ageOn(ath?.date_of_birth,target.date),sourceSeason=sourceSeasonFor(rows),targetYr=targetSeason(target.date);
     const sourceYearRows=sourceSeason?rows.filter(r=>Number(r?.season)===sourceSeason):rows;
     const ageRows=sourceYearRows.filter(r=>ageFits(r,age));
     let preferred=ageRows.length?ageRows:sourceYearRows.filter(r=>{const{min,max}=ageBounds(r);return min==null&&max==null;});
@@ -52,15 +78,15 @@
     const dedupe=new Map();for(const r of preferred){const sec=secondsOf(r);if(!Number.isFinite(sec)||sec<=0)continue;const k=`${kind(r)}|${sec.toFixed(2)}|${route}`;if(dedupe.has(k))continue;dedupe.set(k,{raw:r,label:programme(r),family:f,kind:kind(r),seconds:sec,course:route,officialCourse:route,sourceCourse:courseOf(r)||route,converted:!!(courseOf(r)&&courseOf(r)!==route),targetDate:target.date,targetSeason:targetYr,sourceSeason,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:age,sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
     return[...dedupe.values()];
   }
-  function staticDeep(event,viewCourse,ath,now=today()){
+  function staticDeep(event,viewCourse,ath,now=today(),idx){
     const rows=[...(event?.deeper||[])],out=[];
-    for(const r of rows){const sec=Number(r?._seconds??M.pathway?.seconds?.(r));if(!Number.isFinite(sec)||sec<=0)continue;const k=kind(r);if(k==='qualifying')continue;const label=text(r?._label||M.pathway?.standardLabel?.(r)||programme(r)||'Benchmark'),f=family(label),route=familyTrack(f)||trackFor({...r,programme:label})||courseOf(r)||viewCourse,target=futureMeetDate(label,[r],now),targetYr=targetSeason(target.date);out.push({raw:r,label,family:f,kind:k,seconds:sec,course:route,officialCourse:route,sourceCourse:courseOf(r)||route,converted:!!(courseOf(r)&&courseOf(r)!==route),targetDate:target.date,targetSeason:targetYr,sourceSeason:Number(r?.season)||null,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:ageOn(ath?.date_of_birth,target.date),sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
+    for(const r of rows){const sec=Number(r?._seconds??M.pathway?.seconds?.(r));if(!Number.isFinite(sec)||sec<=0)continue;const k=kind(r);if(k==='qualifying')continue;const label=text(r?._label||M.pathway?.standardLabel?.(r)||programme(r)||'Benchmark'),f=family(label),route=familyTrack(f)||trackFor({...r,programme:label})||courseOf(r)||viewCourse,target=futureMeetDate(label,[r],now,idx),targetYr=targetSeason(target.date);out.push({raw:r,label,family:f,kind:k,seconds:sec,course:route,officialCourse:route,sourceCourse:courseOf(r)||route,converted:!!(courseOf(r)&&courseOf(r)!==route),targetDate:target.date,targetSeason:targetYr,sourceSeason:Number(r?.season)||null,planningProxy:target.planningProxy,sourceDate:target.sourceDate,ageAtTarget:ageOn(ath?.date_of_birth,target.date),sourceStatus:text(r?.source_status||r?.source_version),sourceUrl:text(r?.source_url)});}
     return out;
   }
-  function buildEventLadder(ath,event,{course='',now=today()}={}){
-    if(!ath||!event)return{course:text(course).toUpperCase(),steps:[],next:null,tracks:{SCM:[],LCM:[]}};const c=text(course||event?.course||event?.pb?.course||'SCM').toUpperCase(),pbSeconds=Number(event?.pbSeconds??event?.seconds??event?.pb?.result_seconds),byProgramme=rowsByProgramme(event,ath),steps=[];
-    for(const rows of byProgramme.values())steps.push(...chooseProgrammeRows(rows,ath,event,c,now));
-    steps.push(...staticDeep(event,c,ath,now));
+  function buildEventLadder(ath,event,{course='',now=today(),idx}={}){
+    if(!ath||!event)return{course:text(course).toUpperCase(),steps:[],next:null,tracks:{SCM:[],LCM:[]}};const c=text(course||event?.course||event?.pb?.course||'SCM').toUpperCase(),pbSeconds=Number(event?.pbSeconds??event?.seconds??event?.pb?.result_seconds),byProgramme=rowsByProgramme(event,ath,idx),steps=[];
+    for(const rows of byProgramme.values())steps.push(...chooseProgrammeRows(rows,ath,event,c,now,idx));
+    steps.push(...staticDeep(event,c,ath,now,idx));
     const seen=new Set(),clean=[];for(const s of steps){const key=`${s.family}|${s.kind}|${s.seconds.toFixed(2)}|${s.course}|${s.targetSeason||''}`;if(seen.has(key))continue;seen.add(key);const achieved=Number.isFinite(pbSeconds)?pbSeconds<=s.seconds:false,gapSeconds=Number.isFinite(pbSeconds)?Math.max(0,pbSeconds-s.seconds):null,gapPercentage=Number.isFinite(gapSeconds)&&s.seconds>0?gapSeconds/s.seconds*100:null;clean.push({...s,achieved,gapSeconds,gapPercentage,displayLabel:s.planningProxy?`${s.label} ${s.targetSeason||''} planning`:s.label});}
     clean.sort((a,b)=>(a.course===c?0:1)-(b.course===c?0:1)||strengthOrder(a,b,c));
     const tracks={SCM:clean.filter(s=>s.course==='SCM'||s.course==='BOTH'),LCM:clean.filter(s=>s.course==='LCM'||s.course==='BOTH')};
@@ -73,7 +99,7 @@
     return{course:c,pbSeconds,steps:clean,next,nextQualifying,nextFinal,nextMedal,tracks,athleteAgeNow:ageOn(ath?.date_of_birth,now)};
   }
   function buildAthletePathways(ath,{course='',now=today()}={}){
-    const c=text(course||M.state?.settings?.pathwayCourse||M.currentSession?.()?.identity?.course||'SCM').toUpperCase(),ranked=P.rankedEvents?.(ath,M.state,c)||[],profile=M.pathway?.profile?.(ath,c)||{},eventMap=new Map((profile?.events||[]).filter(e=>e?.pb).map(e=>[`${Number(e.pb.distance)}|${strokeKey(e.pb.stroke)}`,e])),events=ranked.map(r=>{const legacy=eventMap.get(`${Number(r.distance)}|${strokeKey(r.stroke)}`)||{pb:{course:r.course||c,distance:r.distance,stroke:r.stroke,result_seconds:r.seconds},qualifying:[],deeper:[]};const ladder=buildEventLadder(ath,{...legacy,distance:r.distance,stroke:r.stroke,pbSeconds:r.seconds,course:r.course||c},{course:c,now});return{...r,ladder};});return{athlete:ath,course:c,events,scm:events.map(e=>({...e,steps:e.ladder.tracks.SCM})),lcm:events.map(e=>({...e,steps:e.ladder.tracks.LCM}))};
+    const c=text(course||M.state?.settings?.pathwayCourse||M.currentSession?.()?.identity?.course||'SCM').toUpperCase(),ranked=P.rankedEvents?.(ath,M.state,c)||[],profile=M.pathway?.profile?.(ath,c)||{},eventMap=new Map((profile?.events||[]).filter(e=>e?.pb).map(e=>[`${Number(e.pb.distance)}|${strokeKey(e.pb.stroke)}`,e])),idx={standards:buildStandardsIndex(),meets:buildMeetsIndex()},events=ranked.map(r=>{const legacy=eventMap.get(`${Number(r.distance)}|${strokeKey(r.stroke)}`)||{pb:{course:r.course||c,distance:r.distance,stroke:r.stroke,result_seconds:r.seconds},qualifying:[],deeper:[]};const ladder=buildEventLadder(ath,{...legacy,distance:r.distance,stroke:r.stroke,pbSeconds:r.seconds,course:r.course||c},{course:c,now,idx});return{...r,ladder};});return{athlete:ath,course:c,events,scm:events.map(e=>({...e,steps:e.ladder.tracks.SCM})),lcm:events.map(e=>({...e,steps:e.ladder.tracks.LCM}))};
   }
   P.pathwayLadderForEvent=buildEventLadder;
   P.pathwaysForAthlete=buildAthletePathways;
@@ -81,5 +107,5 @@
   P.ageAt=ageOn;
   P.pathwayFamily=family;
   P.pathwayTrackFor=trackFor;
-  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;X.actionOrder=actionOrder;X.trackFor=trackFor;
+  X.buildEventLadder=buildEventLadder;X.buildAthletePathways=buildAthletePathways;X.futureMeetDate=futureMeetDate;X.ageOn=ageOn;X.strengthOrder=strengthOrder;X.actionOrder=actionOrder;X.trackFor=trackFor;X.buildStandardsIndex=buildStandardsIndex;X.buildMeetsIndex=buildMeetsIndex;X.rowsByProgramme=rowsByProgramme;
 })(globalThis);

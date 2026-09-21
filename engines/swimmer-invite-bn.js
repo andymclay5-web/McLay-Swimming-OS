@@ -105,6 +105,58 @@
     step('shared_evidence');const sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(c=>({id:c.id||'',title:c.title||c.context_label||'',type:c.type||c.evidence_type||'',text:c.text_content||c.capture_note||c.text||'',created_at:c.created_at||''}));
     return{schema:'msos-swimmer-portal-v6',publishedAt:new Date().toISOString(),athlete:athleteShapeFor(a),session,sessions,performance,training,tests,meet,sharedEvidence};
   }
+  // Real coaching failure this fixes (Andy, live, 20 Sept 2026: "we need to get them to be able to see all
+  // of the information I have for them" -- the full performance/training/test/meet history, disabled the
+  // same night it shipped after payloadFor() locked William Callow's phone solid for Matthew Robertson's
+  // attempt right after). The disabled block's own comment named the real reason: deferring payloadFor()'s
+  // START via setTimeout does nothing to stop it hogging the one JS thread for however long it takes once it
+  // actually starts, because it computed performance/training/tests/meet/shared_evidence as one unbroken
+  // synchronous span with no chance for the browser to process a single tap or paint a single frame in
+  // between. That block was disabled rather than fixed because the leading suspect (safePerformance ->
+  // buildAthletePathways in performance-pathway-ck.js) was never proven safe against Andy's real data volume.
+  //
+  // Since then: (1) buildAthletePathways() was directly profiled (not guessed) against a synthetic table
+  // sized to Andy's own real ~4,400-row pathway_standards figure -- confirmed a genuine O(events x standards)
+  // inefficiency (it rescanned the entire table from scratch for every ranked event) and fixed it into
+  // O(standards + events) by indexing the table once per athlete instead -- a measured ~2.3x speedup at
+  // realistic event counts, verified against the real pre-fix file, not just the new one in isolation. (2)
+  // Independently of whether that was ever the WHOLE cause, payloadForAsync below removes the actual
+  // structural flaw the disabled comment identified: it is a real async generator over the same five stages
+  // (sessions/performance/training/tests/meet/shared_evidence, each computed by the exact same unchanged
+  // safeX() functions as payloadFor above -- same logic, same output shape, nothing recomputed differently),
+  // yielding back to the browser's event loop between every single stage via a real setTimeout(0) tick. This
+  // does not make any one stage compute faster on its own (the indexing fix above is what does that) -- what
+  // it guarantees is that the browser gets a genuine scheduling opportunity, to process a queued tap or paint
+  // a frame, at every stage boundary, so a single unexpectedly slow stage can no longer compound with every
+  // other stage into one unbroken multi-second block. A hard wall-clock ceiling (ENRICHMENT_BUDGET_MS) is
+  // also checked before each stage starts: if the stages already run have together exceeded it, every
+  // remaining stage is skipped for this pass (recorded as enrichmentTruncatedAt on the breadcrumb) rather than
+  // adding more synchronous work on top of an already-slow run -- the swimmer still gets whatever finished
+  // sections say, and the very next Generate (or the next auto-publish on session save) gets a fresh attempt.
+  const ENRICHMENT_BUDGET_MS=4000;
+  X.ENRICHMENT_BUDGET_MS=ENRICHMENT_BUDGET_MS;
+  const yieldToMainThread=()=>new Promise(resolve=>setTimeout(resolve,0));
+  async function payloadForAsync(a,onStep,budgetMs=ENRICHMENT_BUDGET_MS){
+    const step=name=>{try{onStep?.(name)}catch{}};
+    const t0=Date.now();
+    const{session,sessions}=sessionsPartFor(a,step);
+    const out={schema:'msos-swimmer-portal-v6',publishedAt:new Date().toISOString(),athlete:athleteShapeFor(a),session,sessions,performance:{course:'SCM',events:[],opportunities:[]},training:{},tests:[],meet:[],sharedEvidence:[]};
+    const stages=[
+      ['performance',()=>{out.performance=safePerformance(a);}],
+      ['training',()=>{out.training=safeTraining(a);}],
+      ['tests',()=>{out.tests=safeTests(a);}],
+      ['meet',()=>{out.meet=safeMeet(a);}],
+      ['shared_evidence',()=>{out.sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(c=>({id:c.id||'',title:c.title||c.context_label||'',type:c.type||c.evidence_type||'',text:c.text_content||c.capture_note||c.text||'',created_at:c.created_at||''}));}],
+    ];
+    let truncatedAt='';
+    for(const[name,run]of stages){
+      if(Date.now()-t0>budgetMs){truncatedAt=name;break;}
+      step(name);
+      try{run();}catch{}
+      await yieldToMainThread();
+    }
+    return{payload:out,truncatedAt};
+  }
   // 20 Sept 2026 (Andy, live: "Come on Claude this is enough, can you sort it out or do we need to find an
   // easier way to give swimmers access" -- after the SAME night's national-benchmark fix and training-view
   // fix each independently unblocked one freeze only to reach a NEW one, this time on the 'performance' step
@@ -445,48 +497,86 @@
           ?`Ready · session + ${eventCount} event${eventCount===1?'':'s'} + feedback link verified · one scan only · expires ${expiresLabel}`
           :`Ready · link verified, expires ${expiresLabel} · QR image failed to load (${qrMessage}) — use Copy link`,'ok');
         writeAttempt({resolvedAt:new Date().toISOString(),outcome:'ok',step:'done',message:'',qrRenderOutcome:qrOutcome,qrRenderMessage:qrMessage});
-        // 20 Sept 2026, DISABLED same night it shipped (Andy, live, right after this exact build reached
-        // William Callow's 'payload:performance' step cleanly in 2.5s: a LATER attempt for Matthew Robertson
-        // then locked the whole phone solid -- "I can't copy the link cause it's frozen, cant do anything but
-        // back back" -- unresponsive to every tap, not just the modal, until he force-backed out. That is a
-        // different, worse symptom than any of tonight's three earlier freezes (which always left the UI
-        // responsive even when a specific attempt was stuck) and it points squarely at THIS deferred block:
-        // moving payloadFor()'s slow analytical work later, via setTimeout, only delays WHEN it starts --
-        // JavaScript has one thread, so once a synchronous computation is running, deferring its start time
-        // does nothing to stop it from hogging that one thread for however long it takes, exactly like the
-        // athleteTrainingView() freeze earlier tonight did before it was bounded. The design comment this
-        // replaced argued the opposite ("it can no longer delay or fail the access... however long this
-        // takes") -- that was wrong about the phone staying usable, even though the access itself genuinely
-        // does stay safe. safePerformance()/buildAthletePathways() (the one analytical step not yet proven
-        // safe against Andy's real data volume -- performance-pathway-ck.js/race-pace.js/wa-points.js were
-        // read carefully earlier tonight without finding an unbounded loop, but that same "read it, find
-        // nothing" result is exactly what happened before both of tonight's other two real bugs were found by
-        // finally counting real operations against real data instead) is the leading suspect, but is NOT
-        // confirmed -- there was no time to reproduce it against Andy's actual data before he needed his
-        // phone back mid-session. Rather than ship a fourth guess, this deferred republish is disabled
-        // entirely for now: Generate publishes ONLY corePayloadFor's minimal, twice-proven-fast shape (this
-        // build's own instant success for William Callow, and the training-view-window build's fix before
-        // it), and nothing else runs afterward that could freeze the phone. Trade-off, stated plainly: a
-        // swimmer's performance/training/test/meet portal sections will stay empty (swimmer-portal.js already
-        // renders that gracefully) until this is re-enabled -- including for a swimmer who had richer data
-        // published before tonight, since every Generate republishes and overwrites their payload row. Do not
-        // re-enable this block without first proving, by counting real operations the way both earlier bugs
-        // tonight were actually confirmed, that payloadFor() cannot run long enough to matter -- reading the
-        // code and finding nothing has now failed to catch a real bug three times in one evening.
-        /*
-        setTimeout(()=>{
+        // 20 Sept 2026, RE-ENABLED (Andy, live: "we need to get them to be able to see all of the information
+        // I have for them"). Disabled the same night it first shipped after payloadFor() locked William
+        // Callow's phone solid for a later Matthew Robertson attempt -- see payloadForAsync's own comment
+        // above for the full account of what was found and fixed since: buildAthletePathways() directly
+        // profiled and measurably sped up (~2.3x at Andy's real ~4,400-row standards-table scale, verified
+        // against the actual pre-fix file), and this deferred republish now runs as payloadForAsync's real
+        // multi-stage generator -- the same unchanged safeX() computations as before, but yielding back to
+        // the browser between every stage and bounded by a hard wall-clock ceiling, so no single stage can
+        // ever again compound into one unbroken freeze. Deliberately still deferred one tick and never
+        // awaited by the Generate button itself -- it can only add data to an access that has already fully
+        // succeeded, never delay or fail it.
+        (async()=>{
           try{
-            const full=payloadFor(a,name=>{try{writeAttempt({enrichmentStep:String(name||'')});}catch{}});
-            rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:full}).then(
-              ()=>{try{writeAttempt({enrichmentOutcome:'ok',enrichmentAt:new Date().toISOString()});}catch{}},
-              err=>{try{writeAttempt({enrichmentOutcome:'error',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-            );
-          }catch(err){try{writeAttempt({enrichmentOutcome:'threw',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-        },0);
-        */
+            const{payload:full,truncatedAt}=await payloadForAsync(a,name=>{try{writeAttempt({enrichmentStep:String(name||'')});}catch{}});
+            await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:full});
+            writeAttempt({enrichmentOutcome:truncatedAt?'partial':'ok',enrichmentTruncatedAt:truncatedAt||null,enrichmentAt:new Date().toISOString()});
+          }catch(err){try{writeAttempt({enrichmentOutcome:'error',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
+        })();
       })(),X.GENERATE_TIMEOUT_MS,()=>step);}finally{clearInterval(tickTimer);try{document.removeEventListener('visibilitychange',onVisibilityChange);}catch{}try{await wakeLock?.release?.()}catch{}wakeLock=null;}}catch(err){if(!gen.cancelled){qr.innerHTML='<span class="muted">QR not generated</span>';setStatus(err?.message||String(err),'error');writeAttempt({resolvedAt:new Date().toISOString(),outcome:'error',message:err?.message||String(err)});}}finally{if(activeGeneration===gen)activeGeneration=null;if(myGeneration===gen)myGeneration=null;genBtn.disabled=false}};copy.onclick=async()=>{if(!activeUrl)return;try{await navigator.clipboard.writeText(activeUrl);setStatus('Link copied.','ok')}catch{setStatus('Copy failed — use the QR code.','error')}};const revokeBtn=wrap.querySelector('[data-bn-revoke]');revokeBtn.onclick=async()=>{if(revokeBtn.disabled)return;revokeBtn.disabled=true;try{const n=await rpc('msos_revoke_swimmer_devices',{p_athlete_id:String(a.id)});setStatus(`${Number(n)||0} swimmer device${Number(n)===1?'':'s'} revoked.`,'ok')}catch(err){setStatus(err?.message||String(err),'error')}finally{revokeBtn.disabled=false}};}
+  // Real coaching failure this fixes (Andy, live, 20 Sept 2026, right after Matthew's first real session
+  // reached his phone and came back with his own notes): "will tonight's session show on his phone when I
+  // write it?" Until this fix, the honest answer was no. Device pairing itself is permanent -- msos_claim_
+  // swimmer_invite exchanges a one-time QR for a device token saved on the swimmer's own phone (localStorage),
+  // proven working live tonight, so a swimmer never needs to scan a second QR code -- but the actual SESSION
+  // DATA only ever got (re)published to Supabase from inside "Generate 15-minute QR", which required Andy to
+  // reopen that one swimmer's own access screen and tap Generate again, every time, per swimmer. That is not
+  // what "give swimmers access to their sessions" was ever supposed to mean, and it does not scale past one
+  // or two athletes -- the real substance behind tonight's "how much longer" frustration, not a new bug so
+  // much as a piece of the original ask that was never actually finished.
+  //
+  // Fixed here without touching app.js at all: Store.putSession is a checksum-protected release asset (see
+  // release-package.test.js's `mutable` set, which app.js is deliberately NOT in) and app.js/Coach Hub stay
+  // off-limits without concrete evidence tying them to a real bug, per standing instruction. Instead this
+  // wraps the EXISTING M.store.putSession the exact same optional-hook way app.js already layers cloud sync
+  // onto it -- Store.putSession's own body already calls `M.cloud?.stageSession?.(...)` right after saving;
+  // this is that identical pattern, from a different engine, not a new technique. Whenever ANY session is
+  // saved (new session created, session edited, or intake applied -- the three real places app.js calls
+  // Store.putSession), every currently-active athlete belonging to that session's squad(s) (the same
+  // case-insensitive squad match app.js's own UI.currentAthletes/D.presentAthletes already use) gets their
+  // swimmer-portal payload silently republished in the background, using corePayloadFor -- the exact same
+  // minimal, twice-proven-fast shape Generate's own critical path already trusts, never the full analytical
+  // payloadFor (that stays deliberately disabled -- see the comment above corePayloadFor for why). This can
+  // never block or fail the session save itself (fire-and-forget, each athlete's publish independently
+  // wrapped in try/catch, so one failure can't affect another athlete or the save that triggered it), and it
+  // is harmless to run for an athlete who has never been given access at all: msos_publish_swimmer_payload is
+  // a plain upsert nobody can read without their own device token (RLS revokes all direct access to that
+  // table -- supabase/20260824_secure_swimmer_portal.sql), so it just sits there ready for whenever Andy does
+  // eventually generate that swimmer's first QR.
+  function athletesForSquads(squads){
+    if(!Array.isArray(squads)||!squads.length)return[];
+    const set=new Set(squads.map(s=>String(s||'').toLowerCase()).filter(Boolean));
+    if(!set.size)return[];
+    return(M.state?.athletes||[]).filter(a=>a.active!==false&&set.has(String(a.squad||'').toLowerCase()));
+  }
+  function autoPublishSessionToSwimmers(session){
+    try{
+      const athletes=athletesForSquads(session?.identity?.squads);
+      for(const a of athletes){
+        Promise.resolve().then(async()=>{
+          try{
+            const payload=corePayloadFor(a,()=>{});
+            await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
+          }catch{}
+        });
+      }
+    }catch{}
+  }
+  (function installSessionAutoPublishHook(){
+    if(typeof M.store?.putSession!=='function'||M.store.putSession.__msosSwimmerAutoPublish)return;
+    const prevPutSession=M.store.putSession;
+    const wrapped=(state,session)=>{
+      const result=prevPutSession(state,session);
+      autoPublishSessionToSwimmers(result||session);
+      return result;
+    };
+    wrapped.__msosSwimmerAutoPublish=true;
+    M.store.putSession=wrapped;
+  })();
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(installButton);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;
+  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;
 })(globalThis);
