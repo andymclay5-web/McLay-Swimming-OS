@@ -95,8 +95,14 @@ function loadPipeline({appFile=appPath,modFile=modPath,boardFile=boardPath}={}){
   return {M,Modification,B:M.boardEngine};
 }
 
+// 19 Sept 2026: this originally read the pre-fix source via `git show HEAD:<path>`, which only worked while
+// the fix itself was still uncommitted in this same session -- once the fix landed as commit 32b23ff, HEAD
+// pointed at the FIXED source, so the fail-before checks below stopped reproducing anything (silently
+// asserting against the current, already-correct behaviour). Pinned to 1a111fa, the exact commit immediately
+// before 32b23ff, which stays correct regardless of how many later, unrelated commits land on this branch.
+const PRE_FIX_COMMIT='1a111fa';
 function gitHeadCopy(realPath,suffix){
-  const old=execFileSync('git',['show',`HEAD:${path.relative(root,realPath).replace(/\\/g,'/')}`],{cwd:root}).toString('utf8');
+  const old=execFileSync('git',['show',`${PRE_FIX_COMMIT}:${path.relative(root,realPath).replace(/\\/g,'/')}`],{cwd:root}).toString('utf8');
   const tmp=realPath.replace(/\.js$/,`.${suffix}.tmp.js`);
   fs.writeFileSync(tmp,old);
   return tmp;

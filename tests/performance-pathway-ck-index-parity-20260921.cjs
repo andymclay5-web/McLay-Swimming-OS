@@ -9,24 +9,29 @@
 //
 // A pure algorithmic/data-access change like that is only safe if the OUTPUT never changes -- same filters
 // (active/sex/para), same grouping, same ordering, just a different (indexed) route to the same rows. This
-// test proves exactly that: it loads the real PRE-FIX implementation straight from git (the last committed
-// HEAD, before this session's uncommitted indexing change) in one isolated VM context, the real CURRENT
-// (indexed) implementation via a normal require() in another, runs both against an identical, realistic
-// multi-event/multi-programme/multi-season fixture (deliberately larger and messier than the existing
-// hand-picked tests/performance-pathway-ck.cjs fixture -- more distances, more strokes, more seasons, some
-// rows that should be filtered out by active/sex/para/age, some meets that need year-rollover projection),
-// and asserts the two athletes' full pathway outputs are byte-for-byte JSON-identical.
+// test proves exactly that: it loads the real PRE-FIX implementation straight from git -- pinned to
+// 7f1d176, the exact commit immediately before the indexing fix landed (commit a8b8da0), the same
+// PRE_FIX_COMMIT pattern tests/board-race-simulation-fins-quality-20260918.cjs already uses, and for the
+// same reason: reading `HEAD` here would work only until the fix itself was committed, after which HEAD
+// points at the FIXED source and this test would silently compare the file against itself -- in one
+// isolated VM context, the real CURRENT (indexed) implementation via a normal require() in another, runs
+// both against an identical, realistic multi-event/multi-programme/multi-season fixture (deliberately
+// larger and messier than the existing hand-picked tests/performance-pathway-ck.cjs fixture -- more
+// distances, more strokes, more seasons, some rows that should be filtered out by active/sex/para/age,
+// some meets that need year-rollover projection), and asserts the two athletes' full pathway outputs are
+// byte-for-byte JSON-identical.
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
 const{execFileSync}=require('node:child_process');
 
+const PRE_FIX_COMMIT='7f1d176';
 const repoRoot=path.join(__dirname,'..');
 const modulePath=path.join(repoRoot,'engines','performance-pathway-ck.js');
-const oldSrc=execFileSync('git',['show','HEAD:engines/performance-pathway-ck.js'],{cwd:repoRoot,encoding:'utf8'});
+const oldSrc=execFileSync('git',['show',`${PRE_FIX_COMMIT}:engines/performance-pathway-ck.js`],{cwd:repoRoot,encoding:'utf8'});
 const newSrc=fs.readFileSync(modulePath,'utf8');
-assert.notEqual(oldSrc,newSrc,'test setup error: HEAD\'s performance-pathway-ck.js is identical to the working copy -- this session\'s indexing change is not actually present as an uncommitted diff, so this parity test would compare a file against itself');
+assert.notEqual(oldSrc,newSrc,`test setup error: ${PRE_FIX_COMMIT}'s performance-pathway-ck.js is identical to the working copy -- the indexing change is not actually present as a diff against this pinned commit, so this parity test would compare a file against itself`);
 assert.ok(/buildStandardsIndex|buildMeetsIndex/.test(newSrc),'test setup error: the current file does not look like it has the indexing fix at all');
 assert.ok(!/buildStandardsIndex|buildMeetsIndex/.test(oldSrc),'test setup error: HEAD already looks like it has the indexing fix -- picked the wrong pre-fix reference point');
 

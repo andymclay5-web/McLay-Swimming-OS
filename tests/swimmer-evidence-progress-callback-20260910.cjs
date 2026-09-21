@@ -50,15 +50,25 @@ const X=global.MSOS4.swimmerPerformanceBM;
 
   // No organisation_id on the fixture athlete, and empty pathway_standards/pathway_meets refs, means
   // exactly 6 jobs run: the four athlete-id-keyed ones plus pathway_standards and pathway_meets.
-  assert.equal(calls.length,6,`expected onJob called once per job, got ${JSON.stringify(calls)}`);
-  assert.deepEqual(calls.map(c=>c.name),
+  // 19 Sept 2026: three more non-indexed checkpoint calls (refs_save/t400_hydrate/cache_invalidate) were
+  // added after the job loop -- see the comment above completeEvidence()'s post-loop tail in
+  // engines/swimmer-performance-ci.js -- so this now expects 9 calls total, not 6.
+  assert.equal(calls.length,9,`expected onJob called once per job plus the 3 post-loop checkpoints, got ${JSON.stringify(calls)}`);
+  const jobCalls=calls.slice(0,6),checkpointCalls=calls.slice(6);
+  assert.deepEqual(jobCalls.map(c=>c.name),
     ['results_pb_board','coach_results','results_event_history','training_test_results','pathway_standards','pathway_meets'],
     'jobs must be reported in the same order they actually run');
-  calls.forEach((c,idx)=>{
+  jobCalls.forEach((c,idx)=>{
     assert.equal(c.i,idx+1,`call ${idx} must report 1-based index ${idx+1}, got ${c.i}`);
     assert.equal(c.total,6,`call ${idx} must report the true total job count (6), got ${c.total}`);
   });
+  assert.deepEqual(checkpointCalls.map(c=>c.name),['refs_save','t400_hydrate','cache_invalidate'],
+    'the three post-loop checkpoints must fire, in order, after every evidence job');
+  checkpointCalls.forEach(c=>{
+    assert.equal(c.i,undefined,`checkpoint ${c.name} must NOT carry an index -- that is what distinguishes it from an evidence-job step`);
+    assert.equal(c.total,undefined,`checkpoint ${c.name} must NOT carry a total -- same reasoning as the index check above`);
+  });
   assert.equal(result.ok,false,'every job timed out, so completion must still be reported as not-ok');
 
-  console.log('SWIMMER_EVIDENCE_PROGRESS_CALLBACK_PASS', `${calls.length} jobs reported in order`);
+  console.log('SWIMMER_EVIDENCE_PROGRESS_CALLBACK_PASS', `${calls.length} calls reported in order`);
 })().catch(err=>{console.error('SWIMMER_EVIDENCE_PROGRESS_CALLBACK_FAIL',err);process.exit(1);});

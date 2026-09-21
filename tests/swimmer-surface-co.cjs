@@ -23,7 +23,11 @@ assert.ok(invite.includes("schema:'msos-swimmer-portal-v6'"),'secure portal payl
 assert.ok(invite.includes('session=sessions.find(s=>s.id===currentId)||safeSession(a)'),'secure portal must receive the current individual session');
 assert.ok(invite.includes('function sessionsFor(a)'),'secure portal must receive the full calendar session picker list');
 assert.ok(portal.includes('sessionPicker(list,s)')||portal.includes('function sessionPicker'),'swimmer portal must render a session picker');
-assert.ok(invite.includes('tests:safeTests(a)')&&invite.includes('meet:safeMeet(a)'),'portal must receive swimmer-only tests and meet data');
+// 19 Sept 2026: payloadFor's return object switched from inline `tests:safeTests(a)`/`meet:safeMeet(a)` to
+// pre-computed `const tests=safeTests(a)`/`const meet=safeMeet(a)` plus shorthand `tests,meet` in the return
+// literal, so a sub-step breadcrumb could fire between each one -- see the comment above payloadFor() in
+// engines/swimmer-invite-bn.js. Same data flow, different literal shape.
+assert.ok(invite.includes('const tests=safeTests(a)')&&invite.includes('const meet=safeMeet(a)'),'portal must receive swimmer-only tests and meet data');
 assert.ok(!invite.includes('new MutationObserver'),'swimmer access must not add a mutation-observer render loop');
 assert.ok(portal.includes("TAB='session'"),'swimmer portal must open on Session');
 assert.ok(portal.includes('Strongest performance first.')&&portal.includes('Tap an event for the full pathway, PB race and splits.'),'Performance must stay event-led, not a giant expanded ladder');

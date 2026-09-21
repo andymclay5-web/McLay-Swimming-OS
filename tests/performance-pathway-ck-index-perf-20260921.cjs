@@ -23,11 +23,15 @@ const fs=require('node:fs');
 const path=require('node:path');
 const{execFileSync}=require('node:child_process');
 
+// Pinned to 7f1d176, the exact commit immediately before the indexing fix landed (a8b8da0) -- not `HEAD`,
+// which only pointed at the pre-fix source until the fix itself was committed (same PRE_FIX_COMMIT pattern
+// tests/board-race-simulation-fins-quality-20260918.cjs already uses, and the same reason).
+const PRE_FIX_COMMIT='7f1d176';
 const repoRoot=path.join(__dirname,'..');
 const modulePath=path.join(repoRoot,'engines','performance-pathway-ck.js');
-const oldSrc=execFileSync('git',['show','HEAD:engines/performance-pathway-ck.js'],{cwd:repoRoot,encoding:'utf8'});
+const oldSrc=execFileSync('git',['show',`${PRE_FIX_COMMIT}:engines/performance-pathway-ck.js`],{cwd:repoRoot,encoding:'utf8'});
 const newSrc=fs.readFileSync(modulePath,'utf8');
-assert.notEqual(oldSrc,newSrc,'test setup error: HEAD\'s performance-pathway-ck.js is identical to the working copy -- nothing to benchmark against');
+assert.notEqual(oldSrc,newSrc,`test setup error: ${PRE_FIX_COMMIT}'s performance-pathway-ck.js is identical to the working copy -- nothing to benchmark against`);
 
 const STANDARDS_ROW_COUNT=4406; // Andy's own real, documented pathway_standards row count
 const MEET_ROW_COUNT=300;
@@ -104,12 +108,17 @@ function benchNew(iterations,warmup){
 }
 
 function run(){
-  const ITER=150,WARMUP=20;
-  const oldMs=benchOld(ITER,WARMUP);
-  const newMs=benchNew(ITER,WARMUP);
+  // OLD's own per-call cost (~100ms+ at this scale -- that's the whole point of this test) means a large
+  // iteration count there costs real wall-clock time for no extra statistical value; NEW is cheap enough to
+  // afford more. Asymmetric counts keep this test's total runtime well under other tests' typical budget
+  // (a few seconds, not the 20+ seconds a naive matching 150/20 on both sides cost during development, which
+  // was slow enough to trip this suite's own per-file timeout when run as part of a full sweep).
+  const OLD_ITER=25,OLD_WARMUP=5,NEW_ITER=100,NEW_WARMUP=15;
+  const oldMs=benchOld(OLD_ITER,OLD_WARMUP);
+  const newMs=benchNew(NEW_ITER,NEW_WARMUP);
   const speedup=oldMs/newMs;
-  console.log(`OLD (full-table-scan per event): median ${oldMs.toFixed(3)}ms over ${ITER} warmed-up iterations`);
-  console.log(`NEW (indexed once per athlete):  median ${newMs.toFixed(3)}ms over ${ITER} warmed-up iterations`);
+  console.log(`OLD (full-table-scan per event): median ${oldMs.toFixed(3)}ms over ${OLD_ITER} warmed-up iterations`);
+  console.log(`NEW (indexed once per athlete):  median ${newMs.toFixed(3)}ms over ${NEW_ITER} warmed-up iterations`);
   console.log(`Measured speedup: ${speedup.toFixed(2)}x`);
 
   // A conservative threshold (well under the ~2.3x measured during development) so this test isn't flaky on a
