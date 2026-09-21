@@ -197,16 +197,35 @@ async function runStaleAttemptIsCancelledByANewOne(){
   // work started, but JavaScript has one thread, so it did nothing to stop that work from freezing the whole
   // phone once it actually started running (confirmed live: Andy's phone locked up completely, unresponsive
   // to every tap, right after this exact mechanism would have fired). See engines/swimmer-invite-bn.js's own
-  // comment at the disabled setTimeout block for the full account. With it disabled, nothing runs after
-  // 'done' at all, so this test is back to its original, simpler shape: confirm the stuck first attempt's
-  // ticker was actually torn down, not merely outraced this one time, by letting real time pass (well past
-  // its own 5ms tick interval) after the second attempt has finished, and proving no further write ever
-  // lands. A still-alive stray ticker would keep re-stamping its own frozen step forever, eventually
-  // overwriting the second attempt's genuine "done" outcome.
-  const writesAfterSecondSettles=storage._calls.length;
+  // comment at the disabled setTimeout block for the full account.
+  //
+  // 21 Sept 2026, RE-ENABLED (Andy, live: "we need to get them to be able to see all of the information I have
+  // for them"): the background enrichment now runs again, but as payloadForAsync's real multi-stage generator
+  // -- yielding back to the browser between every stage and bounded by a hard wall-clock ceiling (see
+  // payloadForAsync's own comment in swimmer-invite-bn.js), only after buildAthletePathways() was directly
+  // profiled and measurably sped up. That means finalAttempt's OWN successful attempt now legitimately keeps
+  // writing enrichmentStep/enrichmentOutcome fields to the shared breadcrumb for a little while AFTER 'done' --
+  // this is real, intended background work, not the bug this test exists to catch. The invariant this test
+  // must still protect is narrower but just as real: the STALE, SUPERSEDED first attempt's ticker (frozen on
+  // 'Establishing secure owner access…') must never write again once the second attempt has taken over, and
+  // the second attempt's own core outcome (step/resolvedAt/outcome) must never be overwritten by anything --
+  // only new enrichment* fields may be added on top of it.
   await new Promise(r=>setTimeout(r,60));
-  assert.equal(storage._calls.length,writesAfterSecondSettles,"the first, superseded attempt's ticker must be fully cancelled -- a still-running stray ticker would keep writing to the shared breadcrumb key forever");
-  assert.deepEqual(M.swimmerInviteBN.lastAttemptStatus(),finalAttempt,'no stray write from the superseded attempt may land after the real attempt has finished');
+  const afterEnrichmentWindow=M.swimmerInviteBN.lastAttemptStatus();
+  assert.notEqual(afterEnrichmentWindow.step,'Establishing secure owner access…','the stale first attempt\'s ticker must never re-stamp its own frozen step over the second attempt\'s real outcome, even once background enrichment is legitimately running for the second attempt');
+  assert.equal(afterEnrichmentWindow.step,'done',"the second attempt's real 'done' step must survive the enrichment window unchanged");
+  assert.equal(afterEnrichmentWindow.outcome,finalAttempt.outcome);
+  assert.equal(afterEnrichmentWindow.resolvedAt,finalAttempt.resolvedAt,'the second attempt\'s resolvedAt must never be overwritten -- by the stale first attempt\'s ticker, or by its own legitimate background enrichment');
+  assert.ok(!('performance' in afterEnrichmentWindow),'the breadcrumb never carries payload bodies, from either attempt -- only step/outcome/enrichment* diagnostics');
+
+  // Confirm the second attempt's own background enrichment genuinely completes (proving it isn't itself stuck
+  // -- the exact class of bug this whole test file exists to catch, just for the NEW mechanism this time).
+  let settled=afterEnrichmentWindow;
+  for(let i=0;i<50&&settled.enrichmentOutcome===undefined;i++){await new Promise(r=>setTimeout(r,10));settled=M.swimmerInviteBN.lastAttemptStatus();}
+  assert.equal(settled.enrichmentOutcome,'ok',"the second attempt's own background enrichment must genuinely finish, not hang -- this fixture's data is small enough to never hit the wall-clock budget");
+  assert.equal(settled.enrichmentTruncatedAt,null);
+  assert.equal(settled.step,'done','enrichment completing must still never touch the real done/outcome/resolvedAt fields');
+  assert.equal(settled.resolvedAt,finalAttempt.resolvedAt);
 
   console.log('QR_CONCURRENT_GUARD_SUPERSEDE_PASS');
 }

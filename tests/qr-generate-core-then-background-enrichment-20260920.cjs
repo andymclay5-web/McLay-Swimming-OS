@@ -26,14 +26,26 @@
 // full account in its own comment) until it can be proven safe the way the other two fixes were: by counting,
 // not reading.
 //
-// This test now proves the OPPOSITE of what it used to: (1) Generate's critical-path publish still carries
-// only corePayloadFor's minimal shape -- that half of the fix is real and unaffected by the disablement; (2)
-// crucially, NO second msos_publish_swimmer_payload call ever follows, and no enrichmentStep/enrichmentOutcome
-// breadcrumb field ever appears, however long you wait -- the exact thing that was freezing phones cannot run
-// at all right now; (3) a source-level guard: if someone re-enables that commented-out block without first
-// fixing/proving safePerformance() is actually bounded, this test reproduces a second publish call carrying
-// the full analytical payload again -- confirming this test would catch an accidental or premature
-// re-enablement before it reaches a coach's phone a second time.
+// 21 Sept 2026, RE-ENABLED (Andy, live: "we need to get them to be able to see all of the information I have
+// for them ... what do you need to do to make that happen?"): this test now proves the SAFE re-enablement,
+// not the disablement. What changed since the block above was written: (1) buildAthletePathways() was
+// directly profiled (not guessed) against a synthetic pathway_standards table sized to Andy's own real
+// ~4,406-row figure, and a genuine O(events x standards) inefficiency was found and fixed by indexing the
+// table once per athlete instead of rescanning it per event (~2.3x measured speedup at realistic event
+// counts, verified against the real pre-fix file -- see engines/performance-pathway-ck.js's own comment and
+// tests/performance-pathway-ck-index-parity-20260921.cjs / tests/performance-pathway-ck-index-perf-20260921.cjs).
+// (2) The disabled synchronous setTimeout(payloadFor) block was replaced with payloadForAsync -- a real async
+// generator over the same five stages (sessions/performance/training/tests/meet/shared_evidence, each still
+// computed by the exact same unchanged safeX() functions as before), yielding back to the browser's event
+// loop between every stage via a real setTimeout(0) tick, and bounded by a hard wall-clock ceiling
+// (ENRICHMENT_BUDGET_MS) that skips all remaining stages if already exceeded rather than adding more
+// synchronous work on top of an already-slow run. This test now proves: (1) Generate's critical-path publish
+// still carries only corePayloadFor's minimal shape, unaffected by any of this; (2) a SECOND
+// msos_publish_swimmer_payload call now DOES follow automatically, carrying the full analytical payload, but
+// only after genuinely yielding to the event loop at least once (proving it cannot re-create the single
+// unbroken synchronous block that froze Andy's phone); (3) when the wall-clock budget is exceeded partway
+// through, the remaining stages are genuinely skipped (truncatedAt set, and the corresponding fields stay at
+// their empty default) rather than pushed through anyway.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -83,7 +95,7 @@ const athlete={id:'ath-core-enrichment-fixture',full_name:'William Callow',date_
   current_s_class:'',current_sb_class:'',current_sm_class:''};
 
 // Real, non-empty analytical data throughout -- proves the critical-path publish deliberately leaves this
-// out, and (in the disabled-by-default state) that nothing ever comes along afterward to add it back in.
+// out, and that the deferred enrichment genuinely picks it up afterward.
 function makeFetchSpy(){
   const calls=[];
   const fn=async(url,opts)=>{
@@ -100,7 +112,7 @@ function makeFetchSpy(){
   return fn;
 }
 
-function bootFixture(src){
+function bootFixture(){
   const modalHost=makeNode('div');
   const athletesHead=makeNode('div');
   const doc=makeDocument(modalHost,athletesHead);
@@ -123,7 +135,7 @@ function bootFixture(src){
       projectionFor:()=>({date:'2026-09-20',squad:'Development',course:'SCM',title:'Threshold set',
         metres:{recorded:4000},delivery:'',zones:{},strokes:{},tags:{},
         blocks:[{id:'blk-1',label:'Main set',metres:800,items:[{id:'item-1',label:'8x100 Threshold',metres:800,tags:[],target:null}]}]}),
-      // Real, non-empty training view -- must never appear in ANY publish call while enrichment is disabled.
+      // Real, non-empty training view -- must appear only in the DEFERRED publish, never the critical-path one.
       viewFor:()=>({
         today:{title:'Threshold set',date:'2026-09-20',delivery:'',deliveredMetres:4000,prescribedMetres:4000,strokes:{},tags:{},zones:{}},
         week:{confirmedDeliveredMetres:8000,sessions:2,strokes:{},tags:{},zones:{}},
@@ -132,7 +144,7 @@ function bootFixture(src){
       }),
       candidateSessionsFor:()=>[],
     },
-    // Real, non-empty performance pathway data -- same reasoning: must never appear while disabled.
+    // Real, non-empty performance pathway data -- same reasoning: only the deferred publish may carry it.
     performanceEngine:{pathwaysForAthlete:()=>({events:[{course:'SCM',distance:100,stroke:'Freestyle',seconds:60.5,points:500,ladder:{tracks:{SCM:[],LCM:[]},next:null},raw:{}}]})},
     swimmerPerformanceBM:{
       completeEvidence:()=>Promise.resolve({ok:true,rows:0,errors:[]}),
@@ -141,16 +153,8 @@ function bootFixture(src){
   };
   const fetchSpy=makeFetchSpy();
   global.fetch=fetchSpy;
-  if(src){
-    const tmpPath=invitePath.replace(/\.js$/,'.coreenrichmentfailbefore.tmp.js');
-    fs.writeFileSync(tmpPath,src);
-    delete require.cache[require.resolve(tmpPath)];
-    require(tmpPath);
-    fs.unlinkSync(tmpPath);
-  }else{
-    delete require.cache[require.resolve(invitePath)];
-    require(invitePath);
-  }
+  delete require.cache[require.resolve(invitePath)];
+  require(invitePath);
   global.MSOS4.swimmerInviteBN.STATUS_TICK_MS=5;
   return{M:global.MSOS4,modalHost,athletesHead,doc,fetchSpy};
 }
@@ -168,9 +172,15 @@ function publishCalls(fetchSpy){
   return fetchSpy._calls.filter(c=>c.url.includes('msos_publish_swimmer_payload'));
 }
 
-async function runCoreOnlyNoAutomaticEnrichment(){
+async function waitFor(predicate,{tries=100,everyMs=10}={}){
+  for(let i=0;i<tries;i++){if(predicate())return true;await new Promise(r=>setTimeout(r,everyMs));}
+  return predicate();
+}
+
+async function runCoreCriticalPathThenSafeDeferredEnrichment(){
   const{M,athletesHead,modalHost,fetchSpy}=bootFixture();
   const{generate}=await openModal(athletesHead,modalHost);
+
   await Promise.race([
     generate.onclick(),
     new Promise((_,reject)=>setTimeout(()=>reject(new Error('TEST_HARNESS_GUARD: generate did not settle')),3000)),
@@ -180,82 +190,115 @@ async function runCoreOnlyNoAutomaticEnrichment(){
   assert.equal(finalAttempt.outcome,'ok','generate must complete successfully using only the fast, bounded core payload');
   assert.equal(finalAttempt.step,'done');
 
-  const calls=publishCalls(fetchSpy);
-  assert.equal(calls.length,1,'exactly one msos_publish_swimmer_payload call must happen -- the critical-path one');
-  const corePublished=calls[0].body.p_payload;
-  assert.equal(corePublished.performance.events.length,0,'the critical-path publish must NOT carry the real, non-empty performance data available in the fixture -- it must use corePayloadFor, not the full analytical payloadFor');
+  const callsRightAfterGenerate=publishCalls(fetchSpy);
+  assert.equal(callsRightAfterGenerate.length,1,'exactly one msos_publish_swimmer_payload call must have happened by the time Generate itself resolves -- the critical-path one');
+  const corePublished=callsRightAfterGenerate[0].body.p_payload;
+  assert.equal(corePublished.performance.events.length,0,'the critical-path publish must NOT carry the real, non-empty performance data available in the fixture -- it must use corePayloadFor, not the full analytical payloadFor/payloadForAsync');
   assert.deepEqual(corePublished.training,{},'the critical-path publish must not carry the real, non-empty training data available in the fixture');
   assert.ok(corePublished.session?.blocks?.length,'the critical-path publish must still carry the current session -- corePayloadFor is not empty, just minimal');
 
-  // The heart of this test, now inverted from what it used to prove: NOTHING must follow. Wait comfortably
-  // longer than the disabled block's own setTimeout(...,0) delay and confirm no second publish call, and no
-  // enrichment breadcrumb field, ever appears -- proving the mechanism that froze Andy's phone cannot run.
-  await new Promise(r=>setTimeout(r,150));
-  const callsAfterWaiting=publishCalls(fetchSpy);
-  assert.equal(callsAfterWaiting.length,1,'no second msos_publish_swimmer_payload call may follow automatically -- the background-enrichment republish that used to fire here is disabled specifically because it could freeze the whole phone');
-  const settled=M.swimmerInviteBN.lastAttemptStatus();
-  assert.equal(settled.enrichmentOutcome,undefined,'no enrichmentOutcome field may appear on the breadcrumb -- confirms the deferred republish never ran at all, not merely that it has not finished yet');
-  assert.equal(settled.enrichmentStep,undefined,'no enrichmentStep field may appear on the breadcrumb either');
-  assert.equal(settled.step,'done',"the attempt's real 'done' step must be exactly what it was right after Generate finished -- nothing runs afterward to change it");
-  assert.equal(settled.resolvedAt,finalAttempt.resolvedAt);
+  // The deferred enrichment genuinely runs and eventually completes (the actual thread-yielding proof is a
+  // separate, more targeted test below against payloadForAsync directly -- see
+  // runPayloadForAsyncYieldsBetweenStages).
+  const enrichmentSettled=await waitFor(()=>M.swimmerInviteBN.lastAttemptStatus().enrichmentOutcome!==undefined);
+  assert.ok(enrichmentSettled,'the deferred background enrichment must eventually complete, not hang forever');
 
-  console.log('QR_CORE_ONLY_NO_AUTOMATIC_ENRICHMENT_PASS');
+  const settled=M.swimmerInviteBN.lastAttemptStatus();
+  assert.equal(settled.enrichmentOutcome,'ok');
+  assert.equal(settled.enrichmentTruncatedAt,null,'this fixture\'s data is small and fast -- it must finish well inside the wall-clock budget, not get truncated');
+  assert.equal(settled.step,'done',"the real 'done' step must be unchanged by the enrichment that follows it");
+  assert.equal(settled.resolvedAt,finalAttempt.resolvedAt,'the enrichment must never rewrite the critical path\'s own resolvedAt');
+
+  const callsAfterEnrichment=publishCalls(fetchSpy);
+  assert.equal(callsAfterEnrichment.length,2,'exactly one further msos_publish_swimmer_payload call must follow, carrying the deferred full analytical payload');
+  const fullPublished=callsAfterEnrichment[1].body.p_payload;
+  assert.equal(fullPublished.performance.events.length,1,'the deferred publish must carry the real, non-empty performance data the critical-path publish deliberately left out');
+  assert.equal(fullPublished.training.today?.deliveredMetres,4000,'the deferred publish must carry the real, non-empty training data the critical-path publish deliberately left out');
+
+  console.log('QR_CORE_THEN_SAFE_DEFERRED_ENRICHMENT_PASS');
 }
 
-function runReenablementWouldBeCaught(){
-  // Source-level guard, not a fail-before/pass-after of a bug fix: if the disabled setTimeout block is ever
-  // simply uncommented again without first proving payloadFor() cannot run long enough to matter, this
-  // reproduces exactly the risk that froze Andy's phone -- a second, automatic publish call carrying the full
-  // analytical payload, with nothing bounding how long building it can take.
-  const disabledBlock=`        /*
-        setTimeout(()=>{
-          try{
-            const full=payloadFor(a,name=>{try{writeAttempt({enrichmentStep:String(name||'')});}catch{}});
-            rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:full}).then(
-              ()=>{try{writeAttempt({enrichmentOutcome:'ok',enrichmentAt:new Date().toISOString()});}catch{}},
-              err=>{try{writeAttempt({enrichmentOutcome:'error',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-            );
-          }catch(err){try{writeAttempt({enrichmentOutcome:'threw',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-        },0);
-        */`;
-  const reenabledBlock=`        setTimeout(()=>{
-          try{
-            const full=payloadFor(a,name=>{try{writeAttempt({enrichmentStep:String(name||'')});}catch{}});
-            rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:full}).then(
-              ()=>{try{writeAttempt({enrichmentOutcome:'ok',enrichmentAt:new Date().toISOString()});}catch{}},
-              err=>{try{writeAttempt({enrichmentOutcome:'error',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-            );
-          }catch(err){try{writeAttempt({enrichmentOutcome:'threw',enrichmentMessage:err?.message||String(err),enrichmentAt:new Date().toISOString()});}catch{}}
-        },0);`;
-  assert.ok(realSrc.includes(disabledBlock),'test setup error: could not locate the disabled (commented-out) background-enrichment block in the real source -- its wording changed in a way this test does not expect');
-  const reenabledSrc=realSrc.replace(disabledBlock,reenabledBlock);
-  assert.notEqual(reenabledSrc,realSrc,'test setup error: could not construct the re-enabled source');
-  require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});
+async function runBudgetExceededTruncatesRemainingStages(){
+  // Directly exercises payloadForAsync's own safety net (not routed back through the Generate button): a
+  // budget already exceeded before the first stage's own check (-1ms, so Date.now()-t0 >= 0 is always > -1,
+  // deterministically, with no dependence on how fast the test machine happens to be) must skip every stage,
+  // leaving the output at its empty defaults -- proving truncation actually skips work, not merely labels it.
+  bootFixture();
+  const X=global.MSOS4.swimmerInviteBN;
+  const{payload,truncatedAt}=await X.payloadForAsync(athlete,()=>{},-1);
+  assert.equal(truncatedAt,'performance','a budget already exceeded before the loop starts must be caught at the very first analytical stage');
+  assert.deepEqual(payload.performance,{course:'SCM',events:[],opportunities:[]},'a truncated stage must keep its empty default, never partially-run real data');
+  assert.deepEqual(payload.training,{});
+  assert.deepEqual(payload.tests,[]);
+  assert.deepEqual(payload.meet,[]);
+  assert.deepEqual(payload.sharedEvidence,[]);
+  assert.ok(payload.session,'even a fully truncated enrichment pass must still carry the identity/session data computed before the budget check -- it is never a blank object');
+  console.log('QR_ENRICHMENT_BUDGET_TRUNCATION_PASS');
+}
 
-  return(async()=>{
-    const{M,athletesHead,modalHost,fetchSpy}=bootFixture(reenabledSrc);
-    const{generate}=await openModal(athletesHead,modalHost);
-    await Promise.race([
-      generate.onclick(),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('TEST_HARNESS_GUARD: generate did not settle')),3000)),
-    ]);
-    assert.equal(M.swimmerInviteBN.lastAttemptStatus().outcome,'ok','fixture sanity: the re-enabled source must still complete the critical path successfully');
+async function runPayloadForAsyncYieldsBetweenStages(){
+  // The direct, targeted proof of the actual safety property (as opposed to the end-to-end test above, which
+  // only proves the enrichment eventually finishes): a macrotask scheduled during payloadForAsync's very first
+  // stage must get a genuine turn on the event loop before payloadForAsync's own promise resolves. This is
+  // only possible because payloadForAsync awaits a real setTimeout(0) between every stage -- if that yield
+  // were ever removed (reverting to one unbroken synchronous span, exactly like the original disabled
+  // payloadFor() block), every stage would run back-to-back on the microtask queue and this sentinel
+  // (a macrotask, scheduled strictly before payloadForAsync's own first yield timer in the same iteration)
+  // would still be pending -- not yet run -- by the time the assertion below checks it.
+  bootFixture();
+  const X=global.MSOS4.swimmerInviteBN;
+  let sentinelRan=false;
+  const resultPromise=X.payloadForAsync(athlete,name=>{
+    if(name==='performance')setTimeout(()=>{sentinelRan=true;},0);
+  });
+  await resultPromise;
+  assert.ok(sentinelRan,'a macrotask scheduled during payloadForAsync\'s first stage must have already run by the time payloadForAsync itself resolves -- proves it genuinely yields the thread between stages instead of running end to end synchronously');
+  console.log('QR_ENRICHMENT_YIELDS_BETWEEN_STAGES_PASS');
+}
 
-    for(let i=0;i<50;i++){
-      if(publishCalls(fetchSpy).length>=2)break;
-      await new Promise(r=>setTimeout(r,10));
-    }
-    const calls=publishCalls(fetchSpy);
-    assert.equal(calls.length,2,'re-enabling the commented-out block must reproduce a second, automatic publish call -- confirming this test would catch an accidental re-enablement before it reaches a coach\'s phone again');
-    assert.equal(calls[1].body.p_payload.performance.events.length,1,'the re-enabled background republish carries the full analytical payload -- exactly the shape of work that is not yet proven bounded');
+async function runFailBeforeYieldSentinelWouldCatchARegression(){
+  // Fail-before for the yield test above: strip out the one await that actually yields the thread between
+  // stages (reverting payloadForAsync to one unbroken synchronous span, the exact shape of the original
+  // disabled payloadFor() setTimeout block) and confirm the same sentinel technique correctly reports it as
+  // NOT yielding -- proving runPayloadForAsyncYieldsBetweenStages would have caught this regression.
+  const fixedLine='      await yieldToMainThread();\n';
+  assert.ok(realSrc.includes(fixedLine),'test setup error: could not locate payloadForAsync\'s own yield call in the real source -- its wording changed in a way this test does not expect');
+  const deYieldedSrc=realSrc.replace(fixedLine,'');
+  assert.notEqual(deYieldedSrc,realSrc,'test setup error: could not construct the de-yielded reversion');
+  const tmpPath=invitePath.replace(/\.js$/,'.enrichmentyieldfailbefore.tmp.js');
+  fs.writeFileSync(tmpPath,deYieldedSrc);
+  try{
+    require('node:child_process').execFileSync(process.execPath,['--check',tmpPath],{stdio:'pipe'});
+    bootFixture();
+    delete require.cache[require.resolve(tmpPath)];
+    require(tmpPath);
+    const X=global.MSOS4.swimmerInviteBN;
+    let sentinelRan=false;
+    await X.payloadForAsync(athlete,name=>{
+      if(name==='performance')setTimeout(()=>{sentinelRan=true;},0);
+    });
+    assert.equal(sentinelRan,false,'pre-fix (de-yielded) payloadForAsync must run all stages back-to-back on the microtask queue, so a macrotask scheduled during its first stage must NOT have run yet by the time it resolves -- confirms the real fix\'s yield call is what the sentinel test above is actually pinning');
+  }finally{
+    fs.unlinkSync(tmpPath);
+  }
+  console.log('QR_ENRICHMENT_YIELD_FAILBEFORE_PASS');
+}
 
-    console.log('QR_CORE_REENABLEMENT_WOULD_BE_CAUGHT_PASS');
-  })();
+function runReenablementIsTheIntendedSafeMechanism(){
+  // Source-level guard, inverted from this file's original shape: the deferred republish must be wired
+  // through payloadForAsync (yielding, budgeted) and must NOT be the old fully-synchronous payloadFor with no
+  // yield points -- that combination is exactly what froze Andy's phone the first time this shipped.
+  assert.match(realSrc,/const\{payload:full,truncatedAt\}=await payloadForAsync\(a,/,'the Generate button\'s deferred republish must call the yielding, budgeted payloadForAsync -- not the old fully-synchronous payloadFor');
+  assert.doesNotMatch(realSrc.split('function installButton(){')[0].split('async function payloadForAsync')[0].slice(-4000),/setTimeout\(\(\)=>\{\s*try\{\s*const full=payloadFor\(a,/,'the disabled fully-synchronous setTimeout(payloadFor) block must not have been reintroduced verbatim');
+  console.log('QR_CORE_REENABLEMENT_USES_SAFE_MECHANISM_PASS');
 }
 
 (async()=>{
-  await runCoreOnlyNoAutomaticEnrichment();
-  await runReenablementWouldBeCaught();
+  await runCoreCriticalPathThenSafeDeferredEnrichment();
+  await runBudgetExceededTruncatesRemainingStages();
+  await runPayloadForAsyncYieldsBetweenStages();
+  await runFailBeforeYieldSentinelWouldCatchARegression();
+  runReenablementIsTheIntendedSafeMechanism();
   require('node:child_process').execFileSync(process.execPath,['--check',invitePath],{stdio:'pipe'});
   process.exit(0);
 })().catch(err=>{console.error(err);process.exit(1);});
