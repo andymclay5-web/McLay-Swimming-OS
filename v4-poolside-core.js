@@ -52,7 +52,11 @@
   function cueZone(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);return m?zoneValue(m[1]):'';}
   function zoneProgression(line){const m=txt(line).match(/\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b\s*(?:to|→|->)\s*\b(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(!m)return null;const from=zoneValue(m[1]),to=zoneValue(m[2]);return from&&to&&from!==to?{from,to,text:txt(line)}:null;}
   function cueStroke(line){
-    const t=txt(line);if(/\b(?:individual\s+medley|medley|IM)\b/i.test(t))return'IM';if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';return'';
+    // "i['’]m" alongside the plain "IM" token: a mobile keyboard autocorrecting the standalone word
+    // "im" into the contraction "I'm" (see the matching fix in normaliseText above) can also land inside a
+    // cue line (e.g. a race-intent annotation), not only the main set line -- recognised here too so a cue
+    // naming the IM stroke isn't silently dropped just because of the same autocorrect substitution.
+    const t=txt(line);if(/\b(?:individual\s+medley|medley|IM|i[’']m)\b/i.test(t))return'IM';if(/\b(?:freestyle|free)\b/i.test(t))return'Freestyle';if(/\b(?:backstroke|back)\b/i.test(t))return'Backstroke';if(/\b(?:breaststroke|breast|br)\b/i.test(t))return'Breaststroke';if(/\b(?:butterfly|fly)\b/i.test(t))return'Butterfly';return'';
   }
   function cueRaceIntent(line){
     const raw=txt(line),normal=raw.replace(/\b(50|100|200|400|800|1500)\s*m\b/gi,'$1');
@@ -98,6 +102,16 @@
     const stage=[];
     for(let line of input){
       line=line.replace(/\b(\d{1,2})\s*x\s*10p\s+i[’']?m\b/gi,'$1 x 100 IM');
+      // Real coaching failure this fixes: Andy typed "IM" while entering a real session ("6x100 IM desc
+      // 1-3 15sr", "450 (200 IM, 100 #1, 150 fr") and his phone's own autocorrect silently turned the
+      // standalone word "im" into the contraction "I'm" before it ever reached this parser -- a very common
+      // mobile-keyboard behaviour, not a typo Andy made on purpose. The line-100 fix above only covers one
+      // specific historical typo shape ("Nx10p i'm"); it never matches "<number> I'm" in general, so this
+      // exact autocorrect substitution slipped straight through as literal, unrecognised text and showed up
+      // verbatim on the Board instead of being read as the IM stroke. Scoped to right after a digit (the
+      // distance) so it only fires in this swim-notation context, never touching a genuine English
+      // contraction that happened to appear in free-text session notes.
+      line=line.replace(/(\d)\s+i[’']m\b/gi,'$1 IM');
       const hr=headingRounds(line);
       if(hr){stage.push(hr.heading,`${hr.rounds} Rounds:`);if(hr.tail)stage.push(hr.tail);continue}
       stage.push(normaliseCycle(line));
