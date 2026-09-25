@@ -551,16 +551,40 @@
     if(!set.size)return[];
     return(M.state?.athletes||[]).filter(a=>a.active!==false&&set.has(String(a.squad||'').toLowerCase()));
   }
-  function autoPublishSessionToSwimmers(session){
+  // Real coaching failure this fixes (Andy, live, 21 Sept 2026: "add squad on roll also freezes" -- reported
+  // right after his own Coach Hub freeze report, on a completely different screen, ruling out Hub's own
+  // render as the shared cause once profiling had already cleared it -- see coach-hub-double-tap-freeze test
+  // and its 2026-09-21 re-verification for that separate finding). engines/attendance-roster.js's addSquad()
+  // calls M.store.putSession() directly (the exact same call app.js makes on every new session, session
+  // edit, and intake apply), which this file's installSessionAutoPublishHook wraps. Until this fix,
+  // autoPublishSessionToSwimmers() queued EVERY currently-active athlete in the session's (now-larger) squad
+  // set as its own Promise.resolve().then() microtask, all in the same synchronous turn -- microtasks all run
+  // back-to-back before the browser gets a chance to paint or handle the next tap. Profiled against real
+  // Supabase-sourced scale (272 sessions, 72 athletes, a real 2-squad session pulling in 30 athletes -- see
+  // /tmp/msos-profile2/profile-autopublish.cjs): the synchronous corePayloadFor()-equivalent work alone
+  // (candidateSessionsFor + projectionFor per candidate session) totalled ~167ms on server-grade hardware for
+  // just those 30 athletes, with real per-athlete variance up to 52ms -- on a real phone's much slower JS
+  // engine this compounds well into freeze territory, on top of firing 30 concurrent network RPCs at once.
+  // This is exactly the same "unbounded synchronous burst, no yield to the browser" shape as the double-tap
+  // Coach Hub freeze this project already fixed once (engines/coach-loop-ui.js, 16 Sept) and the same shape
+  // the 20 Sept re-enable comment above describes payloadForAsync being rewritten to avoid ("yielding back to
+  // the browser between every stage ... so no single stage can ever again compound into one unbroken
+  // freeze") -- this auto-publish-on-every-save hook was simply added later and never got that same
+  // treatment. Fixed by yielding to the browser (a real macrotask boundary, not just a microtask) before
+  // each athlete's synchronous work runs, so a squad add (or any session save) can never do more than roughly
+  // one athlete's worth of work per turn -- the browser gets to paint and handle input in between every
+  // single athlete, no matter how large the squad. Still fire-and-forget (never awaited by putSession, so it
+  // can never block or fail the save itself) and still one try/catch per athlete (one failure can't affect
+  // another). See tests/swimmer-autopublish-squad-add-freeze-20260921.cjs.
+  async function autoPublishSessionToSwimmers(session){
     try{
       const athletes=athletesForSquads(session?.identity?.squads);
       for(const a of athletes){
-        Promise.resolve().then(async()=>{
-          try{
-            const payload=corePayloadFor(a,()=>{});
-            await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
-          }catch{}
-        });
+        await new Promise(resolve=>setTimeout(resolve,0));
+        try{
+          const payload=corePayloadFor(a,()=>{});
+          await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
+        }catch{}
       }
     }catch{}
   }

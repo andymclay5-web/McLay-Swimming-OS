@@ -19,6 +19,33 @@
   const txt=v=>String(v??'').replace(/\s+/g,' ').trim();
   const clone=v=>U.clone?U.clone(v):JSON.parse(JSON.stringify(v));
   const nowDate=()=>new Date();
+  // 23 Sept 2026 (Andy, live, correcting an assumption in systemFrom()'s own 21 Sept "correction #2" comment
+  // below, which said the reverse HR->zone mapping wasn't built yet "since Andy hasn't given the exact
+  // boundary numbers for it"): he had already spent hours wiring Clive Rushton's Swim Ontario heart-rate/
+  // stroke-rate cone into this app -- it's engines/aerobic.js's own RUSHTON table (Regeneration/Development
+  // <140bpm, Overload ~150bpm, Threshold 160-165bpm, Clearance 165-185bpm), used there to show an HR/SR guide
+  // when no T400 evidence exists for a zone. "It should already be there" -- it was, just never read in
+  // REVERSE (an authored HR figure in a set's own text -> which zone that implies) for systemFrom()
+  // specifically, which is exactly the gap the 17 Sept and 21 Sept comments below both flagged. These
+  // boundaries are the same numbers as engines/aerobic.js's RUSHTON table, kept in sync by this file's own
+  // drift-guard test (tests/dosage-rushton-hr-zone-20260923.cjs) rather than parsed from that table at
+  // runtime, since the table's string format ("<140", "~150", "160–165") is written for display, not for
+  // arithmetic. Matches the same "HR <number>" / "Heart Rate <number>" phrasing engines/context-engine-av.js
+  // already recognises for voice-captured HR observations, extended here to also accept an authored range
+  // ("HR 160-165"), using its midpoint. Below 140bpm intentionally resolves to Development, not Regeneration:
+  // the table gives both zones the identical "<140" HR band (they're only distinguished by stroke rate, which
+  // authored session text does not reliably carry), so this keeps the same "neutral middle" default already
+  // used elsewhere in systemFrom() for genuinely easy work -- Andy can ask for a stroke-rate-based split later
+  // if it turns out to matter in practice.
+  function hrZone(raw){
+    const m=raw.match(/(?:heart\s*rate|\bhr)\b\s*:?\s*(\d{2,3})(?:\s*(?:[-–—]|to)\s*(\d{2,3}))?/i);
+    if(!m)return null;
+    const lo=Number(m[1]),hi=m[2]!=null?Number(m[2]):lo,mid=(lo+hi)/2;
+    if(mid>=165)return'Clearance';
+    if(mid>=160)return'Threshold';
+    if(mid>=140)return'Overload';
+    return'Development';
+  }
   // Real coaching failure this fixes (Andy, 17 Sept 2026, looking at a real session's dosage/methodology
   // report showing 93-95% "Unclassified"): every check below used to test `v||raw` -- a single string
   // picked by which of the two was non-empty, NOT both. `v` is the item's own `zone` field; `raw` is its
@@ -30,12 +57,13 @@
   // own text. Now both `v` and `raw` are checked independently, so a real keyword in either one is enough --
   // fixing this alone should recover a meaningful share of what's currently showing as "Unclassified" for
   // items that already say "Easy"/"Max"/etc. in their own text but carry an unrecognised zone value.
-  // Two gaps NOT fixed here, deliberately, since they need Andy's own input rather than a guess: (1) plain
-  // HR-range text ("HR 170-180", "Heart Rate 170—180") still isn't recognised at all -- the Rushton Cone
-  // HR/SR reference (engines/aerobic.js's RUSHTON table) exists but currently only runs forward (an
-  // already-assigned zone -> HR/SR guidance to aim for), not in reverse (an authored HR figure -> which
-  // zone that implies), and the exact boundary rules for that reverse mapping are a coaching call, not a
-  // code one; (2) a descending set ("Desc 1-3") genuinely spans a RANGE of zones by its own nature, and a
+  // One gap NOT fixed here at the time, deliberately, since it needed Andy's own input rather than a guess:
+  // plain HR-range text ("HR 170-180", "Heart Rate 170—180") wasn't recognised at all -- the Rushton Cone
+  // HR/SR reference (engines/aerobic.js's RUSHTON table) existed but only ran forward (an already-assigned
+  // zone -> HR/SR guidance to aim for), not in reverse (an authored HR figure -> which zone that implies).
+  // Fixed 23 Sept 2026 -- see hrZone() and its call site below for the reverse mapping, now built using that
+  // same table's own boundaries. A second gap remains open: a descending set ("Desc 1-3") genuinely spans a
+  // RANGE of zones by its own nature, and a
   // single classification for the whole item is inherently wrong for it -- proper handling needs per-rep
   // zone data (dosage.js's addSet/repSystem already supports this via item.repPattern, if the parser
   // populates it for descending sets) rather than a single system-wide label.
@@ -58,33 +86,55 @@
     if(item?.raceIntent||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
     if(either(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i))return'Speed / Max';
     if(either(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i))return'Skill / Technical';
+    // 23 Sept 2026: an authored heart-rate figure/range is as strong an explicit signal as any keyword above
+    // it, and is checked here on the same footing -- after every keyword (a coach's own word for the zone
+    // always wins over a derived HR reading), before the historical/structural notes and Development default
+    // below. See hrZone()'s own comment above for the Rushton Cone sourcing and boundary reasoning.
+    const hr=hrZone(raw);if(hr)return hr;
     // 18 Sept 2026 (Andy, answering the "should untagged sets get a default" question raised alongside the
     // cues fix above): his own stated logic -- "all easy swimming would fit into Aerobic Capicity and/or
     // aerobic development or regentration... a hard 400 prob is threashold, a hard 200 is prob cl, a hard 100
     // is prob 400 to 200p... max is max, atp cp for short dist... through the other anaerobic zones based on
-    // dist and rest" -- and he explicitly chose inferring this from STRUCTURE (distance + rest), not requiring
-    // a keyword like "hard" to be typed. A real 'set' item always carries its own distance; whether it also
-    // carries a genuine authored rest (item.restSeconds, parsed from e.g. "Rest · 20 sec" -- NOT the same as
-    // a send-off/cycleSeconds interval) is what tells continuous/easy swimming apart from "worked" reps, per
-    // Andy's own words. No keyword anywhere matched at this point, so: an item with a real authored rest is
-    // "worked" -- Andy's named distance ladder decides which anaerobic-ish zone (400+->Threshold, 200-399->
-    // Clearance, 100-199->Race pace, <100->Speed/Max/ATP-CP); an item with NO authored rest at all is treated
-    // as continuous/easy swimming -> Development (his own "either Aerobic Capacity/Development/Regeneration is
-    // fine" latitude, picking the neutral middle one). Deliberately NOT touched, since there's no real
-    // calibration data for it yet: an "Overload" branch within this ladder (Andy named only the 4 anchors
-    // above) -- Overload stays reachable only via its own explicit keyword until he gives a concrete case.
-    // Items with no real distance at all (bare/synthetic fixtures, or a genuinely non-distance line) keep
-    // returning Unclassified exactly as before -- this default only ever fires for a real, distance-bearing set.
-    if(Number(item?.distance)>0){
-      if(item?.restSeconds!=null&&Number(item.restSeconds)>0){
-        const d=Number(item.distance);
-        if(d>=400)return'Threshold';
-        if(d>=200)return'Clearance';
-        if(d>=100)return'Race pace';
-        return'Speed / Max';
-      }
-      return'Development';
-    }
+    // dist and rest" -- and he originally asked for this inferred from STRUCTURE (distance + rest) alone, no
+    // keyword required. A first pass (same day) built a distance+rest ladder on that basis (400+->Threshold,
+    // 200-399->Clearance, 100-199->[race pace, later removed], <100->Speed/Max whenever a real authored rest
+    // was present). Both later corrected below -- superseded, kept only as history.
+    //
+    // 21 Sept 2026, correction #1 (Andy, live: "There is no world those aerobic 100s should and could be race
+    // pace, race pace is only race pace is it is specified @ ... pace"): removed "Race pace" from the
+    // distance+rest ladder; folded that band into "Clearance" instead. Itself superseded minutes later by
+    // correction #2 below -- kept only as history.
+    //
+    // 21 Sept 2026, correction #2 (Andy, live, immediately after seeing correction #1's Clearance result --
+    // his full instruction, verbatim): "Those one hundreds definitely wouldn't be clearance... The low key
+    // hundreds with no intensity gauge. They're always going to fit into regeneration or development. No, not
+    // clearance. Clearance is like high intensity aerobic. That's only ever going to happen if it's specified,
+    // with a heart rate or the word clearance. If it's a descending set... descending one to three, we might
+    // have an incorporation of up to clearance or threshold in there. But again, I said it's common sense
+    // around this -- you understand physiology, you should be able to use a little bit more logic for this. If
+    // it's got no intensity, it's going to be easy, so that's going to fit into regeneration [or development]."
+    //
+    // This is a full retraction of the distance+rest STRUCTURAL ladder, not just its Race-pace rung: an
+    // authored rest interval alone was never a reliable "worked/hard" signal -- a rest-bearing 400, 200 or 100
+    // is just as often an easy set broken into reps with a short recovery as it is a genuinely hard one, and
+    // guessing "hard" from rest+distance shape produced the exact same category of wrong answer for every rung
+    // of the ladder, not only the 100-199m one. So: Threshold, Clearance and Speed/Max are no longer reachable
+    // from distance+rest structure AT ALL -- only from an explicit signal (a real keyword, already checked
+    // above this point, e.g. "threshold"/"clearance"/"max"; an authored heart-rate figure/range, via hrZone()
+    // above, reading engines/aerobic.js's own RUSHTON Cone boundaries -- see hrZone()'s comment, added 23
+    // Sept once it turned out this table already existed; or item.raceIntent for Race pace, unaffected by
+    // this correction). Any real,
+    // distance-bearing item with no explicit signal anywhere is "got no intensity, it's going to be easy" --
+    // Regeneration or Development, matching Andy's own latitude for continuous/easy swimming from 18 Sept
+    // (picking the same neutral middle default, Development, for consistency with that existing choice; rest
+    // presence no longer distinguishes anything here). Deliberately NOT built here: descending-set escalation
+    // ("descending one to three... incorporation of up to clearance or threshold") -- Andy floated this as a
+    // "maybe", not a concrete rule, and a single whole-item classification is inherently wrong for a set that
+    // by its own nature spans a range of zones across its reps (needs per-rep zone data via item.repPattern,
+    // already flagged as a real, deliberately-deferred gap in the 17 Sept comment above). Items with no real
+    // distance at all (bare/synthetic fixtures, a genuinely non-distance line) keep returning Unclassified
+    // exactly as before. See tests/dosage-no-intensity-defaults-to-development-20260921.cjs.
+    if(Number(item?.distance)>0)return'Development';
     return'Unclassified';
   }
   function strokeFrom(item){

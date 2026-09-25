@@ -32,7 +32,24 @@
   // this special-casing to be protecting; it was simply deleting a deliberate coaching instruction (choice of
   // stroke under race conditions is real information, not a null value). Stop treating 'Choice' differently
   // from any other authored stroke here.
-  function cueText(item){const pat=compactPattern(item),race=compactRace(item),seq=compactSequence(item),comp=composition(item),repeat=short(item?.repeatBreakdownCue||''),intervals=repIntervalText(item),cues=tidyCues(item),rest=Number(item?.restSeconds)>0?`Rest · ${Number(item.restSeconds)} sec`:'',bits=[];if(pat)bits.push(pat);else if(race)bits.push(race);if(comp)bits.push(comp);if(repeat)bits.push(repeat);else if(seq)bits.push(seq);if(intervals)bits.push(intervals);if(cues)bits.push(cues);if(rest)bits.push(rest);if(bits.length)return[...new Set(bits.filter(Boolean))].join(' · ');if(item?.zone||(item?.repPattern||[]).length||inlineIntent(item))return'';return short(item?.raw||item?.text).replace(/^\d+\s*[x×]\s*\d+(?:\.5)?\s*/i,'').replace(/^\d+(?:\.5)?\s*/,'').replace(/^(Fr|Bk|Br|Fly|IM)\b\s*/,'').replace(/^(Pull|Upper-body)\b\s*/i,'').replace(/^·\s*/, '');}
+  // Real coaching failure this fixes (Andy, live, 21 Sept 2026, from his own screen: McKenzie's rep-condensed
+  // kick set showing "8×50 Fr Kick @ 1:10 / Desc 1-4 / 5-8 · Desc 1—3" -- BOTH the machine-regenerated
+  // per-rep-group breakdown AND the coach-authored cue at once). engines/bridge.js's preserveRepeatingDescent()
+  // (wired up earlier this same day -- see tests/prescription-bridge-descent-preservation-20260921.cjs) fixed
+  // the Board's headline text/cue to correctly show the coach's ORIGINAL authored "Desc 1-3" instead of a
+  // wrongly-regenerated one, restoring it into item.cues/raw/text and marking the item
+  // item.authoredPatternPreserved=true -- but it deliberately never touches item.repPattern itself (that
+  // array still reflects Modification.adaptItem's own condensed-reps regeneration, e.g. 12->8 reps
+  // regrouping "Desc 1-3" into two 4-rep groups). compactPattern() below reads that same still-regenerated
+  // repPattern independently of tidyCues()'s item.cues, and cueText()'s bits array pushed both without
+  // regard for whether one had just been corrected -- so the fixed, authored cue and the still-regenerated
+  // pattern description both rendered, concatenated, instead of the fix's correction replacing the
+  // regenerated one on screen. Fixed by treating authoredPatternPreserved as authoritative: once the bridge
+  // has restored the coach's real cue, the machine-regenerated per-rep-group pattern text is suppressed
+  // (item.cues already carries the one correct, authored description) -- race/composition/repeat/interval
+  // cues are untouched, since none of those are what adaptItem regenerates against the condensed rep count.
+  // See tests/board-cue-double-up-authored-pattern-20260921.cjs.
+  function cueText(item){const patPreserved=!!item?.authoredPatternPreserved,pat=patPreserved?'':compactPattern(item),race=compactRace(item),seq=compactSequence(item),comp=composition(item),repeat=short(item?.repeatBreakdownCue||''),intervals=repIntervalText(item),cues=tidyCues(item),rest=Number(item?.restSeconds)>0?`Rest · ${Number(item.restSeconds)} sec`:'',bits=[];if(pat)bits.push(pat);else if(race)bits.push(race);if(comp)bits.push(comp);if(repeat)bits.push(repeat);else if(seq)bits.push(seq);if(intervals)bits.push(intervals);if(cues)bits.push(cues);if(rest)bits.push(rest);if(bits.length)return[...new Set(bits.filter(Boolean))].join(' · ');if(item?.zone||(item?.repPattern||[]).length||inlineIntent(item))return'';return short(item?.raw||item?.text).replace(/^\d+\s*[x×]\s*\d+(?:\.5)?\s*/i,'').replace(/^\d+(?:\.5)?\s*/,'').replace(/^(Fr|Bk|Br|Fly|IM)\b\s*/,'').replace(/^(Pull|Upper-body)\b\s*/i,'').replace(/^·\s*/, '');}
   // Real coaching failure this fixes: Andy authored "3x50 1 build, 1@200pace, 1 max @ 1:30" -- a per-rep
   // breakdown where only the THIRD rep is max effort, reps 1-2 are build/200-pace -- but the Board's bold
   // headline read "3×50 MAX @ 1:30", claiming the whole set was max effort. Root cause: the MAX check below

@@ -210,7 +210,20 @@
         else{const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);out.adaptationReason=`${Math.round(p.ratio*100)}% load fallback · no fair performance comparator · interval recalculated to match squad set time`;out.adaptationConfidence='low';if(Number(item.cycleSeconds)>0)alignReducedRepsToGroupWindow(out,item,baseReps,reps,{source:'No fair performance comparator available',reason:'Fallback rep reduction; interval recalculated so total time still matches the squad set window',confidence:'low'});}}
       }
     }
-    if(!manualShape&&(key==='mckenziedrage'||key==='mackenziedrage')&&Number(item.distance)===50&&isKick(item)&&Number(item.cycleSeconds)>0)preserveAuthoredTiming(out,item,'McKenzie 50 kick keeps the coach-authored cycle');applyCharlotteKickBase(out,ath,manualShape);adaptiveLabel(out,item,ath);applyOverride(out,ov);syncRepeatBreakdown(out,item);return out;
+    // Real coaching failure this fixes (Andy, live, 21 Sept 2026, direct instruction): "mckenzies kick times
+    // need to change, why would we reduce reps if she was capable of going on the same send off." A
+    // McKenzie-specific rule right here used to unconditionally call preserveAuthoredTiming() after the
+    // general reps-reduction logic above had ALREADY correctly computed a reduced rep count (12->8) AND a
+    // proportionally longer interval via alignReducedRepsToGroupWindow (the same "fewer reps -> longer
+    // interval, same total squad-window time" rule every other swimmer in this app already gets, per Andy's
+    // own 4 Sept design comment above alignReducedRepsToGroupWindow) -- silently overwriting that correct
+    // interval back to the original, unchanged send-off. Her rep count changing at all already means the
+    // engine judged she could not hold the full volume at that send-off; locking the interval afterward
+    // directly contradicted the reason the reps were reduced in the first place, with no documented reason
+    // for the exception. Removed entirely -- her 50m kicks now go through the exact same general fallback
+    // (line ~210 above) as every other swimmer's kick set, with no name-specific carve-out. See
+    // tests/mckenzie-kick-interval-not-locked-20260921.cjs.
+    applyCharlotteKickBase(out,ath,manualShape);adaptiveLabel(out,item,ath);applyOverride(out,ov);syncRepeatBreakdown(out,item);return out;
   }
 
   function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
