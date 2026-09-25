@@ -41,11 +41,18 @@ assert.equal(p.item.distance,250);assert.equal(p.target.status,'pattern');
 assert.ok(Math.abs(p.target.rows[0].seconds-346.8)<.02,`McKenzie 250 REG should use current 8:00 T400, got ${p.target.rows[0].seconds}`);
 assert.match(p.target.source||'',/8:00|8:00\.0/,'current T400 must be the source');
 
-// McKenzie kick: modification.js keeps her coach-authored cycle; TrainingPolicy must not
-// invent a ratio-derived floor on top of it, and the displayed cue must still agree with it.
+// McKenzie kick: 21 Sept 2026 revision (Andy, live, direct instruction: "why would we reduce reps if she was
+// capable of going on the same send off" -- see engines/modification.js and tests/mckenzie-kick-interval-not-
+// locked-20260921.cjs for the full fix). A McKenzie-specific rule here used to unconditionally lock her 50m
+// kick interval to the coach-authored cycle regardless of any rep reduction; that override has been removed,
+// so her kicks now go through the exact same general fallback every other swimmer's kick set already uses --
+// reps reduce per her load ratio (5 -> 3 at 2/3) AND the interval lengthens proportionally so the total squad
+// set window is preserved (5*60/3=100s, i.e. 1:40), and the displayed cue must agree with the recalculated cycle.
 const kick=set('kick',5,50,{stroke:'Freestyle',raw:'5 x 50 Kick Build @ 1:00',cues:['Kick Build @ 1:00'],cycleSeconds:60});
 p=Coordinator.prescription(session,kick,mckenzie,state);
-assert.equal(p.item.cycleSeconds,60,'McKenzie 50 kick must keep the coach-authored cycle, not a ratio-derived floor');assert.match(p.item.raw,/@ 1:00/);assert.match(p.item.cues.join(' '),/@ 1:00/);
+assert.equal(p.item.reps,3,'McKenzie 50 kick reps must reduce per her load ratio, same as any other swimmer\'s kick set');
+assert.equal(p.item.cycleSeconds,100,'McKenzie 50 kick interval must lengthen to match the recalculated squad set window (5*60/3=100s), not stay locked at the original 60s');
+assert.match(p.item.raw,/@ 1:40/);assert.match(p.item.cues.join(' '),/@ 1:40/);
 
 // Longer coach-authored race-pace recovery is authoritative once it already clears the floor.
 const rpLong=set('rp-long',4,50,{stroke:'#1 Stroke',raw:'4 x 50 #1 Stroke @ 2:30',cues:['#1 Build','#2-4 @ 100m Race Pace'],cycleSeconds:150,repInstructions:[{rep:1,label:'Build',raceIntent:null},{rep:2,label:'100m Race Pace',raceIntent:{distance:100}},{rep:3,label:'100m Race Pace',raceIntent:{distance:100}},{rep:4,label:'100m Race Pace',raceIntent:{distance:100}}]});

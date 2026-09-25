@@ -56,7 +56,14 @@ function bootFixture({athletes=[]}={}){
   return{X:global.MSOS4.swimmerInviteBN,state,fetchCalls,origPutSession};
 }
 
-async function flush(){for(let i=0;i<5;i++)await Promise.resolve();}
+// 21 Sept 2026: autoPublishSessionToSwimmers() now yields to the browser via a real setTimeout(0) before
+// EVERY athlete's work (see tests/swimmer-autopublish-squad-add-freeze-20260921.cjs -- fixes Andy's live
+// "add squad on roll also freezes" report, the same unbounded-same-tick-microtask-burst shape this test's
+// own fixtures would previously let slip through unnoticed since draining microtasks alone used to be
+// enough to see every athlete published). Waiting through real macrotask boundaries here, not just
+// microtasks, is required for this test's own assertions to still observe every athlete's publish -- the
+// athletes ARE still all published, just one real tick apart instead of all in the same turn.
+async function flush(){for(let i=0;i<20;i++)await new Promise(resolve=>setTimeout(resolve,0));}
 
 async function runSavingASessionPublishesOnlyItsSquadsActiveAthletes(){
   const athletes=[

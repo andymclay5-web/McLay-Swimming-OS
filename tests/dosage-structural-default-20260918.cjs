@@ -3,29 +3,35 @@
 // cues fix -- see tests/dosage-cue-classification-20260918.cjs and msos-known-issues.md's dosage section):
 // even after that fix, ~3200m of his real 4250m session -- the warm-up stroke ladder, the pre-set breakdown,
 // and critically the entire 1600m post-set 4x400 IM/Freestyle/IM/Choice -- still reported Unclassified,
-// because none of those lines carry ANY zone/intensity keyword anywhere (not raw, not cues, not zone). Asked
-// directly whether the classifier should default entirely-untagged sets from their own structure rather than
-// staying Unclassified, Andy answered with his own coaching logic: "all easy swimming would fit into Aerobic
-// Capicity and/or aerobic development or regentration... a hard 400 prob is threashold, a hard 200 is prob
-// cl, a hard 100 is prob 400 to 200p... max is max, atp cp for short dist... through the other anaerobic
-// zones based on dist and rest" -- and explicitly chose inferring this from STRUCTURE (distance + rest), not
-// requiring a keyword like "hard" to be typed.
+// because none of those lines carry ANY zone/intensity keyword anywhere (not raw, not cues, not zone).
 //
-// Implemented as a last-resort default inside systemFrom(), firing only when no keyword anywhere matched:
-// a real distance-bearing item with a genuine authored rest (item.restSeconds, e.g. from "Rest · 20 sec" --
-// distinct from a send-off/cycleSeconds interval) is treated as "worked" and classified by Andy's own named
-// distance ladder (400+ -> Threshold, 200-399 -> Clearance, 100-199 -> Race pace, <100 -> Speed / Max /
-// ATP-CP); an item with NO authored rest at all is treated as continuous/easy swimming -> Development. An
-// item with no real distance at all (a bare fixture, a non-distance cue) is untouched -- still Unclassified,
-// exactly as before this fix, since there's nothing to structurally default FROM.
+// HISTORY (both retracted -- kept only so the file's own claims stay traceable; the code itself no longer
+// carries either of these):
+//   - 18 Sept 2026 original: Andy asked for a full distance+rest STRUCTURE-inferred ladder (a rest-bearing
+//     item's distance alone deciding 400+->Threshold, 200-399->Clearance, 100-199->Race pace, <100->Speed/Max).
+//   - 21 Sept 2026, correction #1: "Race pace" removed from that ladder (see
+//     tests/dosage-race-pace-requires-explicit-pace-20260921.cjs), folded into Clearance.
+//   - 21 Sept 2026, correction #2, live, direct instruction, immediately superseding correction #1's Clearance
+//     result too: "Those one hundreds definitely wouldn't be clearance... The low key hundreds with no
+//     intensity gauge. They're always going to fit into regeneration or development. No, not clearance.
+//     Clearance is like high intensity aerobic. That's only ever going to happen if it's specified, with a
+//     heart rate or the word clearance... If it's got no intensity, it's going to be easy, so that's going to
+//     fit into regeneration [or development]." This retracted the WHOLE distance+rest ladder, not only its
+//     Race-pace/Clearance rungs -- rest was never a reliable "worked/hard" signal on its own, at any distance.
+//     See tests/dosage-no-intensity-defaults-to-development-20260921.cjs for the full current-behaviour test.
 //
-// This test proves: (1) each rung of Andy's own distance ladder for a "worked" (rest-bearing) item; (2) a
-// distance-bearing item with NO rest defaults to Development, not Unclassified; (3) an item with no distance
-// at all is untouched (still Unclassified) -- no regression to the two prior fixes' own "genuinely
-// unclassifiable" assertions; (4) end-to-end against Andy's REAL session text: the 1600m post-set 4x400 (his
-// single biggest real load chunk, explicitly "Rest · 20 sec" on 400m rounds) now classifies as Threshold,
-// Unclassified drops from 3650m all the way to 0m, and the Coach Hub/Board banner now reads "Threshold 45% ·
-// Development 24%"; (5) fail-before/pass-after on the exact source change.
+// What SURVIVES from the original 18 Sept fix, and what this file now actually tests: any real, distance-
+// bearing item that carries no keyword anywhere (raw/zone/cues) still gets a structural default instead of
+// staying Unclassified -- it just now always resolves to Development (the same "neutral middle" of Andy's own
+// "Aerobic Capacity/Development/Regeneration, either is fine" latitude), regardless of rest. An item with no
+// real distance at all (a bare fixture, a non-distance cue) is untouched -- still Unclassified, exactly as
+// before any of this.
+//
+// This test proves: (1) a distance-bearing item with no keyword anywhere defaults to Development, not
+// Unclassified, whether or not it carries a rest; (2) no regression -- an explicit keyword anywhere still wins
+// outright; (3) an item with no distance at all stays Unclassified; (4) end-to-end against Andy's REAL session
+// text: Unclassified drops from 3650m to 0m, with every previously-untagged line landing on Development; (5)
+// fail-before/pass-after on the original 18 Sept gap (no default at all -> Unclassified).
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
@@ -106,31 +112,23 @@ function run(){
   const D=loadDosage();
   assert.ok(D&&typeof D.systemFrom==='function','dosage engine must load and expose systemFrom');
 
-  // Andy's own named distance ladder for a "worked" (rest-bearing) item with no other keyword anywhere.
-  assert.equal(D.systemFrom('',{raw:'4 x 400 IM/Free/IM/Choice',distance:400,restSeconds:20}),'Threshold',
-    'a rest-bearing 400 with no other keyword must default to Threshold ("a hard 400 prob is threashold")');
-  assert.equal(D.systemFrom('',{raw:'3 x 200 Choice',distance:200,restSeconds:15}),'Clearance',
-    'a rest-bearing 200 with no other keyword must default to Clearance ("a hard 200 is prob cl")');
-  assert.equal(D.systemFrom('',{raw:'6 x 100 Choice',distance:100,restSeconds:10}),'Race pace',
-    'a rest-bearing 100 with no other keyword must default to Race pace ("a hard 100 is prob 400 to 200 pace")');
-  assert.equal(D.systemFrom('',{raw:'8 x 50 Choice',distance:50,restSeconds:10}),'Speed / Max',
-    'a rest-bearing sub-100 rep with no other keyword must default to Speed / Max (ATP-CP, "atp cp for short dist")');
-
-  // No rest data at all -> continuous/easy swimming -> Development, not Unclassified.
+  // A distance-bearing item with no keyword anywhere defaults to Development -- with or without a rest.
+  assert.equal(D.systemFrom('',{raw:'4 x 400 IM/Free/IM/Choice',distance:400,restSeconds:20}),'Development',
+    'a rest-bearing 400 with no keyword must default to Development, not Unclassified and not Threshold (rest is not a "worked" signal on its own -- see the 21 Sept correction)');
   assert.equal(D.systemFrom('',{raw:'400 Freestyle',distance:400,restSeconds:null}),'Development',
-    'a distance-bearing item with NO authored rest must default to Development (continuous/easy swimming), not Unclassified');
+    'a distance-bearing item with NO authored rest must also default to Development, not Unclassified');
   assert.equal(D.systemFrom('',{raw:'400 Freestyle',distance:400}),'Development',
     'the same must hold when restSeconds is simply absent from the item, not just explicitly null');
 
   // No regression: an explicit keyword anywhere still wins outright, unaffected by this default.
   assert.equal(D.systemFrom('Overload',{raw:'4 x 400',distance:400,restSeconds:20}),'Overload',
-    'an item already classifiable from a real keyword must be unaffected by the new structural default');
+    'an item already classifiable from a real keyword must be unaffected by the structural default');
   assert.equal(D.systemFrom('',{raw:'4 x 100 MAX',distance:100,restSeconds:20,cues:['MAX']}),'Speed / Max',
-    'an explicit MAX keyword must still win outright over the distance ladder (both agree here, but via the keyword path, not the default)');
+    'an explicit MAX keyword must still win outright over the structural default');
 
-  // No regression to the two prior fixes' own "genuinely unclassifiable" claims: an item with NO real
-  // distance at all (a bare/synthetic fixture, or a genuinely non-distance line) must stay Unclassified --
-  // there is nothing to structurally default FROM.
+  // No regression to the prior fixes' own "genuinely unclassifiable" claims: an item with NO real distance at
+  // all (a bare/synthetic fixture, or a genuinely non-distance line) must stay Unclassified -- there is
+  // nothing to structurally default FROM.
   assert.equal(D.systemFrom('Aerobic',{zone:'Aerobic',raw:'2x100 choice'}),'Unclassified',
     'an item with no distance field at all must be untouched by this default -- still Unclassified (matches tests/dosage-zone-raw-text-fallback-20260917.cjs\'s own claim)');
   assert.equal(D.systemFrom('',{raw:'200 Choice',cues:['Rest 15 sec']}),'Unclassified',
@@ -154,73 +152,45 @@ function runEndToEndOnAndyRealSession(){
   assert.equal(dose.unclassifiedMetres,0,
     'Unclassified metres must drop all the way to 0m now that every distance-bearing line in Andy\'s real session gets a structural default when nothing else classifies it');
 
-  const threshold=dose.systems['Threshold'];
-  assert.ok(threshold,'dosage report must include a Threshold system entry');
-  assert.equal(threshold.metres,1600,
-    'the 1600m post-set 4x400 (his single biggest real load chunk, "Rest · 20 sec" on 400m rounds) must classify as Threshold per his own "hard 400 prob is threashold" rule');
-
   const development=dose.systems['Development'];
   assert.ok(development,'dosage report must include a Development system entry');
-  assert.equal(development.metres,1600,
-    'the warm-up ladder and pre-set/main-set lines with no authored rest must default to Development (continuous/easy swimming), not Unclassified');
+  assert.equal(development.metres,3200,
+    'both the no-rest lines AND the 1600m post-set 4x400 (which has an authored rest but no intensity keyword) must land on Development now that rest no longer escalates the classification');
 
   const speedMax=dose.systems['Speed / Max'];
-  assert.equal(speedMax.metres,450,'the cues-fix\'s own 450m of Speed / Max work (see tests/dosage-cue-classification-20260918.cjs) must be unaffected by this separate fix');
+  assert.equal(speedMax.metres,450,'the cues-fix\'s own 450m of Speed / Max work (see tests/dosage-cue-classification-20260918.cjs), which comes from a real MAX keyword, must be unaffected by this fix');
+
+  assert.ok(!dose.systems['Threshold']||dose.systems['Threshold'].metres===0,
+    'no line in this session names "threshold" explicitly, so nothing should land there now that distance+rest alone no longer implies Threshold');
 
   const ranked=Object.entries(dose.systems).filter(([,v])=>v.pctDose>0).sort((a,b)=>b[1].pctDose-a[1].pctDose);
   const banner=ranked.slice(0,2).map(([l,v])=>`${l} ${Math.round(v.pctDose)}%`).join(' · ');
-  assert.equal(banner,'Threshold 45% · Development 24%',
-    `the Coach Hub/Board "SESSION METHODOLOGY" banner must now read Threshold 45% · Development 24% (was Unclassified 55% · Speed / Max 24% before this fix): got "${banner}"`);
+  assert.equal(banner,'Development 61% · Speed / Max 21%',
+    `the Coach Hub/Board "SESSION METHODOLOGY" banner must now read Development 61% · Speed / Max 21% (no more phantom Threshold from an authored rest alone): got "${banner}"`);
 
   console.log('DOSAGE_STRUCTURAL_DEFAULT_E2E_PASS');
 }
 
 function runFailBefore(){
   // Fail-before: revert systemFrom to end at the plain `return'Unclassified';` (no structural default at
-  // all) and confirm the same rest-bearing 400 now wrongly reports Unclassified -- the exact gap Andy flagged.
-  const fixedTail=`    if(either(/\\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\\b/i))return'Skill / Technical';
-    // 18 Sept 2026 (Andy, answering the "should untagged sets get a default" question raised alongside the
-    // cues fix above): his own stated logic -- "all easy swimming would fit into Aerobic Capicity and/or
-    // aerobic development or regentration... a hard 400 prob is threashold, a hard 200 is prob cl, a hard 100
-    // is prob 400 to 200p... max is max, atp cp for short dist... through the other anaerobic zones based on
-    // dist and rest" -- and he explicitly chose inferring this from STRUCTURE (distance + rest), not requiring
-    // a keyword like "hard" to be typed. A real 'set' item always carries its own distance; whether it also
-    // carries a genuine authored rest (item.restSeconds, parsed from e.g. "Rest · 20 sec" -- NOT the same as
-    // a send-off/cycleSeconds interval) is what tells continuous/easy swimming apart from "worked" reps, per
-    // Andy's own words. No keyword anywhere matched at this point, so: an item with a real authored rest is
-    // "worked" -- Andy's named distance ladder decides which anaerobic-ish zone (400+->Threshold, 200-399->
-    // Clearance, 100-199->Race pace, <100->Speed/Max/ATP-CP); an item with NO authored rest at all is treated
-    // as continuous/easy swimming -> Development (his own "either Aerobic Capacity/Development/Regeneration is
-    // fine" latitude, picking the neutral middle one). Deliberately NOT touched, since there's no real
-    // calibration data for it yet: an "Overload" branch within this ladder (Andy named only the 4 anchors
-    // above) -- Overload stays reachable only via its own explicit keyword until he gives a concrete case.
-    // Items with no real distance at all (bare/synthetic fixtures, or a genuinely non-distance line) keep
-    // returning Unclassified exactly as before -- this default only ever fires for a real, distance-bearing set.
-    if(Number(item?.distance)>0){
-      if(item?.restSeconds!=null&&Number(item.restSeconds)>0){
-        const d=Number(item.distance);
-        if(d>=400)return'Threshold';
-        if(d>=200)return'Clearance';
-        if(d>=100)return'Race pace';
-        return'Speed / Max';
-      }
-      return'Development';
-    }
+  // all) and confirm the same untagged 400 now wrongly reports Unclassified -- the original 18 Sept gap.
+  // Matched on the code shape only (not the preceding prose comment, rewritten twice since), so this test
+  // stays robust to comment wording changes; the code fragment itself is unique in the file.
+  const fixedTail=`if(Number(item?.distance)>0)return'Development';
     return'Unclassified';
   }`;
-  const buggyTail=`    if(either(/\\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\\b/i))return'Skill / Technical';
-    return'Unclassified';
+  const buggyTail=`return'Unclassified';
   }`;
   assert.ok(dosageSrc.includes(fixedTail),'test setup error: could not locate the fixed systemFrom tail -- its wording changed in a way this test does not expect');
   const buggySrc=dosageSrc.replace(fixedTail,buggyTail);
   assert.notEqual(buggySrc,dosageSrc,'test setup error: could not construct the reverted buggy source');
 
-  const tmpPath=dosagePath.replace(/\.js$/,'.structuraldefaultfailbefore.tmp.js');
+  const tmpPath=dosagePath.replace(/\.js$/,`.structuraldefaultfailbefore.${process.hrtime.bigint()}.tmp.js`);
   fs.writeFileSync(tmpPath,buggySrc);
   try{
     const D=loadDosage(tmpPath);
     assert.equal(D.systemFrom('',{raw:'4 x 400 IM/Free/IM/Choice',distance:400,restSeconds:20}),'Unclassified',
-      'the buggy pre-fix source must wrongly report Unclassified for a rest-bearing 400 with no keyword -- confirms this test would have caught the real gap Andy flagged');
+      'the buggy pre-fix source must wrongly report Unclassified for an untagged 400 -- confirms this test would have caught the original gap Andy flagged');
   }finally{
     fs.unlinkSync(tmpPath);
   }
@@ -233,6 +203,7 @@ try{
   runEndToEndOnAndyRealSession();
   runFailBefore();
   require('node:child_process').execFileSync(process.execPath,['--check',dosagePath],{stdio:'pipe'});
+  console.log('DOSAGE_STRUCTURAL_DEFAULT_ALL_PASS');
 }catch(err){
   console.error(err);
   process.exit(1);
