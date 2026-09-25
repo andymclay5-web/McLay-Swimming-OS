@@ -42,16 +42,27 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     const month=await page.locator('[data-training-calendar-month]').innerText();
     assert.match(month,/September\s+2026/i,`Training calendar must open on the current NZ month: ${month}`);
 
-    for(const date of ['2026-09-07','2026-09-08','2026-09-14','2026-09-21']){
+    // 25 Sept 2026: these four dates were originally chosen as upcoming when this test was authored (7/8/14
+    // Sept), but this sandbox's wall clock keeps advancing between sessions and they are now in the PAST --
+    // and engines/navigation.js's own 25 Sept fix (see tests/session-calendar-hide-past-blank-20260925.cjs)
+    // deliberately stops showing a published-but-never-created slot for any past date, since a coach tapping
+    // a past date should never be dropped into a "create a new session" flow. So a past date here would now
+    // correctly render NO [data-cal-date] pill at all, which is a sign this fix is working, not a bug -- but
+    // it breaks this test's own "published schedule shows before a workout exists" claim, which is about
+    // FUTURE/upcoming dates. Moved to dates just after today (still within the coverage window in
+    // monthly_calendar.json) so the claim being tested stays about the future, where it belongs. Like the
+    // "must be September" assertion above, this remains wall-clock-sensitive by nature (a real published
+    // schedule a coach is browsing) and will need its own dates nudged forward again in future.
+    for(const date of ['2026-09-26','2026-09-28','2026-09-29','2026-09-30']){
       const cell=page.locator(`[data-training-calendar-date="${date}"]`);
       assert.equal(await cell.count(),1,`published September calendar must render ${date}`);
       assert.ok(await cell.locator('[data-cal-date]').count()>0,`${date} must expose published AM/PM Training slots even before a canonical workout exists`);
     }
 
-    await page.click('[data-training-calendar-date="2026-09-07"] [data-cal-part="PM"]');
+    await page.click('[data-training-calendar-date="2026-09-28"] [data-cal-part="PM"]');
     await page.waitForSelector('[data-training-cal-choice]',{timeout:3000});
     const choices=await page.locator('[data-training-cal-choice]').allTextContents();
-    assert.ok(choices.some(x=>/National\+Development/i.test(x)),`Sep 7 PM must expose National+Development published slot: ${JSON.stringify(choices)}`);
+    assert.ok(choices.some(x=>/National\+Development/i.test(x)),`Sep 28 PM must expose a published slot covering National+Development: ${JSON.stringify(choices)}`);
     assert.deepEqual(errors,[],`browser errors: ${errors.join('\n')}`);
     console.log(`TRAINING_START_CALENDAR_PASS boot=${boot.view} month=${month} sep7plus=visible meet=shelved`);
   } finally {await browser.close()}
