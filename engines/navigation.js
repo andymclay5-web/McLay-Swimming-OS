@@ -51,13 +51,47 @@
     };
     apply();
   };
+  // 25 Sept 2026 (Andy, live): "Needs to be clearer on the session picker with past sessions. I should only
+  // see past sessions I've actually ran and finished, and remove all the empty sessions... It's confusing as
+  // all scheduled sessions show." Root cause: this calendar (the one actually wired to the "Select Training
+  // session" button -- app.js has its own, older UI.openSessionCalendar too, but this file's copy loads after
+  // it and wins) showed a pill for every PAST day/part that had either a real canonical session OR merely a
+  // published schedule entry from monthly_calendar.json, with no distinction for whether that session had
+  // ever actually been touched. Two concrete symptoms: (1) a squad's recurring blank/never-opened session
+  // showed as a normal pill, indistinguishable from a real, delivered one; (2) a PAST date with only a
+  // published-but-never-created slot (no canonical session exists for it at all) still showed a pill, and
+  // tapping it ran the exact same "create a new session" flow (primeNewSessionSlot -> M.actions.openNewSession)
+  // as it does for a genuinely upcoming date -- so a past tap could silently open a blank "new session" editor
+  // instead of anything Andy actually ran, which is exactly the "I don't even know if I can see past sessions,
+  // it might just open create a new session on that slot" confusion he described.
+  //
+  // Fixed with a single date-aware filter applied where byDate/scheduleByDate are first built, so every
+  // downstream user of them (both the month-grid pills in draw() and the day/part picker in openDayPicker())
+  // is fixed for free, with no change to today/future behaviour: for a date strictly before today, (a) a
+  // published-schedule-only entry (scheduleByDate) is dropped entirely -- there is nothing real to open, so
+  // nothing should tempt a tap into creating one; (b) a real canonical session is kept only if it has genuine
+  // evidence of being run, reusing app.js's own M.analysis.summary() (already used everywhere else in this
+  // app to answer "was this session actually delivered" -- finished flag, any attendance marked present/
+  // modified/late, any capture, any timed set, or any in-session change/branch/edit) rather than re-deriving
+  // that signal by hand. The currently-selected session is always kept regardless, so navigating here while
+  // sitting inside a blank past session (e.g. via browser history) never makes the calendar look broken by
+  // hiding the very session that's open. Today and every future date are completely untouched -- Andy still
+  // needs to see and create sessions for those normally. See tests/session-calendar-hide-past-blank-20260925.cjs.
+  const hasSessionEvidence=session=>{
+    if(!session?.id)return false;
+    const sum=M.analysis?.summary?.(session);
+    if(!sum)return false;
+    return !!sum.finished||Number(sum.attendance?.here)>0||Number(sum.evidence?.captures)>0||Number(sum.evidence?.timedSets)>0||Number(sum.evidence?.changes)>0;
+  };
   UI.openSessionCalendar=async()=>{
     const allowed=Object.values(M.state.canonicalSessions||{}).filter(x=>M.access.sessionAllowed(x));
     const published=await loadPublishedCalendar();
-    const scheduleByDate={};for(const d of published.dates||[]){if(d?.date)(scheduleByDate[d.date]=d.sessions||[])}
-    if(!allowed.length&&!Object.keys(scheduleByDate).length){M.toast('No sessions available yet');return}
-    const current=M.currentSession();const byDate={};for(const s of allowed){const d=s.identity?.date;if(!d)continue;(byDate[d]=byDate[d]||[]).push(s)}
-    const todayStr=nzToday();let baseDate=todayStr;
+    const todayStr=nzToday();
+    const current=M.currentSession();
+    const scheduleByDate={};for(const d of published.dates||[]){if(d?.date&&d.date>=todayStr)(scheduleByDate[d.date]=d.sessions||[])}
+    const byDate={};for(const s of allowed){const d=s.identity?.date;if(!d)continue;if(d<todayStr&&s.id!==current?.id&&!hasSessionEvidence(s))continue;(byDate[d]=byDate[d]||[]).push(s)}
+    if(!Object.keys(byDate).length&&!Object.keys(scheduleByDate).length){M.toast('No sessions available yet');return}
+    let baseDate=todayStr;
     const coverageStart=published.coverage_start||Object.keys(scheduleByDate).sort()[0]||'';
     const coverageEnd=published.coverage_end||Object.keys(scheduleByDate).sort().at(-1)||'';
     if(coverageStart&&coverageEnd&&(todayStr<coverageStart||todayStr>coverageEnd))baseDate=current?.identity?.date||coverageEnd||todayStr;
