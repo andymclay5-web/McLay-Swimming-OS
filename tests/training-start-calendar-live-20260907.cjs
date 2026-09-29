@@ -15,6 +15,15 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
     await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
 
+    // 26 Sept 2026 (Andy, live, urgent -- night before NZSC champs session 1): "the whole meet tabs
+    // gone.... Need to be able to at least load programs to it." engines/navigation.js's MEET_SHELVED flag
+    // is now false -- see tests/meet-unshelved-20260926.cjs for that fix and its own fail-before/pass-after.
+    // Investigating this block to update it turned up that its "saved Meet state must be normalised to
+    // Training Board on boot" assertion was NEVER actually about Meet shelving in the first place: it's
+    // engines/storage.js's applyUi() unconditionally forcing state.settings.view back to 'board' on every
+    // single boot/hydration, regardless of what view was last saved or whether Meet is shelved at all --
+    // a separate, deliberate "always land on Board on cold boot" behaviour. So boot.view/surface/bodyView
+    // stay 'board' exactly as before; only meetHidden (which WAS genuinely about shelving) flips to false.
     await page.evaluate(()=>{
       MSOS4.state.settings.view='meet';
       MSOS4.state.settings.surfaceMode='meet';
@@ -28,11 +37,11 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForTimeout(100);
 
     const boot=await page.evaluate(()=>({view:MSOS4.state.settings.view,surface:MSOS4.state.settings.surfaceMode,bodyView:document.body.dataset.msosView,meetClass:document.body.classList.contains('meet-program-ba-active'),meetHidden:document.querySelector('.bottom-nav [data-nav="meet"]')?.hidden??true}));
-    assert.equal(boot.view,'board','saved Meet state must be normalised to Training Board on boot');
+    assert.equal(boot.view,'board','a saved Meet state is still normalised to Training Board on cold boot -- engines/storage.js\'s applyUi() always resets to board, independent of Meet shelving');
     assert.equal(boot.surface,'training');
     assert.equal(boot.bodyView,'board');
     assert.equal(boot.meetClass,false);
-    assert.equal(boot.meetHidden,true,'Meet bottom-nav entry must remain shelved after header chrome rerenders');
+    assert.equal(boot.meetHidden,false,'Meet bottom-nav entry must be visible now that Meet is unshelved, even though boot still lands on Board');
 
     // The real phone already has historical sessions, so its picker is enabled. A pristine CI profile
     // may have none. Enable only the test button here so we exercise the same published-calendar owner.
@@ -64,6 +73,6 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     const choices=await page.locator('[data-training-cal-choice]').allTextContents();
     assert.ok(choices.some(x=>/National\+Development/i.test(x)),`Sep 28 PM must expose a published slot covering National+Development: ${JSON.stringify(choices)}`);
     assert.deepEqual(errors,[],`browser errors: ${errors.join('\n')}`);
-    console.log(`TRAINING_START_CALENDAR_PASS boot=${boot.view} month=${month} sep7plus=visible meet=shelved`);
+    console.log(`TRAINING_START_CALENDAR_PASS boot=${boot.view} month=${month} sep7plus=visible meet=unshelved`);
   } finally {await browser.close()}
 })().catch(e=>{console.error(e.stack||e);process.exit(1)});
