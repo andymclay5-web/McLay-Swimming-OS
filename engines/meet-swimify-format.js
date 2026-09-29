@@ -27,8 +27,11 @@
     const source=String(raw||'').replace(/\r/g,''),lines=source.split('\n'),events=[];let title='',session='',date='',ev=null,heat=null,nextHeat=1;
     const addHeat=(n,start='')=>{if(!ev)return null;let h=ev.heats.find(x=>x.heat===n);if(!h){h={heat:n,start_time:txt(start),rows:[]};ev.heats.push(h)}else if(start)h.start_time=txt(start);nextHeat=Math.max(nextHeat,n+1);return h};
     for(const rawLine of lines){
-      const line=rawLine.trim();if(!line)continue;
-      if(/Datahandling:\s*Swimify|Licensed to:|\bPage\s+\d+\/\d+\b/i.test(line))continue;
+      let line=rawLine.trim();if(!line)continue;
+      // Swimify extraction can glue a page footer directly onto the next Event line.
+      // Strip the footer prefix but preserve any trailing Event text on that same line.
+      line=line.replace(/^.*?Datahandling:\s*Swimify.*?Page\s+\d+\/\d+\s*/i,'').trim();
+      if(!line||/^Licensed to:/i.test(line)||/^Page\s+\d+\/\d+\b/i.test(line))continue;
       if(!title&&/Championship|Champs|Carnival|Meet/i.test(line)&&!/^Event\b/i.test(line))title=txt(line);
       if(!date){const dm=line.match(/Competition Date:\s*(.+)$/i);if(dm)date=txt(dm[1])}
       const em=line.match(/^Event\s+(\d+),?\s+(.+)$/i);
