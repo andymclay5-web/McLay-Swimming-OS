@@ -23,6 +23,7 @@
   function eventInfo(label){const s=txt(label),relay=/\b4\s*[x×]\s*50\b/i.test(s);let distance=relay?200:Number(s.match(/\b(25|50|100|200|400|800|1500)\b/)?.[1]||0),stroke='';if(/freestyle/i.test(s))stroke='Freestyle';else if(/backstroke/i.test(s))stroke='Backstroke';else if(/breaststroke/i.test(s))stroke='Breaststroke';else if(/butterfly/i.test(s))stroke='Butterfly';else if(/\bIM\b|individual medley/i.test(s))stroke='IM';return{distance,stroke,relay}}
   function parseSeconds(v){const s=txt(v).replace(/^X/i,'');if(!s||/^(?:NT|SCR|NS|DNS)$/i.test(s))return null;const p=s.split(':').map(Number);if(p.some(x=>!Number.isFinite(x)))return null;if(p.length===3)return p[0]*3600+p[1]*60+p[2];if(p.length===2)return p[0]*60+p[1];const n=Number(s);return Number.isFinite(n)?n:null}
   function parseProgramme(raw,id='session'){
+    if(M.meetSwimifyFormat?.detect?.(raw))return M.meetSwimifyFormat.parse(raw,id);
     const lines=String(raw||'').replace(/\r/g,'').split('\n'),events=[];let title='',sessionLabel='',dateRange='',current=null,heat=null,lastRelay=null;
     const pushHeat=(n,start='')=>{if(!current)return null;let h=current.heats.find(x=>x.heat===n);if(!h){h={heat:n,start_time:txt(start),rows:[]};current.heats.push(h)}else if(start)h.start_time=txt(start);return h};
     for(const rawLine of lines){const line=rawLine.trim();if(!line)continue;
