@@ -147,16 +147,46 @@
   }
   function style(){if(document.getElementById('meet-workspace-cy-style'))return;const s=document.createElement('style');s.id='meet-workspace-cy-style';s.textContent=`.meet-workspace-cy{position:relative;z-index:20;background:var(--surface,#fff);border-bottom:1px solid rgba(13,69,102,.14);padding:.25rem 0 .35rem}.mwm-tabs{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:thin}.mwm-tabs button{flex:0 0 auto;display:grid;text-align:left;min-width:118px;border-radius:10px;padding:.38rem .5rem}.mwm-tabs button small{font-size:.68rem;opacity:.7}.mwm-tabs button.active{outline:2px solid currentColor}.mwm-tabs .mwm-new{min-width:132px}`;document.head.appendChild(s)}
 
+  // 26 Sept 2026 (Andy, live, urgent -- night before NZSC champs session 1): "the whole meet tabs
+  // gone.... Need to be able to at least load programs to it." Investigating that report (after un-shelving
+  // Meet in engines/navigation.js -- see tests/meet-unshelved-20260926.cjs) turned up a second, independent,
+  // real bug directly blocking the same need: pasting or uploading a real programme, reviewing it and
+  // tapping "Use this programme tonight" never actually created a usable Meet tab -- MSOS4.meetWorkspaceEngine.
+  // managedRows() stayed empty and the tab silently never appeared, with no console error.
+  //
+  // Root cause: this listener was registered on the CAPTURE phase (the `true` below), then queued a
+  // microtask to read M.state.meetFieldDeck -- built on the assumption that a captured event always finishes
+  // its full capture -> target -> bubble dispatch (including the [data-mfa-use] button's own click handler in
+  // engines/meet-field-au.js, which is what actually sets meetFieldDeck) before any microtask queued during
+  // that dispatch gets to run. Confirmed by direct instrumentation that this assumption is false for a real
+  // (trusted) click: the queued microtask ran with meetFieldDeck still unset, BEFORE the button's own bubble-
+  // phase handler had fired -- so adoptLoadedProgramme()'s `if(!d?.races?.length)return` bailed out silently,
+  // every single time, and no meet/workspace was ever created from a loaded programme.
+  //
+  // Fixed by listening on the BUBBLE phase instead (capture -> false): since document is an ancestor of the
+  // button, a bubble-phase listener on document is guaranteed by the DOM event-dispatch order to run AFTER
+  // the button's own target-phase click handler has already completed, regardless of microtask timing --
+  // there is no longer a race to get right. The queueMicrotask wrapper is kept as a harmless extra tick of
+  // margin, not as the fix itself.
+  //
+  // A second, related gap surfaced once the above let a real adoption go through for the first time: this
+  // handler only called renderSwitcher() (the tabs bar), never M.ui.renderMeet() itself -- so a stale meet
+  // that was already open (e.g. a leftover demo/legacy meet, or whatever was last selected) kept showing in
+  // the "LIVE MEET DECK" hero and elsewhere on the Meet screen even after the newly-loaded programme had been
+  // correctly adopted into its own meet underneath. Calling M.ui.renderMeet() here refreshes the whole Meet
+  // screen against the now-current meet, not just its tab bar (renderSwitcher() still runs too, via the
+  // wrapping this file installs on M.ui.renderMeet itself, so nothing is dropped by removing the direct call).
+  // See tests/meet-programme-use-adopts-workspace-20260926.cjs.
   function bindIntakeHandoff(){
     document.addEventListener('click',e=>{
       if(!e.target?.closest?.('[data-mfa-use]'))return;
       queueMicrotask(()=>{
         if(M.state?.settings?.view!=='meet'||!M.state?.meetFieldDeck?.races?.length)return;
         adoptLoadedProgramme();
-        renderSwitcher();
         save();
+        M.ui.renderMeet?.();
       });
-    },true);
+    },false);
   }
 
   style();

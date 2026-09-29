@@ -3,7 +3,15 @@
   const M=g.MSOS4;if(!M?.nav||!M?.ui)return;
   const N=M.nav,UI=M.ui,U=M.util,V=M.navigationEngine={build:'v4-navigation-session-selection-authority-20260901'};
   const views=new Set([...(N.views||['board','tv','hub','swimmer','meet','athletes','roll','times','connection','guardian']),'reports','data']);
-  const MEET_SHELVED=true;
+  // 26 Sept 2026 (Andy, live, urgent): "Just went to load the prog am for a session 1 of nzsc champs
+  // tomorrow and the whole meet tabs gone.... Need to be able to at least load programs to it." MEET_SHELVED
+  // was Andy's own deliberate call (see commit ea8ad17, 7 Sept 2026, his own account) to hide the Meet tab
+  // entirely while it wasn't being actively worked on. He now needs it back for a real competition tomorrow,
+  // which overrides that earlier call -- un-shelved so the tab and its "meet" view are reachable again. This
+  // is a navigation-only change (the shelve flag and the tab-hiding it drives); no meet-*.js file itself was
+  // touched. See tests/meet-unshelved-20260926.cjs for the fail-before/pass-after and a live smoke-check of
+  // the shipped meet screens.
+  const MEET_SHELVED=false;
   const normalView=view=>MEET_SHELVED&&view==='meet'?'board':views.has(view)?view:'board';
   const applySurfaceMode=view=>{const surfaceMode=view==='meet'?'meet':'training';M.state.settings=M.state.settings||{};M.state.settings.surfaceMode=surfaceMode;document.body.dataset.msosSurface=surfaceMode;return surfaceMode};
   const clearMeetChrome=()=>{
