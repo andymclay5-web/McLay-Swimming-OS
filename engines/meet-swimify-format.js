@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;
   if(!M)return;
-  const BUILD='v4-meet-swimify-format-20260929a';
+  const BUILD='v4-meet-swimify-format-20260930b';
   const txt=v=>M.util?.text?M.util.text(v):String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>txt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const isAQ=v=>{const n=norm(v);return n==='aqgcb'||n.includes('aquagym')||n.includes('aqua gym')};
@@ -39,7 +39,14 @@
         let label=txt(em[2]),hs='';
         const hi=label.search(/\s+Heat(?:\s|$)/i);
         if(hi>=0){hs=txt(label.slice(hi).replace(/^Heat\s*/i,''));label=txt(label.slice(0,hi))}
-        ev={event_number:Number(em[1]),event:label,...info(label),heats:[]};events.push(ev);heat=null;nextHeat=1;
+        const eventNumber=Number(em[1]);
+        // Swimify repeats the Event heading at the start of every heat. Treat those
+        // headings as one canonical event so the live deck shows all heats together.
+        // Only create a new event when this event number has not been seen before.
+        ev=events.find(x=>Number(x.event_number)===eventNumber)||null;
+        if(!ev){ev={event_number:eventNumber,event:label,...info(label),heats:[]};events.push(ev)}
+        else if(!ev.event&&label){ev.event=label;Object.assign(ev,info(label))}
+        heat=null;nextHeat=Math.max(1,...(ev.heats||[]).map(x=>(Number(x.heat)||0)+1));
         if(hs){const hm=heatMeta(hs,nextHeat);heat=addHeat(hm.heat,hm.start_time)}
         continue;
       }
