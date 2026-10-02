@@ -144,10 +144,27 @@
   N.applyHistory=state=>{M.boardStateEngine?.cancelWork?.();const view=normalView(state?.msosView);M.state.settings=M.state.settings||{};M.state.settings.view=view;applySurfaceMode(view);if(!state?.layer)closeTransient();else if(state.layer.type==='item')M.state.settings.expandedItemId=state.layer.id;paint(view);saveUi();restoreScroll(view);};
 
   let rootBackArmed=false;
-  N.init=()=>{if(V.initialized)return;V.initialized=true;const initial=normalView(M.state?.settings?.view||'board');M.state.settings.view=initial;applySurfaceMode(initial);active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(N.state?.(initial)||{msos:true,msosView:initial},'',`#${initial}`)}catch{}
+  N.init=()=>{if(V.initialized)return;V.initialized=true;
+    // 2 Oct 2026 (full-app audit, flaky-test investigation): cold boot must always land on Board,
+    // regardless of whatever view was last saved -- a deliberate, explicit standing rule (4 Sept 2026),
+    // not merely a side effect of Meet being shelved. It used to be enforced by TWO overlapping, racy
+    // mechanisms: this function reading M.state.settings.view through normalView() (whose MEET_SHELVED
+    // branch happened to force 'meet'->'board'), plus storage.js's applyUi() unconditionally forcing
+    // view='board' during hydrate() -- but only `if(!live)`, and operationalAlreadyLive() returns true
+    // for essentially any real page load the instant document.readyState leaves 'loading', which is
+    // before any deferred script (this one included) ever runs. So applyUi()'s correction was already
+    // unreliable; with Meet now unshelved, normalView()'s incidental 'meet'->'board' safety net is also
+    // gone, exposing a real ~50%-of-boots race where this function can read a stale pre-hydration view
+    // and lock it in before hydrate() gets a chance to correct it (tests/training-start-calendar-live-20260907.cjs
+    // caught it failing 3 of 5 runs). Fixed by never depending on the last-saved view for this decision --
+    // 'board', deterministically, every time, with no race window at all.
+    const initial='board';M.state.settings.view=initial;applySurfaceMode(initial);active(initial);try{history.replaceState(N.state?.(initial,{exitGuard:true})||{msos:true,msosView:initial,exitGuard:true},'',`#${initial}`);history.pushState(N.state?.(initial)||{msos:true,msosView:initial},'',`#${initial}`)}catch{}
     addEventListener('popstate',e=>{if(e.state?.exitGuard){if(rootBackArmed){history.back();return}rootBackArmed=true;M.toast?.('Press back again to exit');try{history.pushState(N.state?.(M.state.settings.view)||{msos:true,msosView:M.state.settings.view},'',`#${M.state.settings.view}`)}catch{}setTimeout(()=>rootBackArmed=false,1800);return}if(e.state?.msos)N.applyHistory(e.state)});
     addEventListener('pagehide',rememberScroll);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')rememberScroll();else if(document.visibilityState==='visible')restoreScroll(M.state.settings.view)});renderExtra(initial);hideShelvedMeet();
-    queueMicrotask(()=>{M.state.settings.view=normalView(M.state.settings.view);applySurfaceMode(M.state.settings.view);active(M.state.settings.view);saveUi()});
+    // Re-asserts the same cold-boot decision a microtask later (same reasoning as above: this must not
+    // re-read M.state.settings.view, since a same-tick hydrate() resolution could have swapped in a
+    // persisted 'meet' value in the interim -- deterministically 'board' either way).
+    queueMicrotask(()=>{M.state.settings.view='board';applySurfaceMode(M.state.settings.view);active(M.state.settings.view);saveUi()});
     requestAnimationFrame(()=>hideShelvedMeet());
   };
 

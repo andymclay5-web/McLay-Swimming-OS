@@ -39,17 +39,38 @@
     const row=timeline.rows[idx]||null,block=session.blocks?.find(b=>b.id===row?.blockId)||null,item=row?ordered(session).find(x=>x.item.id===row.itemId)?.item:null;return{status:row?'active':'none',sessionId:session.id,blockId:row?.blockId||'',itemId:row?.itemId||'',blockLabel:row?.blockLabel||'',itemLabel:row?.itemLabel||'',rep:anchor&&anchor.itemId===row?.itemId?anchor.rep:null,confidence,source,driftSeconds,planned:row,timeline,anchor,item,block};
   }
   function resolveAthlete(name,state=M.state){const q=text(name).toLowerCase();if(!q)return null;const here=M.ui?.presentAthletes?.()||[],pool=here.length?here:(state?.athletes||[]),exact=pool.find(a=>text(a.full_name).toLowerCase()===q);if(exact)return exact;const first=pool.filter(a=>text(a.full_name).toLowerCase().split(' ')[0]===q);if(first.length===1)return first[0];const incl=pool.filter(a=>text(a.full_name).toLowerCase().includes(q));return incl.length===1?incl[0]:null;}
+  // 2 Oct 2026 (voice/earbud build, Andy's own words: "make comments to be added to swimmers by saying
+  // their name or the group by saying their squad"): squad names are derived live from the real roster's
+  // own athlete.squad values (the same pattern engines/attendance-roster.js already uses), never a
+  // hardcoded list -- so a squad renamed or added in the roster is recognised immediately, with no second
+  // list to keep in sync. Only consulted when no individual athlete was matched, so a coach saying a
+  // swimmer's name always wins over an incidental squad-name match in the same sentence.
+  function squadsFromRoster(state=M.state){return[...new Set((state?.athletes||[]).map(a=>text(a.squad)).filter(Boolean))];}
+  function resolveSquadMention(raw,state=M.state){const squads=squadsFromRoster(state);for(const sq of squads){const re=new RegExp(`\\b${sq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'i');if(re.test(raw))return sq;}return null;}
   function parseVoice(input,{session=current(),state=M.state}={}){
     const raw=text(input),ctx=nowContext(session),lower=raw.toLowerCase(),athletes=state?.athletes||[];let athlete=null;for(const a of athletes){const full=text(a.full_name),first=full.split(' ')[0];if(new RegExp(`\\b${full.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')}\\b`,'i').test(raw)||new RegExp(`^${first.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')}\\b`,'i').test(raw)){athlete=a;break;}}
-    let m=lower.match(/(?:starting|start|on)\s+(?:the\s+)?(.+)/i);if(m&&/\b(?:set|main|warm|pre|post|round|x|×|\d)\b/i.test(m[1]))return{intent:'context_anchor',athlete:null,query:null,payload:{label:text(m[1])},context:ctx,raw};
+    const squad=athlete?null:resolveSquadMention(raw,state);
+    let m=lower.match(/(?:starting|start|on)\s+(?:the\s+)?(.+)/i);if(m&&/\b(?:set|main|warm|pre|post|round|x|×|\d)\b/i.test(m[1]))return{intent:'context_anchor',athlete:null,squad:null,query:null,payload:{label:text(m[1])},context:ctx,raw};
     m=lower.match(/\b(?:rep|number|#)\s*(\d+)\b/);const rep=m?Number(m[1]):null;
-    if(/\b(?:pb|personal best)\b/.test(lower))return{intent:'query_pb',athlete,query:raw,payload:{},context:ctx,raw};
-    if(/\b(?:target|targets|times? for this set|what.*hit|supposed to hit)\b/.test(lower))return{intent:'query_targets',athlete,query:raw,payload:{},context:ctx,raw};
-    if(/\b(?:tv|board)\b/.test(lower)&&/\b(?:video|photo|show|display)\b/.test(lower))return{intent:'display_evidence',athlete,query:raw,payload:{destination:'tv'},context:ctx,raw};
-    if(/\b(?:conversation|record conversation)\b/.test(lower))return{intent:'conversation',athlete,query:null,payload:{},context:ctx,raw};
-    if(/\bvideo\b/.test(lower))return{intent:'video',athlete,query:null,payload:{},context:ctx,raw};
-    const nums=[...raw.matchAll(/(?<!\d)(\d{1,3}(?:\.\d)?)(?!\d)/g)].map(x=>Number(x[1]));const sr=raw.match(/stroke\s*rate\s*(\d{1,3}(?:\.\d)?)/i),rpe=raw.match(/\brpe\s*(\d{1,2}(?:\.\d)?)/i),hr=raw.match(/(?:heart\s*rate|\bhr)\s*(\d{2,3})/i);return{intent:'capture_note',athlete,query:null,payload:{rep,strokeRate:sr?Number(sr[1]):null,rpe:rpe?Number(rpe[1]):null,heartRate:hr?Number(hr[1]):null,numbers:nums,note:raw},context:ctx,raw};
+    if(/\b(?:pb|personal best)\b/.test(lower))return{intent:'query_pb',athlete,squad,query:raw,payload:{},context:ctx,raw};
+    if(/\b(?:target|targets|times? for this set|what.*hit|supposed to hit)\b/.test(lower))return{intent:'query_targets',athlete,squad,query:raw,payload:{},context:ctx,raw};
+    if(/\b(?:tv|board)\b/.test(lower)&&/\b(?:video|photo|show|display)\b/.test(lower))return{intent:'display_evidence',athlete,squad,query:raw,payload:{destination:'tv'},context:ctx,raw};
+    if(/\b(?:conversation|record conversation)\b/.test(lower))return{intent:'conversation',athlete,squad,query:null,payload:{},context:ctx,raw};
+    if(/\bvideo\b/.test(lower))return{intent:'video',athlete,squad,query:null,payload:{},context:ctx,raw};
+    const nums=[...raw.matchAll(/(?<!\d)(\d{1,3}(?:\.\d)?)(?!\d)/g)].map(x=>Number(x[1]));const sr=raw.match(/stroke\s*rate\s*(\d{1,3}(?:\.\d)?)/i),rpe=raw.match(/\brpe\s*(\d{1,2}(?:\.\d)?)/i),hr=raw.match(/(?:heart\s*rate|\bhr)\s*(\d{2,3})/i);return{intent:'capture_note',athlete,squad,query:null,payload:{rep,strokeRate:sr?Number(sr[1]):null,rpe:rpe?Number(rpe[1]):null,heartRate:hr?Number(hr[1]):null,numbers:nums,note:raw},context:ctx,raw};
   }
+  // 2 Oct 2026 (Andy, real field report from South Island Champs): tried talking through Matthew's race
+  // via an earbud at poolside and got back a transcript that was just a couple of words looping --
+  // "Matthew, Matthew, gay, gay, Matthew, Matthew, gay, gay, Matthew, Mac, Matthew, Matthew, gay, gay,
+  // gay, gay, gay." Andy chose to stay on the free browser speech engine (no per-use cost) and add a
+  // confirm-or-discard step instead of switching to a paid engine -- so a garbled capture can be caught
+  // and binned before it ever gets attached to the wrong swimmer, rather than silently saved. This
+  // heuristic flags that specific failure shape (one word dominating an utterance -- exactly what a
+  // noisy/echoing poolside mic produces when the recognizer loses the actual speech) so the confirm UI
+  // (engines/voice-ui-av.js) can visually warn the coach rather than relying on them to read it closely
+  // on a small screen. Deliberately not used to auto-discard -- Andy asked to see and decide, not have
+  // the app silently drop anything.
+  function looksGarbled(raw){const words=String(raw||'').toLowerCase().split(/\s+/).filter(Boolean);if(words.length<6)return false;const counts={};for(const w of words)counts[w]=(counts[w]||0)+1;const top=Math.max(...Object.values(counts));return top/words.length>=0.4;}
   function compactContext(ctx=nowContext()){if(!ctx||ctx.status!=='active')return'No live session context';const bits=[ctx.blockLabel,ctx.itemLabel,ctx.rep?`rep ${ctx.rep}`:'',ctx.driftSeconds?`${ctx.driftSeconds>0?'+':''}${Math.round(ctx.driftSeconds/60)} min drift`:'',`${Math.round(ctx.confidence*100)}% context`].filter(Boolean);return bits.join(' · ');}
-  C.plannedTimeline=plannedTimeline;C.addAnchor=addAnchor;C.latestAnchor=latestAnchor;C.now=nowContext;C.resolveAthlete=resolveAthlete;C.parseVoice=parseVoice;C.compact=compactContext;C.ordered=ordered;C.swimEstimate=swimEstimate;
+  C.plannedTimeline=plannedTimeline;C.addAnchor=addAnchor;C.latestAnchor=latestAnchor;C.now=nowContext;C.resolveAthlete=resolveAthlete;C.resolveSquadMention=resolveSquadMention;C.squadsFromRoster=squadsFromRoster;C.parseVoice=parseVoice;C.looksGarbled=looksGarbled;C.compact=compactContext;C.ordered=ordered;C.swimEstimate=swimEstimate;
 })(globalThis);

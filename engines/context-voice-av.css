@@ -1,1 +1,20 @@
 .av-context-badge{margin:8px 10px;padding:8px 10px;border:1px solid #c9d7dc;border-radius:12px;background:#f7fafb;display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center}.av-context-badge b{font-size:.72rem;letter-spacing:.04em}.av-context-badge span{font-size:.82rem;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.av-context-badge small{grid-column:2;font-size:.68rem;color:#637780}.av-all-pbs details>summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;list-style:none}.av-all-pbs details>summary::-webkit-details-marker{display:none}.av-pb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}.av-pb-grid div{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid #d7e0e3;border-radius:10px;background:#fafcfd}.av-pb-grid span{font-size:.76rem}.av-pb-grid strong{font-size:.78rem;white-space:nowrap}@media(max-width:430px){.av-pb-grid{grid-template-columns:1fr}}
+.av-voice-confirm-backdrop{position:fixed;inset:0;background:rgba(10,20,25,.55);display:flex;align-items:flex-end;justify-content:center;z-index:9000;padding:0 10px 10px}
+.av-voice-confirm{width:100%;max-width:480px;background:#fff;border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -4px 24px rgba(0,0,0,.25)}
+.av-voice-confirm b{font-size:.78rem;letter-spacing:.03em;color:#45565c}
+.av-voice-confirm-text{font-size:1rem;font-weight:700;margin:6px 0 4px;word-break:break-word}
+.av-voice-confirm-who{font-size:.82rem;color:#45565c;margin-bottom:12px}
+.av-voice-confirm-garbled .av-voice-confirm-text{color:#9a2d1f}
+.av-voice-confirm-garbled b{color:#9a2d1f}
+.av-voice-confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.av-voice-confirm-actions button{padding:12px;border-radius:10px;border:1px solid #c9d7dc;background:#f7fafb;font-weight:700;font-size:.9rem}
+.av-voice-confirm-save{background:#0d4566;color:#fff;border-color:#0d4566}
+/* 2 Oct 2026 (quality + connectivity build): the only existing pending-count indicator in this app lives
+   buried in the admin-only Connection screen -- a coach recording voice notes poolside has no way to tell
+   whether a capture is still waiting to be sent. This tiny badge on the sticky Talk button itself (driven
+   by voice-ui-av.js's paintPendingBadge via data-av-pending/data-av-pending-failed attributes) is that
+   visible "something's still in flight" signal: a neutral count while it's just waiting on a connection,
+   red once something has hit a real (non-network) error and needs a manual retry (double-tap Talk). */
+[data-sticky-voice]{position:relative}
+[data-sticky-voice][data-av-pending]:not([data-av-pending=""])::after{content:attr(data-av-pending);position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:#45565c;color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1}
+[data-sticky-voice][data-av-pending-failed="1"]::after{background:#9a2d1f}
