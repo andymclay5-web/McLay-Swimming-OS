@@ -697,8 +697,97 @@
       M.dataRegistry.activate=wrappedActivate;
     }
   })();
+  // 5 Oct 2026 -- Andy's "sort the swimmer access reverse" direction: the REVERSE of
+  // realAccountSectionHtml/bindRealAccountSection above (there, Andy picks a swimmer and sends the
+  // invite). Here the swimmer starts it -- Andy shares one stable, per-organisation join link/QR (not a
+  // secret; knowing it only lets someone REQUEST to link, never grants access by itself -- every request
+  // still needs an explicit decision below), the swimmer signs in with their own email (swimmer-portal.js's
+  // existing passwordless flow, unchanged) and self-selects off the roster to avoid a duplicate athlete
+  // record, and this modal is where Andy reviews and approves/declines what comes in. Deliberately still a
+  // coach-shared QR/link for this round -- matching Andy's own stated scope verbatim, 5 Oct 2026: "short
+  // term we should still use QR or link to set up while trialing but at a point we want that to shift to
+  // swimmers purchase etc." The open, self-serve "any swimmer finds any coach" flow that sentence points to
+  // later is a separate, bigger app-store redesign and deliberately not built here.
+  //
+  // Known limitation, stated plainly rather than silently skipped: there is no push alert when a new
+  // request comes in. push-alerts.js's sendCoachAlert needs M.cloud (the signed-in COACH's own session),
+  // and supabase/functions/send-coach-alert/index.ts's own membership check
+  // (`if (!membership) return json({ error: "not_a_member" }, 403)`) means it can't be called from the
+  // swimmer's side either -- a swimmer who has only just submitted a request has no organisation_members
+  // row yet (that row is exactly what approval below creates). Doing this properly needs either a DB
+  // trigger or a change to that edge function's membership check, bigger than this round and not done
+  // without Andy's sign-off first. The pending-count badge on the button below -- refreshed every time this
+  // installer runs, i.e. whenever the athletes view re-renders, same as installButton() above -- is the
+  // stated MVP substitute: Andy needs to actually open this screen to see new requests, for now.
+  function linkRequestsBadge(btn){
+    const org=M.cloud?.org?.()||M.state?.settings?.organisationId;if(!org)return;
+    rpc('mclay_list_swimmer_link_requests',{target_org:org}).then(rows=>{
+      const n=Array.isArray(rows)?rows.length:0;
+      let badge=btn.querySelector('[data-bn-link-badge]');
+      if(!n){badge?.remove();return;}
+      if(!badge){badge=document.createElement('span');badge.dataset.bnLinkBadge='1';badge.className='bn-link-badge';btn.append(badge);}
+      badge.textContent=String(n);
+    }).catch(()=>{});
+  }
+  function linkRequestsModal(){
+    const org=M.cloud?.org?.()||M.state?.settings?.organisationId;
+    const host=document.querySelector('#modalHost')||document.body,wrap=document.createElement('div');
+    wrap.className='modal-backdrop';wrap.dataset.bnLinkRequests='1';
+    wrap.innerHTML=`<div class="bn-access-modal"><div class="eyebrow">SWIMMER JOIN REQUESTS</div><h2>Swimmer-requested access</h2><p class="muted">Share this link or QR with your squad while trialling -- a swimmer signs in with their own email, picks themselves off the roster, and you approve or decline below. Knowing the link only lets someone ask; it never grants access by itself.</p><div class="bn-qr" data-bn-link-qr><span class="muted">Loading…</span></div><div class="bn-access-url" data-bn-link-url hidden></div><div class="bn-access-actions"><button data-bn-link-copy hidden>Copy link</button><button class="danger" data-bn-link-rotate>New link</button><button data-bn-link-close>Close</button></div><p class="bn-access-status" data-bn-link-status></p><div class="bn-real-account"><div class="eyebrow">PENDING REQUESTS</div><div class="bn-link-requests" data-bn-link-list><p class="muted">Loading…</p></div></div></div>`;
+    host.append(wrap);M.nav?.openLayer?.('modal');
+    const status=wrap.querySelector('[data-bn-link-status]'),qr=wrap.querySelector('[data-bn-link-qr]'),urlBox=wrap.querySelector('[data-bn-link-url]'),copyBtn=wrap.querySelector('[data-bn-link-copy]'),rotateBtn=wrap.querySelector('[data-bn-link-rotate]'),list=wrap.querySelector('[data-bn-link-list]');
+    let activeUrl='';
+    const setStatus=(msg,kind='')=>{status.textContent=msg;status.className=`bn-access-status ${kind}`};
+    const closeModal=()=>{wrap.remove();M.nav?.dismissLayer?.();};
+    wrap.querySelector('[data-bn-link-close]').onclick=closeModal;
+    function showCode(code){
+      const link=new URL('swimmer-portal.html',location.href);link.searchParams.set('join',code);
+      activeUrl=link.toString();
+      urlBox.hidden=false;urlBox.textContent=activeUrl;copyBtn.hidden=false;
+      try{drawQr(qr,activeUrl,240,240);}catch{qr.innerHTML='<span class="muted">QR not available -- use Copy link</span>';}
+    }
+    async function loadRequests(){
+      if(!org)return;
+      list.innerHTML='<p class="muted">Loading…</p>';
+      try{
+        const rows=await rpc('mclay_list_swimmer_link_requests',{target_org:org});
+        if(!Array.isArray(rows)||!rows.length){list.innerHTML='<p class="muted">No pending requests.</p>';return;}
+        list.innerHTML='';
+        rows.forEach(r=>{
+          const row=document.createElement('div');row.className='bn-link-row';
+          row.innerHTML=`<div class="bn-link-row-name">${esc(r.athlete_full_name||'(unknown swimmer)')}</div><div class="bn-link-row-email muted">${esc(r.requester_email||'')}</div><div class="bn-link-row-actions"><button class="primary" data-approve>Approve</button><button class="danger" data-decline>Decline</button></div>`;
+          row.querySelector('[data-approve]').onclick=()=>decide(r.request_id,true,row);
+          row.querySelector('[data-decline]').onclick=()=>decide(r.request_id,false,row);
+          list.append(row);
+        });
+      }catch(err){list.innerHTML=`<p class="muted">${esc(err?.message||String(err))}</p>`;}
+    }
+    async function decide(requestId,approve,row){
+      const btns=row.querySelectorAll('button');btns.forEach(b=>b.disabled=true);
+      try{await rpc('mclay_decide_swimmer_link_request',{request_id:requestId,approve});row.remove();if(!list.children.length)list.innerHTML='<p class="muted">No pending requests.</p>';}
+      catch(err){setStatus(err?.message||String(err),'error');btns.forEach(b=>b.disabled=false);}
+    }
+    rotateBtn.onclick=async()=>{
+      if(rotateBtn.disabled||!org)return;rotateBtn.disabled=true;setStatus('Getting a new link… the old one stops working.');
+      try{const code=await rpc('mclay_rotate_org_join_code',{target_org:org});showCode(code);setStatus('New link ready.','ok');}
+      catch(err){setStatus(err?.message||String(err),'error');}
+      finally{rotateBtn.disabled=false;}
+    };
+    copyBtn.onclick=async()=>{if(!activeUrl)return;try{await navigator.clipboard.writeText(activeUrl);setStatus('Link copied.','ok');}catch{setStatus('Copy failed — use the QR code.','error');}};
+    if(!org){setStatus('Organisation not loaded on this device yet.','error');qr.innerHTML='<span class="muted">—</span>';return;}
+    rpc('mclay_org_join_code',{target_org:org}).then(showCode).catch(err=>{setStatus(err?.message||String(err),'error');qr.innerHTML='<span class="muted">—</span>';});
+    loadRequests();
+  }
+  function installLinkRequestsButton(){
+    if((M.access?.role?.()||'owner')!=='owner')return;
+    const head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');
+    if(!head)return;
+    let b=head.querySelector('[data-bn-link-requests]');
+    if(!b){b=document.createElement('button');b.dataset.bnLinkRequests='1';b.className='bn-access-btn';b.textContent='Swimmer join requests';b.onclick=()=>linkRequestsModal();head.append(b);}
+    linkRequestsBadge(b);
+  }
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
-  function install(){requestAnimationFrame(installButton);}
+  function install(){requestAnimationFrame(()=>{installButton();installLinkRequestsButton();});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;
+  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;X.installLinkRequestsButton=installLinkRequestsButton;X.linkRequestsModal=linkRequestsModal;X.linkRequestsBadge=linkRequestsBadge;
 })(globalThis);
