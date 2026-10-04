@@ -34,7 +34,7 @@
 // onboarding) or two of Andy's own devices.
 (function(g){
   const M=g.MSOS4;if(!M?.state||!M?.store)return;
-  const BUILD='v4-coach-chat-20261002';
+  const BUILD='v4-coach-chat-20261004-extensions';
   const K=M.coachChat={build:BUILD};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const POLL_MS=8000;
@@ -48,6 +48,15 @@
 
   function dmThreadKey(otherId){return `dm:${otherId}`;}
   const GROUP_KEY='group';
+  // 4 Oct 2026 (Andy, verbatim): "we need to be able to say send to the whole team, including swimmers,
+  // the whole group coaching group. Or an individual coach." The "whole group" channel above already
+  // becomes "whole team including swimmers" for free the moment a swimmer has a real account (its RLS was
+  // always built on the broad is_org_member(), by design -- see the 2026-10-03 migration). What's actually
+  // new is the OPPOSITE: a second, coaches-only channel that explicitly excludes swimmers, since "the whole
+  // coaching group" and "whole team" are two different audiences once swimmers can be in the room. Both
+  // channels use the SAME recipient_id-is-null shape as before, now disambiguated by the new `channel`
+  // column (coach_messages.channel, 'all' | 'coaches') the same migration added.
+  const COACHES_KEY='coaches';
 
   // In-memory, per-boot caches (not persisted -- message history always comes from the server, which is the
   // single source of truth; nothing here needs to survive a reload any more than any other live view does).
@@ -69,7 +78,8 @@
 
   function restFilterFor(key){
     const o=org();if(!o)return null;
-    if(key===GROUP_KEY)return `organisation_id=eq.${encodeURIComponent(o)}&recipient_id=is.null`;
+    if(key===GROUP_KEY)return `organisation_id=eq.${encodeURIComponent(o)}&recipient_id=is.null&channel=eq.all`;
+    if(key===COACHES_KEY)return `organisation_id=eq.${encodeURIComponent(o)}&recipient_id=is.null&channel=eq.coaches`;
     const other=key.startsWith('dm:')?key.slice(3):null;const me=myId();
     if(!other||!me)return null;
     return `organisation_id=eq.${encodeURIComponent(o)}&or=(and(sender_id.eq.${encodeURIComponent(me)},recipient_id.eq.${encodeURIComponent(other)}),and(sender_id.eq.${encodeURIComponent(other)},recipient_id.eq.${encodeURIComponent(me)}))`;
@@ -83,7 +93,7 @@
     return threads[key]||[];
   };
 
-  K.send=async(key,body)=>{
+  K.send=async(key,body,opts={})=>{
     const o=org(),me=myId(),f=fetcher();
     body=text(body);
     if(!o)throw new Error('Organisation not loaded on this device yet.');
@@ -92,7 +102,9 @@
     if(!body)throw new Error('Nothing to send.');
     const actor=M.teamAccess?.actor?.()||{role:'owner',name:''};
     const other=key.startsWith('dm:')?key.slice(3):null;
-    const payload={organisation_id:o,sender_id:me,sender_name:actor.name||'',sender_role:actor.role||'',recipient_id:other||null,recipient_name:other?(K.roster().find(r=>r.user_id===other)?.display_name||''):'',body};
+    const channel=key===COACHES_KEY?'coaches':'all';
+    const captureId=opts?.captureId||null;
+    const payload={organisation_id:o,sender_id:me,sender_name:actor.name||'',sender_role:actor.role||'',recipient_id:other||null,recipient_name:other?(K.roster().find(r=>r.user_id===other)?.display_name||''):'',body,channel,capture_id:captureId};
     const rows=await f('/rest/v1/coach_messages',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
     const saved=Array.isArray(rows)?rows[0]:rows;
     if(saved&&mergeMessages(key,[saved]))notify(key);
@@ -114,14 +126,14 @@
 
   K.markSeen=key=>{const msgs=threads[key]||[];const last=msgs[msgs.length-1];if(last)lastSeenAt[key]=last.created_at;};
   K.unreadCount=key=>{const msgs=threads[key]||[];const since=lastSeenAt[key];if(!since)return msgs.filter(m=>m.sender_id!==myId()).length;return msgs.filter(m=>m.sender_id!==myId()&&String(m.created_at)>since).length;};
-  K.totalUnread=()=>{let n=0;n+=K.unreadCount(GROUP_KEY);for(const r of rosterCache)n+=K.unreadCount(dmThreadKey(r.user_id));return n;};
-  K.dmThreadKey=dmThreadKey;K.GROUP_KEY=GROUP_KEY;
+  K.totalUnread=()=>{let n=0;n+=K.unreadCount(GROUP_KEY);n+=K.unreadCount(COACHES_KEY);for(const r of rosterCache)n+=K.unreadCount(dmThreadKey(r.user_id));return n;};
+  K.dmThreadKey=dmThreadKey;K.GROUP_KEY=GROUP_KEY;K.COACHES_KEY=COACHES_KEY;
   K._snapshot=key=>(threads[key]||[]).slice();
 
   function keyForIncoming(row){
     const me=myId();
     if(!row)return null;
-    if(row.recipient_id==null)return GROUP_KEY;
+    if(row.recipient_id==null)return row.channel==='coaches'?COACHES_KEY:GROUP_KEY;
     if(row.sender_id===me)return dmThreadKey(row.recipient_id);
     if(row.recipient_id===me)return dmThreadKey(row.sender_id);
     return null; // not for us -- RLS should never actually deliver this, but never trust the network blindly
@@ -138,6 +150,7 @@
     pollTimer=setInterval(()=>{
       const o=org();if(!o)return;
       K.history(GROUP_KEY).catch(()=>{});
+      K.history(COACHES_KEY).catch(()=>{});
       for(const r of rosterCache)K.history(dmThreadKey(r.user_id)).catch(()=>{});
     },POLL_MS);
   }
@@ -181,6 +194,7 @@
     if(!o||!a?.access_token){realtimeStatus='idle';return;}
     await K.refreshRoster().catch(()=>{});
     await K.history(GROUP_KEY).catch(()=>{});
+    await K.history(COACHES_KEY).catch(()=>{});
     for(const r of rosterCache)await K.history(dmThreadKey(r.user_id)).catch(()=>{});
     const scriptReady=await loadRealtimeScript().catch(()=>false);
     if(!scriptReady||!g.supabase?.createClient){realtimeStatus='polling-only';startPolling();return;}
