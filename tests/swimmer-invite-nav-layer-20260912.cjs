@@ -54,11 +54,18 @@ function checkNavLayerWiring(src){
   assert.match(src,/\[data-bn-close\]'\)\.onclick=closeModal;/,
     'the Close button must be wired to the closeModal helper (not a bare wrap.remove()) so tapping it goes through the same dismissal path as every other modal in the app');
 
-  // 3. Exactly one place in the file ever removes the modal's DOM node -- inside closeModal itself. A second,
-  //    independent wrap.remove() call anywhere else would bypass dismissLayer again and reintroduce the same
-  //    orphaned-history-entry bug through a different door.
+  // 3. Every wrap.remove() call in the file must live inside a properly-paired closeModal helper (remove()
+  //    immediately followed by dismissLayer()) -- a stray, unpaired wrap.remove() anywhere would bypass
+  //    dismissLayer and reintroduce the same orphaned-history-entry bug through a different door.
+  //    5 Oct 2026 -- widened from "exactly one in the whole file" to "every one is properly paired" now that
+  //    a second, independent modal (engines/swimmer-invite-bn.js's new linkRequestsModal(), the swimmer
+  //    join-requests review screen) legitimately has its own closeModal of the same exact shape. The
+  //    original orphaned-history-entry bug this guards against is still caught exactly as before: a bare,
+  //    unpaired wrap.remove() anywhere now makes the two counts diverge instead of just not equalling 1.
   const removeCalls=(src.match(/wrap\.remove\(\)/g)||[]).length;
-  assert.equal(removeCalls,1,`expected exactly one wrap.remove() call (inside closeModal) but found ${removeCalls} -- every path that closes this modal must go through the same closeModal/dismissLayer helper`);
+  const pairedCloseModals=(src.match(/const closeModal=\(\)=>\{(?:myGeneration\?\.cancel\?\.\(\);)?wrap\.remove\(\);M\.nav\?\.dismissLayer\?\.\(\);\};/g)||[]).length;
+  assert.ok(pairedCloseModals>=1,'expected at least one properly-paired closeModal helper (wrap.remove() + dismissLayer) in engines/swimmer-invite-bn.js');
+  assert.equal(removeCalls,pairedCloseModals,`expected every wrap.remove() call to live inside a properly-paired closeModal helper, but found ${removeCalls} wrap.remove() call(s) against ${pairedCloseModals} properly-paired closeModal helper(s) -- a wrap.remove() outside that pairing would bypass dismissLayer and reintroduce the orphaned-history-entry bug`);
 }
 
 checkNavLayerWiring(inviteSrc);

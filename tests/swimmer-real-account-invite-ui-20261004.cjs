@@ -80,7 +80,11 @@ function bootFixture({rpcImpl}={}){
 async function openModal(){
   const M=global.MSOS4;
   await null;
-  const genBtn=athletesHead._appended.at(-1);
+  // 5 Oct 2026 -- looked up by its own data-bn-access marker rather than "last appended", now that
+  // installLinkRequestsButton() (the new swimmer join-requests review button) also appends a sibling
+  // button into this same header -- exactly the real-app discrimination swimmer-instant-open-cn.js's own
+  // render hook already uses (root.querySelector('[data-bn-access]')), not a position-dependent guess.
+  const genBtn=athletesHead._appended.find(n=>n.dataset?.bnAccess);
   assert.ok(genBtn,'installButton() must have appended the "Give swimmer access" button');
   genBtn.onclick();
   const wrap=modalHost._appended.at(-1);
