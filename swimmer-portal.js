@@ -5,6 +5,75 @@
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const clock=v=>{const n=Number(v);if(!Number.isFinite(n))return'—';const m=Math.floor(n/60),s=n-m*60,txt=s.toFixed(Math.abs(s-Math.round(s))>.001?2:0);return m?`${m}:${txt.padStart(txt.includes('.')?5:2,'0')}`:txt};
   async function rpc(name,body){if(!CFG.supabaseUrl||!CFG.supabaseAnonKey)throw new Error('Secure swimming service is not configured.');const res=await fetch(`${String(CFG.supabaseUrl).replace(/\/$/,'')}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:CFG.supabaseAnonKey,Authorization:`Bearer ${CFG.supabaseAnonKey}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=raw}if(!res.ok)throw new Error(data?.message||data?.hint||`Secure access failed (${res.status})`);return data;}
+  // 4 Oct 2026 -- Andy's 3 Oct "future proof, app store ready" direction (real swimmer accounts, not a
+  // per-device QR token) finally has something to actually DO once a swimmer signs in: accept a coach's
+  // invite and view the same portal through a real, portable identity instead of one phone's localStorage.
+  // supabase/20261003_swimmer_accounts_and_chat_extensions.sql already shipped the invite/accept RPCs and
+  // athletes.linked_user_id; supabase/20261004_swimmer_real_account_portal_access.sql (delivered alongside
+  // this file, NOT yet applied by Andy) adds the one missing piece -- mclay_swimmer_portal_snapshot(), the
+  // real-account equivalent of the existing device-token msos_swimmer_portal_snapshot -- reading from the
+  // exact SAME msos_swimmer_payloads row/publish path, never a second payload store. Everything below is
+  // purely ADDITIVE: the existing device-token flow (DEVICE/rpc() above, ?invite= on load) is completely
+  // unchanged, so an existing swimmer's QR-paired phone keeps working exactly as it always has.
+  //
+  // Reuses the EXACT passwordless-email-one-time-code pattern engines/team-access.js already proved out for
+  // assistant coaches (no password is ever created or typed) -- this file just can't import that engine
+  // (it's a standalone page with no M.store/cloud-session.js loaded), so the same two small pieces
+  // (pre-session auth calls with just the anon key; a refresh-on-expiry wrapper matching cloud-session.js's
+  // own ensureFresh, same endpoint/body shape) are reimplemented here, self-contained.
+  const ACCOUNT_KEY='msos_swimmer_account_session_v1';
+  async function accountAuthRequest(path,body){
+    if(!CFG.supabaseUrl||!CFG.supabaseAnonKey)throw new Error('Secure swimming service is not configured.');
+    const res=await fetch(`${String(CFG.supabaseUrl).replace(/\/$/,'')}${path}`,{method:'POST',headers:{apikey:CFG.supabaseAnonKey,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=raw}
+    if(!res.ok)throw new Error(data?.msg||data?.message||data?.error_description||`Sign-in request failed (${res.status})`);
+    return data;
+  }
+  function loadAccountSession(){try{return JSON.parse(localStorage.getItem(ACCOUNT_KEY)||'null')}catch{return null}}
+  function saveAccountSession(s){try{s?localStorage.setItem(ACCOUNT_KEY,JSON.stringify(s)):localStorage.removeItem(ACCOUNT_KEY)}catch{}}
+  function clearAccountSession(){saveAccountSession(null)}
+  async function sendAccountSignInCode(email){
+    email=text(email).toLowerCase();if(!email)throw new Error('Enter your email address.');
+    await accountAuthRequest('/auth/v1/otp',{email,create_user:false});
+    return email;
+  }
+  async function verifyAccountSignInCode(email,code){
+    email=text(email).toLowerCase();code=text(code).replace(/\s+/g,'');
+    if(!email)throw new Error('Enter your email address.');
+    if(!code)throw new Error('Enter the sign-in code you were sent.');
+    const data=await accountAuthRequest('/auth/v1/verify',{type:'email',email,token:code});
+    if(!data?.access_token)throw new Error('Sign-in did not return an access token.');
+    const exp=Number(data.expires_at)||Math.floor(Date.now()/1000)+Number(data.expires_in||3600);
+    const session={access_token:data.access_token,refresh_token:data.refresh_token||'',expires_at:exp,email};
+    saveAccountSession(session);
+    return session;
+  }
+  // Mirrors engines/cloud-session.js's own ensureFresh exactly (same endpoint, same body shape, same
+  // 90-second-early-refresh margin) -- not a new technique, just one this standalone page can't import.
+  async function ensureFreshAccountSession(force=false){
+    const s=loadAccountSession();if(!s?.access_token)throw new Error('Sign in first.');
+    const now=Math.floor(Date.now()/1000);
+    if(!force&&s.expires_at&&Number(s.expires_at)>now+90)return s;
+    if(!s.refresh_token)return s;
+    const res=await fetch(`${String(CFG.supabaseUrl).replace(/\/$/,'')}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:CFG.supabaseAnonKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});
+    const body=await res.json().catch(()=>({}));
+    if(!res.ok||!body?.access_token){clearAccountSession();throw new Error(body?.msg||body?.message||'Your sign-in expired — sign in again.');}
+    const next={...s,access_token:body.access_token,refresh_token:body.refresh_token||s.refresh_token,expires_at:body.expires_at||Math.floor(Date.now()/1000)+Number(body.expires_in||3600)};
+    saveAccountSession(next);
+    return next;
+  }
+  // Same RPC shape as rpc() above, but as the signed-in swimmer (Authorization: Bearer <real access token>,
+  // not the anon key) -- required by mclay_accept_swimmer_invite/mclay_swimmer_portal_snapshot, which both
+  // read auth.uid(). One retry after a forced refresh on a 401, matching cloud-session.js's own pattern,
+  // since a token can go stale between page-load and an action without this page ever being reloaded.
+  async function accountRpc(name,body,{retried=false}={}){
+    const s=await ensureFreshAccountSession(retried);
+    const res=await fetch(`${String(CFG.supabaseUrl).replace(/\/$/,'')}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:CFG.supabaseAnonKey,Authorization:`Bearer ${s.access_token}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=raw}
+    if(res.status===401&&!retried)return accountRpc(name,body,{retried:true});
+    if(!res.ok)throw new Error(data?.message||data?.hint||`Secure access failed (${res.status})`);
+    return data;
+  }
   let SNAP=null,TAB='session',DEVICE='',ACTIONS=[],SELECTED_SESSION_ID='';
   const pld=()=>SNAP?.payload||{};
   // The calendar session picker: p.sessions is the full list of the swimmer's own sessions from Andy's
@@ -113,8 +182,99 @@
   }
   async function reloadActions(){const s=session();if(!s?.id||!DEVICE){ACTIONS=[];return;}try{ACTIONS=await rpc('msos_swimmer_session_actions_snapshot',{p_device_token:DEVICE,p_session_id:String(s.id)});if(!Array.isArray(ACTIONS))ACTIONS=[];}catch{ACTIONS=[];}}
   function draw(){const p=pld(),a=p.athlete||{};ROOT.innerHTML=`<section class="portal-card sp-head"><div><p class="eyebrow">MCLAY SWIMMING OS · MY SWIMMING</p><h1>${esc(a.preferred_name||a.full_name||'Swimmer')}</h1><p class="muted">${esc(a.squad||'')} · private swimmer view</p></div></section><nav class="sp-tabs"><button data-tab="session" class="${TAB==='session'?'active':''}">Session</button><button data-tab="performance" class="${TAB==='performance'?'active':''}">Performance</button><button data-tab="training" class="${TAB==='training'?'active':''}">Training</button><button data-tab="tests" class="${TAB==='tests'?'active':''}">Tests</button><button data-tab="meet" class="${TAB==='meet'?'active':''}">Meet</button></nav>${TAB==='session'?sessionView(p):TAB==='training'?training(p):TAB==='tests'?tests(p):TAB==='meet'?meet(p):performance(p)}<p class="portal-foot">Private swimmer view · ${esc(a.full_name||'')}</p>`;ROOT.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{TAB=b.dataset.tab;draw();});ROOT.querySelectorAll('[data-pick-session]').forEach(b=>b.onclick=async()=>{SELECTED_SESSION_ID=b.dataset.pickSession;await reloadActions();draw();});ROOT.querySelectorAll('[data-challenge]').forEach(b=>b.onclick=()=>challenge(b.dataset.challenge,b.dataset.block));ROOT.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editItem(b.dataset.edit,b.dataset.block));ROOT.querySelectorAll('[data-stroke-challenge]').forEach(b=>b.onclick=()=>challengeStroke(b.dataset.strokeChallenge,b.dataset.block,b.dataset.currentStroke));ROOT.querySelector('[data-finish-session]')?.addEventListener('click',finishSession);}
-  function injectStyle(){if(document.querySelector('#sp-style'))return;const s=document.createElement('style');s.id='sp-style';s.textContent=`.sp-tabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:6px;background:#eef6f8}.sp-tabs button{padding:9px 2px;border-radius:9px;border:1px solid #cbdde5;background:#fff;font-weight:800;font-size:11px}.sp-tabs button.active{background:#0d4566;color:#fff}.sp-events{display:grid;gap:6px}.sp-event,.sp-session-block{border:1px solid #d8e4ea;border-radius:12px;overflow:hidden;background:#fff}.sp-event>summary{display:grid;grid-template-columns:26px minmax(0,1fr) 72px 58px;gap:6px;align-items:center;padding:10px 8px;list-style:none}.sp-event>summary::-webkit-details-marker{display:none}.sp-main{min-width:0;display:grid}.sp-main b{font-size:14px;white-space:nowrap}.sp-main small{font-size:10px;color:#617783;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sp-event summary strong,.sp-event summary em{text-align:right}.sp-event summary em{font-size:11px;font-style:normal}.sp-detail{border-top:1px solid #e6eef2;padding:10px;display:grid;gap:6px}.sp-detail h4{margin:4px 0}.sp-step{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;border-top:1px solid #edf2f4;padding:6px 0;font-size:12px}.sp-step em{grid-column:2;font-style:normal}.sp-splits,.sp-chip-row{display:flex;flex-wrap:wrap;gap:5px}.sp-splits span,.sp-chip-row span{font-size:11px;background:#f3f7f9;padding:5px 7px;border-radius:8px}.sp-outlook summary{font-weight:800;padding:6px 0}.sp-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.sp-kpis>div{border:1px solid #dce7eb;border-radius:10px;padding:8px;display:grid}.sp-kpis b{font-size:18px}.sp-kpis small,.sp-kpis span{font-size:11px}.sp-row,.sp-note{display:grid;grid-template-columns:1fr auto;gap:2px 8px;border-top:1px solid #e5edf1;padding:8px 0}.sp-row small,.sp-note span{grid-column:1/-1}.sp-session-picker{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px}.sp-session-picker button{flex:0 0 auto;display:grid;gap:1px;text-align:center;padding:7px 11px;border-radius:10px;border:1px solid #cbdde5;background:#fff}.sp-session-picker button b{font-size:11px;white-space:nowrap}.sp-session-picker button small{font-size:9px;color:#617783}.sp-session-picker button.active{background:#0d4566;border-color:#0d4566}.sp-session-picker button.active b,.sp-session-picker button.active small{color:#fff}.sp-session-title{display:flex;justify-content:space-between;gap:10px;align-items:start}.sp-session-title h2{margin:0}.sp-session-title strong{font-size:21px}.sp-help{font-size:12px;background:#f4f8fa;border-radius:10px;padding:9px}.sp-session-block{margin-top:9px}.sp-session-block header{padding:8px 10px;background:#eef5f8}.sp-session-block header>div{display:flex;justify-content:space-between;gap:8px}.sp-session-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;padding:9px;border-top:1px solid #e5edf1;align-items:center}.sp-item-main{display:grid;gap:2px;min-width:0}.sp-item-main>b{font-size:14px}.sp-item-main small{font-size:10px;color:#617783}.sp-item-main strong{font-size:11px;color:#0d4566}.sp-stroke-pill{justify-self:start;font-size:10px;font-weight:800;padding:4px 8px;border-radius:999px;border:1px solid #cbdde5;background:#f4f8fa;color:#0d4566}.sp-sent{color:#1b6b50!important}.sp-item-actions{display:flex;gap:4px}.sp-item-actions button{font-size:10px;padding:6px}.sp-finish{width:100%;margin-top:14px;padding:13px;font-size:15px;font-weight:900;background:#0d4566;color:white;border-radius:12px}.sp-finish-done{margin-top:14px;border:1px solid #a8d5c2;background:#effaf5;border-radius:12px;padding:11px;display:grid;gap:4px}.sp-finish-done em{font-size:11px}.sp-modal{position:fixed;inset:0;background:#0008;z-index:9999;display:grid;align-items:end;padding:10px}.sp-modal-card{background:white;border-radius:16px;padding:14px;max-height:88vh;overflow:auto}.sp-modal-card label{display:grid;gap:4px;margin:9px 0;font-weight:700;font-size:12px}.sp-modal-card textarea,.sp-modal-card select{width:100%;box-sizing:border-box;font:inherit;padding:9px}.sp-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.sp-modal-actions button{padding:11px}.sp-modal-actions .primary{background:#0d4566;color:white}.sp-verdict-yes{color:#1b6b50}.sp-verdict-check{color:#a15a0a}@media(max-width:430px){.sp-event>summary{grid-template-columns:22px minmax(0,1fr) 66px 52px;gap:4px}.sp-session-item{grid-template-columns:1fr}.sp-item-actions{justify-content:flex-end}}`;document.head.appendChild(s);}
-  function fail(err){ROOT.innerHTML=`<section class="portal-card error"><p class="eyebrow">SECURE ACCESS</p><h1>We couldn't open your swimmer view.</h1><p>${esc(err?.message||err)}</p><p class="muted">Ask your coach for a fresh QR code.</p></section>`;}
-  async function start(){try{injectStyle();const params=new URLSearchParams(location.search),invite=params.get('invite');DEVICE=localStorage.getItem(DEVICE_KEY)||'';if(invite){const claimed=await rpc('msos_claim_swimmer_invite',{p_invite_token:invite,p_device_label:[navigator.platform,navigator.userAgent].filter(Boolean).join(' · ').slice(0,120)});DEVICE=claimed?.device_token||'';if(!DEVICE)throw new Error('The QR code could not be claimed.');localStorage.setItem(DEVICE_KEY,DEVICE);if(claimed?.athlete_id)localStorage.setItem(ATHLETE_KEY,claimed.athlete_id);history.replaceState({},'',location.pathname);}if(!DEVICE)throw new Error('No swimmer access is set up on this phone yet.');SNAP=await rpc('msos_swimmer_portal_snapshot',{p_device_token:DEVICE});await reloadActions();draw();}catch(err){if(/invalid|revoked/i.test(String(err?.message||''))){localStorage.removeItem(DEVICE_KEY);localStorage.removeItem(ATHLETE_KEY);}fail(err)}}
+  function injectStyle(){if(document.querySelector('#sp-style'))return;const s=document.createElement('style');s.id='sp-style';s.textContent=`.sp-tabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:6px;background:#eef6f8}.sp-tabs button{padding:9px 2px;border-radius:9px;border:1px solid #cbdde5;background:#fff;font-weight:800;font-size:11px}.sp-tabs button.active{background:#0d4566;color:#fff}.sp-events{display:grid;gap:6px}.sp-event,.sp-session-block{border:1px solid #d8e4ea;border-radius:12px;overflow:hidden;background:#fff}.sp-event>summary{display:grid;grid-template-columns:26px minmax(0,1fr) 72px 58px;gap:6px;align-items:center;padding:10px 8px;list-style:none}.sp-event>summary::-webkit-details-marker{display:none}.sp-main{min-width:0;display:grid}.sp-main b{font-size:14px;white-space:nowrap}.sp-main small{font-size:10px;color:#617783;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sp-event summary strong,.sp-event summary em{text-align:right}.sp-event summary em{font-size:11px;font-style:normal}.sp-detail{border-top:1px solid #e6eef2;padding:10px;display:grid;gap:6px}.sp-detail h4{margin:4px 0}.sp-step{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;border-top:1px solid #edf2f4;padding:6px 0;font-size:12px}.sp-step em{grid-column:2;font-style:normal}.sp-splits,.sp-chip-row{display:flex;flex-wrap:wrap;gap:5px}.sp-splits span,.sp-chip-row span{font-size:11px;background:#f3f7f9;padding:5px 7px;border-radius:8px}.sp-outlook summary{font-weight:800;padding:6px 0}.sp-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.sp-kpis>div{border:1px solid #dce7eb;border-radius:10px;padding:8px;display:grid}.sp-kpis b{font-size:18px}.sp-kpis small,.sp-kpis span{font-size:11px}.sp-row,.sp-note{display:grid;grid-template-columns:1fr auto;gap:2px 8px;border-top:1px solid #e5edf1;padding:8px 0}.sp-row small,.sp-note span{grid-column:1/-1}.sp-session-picker{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px}.sp-session-picker button{flex:0 0 auto;display:grid;gap:1px;text-align:center;padding:7px 11px;border-radius:10px;border:1px solid #cbdde5;background:#fff}.sp-session-picker button b{font-size:11px;white-space:nowrap}.sp-session-picker button small{font-size:9px;color:#617783}.sp-session-picker button.active{background:#0d4566;border-color:#0d4566}.sp-session-picker button.active b,.sp-session-picker button.active small{color:#fff}.sp-session-title{display:flex;justify-content:space-between;gap:10px;align-items:start}.sp-session-title h2{margin:0}.sp-session-title strong{font-size:21px}.sp-help{font-size:12px;background:#f4f8fa;border-radius:10px;padding:9px}.sp-session-block{margin-top:9px}.sp-session-block header{padding:8px 10px;background:#eef5f8}.sp-session-block header>div{display:flex;justify-content:space-between;gap:8px}.sp-session-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;padding:9px;border-top:1px solid #e5edf1;align-items:center}.sp-item-main{display:grid;gap:2px;min-width:0}.sp-item-main>b{font-size:14px}.sp-item-main small{font-size:10px;color:#617783}.sp-item-main strong{font-size:11px;color:#0d4566}.sp-stroke-pill{justify-self:start;font-size:10px;font-weight:800;padding:4px 8px;border-radius:999px;border:1px solid #cbdde5;background:#f4f8fa;color:#0d4566}.sp-sent{color:#1b6b50!important}.sp-item-actions{display:flex;gap:4px}.sp-item-actions button{font-size:10px;padding:6px}.sp-finish{width:100%;margin-top:14px;padding:13px;font-size:15px;font-weight:900;background:#0d4566;color:white;border-radius:12px}.sp-finish-done{margin-top:14px;border:1px solid #a8d5c2;background:#effaf5;border-radius:12px;padding:11px;display:grid;gap:4px}.sp-finish-done em{font-size:11px}.sp-modal{position:fixed;inset:0;background:#0008;z-index:9999;display:grid;align-items:end;padding:10px}.sp-modal-card{background:white;border-radius:16px;padding:14px;max-height:88vh;overflow:auto}.sp-modal-card label{display:grid;gap:4px;margin:9px 0;font-weight:700;font-size:12px}.sp-modal-card textarea,.sp-modal-card select{width:100%;box-sizing:border-box;font:inherit;padding:9px}.sp-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.sp-modal-actions button{padding:11px}.sp-modal-actions .primary{background:#0d4566;color:white}.sp-verdict-yes{color:#1b6b50}.sp-verdict-check{color:#a15a0a}.sp-account label{display:grid;gap:4px;margin:12px 0;font-weight:700;font-size:12px}.sp-account input{width:100%;box-sizing:border-box;font:inherit;padding:11px;border:1px solid #cbdde5;border-radius:10px}.sp-account-error{color:#b3261e;background:#fdecea;border-radius:10px;padding:9px;font-size:12px;margin-top:8px}.sp-account-link{width:100%;margin-top:10px;padding:10px;background:none;border:none;color:#0d4566;font-weight:700;text-decoration:underline;font-size:12px}@media(max-width:430px){.sp-event>summary{grid-template-columns:22px minmax(0,1fr) 66px 52px;gap:4px}.sp-session-item{grid-template-columns:1fr}.sp-item-actions{justify-content:flex-end}}`;document.head.appendChild(s);}
+  function fail(err){ROOT.innerHTML=`<section class="portal-card error"><p class="eyebrow">SECURE ACCESS</p><h1>We couldn't open your swimmer view.</h1><p>${esc(err?.message||err)}</p><p class="muted">Ask your coach for a fresh QR code.</p><button class="sp-finish" data-account-signin>Have a real swimmer account? Sign in instead</button></section>`;ROOT.querySelector('[data-account-signin]')?.addEventListener('click',()=>showAccountScreen({step:'email',inviteToken:'',email:'',error:''}));}
+  // Real-account sign-in/accept screen (see the big comment above ACCOUNT_KEY for the full context). A
+  // small hand-rolled state object + one render function, matching the rest of this file's style (no
+  // framework) -- draw() above is untouched and still owns the actual portal view once a snapshot loads,
+  // whichever path (device token or real account) produced it.
+  let ACCOUNT_UI=null;
+  function showAccountScreen(patch){ACCOUNT_UI={step:'email',inviteToken:'',email:'',error:'',busy:false,...ACCOUNT_UI,...patch};drawAccountScreen();}
+  function drawAccountScreen(){
+    const u=ACCOUNT_UI,busy=!!u.busy;
+    const errHtml=u.error?`<p class="sp-account-error">${esc(u.error)}</p>`:'';
+    let body='';
+    if(u.step==='accepting'){
+      body=`<p class="muted">Linking your account…</p>`;
+    }else if(u.step==='code'){
+      body=`<p class="muted">We sent a sign-in code to <b>${esc(u.email)}</b>.</p><label>Sign-in code<input type="text" inputmode="numeric" data-account-code placeholder="6-digit code"></label><button class="sp-finish" data-account-verify ${busy?'disabled':''}>${busy?'Verifying…':'Verify and continue'}</button><button class="sp-account-link" data-account-change-email>Use a different email</button>`;
+    }else if(u.step==='manual-code'){
+      body=`<p class="muted">Signed in as <b>${esc(u.email)}</b>. Enter the invite code your coach gave you to link your account.</p><label>Invite code<input type="text" data-account-token placeholder="Paste the code or link your coach sent"></label><button class="sp-finish" data-account-link-code ${busy?'disabled':''}>${busy?'Linking…':'Link my account'}</button><button class="sp-account-link" data-account-signout>Sign out</button>`;
+    }else{
+      body=`<p class="muted">${u.inviteToken?'A coach has set up your real swimmer account access. Sign in with the email your coach invited.':'Sign in with your email — no password needed, we’ll text/email you a one-time code.'}</p><label>Email address<input type="email" data-account-email value="${esc(u.email)}" placeholder="you@example.com"></label><button class="sp-finish" data-account-send ${busy?'disabled':''}>${busy?'Sending…':'Send sign-in code'}</button>`;
+    }
+    ROOT.innerHTML=`<section class="portal-card sp-account"><p class="eyebrow">MCLAY SWIMMING OS · SIGN IN</p><h1>Your swimmer account</h1>${errHtml}${body}</section>`;
+    ROOT.querySelector('[data-account-send]')?.addEventListener('click',async()=>{
+      const email=text(ROOT.querySelector('[data-account-email]')?.value||'');
+      showAccountScreen({busy:true,error:''});
+      try{await sendAccountSignInCode(email);showAccountScreen({step:'code',email,busy:false});}
+      catch(err){showAccountScreen({busy:false,error:err?.message||String(err)});}
+    });
+    ROOT.querySelector('[data-account-verify]')?.addEventListener('click',async()=>{
+      const code=text(ROOT.querySelector('[data-account-code]')?.value||'');
+      showAccountScreen({busy:true,error:''});
+      try{
+        await verifyAccountSignInCode(u.email,code);
+        if(u.inviteToken){
+          showAccountScreen({step:'accepting',busy:true});
+          await accountRpc('mclay_accept_swimmer_invite',{invite_token:u.inviteToken});
+        }
+        SNAP=await accountRpc('mclay_swimmer_portal_snapshot',{});
+        await reloadActions();draw();
+      }catch(err){showAccountScreen({step:u.inviteToken?'code':'code',busy:false,error:err?.message||String(err)});}
+    });
+    ROOT.querySelector('[data-account-change-email]')?.addEventListener('click',()=>showAccountScreen({step:'email',error:''}));
+    ROOT.querySelector('[data-account-link-code]')?.addEventListener('click',async()=>{
+      const token=text(ROOT.querySelector('[data-account-token]')?.value||'');
+      if(!token){showAccountScreen({error:'Enter the invite code your coach gave you.'});return;}
+      showAccountScreen({busy:true,error:''});
+      try{
+        await accountRpc('mclay_accept_swimmer_invite',{invite_token:token});
+        SNAP=await accountRpc('mclay_swimmer_portal_snapshot',{});
+        await reloadActions();draw();
+      }catch(err){showAccountScreen({busy:false,error:err?.message||String(err)});}
+    });
+    ROOT.querySelector('[data-account-signout]')?.addEventListener('click',()=>{clearAccountSession();showAccountScreen({step:'email',email:'',error:''});});
+  }
+  // Entry point for a ?swimmer_invite=<token> link (see the big comment above ACCOUNT_KEY). If this device
+  // already holds a valid real-account session (e.g. the swimmer is already signed in and a coach sends a
+  // SECOND invite -- a squad move, a re-link after a mistake), accept it immediately without making them
+  // sign in again; a mismatched email (the invite is for a different address) fails cleanly and asks for the
+  // right one instead of silently linking the wrong account.
+  async function startAccountInviteFlow(inviteToken){
+    const existing=loadAccountSession();
+    if(existing?.access_token){
+      showAccountScreen({step:'accepting',inviteToken,busy:true});
+      try{
+        await accountRpc('mclay_accept_swimmer_invite',{invite_token:inviteToken});
+        SNAP=await accountRpc('mclay_swimmer_portal_snapshot',{});
+        await reloadActions();draw();return;
+      }catch(err){
+        clearAccountSession();
+        showAccountScreen({step:'email',inviteToken,email:'',busy:false,error:err?.message||String(err)});
+        return;
+      }
+    }
+    showAccountScreen({step:'email',inviteToken,email:'',busy:false,error:''});
+  }
+  async function start(){
+    try{
+      injectStyle();
+      const params=new URLSearchParams(location.search),invite=params.get('invite'),swimmerInvite=params.get('swimmer_invite');
+      DEVICE=localStorage.getItem(DEVICE_KEY)||'';
+      if(swimmerInvite){history.replaceState({},'',location.pathname);return startAccountInviteFlow(swimmerInvite);}
+      if(invite){const claimed=await rpc('msos_claim_swimmer_invite',{p_invite_token:invite,p_device_label:[navigator.platform,navigator.userAgent].filter(Boolean).join(' · ').slice(0,120)});DEVICE=claimed?.device_token||'';if(!DEVICE)throw new Error('The QR code could not be claimed.');localStorage.setItem(DEVICE_KEY,DEVICE);if(claimed?.athlete_id)localStorage.setItem(ATHLETE_KEY,claimed.athlete_id);history.replaceState({},'',location.pathname);}
+      if(!DEVICE&&loadAccountSession()?.access_token){
+        try{SNAP=await accountRpc('mclay_swimmer_portal_snapshot',{});await reloadActions();draw();return;}
+        catch(err){return showAccountScreen({step:'manual-code',email:loadAccountSession()?.email||'',error:err?.message||String(err)});}
+      }
+      if(!DEVICE)throw new Error('No swimmer access is set up on this phone yet.');
+      SNAP=await rpc('msos_swimmer_portal_snapshot',{p_device_token:DEVICE});
+      await reloadActions();draw();
+    }catch(err){
+      if(/invalid|revoked/i.test(String(err?.message||''))){localStorage.removeItem(DEVICE_KEY);localStorage.removeItem(ATHLETE_KEY);}
+      fail(err);
+    }
+  }
   start();
 })();
