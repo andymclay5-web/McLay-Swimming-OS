@@ -443,9 +443,12 @@ async function main() {
   // focus text that doesn't name a recognisable system would spuriously fail against whatever the session
   // actually trains, exactly the "unknown treated as a failure" mistake Andy's own design answer ruled out.
   {
+    // 4 Oct 2026: the real line this targets grew a season-planner-vocabulary lookup ahead of
+    // dosageEngine.systemFrom() (see tests/season-planner-vocab-mapping-20261004.cjs for that feature's own
+    // coverage) -- updated to match the real source exactly; same bug, same intent, unaffected otherwise.
     const buggy = loadBuggyCopy(realSource,
-      `const named=D.systemFrom(focusText);\n    if(named==='Unclassified')return{checked:false};`,
-      `const named=D.systemFrom(focusText);`);
+      `const named=seasonPlannerSystem(focusText)||D.systemFrom(focusText);\n    if(named==='Unclassified')return{checked:false};`,
+      `const named=seasonPlannerSystem(focusText)||D.systemFrom(focusText);`);
     global.MSOS4.coachLoopUI.planContext = () => ({ weeklyFocus: 'Big meet coming up, keep spirits high' });
     const { session, state } = thresholdSession();
     const before = buggy.evaluate(session, state);
