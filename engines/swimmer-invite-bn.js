@@ -340,7 +340,40 @@
   // nothing blocked touches to the page behind it (exactly "I can move around as usual"), and removing an
   // in-flow block on Close reflows/scrolls the page in a way that can look like nothing happened. Using the
   // one real, already-correct class fixes both.
-  function modal(a){const host=document.querySelector('#modalHost')||document.body,wrap=document.createElement('div');wrap.className='modal-backdrop';wrap.dataset.bnAccess='1';wrap.innerHTML=`<div class="bn-access-modal"><div class="eyebrow">SECURE SWIMMER ACCESS</div><h2>${esc(a.full_name)}</h2><p class="muted">Private swimmer-only access. MSOS verifies performance, the current individual session and the Challenge / Edit / Finish link back to your coach before it issues the QR.</p><div class="bn-qr" data-bn-qr><span class="muted">QR appears here</span></div><div class="bn-access-url" data-bn-url hidden></div><div class="bn-access-actions"><button class="primary" data-bn-generate>Generate 15-minute QR</button><button data-bn-copy hidden>Copy link</button><button class="danger" data-bn-revoke>Revoke swimmer devices</button><button data-bn-close>Close</button></div><p class="bn-access-status" data-bn-status></p></div>`;host.append(wrap);
+  // 4 Oct 2026 -- Andy's 3 Oct "future proof, app store ready" direction: a swimmer's access should
+  // eventually come from a real, portable, signed-in identity (one email, any device), not just this
+  // device-token QR above (one phone, one scan, re-scanned any time access is needed on a NEW phone).
+  // supabase/20261003_swimmer_accounts_and_chat_extensions.sql's mclay_create_swimmer_invite is the
+  // coach-side half of that (any coach, not owner-only, per that migration's own comment); this is the
+  // first and only client UI that calls it -- a second, optional section inside the SAME "Give swimmer
+  // access" modal (not a separate screen), so Andy has one place to either hand a swimmer the quick QR
+  // for today, or set up their real account once. Deliberately no email-SENDING step here, matching
+  // engines/team-access.js's own createInvite for assistant coaches exactly: Andy shares the resulting
+  // link himself (text, WhatsApp, whatever), so this has no dependency on Supabase's email deliverability.
+  function realAccountSectionHtml(a){
+    return `<div class="bn-real-account"><div class="eyebrow">REAL ACCOUNT ACCESS (NEW)</div><p class="muted">One signed-in email, works on any device -- for a swimmer who wants their own portable account instead of (or alongside) the quick QR above.</p><label>Swimmer's email<input type="email" data-bn-real-email placeholder="swimmer@example.com"></label><button data-bn-real-send>Send real-account invite link</button><div class="bn-real-result" data-bn-real-result hidden></div><p class="bn-real-status" data-bn-real-status></p></div>`;
+  }
+  function bindRealAccountSection(wrap,a){
+    const emailInput=wrap.querySelector('[data-bn-real-email]'),sendBtn=wrap.querySelector('[data-bn-real-send]'),status=wrap.querySelector('[data-bn-real-status]'),result=wrap.querySelector('[data-bn-real-result]');
+    if(!sendBtn)return;
+    sendBtn.onclick=async()=>{
+      if(sendBtn.disabled)return;
+      const email=text(emailInput?.value||'');
+      if(!email){status.textContent='Enter the swimmer\'s email address.';return;}
+      const org=M.cloud?.org?.()||M.state?.settings?.organisationId;
+      if(!org){status.textContent='Organisation not loaded on this device yet.';return;}
+      sendBtn.disabled=true;status.textContent='Creating invite…';
+      try{
+        const row=await rpc('mclay_create_swimmer_invite',{target_org:org,target_athlete_id:String(a.id),target_email:email});
+        const link=new URL('swimmer-portal.html',location.href);link.searchParams.set('swimmer_invite',row.invite_token);
+        const expiresLabel=row.expires_at?new Date(row.expires_at).toLocaleDateString():'';
+        result.hidden=false;result.textContent=link.toString();
+        status.textContent=`Ready -- share this link with ${email} yourself (text, WhatsApp, email). Expires ${expiresLabel||'soon'}.`;
+      }catch(err){status.textContent=err?.message||String(err);}
+      finally{sendBtn.disabled=false;}
+    };
+  }
+  function modal(a){const host=document.querySelector('#modalHost')||document.body,wrap=document.createElement('div');wrap.className='modal-backdrop';wrap.dataset.bnAccess='1';wrap.innerHTML=`<div class="bn-access-modal"><div class="eyebrow">SECURE SWIMMER ACCESS</div><h2>${esc(a.full_name)}</h2><p class="muted">Private swimmer-only access. MSOS verifies performance, the current individual session and the Challenge / Edit / Finish link back to your coach before it issues the QR.</p><div class="bn-qr" data-bn-qr><span class="muted">QR appears here</span></div><div class="bn-access-url" data-bn-url hidden></div><div class="bn-access-actions"><button class="primary" data-bn-generate>Generate 15-minute QR</button><button data-bn-copy hidden>Copy link</button><button class="danger" data-bn-revoke>Revoke swimmer devices</button><button data-bn-close>Close</button></div><p class="bn-access-status" data-bn-status></p>${realAccountSectionHtml(a)}</div>`;host.append(wrap);bindRealAccountSection(wrap,a);
     // Real coaching failure this fixes: fixing the missing backdrop class (above) surfaced a second, deeper
     // bug -- Andy reported that even with the screen now properly dimmed/locked, tapping the on-screen
     // "Close" button did nothing, and the only way out was pressing the phone's back button several times
@@ -599,8 +632,73 @@
     wrapped.__msosSwimmerAutoPublish=true;
     M.store.putSession=wrapped;
   })();
+  // Real reliability report (Andy, 2 Oct 2026, flagged then never investigated): "swimmer-facing portal
+  // still not right; results shown are out of date." Root cause, found by reading the actual publish paths
+  // end to end rather than guessing: the swimmer portal's Performance/Tests/Meet tabs are built ONLY by
+  // payloadForAsync, which only ever runs from two places -- Generate's own deferred enrichment call above,
+  // and installSessionAutoPublishHook just above this comment (and that one only ever calls the lightweight
+  // corePayloadFor, by design, never the full payload). Committing a new meet/PB result, test result, or
+  // live meet result through Data & References (engines/data-registry.js's D.commit/D.activate) already
+  // invalidates the COACH's own performance/evidence caches (see data-registry.js's invalidate()) but has
+  // never once touched any swimmer's published portal payload -- so a swimmer's Performance/Tests/Meet tabs
+  // stay exactly as they were the last time Andy happened to open that swimmer's card and tap Generate,
+  // however long ago that was, with no signal to Andy or the swimmer that anything is stale.
+  //
+  // Fixed the same way as the session-save hook above: wrap D.commit/D.activate (the sole writers of these
+  // result types -- see data-registry.js's own Task #64 comment), resolve which real athletes a commit's
+  // rows actually name (by athlete_id, falling back to a case-insensitive athlete_name match against
+  // M.state.athletes -- the same matching precision the rows already carry, nothing invented), and
+  // republish each one's FULL payload via the existing, already-safe payloadForAsync (the same wall-clock-
+  // bounded, per-stage-yielding generator Generate's own deferred enrichment already trusts above -- never a
+  // second, competing computation). Deliberately scoped to the four types that name an individual athlete
+  // and feed exactly what a swimmer sees on those tabs (results/tm_results -> Performance, test_results ->
+  // Tests, live_meet_results -> Meet). national_standards/meet_qualifying are reference tables that would
+  // affect pathway targets for every athlete at once -- republishing every swimmer with access on every
+  // standards-table import is a real, separate design decision, not a default to assume here, so those two
+  // types are deliberately left out; flagged, not silently dropped. Fire-and-forget, one athlete at a time
+  // with a real setTimeout(0) yield in between (the exact same freeze-safety shape
+  // autoPublishSessionToSwimmers already uses), one try/catch per athlete so one failure can't affect
+  // another or the import/activation itself.
+  const RESULT_IMPORT_TYPES=new Set(['results','tm_results','test_results','live_meet_results']);
+  function athletesFromResultRows(rows){
+    const all=M.state?.athletes||[],found=new Map();
+    for(const r of rows||[]){
+      const id=text(r?.athlete_id);
+      let a=id?all.find(x=>String(x.id)===id):null;
+      if(!a){const nm=text(r?.athlete_name).toLowerCase();if(nm)a=all.find(x=>text(x.full_name).toLowerCase()===nm);}
+      if(a)found.set(a.id,a);
+    }
+    return[...found.values()];
+  }
+  async function republishFullPayloadFor(athletes){
+    for(const a of athletes){
+      await new Promise(resolve=>setTimeout(resolve,0));
+      try{const{payload:full}=await payloadForAsync(a,()=>{});await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:full});}catch{}
+    }
+  }
+  (function installResultsAutoPublishHook(){
+    if(typeof M.dataRegistry?.commit!=='function'||M.dataRegistry.commit.__msosSwimmerAutoPublish)return;
+    const prevCommit=M.dataRegistry.commit;
+    const wrappedCommit=async(pre)=>{
+      const result=await prevCommit(pre);
+      if(RESULT_IMPORT_TYPES.has(pre?.type)){const athletes=athletesFromResultRows(pre?.rows);if(athletes.length)republishFullPayloadFor(athletes);}
+      return result;
+    };
+    wrappedCommit.__msosSwimmerAutoPublish=true;
+    M.dataRegistry.commit=wrappedCommit;
+    const prevActivate=M.dataRegistry.activate;
+    if(typeof prevActivate==='function'){
+      const wrappedActivate=async(id)=>{
+        const result=await prevActivate(id);
+        if(result&&RESULT_IMPORT_TYPES.has(result.type)){const athletes=athletesFromResultRows(result.rows);if(athletes.length)republishFullPayloadFor(athletes);}
+        return result;
+      };
+      wrappedActivate.__msosSwimmerAutoPublish=true;
+      M.dataRegistry.activate=wrappedActivate;
+    }
+  })();
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(installButton);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;
+  X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;
 })(globalThis);
