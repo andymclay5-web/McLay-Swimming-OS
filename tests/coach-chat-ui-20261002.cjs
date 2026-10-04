@@ -35,6 +35,7 @@ const ORG_ID = '33333333-3333-3333-3333-333333333333';
     const page = await context.newPage();
 
     const groupRows = [];
+    const coachesRows = [];
     const dmRows = [];
     let nextId = 1;
     let rosterRequests = 0;
@@ -47,13 +48,20 @@ const ORG_ID = '33333333-3333-3333-3333-333333333333';
       const req = route.request();
       const url = req.url();
       if (req.method() === 'GET') {
-        const rows = url.includes('recipient_id=is.null') ? groupRows : dmRows;
+        // Mirrors the real server-side filter restFilterFor() builds: the group and coaches-only channels
+        // are both recipient_id=is.null, disambiguated ONLY by channel=eq.all vs channel=eq.coaches -- a
+        // real server would never let a channel=eq.coaches request see an 'all' row or vice versa, so this
+        // fixture must not either, or this test would miss a channel-leak bug the same way the sandbox's
+        // own earlier RLS audit was written to catch.
+        const rows = url.includes('channel=eq.coaches') ? coachesRows : url.includes('recipient_id=is.null') ? groupRows : dmRows;
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
       }
       if (req.method() === 'POST') {
         const payload = JSON.parse(req.postData() || '{}');
-        const row = { id: `srv-${nextId++}`, organisation_id: payload.organisation_id, sender_id: payload.sender_id, sender_name: payload.sender_name, sender_role: payload.sender_role, recipient_id: payload.recipient_id ?? null, recipient_name: payload.recipient_name || '', body: payload.body, created_at: new Date().toISOString() };
-        (row.recipient_id == null ? groupRows : dmRows).push(row);
+        const row = { id: `srv-${nextId++}`, organisation_id: payload.organisation_id, sender_id: payload.sender_id, sender_name: payload.sender_name, sender_role: payload.sender_role, recipient_id: payload.recipient_id ?? null, recipient_name: payload.recipient_name || '', body: payload.body, channel: payload.channel || 'all', capture_id: payload.capture_id ?? null, created_at: new Date().toISOString() };
+        if (row.recipient_id != null) dmRows.push(row);
+        else if (row.channel === 'coaches') coachesRows.push(row);
+        else groupRows.push(row);
         return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([row]) });
       }
       return route.continue();
@@ -86,7 +94,7 @@ const ORG_ID = '33333333-3333-3333-3333-333333333333';
     await chatBtn.click();
     await page.waitForSelector('[data-chat-channels] [data-chat-channel]');
     const channelLabels = await page.$$eval('[data-chat-channels] .cc-channel-label', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(channelLabels, ['Whole group', 'Jordan'], 'the channel list must show the whole-group channel first, then one row per real other coach from the roster');
+    assert.deepEqual(channelLabels, ['Whole group', 'Coaches only', 'Jordan'], 'the channel list must show the whole-group channel, then the coaches-only channel, then one row per real other coach from the roster');
     console.log('COACH_CHAT_UI_PANEL_ROSTER_PASS');
 
     // --- 2. composing and sending in the group channel actually calls the real REST endpoint and renders
@@ -134,6 +142,50 @@ const ORG_ID = '33333333-3333-3333-3333-333333333333';
     await page.click(`[data-chat-channel="dm:${JORDAN_ID}"]`);
     await page.waitForFunction(() => document.querySelector('[data-sticky-chat]')?.dataset.ccUnread === '');
     console.log('COACH_CHAT_UI_UNREAD_CLEARS_ON_OPEN_PASS');
+
+    // --- 5. the coaches-only channel sends with channel:'coaches' and stays fully separate from the whole
+    // -group channel -- the actual point of this channel existing (swimmers can read 'group' once they have
+    // real accounts, but must never see a 'coaches' row). ---
+    await page.click('[data-chat-back]');
+    await page.waitForSelector('[data-chat-channels] [data-chat-channel]');
+    await page.click('[data-chat-channel="coaches"]');
+    await page.waitForSelector('[data-chat-thread] [data-chat-compose]');
+    await page.fill('[data-chat-input]', 'Keep an eye on lane 3 today, assistant only chatter');
+    await page.click('[data-chat-compose] button[type=submit]');
+    await page.waitForSelector('[data-chat-messages] .cc-msg-mine');
+    assert.equal(coachesRows.length, 1, 'sending in the coaches-only channel must hit the real endpoint exactly once');
+    assert.equal(coachesRows[0].channel, 'coaches', 'the POSTed row must be stamped channel:"coaches"');
+    assert.equal(coachesRows[0].recipient_id, null, 'the coaches-only channel is a broadcast, not a DM, so recipient_id must still be null');
+    assert.equal(groupRows.length, 1, 'sending to the coaches-only channel must never also create a whole-group row -- that would defeat the audience separation this channel exists for');
+    console.log('COACH_CHAT_UI_COACHES_CHANNEL_SEND_PASS');
+
+    // --- 6. capture attachment: picking a capture from the attach picker sends it as capture_id, and the
+    // rendered message shows a tappable attachment line wired through the SAME [data-msos-capture] global
+    // click handler engines/capture-ui.js already uses everywhere else in the app (board evidence, loop
+    // notes), rather than a second bespoke viewer. ---
+    await page.evaluate(() => {
+      window.MSOS4.state.captures = window.MSOS4.state.captures || [];
+      window.MSOS4.state.captures.push({ id: 'cap-stroke-1', capture_type: 'video', text_content: 'Freestyle catch, lane 3', created_at: new Date().toISOString() });
+    });
+    await page.click('[data-chat-back]');
+    await page.waitForSelector('[data-chat-channels] [data-chat-channel]');
+    await page.click('[data-chat-channel="group"]');
+    await page.waitForSelector('[data-chat-thread] [data-chat-compose]');
+    await page.click('[data-chat-attach]');
+    await page.waitForSelector('[data-chat-attach-pick]');
+    const pickerLabel = await page.$eval('[data-chat-attach-pick]', (e) => e.textContent);
+    assert.ok(/Freestyle catch, lane 3/.test(pickerLabel), 'the attach picker must list the real capture by its own text_content, not a generic placeholder');
+    await page.click('[data-chat-attach-pick]');
+    await page.waitForSelector('[data-chat-attach-chip]:not([hidden])');
+    await page.fill('[data-chat-input]', 'What do you see here?');
+    await page.click('[data-chat-compose] button[type=submit]');
+    await page.waitForSelector('[data-chat-messages] .cc-msg-mine .cc-msg-attach');
+    assert.equal(groupRows[groupRows.length - 1].capture_id, 'cap-stroke-1', 'sending with a capture attached must POST the real capture_id, not drop it');
+    const attachBtnCaptureId = await page.$eval('[data-chat-messages] .cc-msg-mine .cc-msg-attach', (e) => e.getAttribute('data-msos-capture'));
+    assert.equal(attachBtnCaptureId, 'cap-stroke-1', 'the rendered attachment line must carry data-msos-capture with the real id, so the existing global capture-viewer click handler (engines/capture-ui.js) can open it without any new viewer code');
+    const chipClearedAfterSend = await page.$eval('[data-chat-attach-chip]', (e) => e.hidden);
+    assert.equal(chipClearedAfterSend, true, 'the pending-attachment chip must clear after a successful send, so the next message is not sent with a stale attachment');
+    console.log('COACH_CHAT_UI_CAPTURE_ATTACH_PASS');
 
     console.log('COACH_CHAT_UI_ALL_PASS');
   } finally {
