@@ -134,8 +134,21 @@
   const HUB_SECTION_LABELS={plan:'Season / week plan link',summary:'Session summary',mix:'Session makeup',meet:'Next meet',carry:'Carry-forward',dosage:'Dosage / stimulus card'};
   let hubCrumbCache=null;
   const msNow=()=>(g.performance&&typeof g.performance.now==='function')?g.performance.now():Date.now();
-  function readHubCrumb(){try{const c=JSON.parse(g.localStorage?.getItem?.(HUB_CRUMB_KEY)||'null');return c&&typeof c==='object'?c:{}}catch{return{}}}
-  function writeHubCrumb(c){try{g.localStorage?.setItem?.(HUB_CRUMB_KEY,JSON.stringify(c))}catch{}}
+  // 5 Oct 2026, second round ("Same again" after the breaker build went live): the breaker only works if
+  // its marker actually persists. On a phone whose localStorage is already full (the compact recovery
+  // copy + legacy store live there), setItem throws and the marker silently never lands. So every write
+  // ALSO goes to a small cookie (separate quota, synchronous, survives back-out/reload), and a failed
+  // localStorage write is itself recorded so the next report shows it.
+  const HUB_COOKIE='msos_hub_crumb';
+  function readCookieCrumb(){try{const raw=String(g.document?.cookie||'').split(/;\s*/).find(x=>x.startsWith(HUB_COOKIE+'='));if(!raw)return null;const v=JSON.parse(decodeURIComponent(raw.slice(HUB_COOKIE.length+1)));if(!v||typeof v!=='object')return null;
+    const at=v.a||'';return{seq:Number(v.q)||0,open:Object.fromEntries((v.o||[]).map(n=>[n,{at,build:v.b||''}])),tripped:Object.fromEntries((v.t||[]).map(n=>[n,{startedAt:'',build:v.b||'',detectedAt:''}])),renderOpen:v.r||undefined,stage:v.s||'',stageAt:v.sa||'',stageBuild:v.b||'',lsFailed:v.lf||'',fromCookie:true};}catch{return null}}
+  function writeCookieCrumb(c){try{if(!g.document)return;const v={q:c.seq||0,o:Object.keys(c.open||{}),t:Object.keys(c.tripped||{}),r:c.renderOpen||'',s:c.stage||'',sa:c.stageAt||'',b:M.BUILD||'',lf:c.lsFailed||'',a:Object.values(c.open||{})[0]?.at||''};g.document.cookie=`${HUB_COOKIE}=${encodeURIComponent(JSON.stringify(v))}; max-age=31536000; SameSite=Lax`;}catch{}}
+  function readHubCrumb(){let c=null;try{c=JSON.parse(g.localStorage?.getItem?.(HUB_CRUMB_KEY)||'null')}catch{}if(!c||typeof c!=='object')c={};
+    const ck=readCookieCrumb();if(ck&&(ck.seq||0)>(Number(c.seq)||0)){c={...c,seq:ck.seq,open:ck.open,tripped:{...(c.tripped||{}),...ck.tripped},renderOpen:ck.renderOpen,stage:ck.stage,stageAt:ck.stageAt,stageBuild:ck.stageBuild,lsFailed:ck.lsFailed,recoveredFromCookie:true};if(!c.renderOpen)delete c.renderOpen;}
+    return c;}
+  function writeHubCrumb(c){c.seq=(Number(c.seq)||0)+1;try{g.localStorage?.setItem?.(HUB_CRUMB_KEY,JSON.stringify(c));}catch(e){c.lsFailed=text(e?.name||e?.message||e).slice(0,60)||'write failed';}writeCookieCrumb(c);}
+  const STAGE_LABELS={'nav:tap':'after tapping Coach Hub, before the Hub started drawing','hub:start':'starting the Hub','hub:html':'drawing the Hub page','sec:plan':'Season / week plan link','sec:summary':'Session summary','sec:mix':'Session makeup','sec:meet':'Next meet','sec:carry':'Carry-forward','sec:dosage':'Dosage / stimulus card'};
+  function setStage(stage){const c=hubCrumb();c.stage=stage;c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);}
   function hubCrumb(){
     if(hubCrumbCache)return hubCrumbCache;
     const c=readHubCrumb();c.open=c.open&&typeof c.open==='object'?c.open:{};c.tripped=c.tripped&&typeof c.tripped==='object'?c.tripped:{};c.timings=c.timings&&typeof c.timings==='object'?c.timings:{};c.errors=c.errors&&typeof c.errors==='object'?c.errors:{};
@@ -144,20 +157,25 @@
     // before the first section of this page load starts.
     for(const [name,info] of Object.entries(c.open))c.tripped[name]={startedAt:info?.at||info||'',build:info?.build||'',detectedAt:now()};
     if(c.renderOpen){c.renderStalled={startedAt:c.renderOpen,detectedAt:now(),sectionTripped:Object.keys(c.open).length>0};}delete c.renderOpen;
+    // Any stage other than a clean finish means the last Hub attempt never completed on that page load.
+    if(c.stage&&!/^(?:hub:done|hub:coalesced|idle)$/.test(c.stage)){c.lastStall={stage:c.stage,label:STAGE_LABELS[c.stage]||c.stage,at:c.stageAt||'',build:c.stageBuild||'',storage:c.lsFailed?`localStorage full/failing (${c.lsFailed})`:'ok',detectedAt:now(),acknowledged:false};}
+    c.stage='idle';
     c.open={};writeHubCrumb(c);hubCrumbCache=c;return c;
   }
   function runSection(name,fn,fallback){
     const c=hubCrumb(),fb=()=>typeof fallback==='function'?fallback():fallback;
     if(c.tripped[name])return fb();
-    c.open[name]={at:now(),build:M.BUILD||''};writeHubCrumb(c);
+    const prevStage=c.stage;c.open[name]={at:now(),build:M.BUILD||''};c.stage='sec:'+name;c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);
     const t0=msNow();
     try{const out=fn();delete c.errors[name];return out;}
     catch(e){c.errors[name]=text(e?.message||e).slice(0,200);return fb();}
-    finally{delete c.open[name];c.timings[name]=Math.round(msNow()-t0);c.lastRunAt=now();writeHubCrumb(c);}
+    finally{delete c.open[name];c.timings[name]=Math.round(msNow()-t0);c.lastRunAt=now();c.stage=prevStage&&prevStage!=='idle'?prevStage:'hub:done';writeHubCrumb(c);}
   }
   function trippedSections(){return Object.keys(hubCrumb().tripped);}
   function resetTripped(){const c=hubCrumb();c.tripped={};writeHubCrumb(c);}
-  function hubDiagnostics(){const c=hubCrumb();return{timings:{...c.timings},tripped:{...c.tripped},errors:{...c.errors},lastRunAt:c.lastRunAt||'',renderStalled:c.renderStalled||null};}
+  function hubDiagnostics(){const c=hubCrumb();return{timings:{...c.timings},tripped:{...c.tripped},errors:{...c.errors},lastRunAt:c.lastRunAt||'',renderStalled:c.renderStalled||null,lastStall:c.lastStall||null,storage:c.lsFailed?`localStorage failing (${c.lsFailed})`:'ok'};}
+  function acknowledgeStall(){const c=hubCrumb();if(c.lastStall)c.lastStall.acknowledged=true;writeHubCrumb(c);}
+  L.setStage=setStage;L.acknowledgeStall=acknowledgeStall;
   L.runSection=runSection;L.trippedSections=trippedSections;L.resetTripped=resetTripped;L.hubDiagnostics=hubDiagnostics;L.HUB_CRUMB_KEY=HUB_CRUMB_KEY;
   L._resetCrumbCacheForTests=()=>{hubCrumbCache=null;};
 
@@ -165,14 +183,15 @@
   function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;
     const rev=Number(M.state?.settings?.storageRevision)||0;
-    if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400)return;
+    if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400){setStage('hub:coalesced');return;}
     const t0=Date.now();
-    {const c=hubCrumb();c.renderOpen=now();writeHubCrumb(c);}
-    const finish=()=>{{const c=hubCrumb();delete c.renderOpen;writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
+    {const c=hubCrumb();c.renderOpen=now();c.stage='hub:start';c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);}
+    const finish=()=>{{const c=hubCrumb();delete c.renderOpen;c.stage='hub:done';if(c.lastStall)c.lastStall.acknowledged=true;c.stageAt=now();writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
     const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}
     const emptyCtx={season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'skipped'};
     const ctx=runSection('plan',()=>planContext(s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
     const tripped=trippedSections(),diag=hubDiagnostics();
+    setStage('hub:html');
     h.innerHTML=`
       <section class="page-card loop-hub-hero">
         <div class="eyebrow">COACH HUB · COACHING BRIEF</div>
@@ -191,7 +210,7 @@
       <section class="page-card"><div class="eyebrow">PSYCHOLOGICAL / BEHAVIOURAL INTENT</div>${psy.length?`<div class="loop-chip-row">${psy.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:'<p class="muted">No explicit psychological/behavioural cue was found in the linked plan or authored session. MSOS does not invent one.</p>'}${ctx.psychologicalFocus?`<p>${esc(ctx.psychologicalFocus)}</p>`:''}</section>
       <section class="page-card"><div class="eyebrow">NEXT PERFORMANCE TARGET</div>${meet?`<div class="loop-meet-line"><div><h2>${esc(meet.title)}</h2><p>${esc([meet.date,meet.course,meet.venue].filter(Boolean).join(' · '))}</p></div><strong>${entries.length?`${entries.length} loaded entr${entries.length===1?'y':'ies'}`:'Meet loaded'}</strong></div>`:'<h2>No upcoming meet currently linked</h2>'}</section>
       <section class="page-card"><div class="eyebrow">EVIDENCE FROM THIS SESSION</div><div class="loop-kpis"><span>${sum?.evidence?.changes||0} live changes</span><span>${sum?.evidence?.captures||0} captures</span><span>${sum?.evidence?.timedSets||0} timed sets</span></div><p class="muted">Evidence supports the coaching picture; it does not replace the plan or delivered-session truth.</p></section>
-      <details class="page-card" data-loop-hub-diagnostics><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><p class="muted">Hub section timings: ${esc(Object.entries(diag.timings).map(([k,v])=>`${k} ${v}ms`).join(' · ')||'none yet')}${tripped.length?` · skipped: ${esc(tripped.join(', '))}`:''}${diag.renderStalled&&!diag.renderStalled.sectionTripped?` · an earlier open stalled outside the guarded sections (${esc(diag.renderStalled.startedAt)})`:''}${Object.keys(diag.errors).length?` · errors: ${esc(Object.entries(diag.errors).map(([k,v])=>`${k}: ${v}`).join('; '))}`:''}</p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
+      <details class="page-card" data-loop-hub-diagnostics><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><p class="muted">Hub section timings: ${esc(Object.entries(diag.timings).map(([k,v])=>`${k} ${v}ms`).join(' · ')||'none yet')}${tripped.length?` · skipped: ${esc(tripped.join(', '))}`:''}${diag.lastStall?` · last unfinished attempt stuck at: ${esc(diag.lastStall.label)} (${esc(diag.lastStall.at)})`:''}${diag.storage!=='ok'?` · ${esc(diag.storage)}`:''}${diag.renderStalled&&!diag.renderStalled.sectionTripped?` · an earlier open stalled outside the guarded sections (${esc(diag.renderStalled.startedAt)})`:''}${Object.keys(diag.errors).length?` · errors: ${esc(Object.entries(diag.errors).map(([k,v])=>`${k}: ${v}`).join('; '))}`:''}</p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
     h.querySelector('[data-loop-board]')?.addEventListener('click',()=>go('board',{restore:true}));
     h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));
     h.querySelector('[data-loop-meet]')?.addEventListener('click',()=>go('meet'));
@@ -279,7 +298,16 @@
   // replace the proven Board/pathway/capture foundations.
   const baseBoard=UI.renderBoard?.bind(UI),baseAthletes=UI.renderAthletes?.bind(UI),baseSwimmer=UI.renderSwimmer?.bind(UI),baseMeet=UI.renderMeet?.bind(UI),baseOpenCapture=M.actions.openCapture?.bind(M.actions);
   UI.renderHub=renderCoachHub;
-  if(baseBoard)UI.renderBoard=()=>{baseBoard();installBoardAthletes();};
+  // Hub stall notice: shown on the Board (which opens fine) when the previous Coach Hub attempt never
+  // finished, so the exact stuck stage is visible even if Hub itself can't open. Dismissible; diagnostic
+  // only -- it never changes the session, Roll or view.
+  function installHubStallNotice(){const host=document.querySelector('#boardView');if(!host)return;host.querySelector('[data-loop-hub-stall]')?.remove();const st=hubCrumb().lastStall;if(!st||st.acknowledged)return;const sec=document.createElement('section');sec.dataset.loopHubStall='1';sec.className='page-card';sec.innerHTML=`<div class="eyebrow">COACH HUB · DIDN'T FINISH LAST TIME</div><p>Stuck at: <b>${esc(st.label)}</b></p><p class="muted">${esc([st.at,st.build,`storage ${st.storage}`].filter(Boolean).join(' · '))}</p><div class="loop-quick"><button data-loop-hub-stall-ok>Got it</button></div>`;host.prepend(sec);const ok=sec.querySelector('[data-loop-hub-stall-ok]');if(ok)ok.onclick=()=>{acknowledgeStall();sec.remove();};}
+  L.installHubStallNotice=installHubStallNotice;
+  if(baseBoard)UI.renderBoard=()=>{baseBoard();installBoardAthletes();try{installHubStallNotice()}catch{}};
+  // Record the tap itself (capture phase, before navigation runs) so a freeze between the tap and the
+  // Hub starting to draw is distinguishable from a freeze inside the Hub.
+  try{g.document?.addEventListener?.('click',e=>{if(e?.target?.closest?.('[data-nav="hub"]'))setStage('nav:tap');},true);}catch{}
+  try{hubCrumb();}catch{}
   if(baseAthletes)UI.renderAthletes=()=>{baseAthletes();enhanceAthleteToday();observeAthletes();};
   if(M.performanceUI)M.performanceUI.render=UI.renderAthletes;
   if(baseSwimmer)UI.renderSwimmer=()=>{baseSwimmer();enhanceSwimmerDevice();};
