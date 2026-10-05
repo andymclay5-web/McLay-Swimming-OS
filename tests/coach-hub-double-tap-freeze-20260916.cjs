@@ -106,15 +106,19 @@ function runFailBefore(){
     const rev=Number(M.state?.settings?.storageRevision)||0;
     if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400)return;
     const t0=Date.now();
-    const finish=()=>{h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
+    {const c=hubCrumb();c.renderOpen=now();writeHubCrumb(c);}
+    const finish=()=>{{const c=hubCrumb();delete c.renderOpen;writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
     const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}`;
   const buggyOpen=`  function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';return;}`;
 
-  const fixedClose=`    h.querySelector('[data-loop-connection]')?.addEventListener('click',()=>go('connection'));
+  // 5 Oct 2026: the Hub section-breaker build added a breadcrumb line inside the guard and a Retry
+  // listener just before finish(); both literals below are updated to match, the double-tap logic under
+  // test is unchanged.
+  const fixedClose=`    h.querySelector('[data-loop-hub-retry]')?.addEventListener('click',()=>{resetTripped();h.dataset.loopHubRenderedAt='0';renderCoachHub();});
     finish();
   }`;
-  const buggyClose=`    h.querySelector('[data-loop-connection]')?.addEventListener('click',()=>go('connection'));
+  const buggyClose=`    h.querySelector('[data-loop-hub-retry]')?.addEventListener('click',()=>{resetTripped();h.dataset.loopHubRenderedAt='0';renderCoachHub();});
   }`;
 
   assert.ok(realSrc.includes(fixedOpen),'test setup error: could not locate the fixed renderCoachHub opening -- its wording changed in a way this test does not expect');
