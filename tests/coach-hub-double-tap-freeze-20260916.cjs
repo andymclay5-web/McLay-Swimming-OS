@@ -100,15 +100,15 @@ function run(){
 function runFailBefore(){
   // Fail-before: revert to the exact pre-fix renderCoachHub (no coalescing guard, no finish()/timing) and
   // confirm two back-to-back calls with unchanged state incorrectly redo the full computation twice.
-  const fixedOpen=`  L.hubRenderRuns=0;
-  function renderCoachHub(){
-    const h=document.querySelector('#hubView');if(!h)return;
-    const rev=Number(M.state?.settings?.storageRevision)||0;
-    if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400)return;
-    const t0=Date.now();
-    {const c=hubCrumb();c.renderOpen=now();writeHubCrumb(c);}
-    const finish=()=>{{const c=hubCrumb();delete c.renderOpen;writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
-    const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}`;
+  // 5 Oct 2026: the Hub section-breaker builds add breadcrumb/stage lines inside renderCoachHub's
+  // opening, so the fixed opening is now located by its stable start/end markers in the real source
+  // rather than pinned verbatim; the coalescing guard under test is asserted explicitly below.
+  const openStart=realSrc.indexOf('  L.hubRenderRuns=0;\n  function renderCoachHub(){');
+  const openEndMarker="finish();return;}";
+  const openEnd=realSrc.indexOf(openEndMarker,openStart);
+  assert.ok(openStart>0&&openEnd>openStart,'test setup error: could not locate renderCoachHub opening');
+  const fixedOpen=realSrc.slice(openStart,openEnd+openEndMarker.length);
+  assert.match(fixedOpen,/Date\.now\(\)-\(Number\(h\.dataset\.loopHubRenderedAt\)\|\|0\)<400/,'the coalescing guard must still be present in the real opening');
   const buggyOpen=`  function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';return;}`;
 

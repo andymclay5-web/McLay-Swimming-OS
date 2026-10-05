@@ -29,16 +29,20 @@ const dosageUiPath=path.join(repoRoot,'engines','dosage-ui.js');
 const CRUMB='msos_hub_breadcrumb_v1';
 
 function makeStore(){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),_m:m};}
+function makeNode(){const n={dataset:{},className:'',_html:'',children:[],get innerHTML(){return this._html},set innerHTML(v){this._html=v},querySelector(){return null},querySelectorAll(){return[]},remove(){n._removed=true;}};return n;}
+function makeBoard(){const b={prepended:[],querySelector(){return null},prepend(x){b.prepended.push(x)}};return b;}
 function makeHubElement(){return{dataset:{},_html:'',get innerHTML(){return this._html},set innerHTML(v){this._html=v},querySelector(){return{addEventListener(){}}},querySelectorAll(){return[]}};}
 
-function boot(store,coachSrcPath=coachLoopPath){
+function boot(store,coachSrcPath=coachLoopPath,jar={cookie:''},boardEl=null){
   for(const f of ['app.js','v4-correct.js','v4-poolside-core.js'])delete require.cache[require.resolve(path.join(repoRoot,f))];
   delete require.cache[require.resolve(coachSrcPath)];
   global.window=global;global.scrollY=0;
   global.requestAnimationFrame=fn=>{if(typeof fn==='function')fn();return 1;};
   global.localStorage=store;
   const hubEl=makeHubElement();
-  global.document={addEventListener(){},querySelector(sel){return sel==='#hubView'?hubEl:null;},querySelectorAll(){return[];},body:{dataset:{}}};
+  // Cookie jar shared across simulated page loads; setting mimics the browser (attributes dropped, one key).
+  global.document={addEventListener(){},querySelector(sel){return sel==='#hubView'?hubEl:(sel==='#boardView'?boardEl:null);},querySelectorAll(){return[];},body:{dataset:{}},createElement(){return makeNode();},
+    get cookie(){return jar.cookie;},set cookie(v){const kv=String(v).split(';')[0];const k=kv.split('=')[0];const rest=String(jar.cookie||'').split(/;\s*/).filter(x=>x&&!x.startsWith(k+'='));rest.push(kv);jar.cookie=rest.join('; ');}};
   global.location={hash:'',href:'https://hub-test.local/'};
   global.history={state:null,replaceState(){},pushState(){},back(){}};
   global.addEventListener=()=>{};global.removeEventListener=()=>{};
@@ -104,6 +108,33 @@ function run(){
   // 6: dosage-ui uses the breaker for its Hub card.
   const dosageSrc=fs.readFileSync(dosageUiPath,'utf8');
   assert.match(dosageSrc,/guard\('dosage',sessionCard,''\)/,'dosage-ui.js must run its Hub card through coachLoopUI.runSection');
+  // 8: localStorage full (setItem throws): the cookie must still carry the marker so the breaker works.
+  const full=makeStore();full.setItem=()=>{const e=new Error('quota');e.name='QuotaExceededError';throw e;};
+  const jar={cookie:''};
+  let fb=boot(full,coachLoopPath,jar);
+  fb.M.coachLoopUI.renderCoachHub();
+  assert.match(jar.cookie,/msos_hub_crumb=/,'with localStorage failing, the crumb must still be written to a cookie');
+  // simulate a freeze inside "plan" on that phone: the cookie shows plan open, stage sec:plan
+  const ck=JSON.parse(decodeURIComponent(jar.cookie.split('msos_hub_crumb=')[1]));ck.q=(ck.q||0)+100;ck.o=['plan'];ck.s='sec:plan';ck.sa='2026-10-05T15:00:00+13:00';jar.cookie='msos_hub_crumb='+encodeURIComponent(JSON.stringify(ck));
+  const board=makeBoard();
+  fb=boot(full,coachLoopPath,jar,board);
+  // 9: the Board shows where the last attempt stalled, before Hub is even opened.
+  fb.M.coachLoopUI.installHubStallNotice();
+  assert.equal(board.prepended.length,1,'the Board must show the stalled-Hub notice');
+  assert.match(board.prepended[0].innerHTML,/Season \/ week plan link/,'the notice names the stuck stage');
+  assert.match(board.prepended[0].innerHTML,/localStorage full\/failing \(QuotaExceededError\)/,'the notice reports the storage failure');
+  fb.M.coachLoopUI.renderCoachHub();
+  assert.equal(fb.legacyCalls(),0,'cookie-carried marker must still skip the frozen section on a full-storage phone');
+  assert.match(fb.hubEl.innerHTML,/SKIPPED TO KEEP THE PHONE RESPONSIVE/);
+  // 10: a stall between the tap and Hub drawing is reported as such.
+  const st2=makeStore();const j2={cookie:''};let nb=boot(st2,coachLoopPath,j2);
+  nb.M.coachLoopUI.setStage('nav:tap');
+  const b2=makeBoard();nb=boot(st2,coachLoopPath,j2,b2);nb.M.coachLoopUI.installHubStallNotice();
+  assert.match(b2.prepended[0]?.innerHTML||'',/after tapping Coach Hub, before the Hub started drawing/,'a freeze before Hub starts must be named as such');
+  // and a clean open after acknowledging leaves no notice next load
+  nb.M.coachLoopUI.acknowledgeStall();nb.M.coachLoopUI.renderCoachHub();
+  const b3=makeBoard();nb=boot(st2,coachLoopPath,j2,b3);nb.M.coachLoopUI.installHubStallNotice();
+  assert.equal(b3.prepended.length,0,'after a clean Hub open there is no stall notice');
   console.log('COACH_HUB_SECTION_BREAKER_PASS');
 }
 
