@@ -33,11 +33,11 @@
   // ---------------------------------------------------------------------------
   function legacy(){try{return M.store?.legacy?.()||{}}catch{return{}}}
   function refRows(key){try{return M.refs?.get?.(key)||[]}catch{return[]}}
-  function weekRows(){const old=legacy();return unique([
+  function weekRows(old=legacy()){return unique([
     ...(M.state?.weeklyPlans||[]),...(M.state?.weekly_plans||[]),
     ...(old.weeklyPlans||[]),...(old.weekly_plans||[]),...refRows('weekly_plans')
   ],x=>text(x.id)||JSON.stringify([x.week_start,x.weekStart,x.squad,x.programme,x.objective,x.focus]));}
-  function seasonRows(){const old=legacy();return unique([
+  function seasonRows(old=legacy()){return unique([
     ...(M.state?.seasonPlans||[]),...(M.state?.season_plans||[]),
     ...(old.seasonPlans||[]),...(old.season_plans||[]),...refRows('season_plans')
   ],x=>text(x.id)||JSON.stringify([x.start_date,x.end_date,x.name,x.squad,x.programme]));}
@@ -55,10 +55,10 @@
     if(!session)return{season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'none'};
     const old=legacy(),oldSession=(old.sessions||[]).find(x=>x.id===session?.metadata?.legacySessionId||x.id===session.id)||{};
     const directWeek=session?.metadata?.weeklyPlanId||session?.metadata?.weekly_plan_id||oldSession.weekly_plan_id||oldSession.week_plan_id||'';
-    const weeks=weekRows().map(w=>({row:w,score:weekScore(w,session,directWeek)})).sort((a,b)=>b.score-a.score);
+    const weeks=weekRows(old).map(w=>({row:w,score:weekScore(w,session,directWeek)})).sort((a,b)=>b.score-a.score);
     const week=weeks[0]?.score>0?weeks[0].row:null,weekSession=nestedWeekSession(week,session);
     const directSeason=session?.metadata?.seasonPlanId||session?.metadata?.season_plan_id||oldSession.season_plan_id||week?.season_plan_id||week?.seasonPlanId||'';
-    const seasons=seasonRows().map(p=>({row:p,score:seasonScore(p,session,directSeason)})).sort((a,b)=>b.score-a.score);
+    const seasons=seasonRows(old).map(p=>({row:p,score:seasonScore(p,session,directSeason)})).sort((a,b)=>b.score-a.score);
     const season=seasons[0]?.score>0?seasons[0].row:null;
     const weeklyFocus=text(weekSession?.objective||weekSession?.focus||week?.objective||week?.focus||week?.phase||week?.physiological_focus||week?.physiology||session?.metadata?.weekObjective||session?.metadata?.weekPhase||'');
     const technicalFocus=text(weekSession?.technical_focus||week?.technical_focus||session?.metadata?.technicalFocus||oldSession.technical_focus||'');
@@ -118,16 +118,61 @@
   // runs, for tests; M.viewTimings.hub is a real duration in ms, surfaced on the Connection page and Copy
   // Diagnostics (same pattern as the background-save timing) so the next report carries a number instead
   // of another guess at the underlying render cost itself.
+  // ---------------------------------------------------------------------------
+  // Coach Hub section breaker (5 Oct 2026, Andy: "Still freezing on coach hub button hit", after the
+  // 16 Sept double-tap fix). Every other tab worked; only Hub froze the phone, and no synthetic data
+  // volume reproduced it in the browser harness (180 sessions, 72 athletes, 2,880 attendance rows, a
+  // 5MB legacy blob, real-shaped PB/T400 evidence: ~110ms total). So rather than guess a sixth time,
+  // each Hub section now runs through runSection(): it records "started <section>" in localStorage
+  // BEFORE running and clears it AFTER. If the phone freezes inside a section and Andy backs out, that
+  // marker survives; the next Hub open sees it, skips ONLY that section, says so on screen (no hiding
+  // broken state), and the rest of the Hub opens normally. "Retry skipped sections" clears it. The
+  // per-section timings + which section tripped are shown in Hub's Data / diagnostics panel, so the
+  // next report names the exact culprit instead of another theory.
+  // ---------------------------------------------------------------------------
+  const HUB_CRUMB_KEY='msos_hub_breadcrumb_v1';
+  const HUB_SECTION_LABELS={plan:'Season / week plan link',summary:'Session summary',mix:'Session makeup',meet:'Next meet',carry:'Carry-forward',dosage:'Dosage / stimulus card'};
+  let hubCrumbCache=null;
+  const msNow=()=>(g.performance&&typeof g.performance.now==='function')?g.performance.now():Date.now();
+  function readHubCrumb(){try{const c=JSON.parse(g.localStorage?.getItem?.(HUB_CRUMB_KEY)||'null');return c&&typeof c==='object'?c:{}}catch{return{}}}
+  function writeHubCrumb(c){try{g.localStorage?.setItem?.(HUB_CRUMB_KEY,JSON.stringify(c))}catch{}}
+  function hubCrumb(){
+    if(hubCrumbCache)return hubCrumbCache;
+    const c=readHubCrumb();c.open=c.open&&typeof c.open==='object'?c.open:{};c.tripped=c.tripped&&typeof c.tripped==='object'?c.tripped:{};c.timings=c.timings&&typeof c.timings==='object'?c.timings:{};c.errors=c.errors&&typeof c.errors==='object'?c.errors:{};
+    // Anything still marked open was started on an EARLIER page load and never finished: the phone
+    // froze (or was killed) inside it. Nothing from this page load can be open yet -- this runs once,
+    // before the first section of this page load starts.
+    for(const [name,info] of Object.entries(c.open))c.tripped[name]={startedAt:info?.at||info||'',build:info?.build||'',detectedAt:now()};
+    if(c.renderOpen){c.renderStalled={startedAt:c.renderOpen,detectedAt:now(),sectionTripped:Object.keys(c.open).length>0};}delete c.renderOpen;
+    c.open={};writeHubCrumb(c);hubCrumbCache=c;return c;
+  }
+  function runSection(name,fn,fallback){
+    const c=hubCrumb(),fb=()=>typeof fallback==='function'?fallback():fallback;
+    if(c.tripped[name])return fb();
+    c.open[name]={at:now(),build:M.BUILD||''};writeHubCrumb(c);
+    const t0=msNow();
+    try{const out=fn();delete c.errors[name];return out;}
+    catch(e){c.errors[name]=text(e?.message||e).slice(0,200);return fb();}
+    finally{delete c.open[name];c.timings[name]=Math.round(msNow()-t0);c.lastRunAt=now();writeHubCrumb(c);}
+  }
+  function trippedSections(){return Object.keys(hubCrumb().tripped);}
+  function resetTripped(){const c=hubCrumb();c.tripped={};writeHubCrumb(c);}
+  function hubDiagnostics(){const c=hubCrumb();return{timings:{...c.timings},tripped:{...c.tripped},errors:{...c.errors},lastRunAt:c.lastRunAt||'',renderStalled:c.renderStalled||null};}
+  L.runSection=runSection;L.trippedSections=trippedSections;L.resetTripped=resetTripped;L.hubDiagnostics=hubDiagnostics;L.HUB_CRUMB_KEY=HUB_CRUMB_KEY;
+  L._resetCrumbCacheForTests=()=>{hubCrumbCache=null;};
+
   L.hubRenderRuns=0;
   function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;
     const rev=Number(M.state?.settings?.storageRevision)||0;
     if(h.dataset.loopHubRev===String(rev)&&Date.now()-(Number(h.dataset.loopHubRenderedAt)||0)<400)return;
     const t0=Date.now();
-    const finish=()=>{h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
+    {const c=hubCrumb();c.renderOpen=now();writeHubCrumb(c);}
+    const finish=()=>{{const c=hubCrumb();delete c.renderOpen;writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
     const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}
-    const ctx=planContext(s),sum=M.analysis?.summary?.(s,M.state)||{},mix=sessionMix(s),meet=upcomingMeet(ctx,s),carry=ctx.carry||recentCarry(s),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
-    const entries=meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[];
+    const emptyCtx={season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'skipped'};
+    const ctx=runSection('plan',()=>planContext(s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
+    const tripped=trippedSections(),diag=hubDiagnostics();
     h.innerHTML=`
       <section class="page-card loop-hub-hero">
         <div class="eyebrow">COACH HUB · COACHING BRIEF</div>
@@ -135,6 +180,7 @@
         <p>${esc([(s.identity?.squads||[]).join(' + '),s.identity?.venue,s.identity?.course].filter(Boolean).join(' · '))}</p>
         <div class="loop-quick"><button data-loop-board>Board</button><button data-loop-swimmers>Swimmers</button><button data-loop-meet>Meet</button><button data-loop-reports>Reports</button></div>
       </section>
+      ${tripped.length?`<section class="page-card" data-loop-hub-tripped><div class="eyebrow">COACH HUB · SKIPPED TO KEEP THE PHONE RESPONSIVE</div><p>${esc(tripped.map(n=>HUB_SECTION_LABELS[n]||n).join(', '))} froze the phone on an earlier open, so ${tripped.length===1?'it is':'they are'} skipped for now. Everything else below is live.</p><div class="loop-quick"><button data-loop-hub-retry>Retry skipped sections</button></div></section>`:''}
       <section class="loop-context-grid">
         <article class="page-card"><div class="eyebrow">SEASON DIRECTION</div><h2>${esc(ctx.seasonName||'Season link needs repair')}</h2><p>${esc(ctx.seasonGoal||'No season goal available from the linked source.')}</p></article>
         <article class="page-card"><div class="eyebrow">THIS WEEK</div><h2>${esc(ctx.weeklyFocus||'Weekly focus needs repair')}</h2><p>${esc(ctx.technicalFocus||'No separate weekly technical focus loaded.')}</p></article>
@@ -145,7 +191,7 @@
       <section class="page-card"><div class="eyebrow">PSYCHOLOGICAL / BEHAVIOURAL INTENT</div>${psy.length?`<div class="loop-chip-row">${psy.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:'<p class="muted">No explicit psychological/behavioural cue was found in the linked plan or authored session. MSOS does not invent one.</p>'}${ctx.psychologicalFocus?`<p>${esc(ctx.psychologicalFocus)}</p>`:''}</section>
       <section class="page-card"><div class="eyebrow">NEXT PERFORMANCE TARGET</div>${meet?`<div class="loop-meet-line"><div><h2>${esc(meet.title)}</h2><p>${esc([meet.date,meet.course,meet.venue].filter(Boolean).join(' · '))}</p></div><strong>${entries.length?`${entries.length} loaded entr${entries.length===1?'y':'ies'}`:'Meet loaded'}</strong></div>`:'<h2>No upcoming meet currently linked</h2>'}</section>
       <section class="page-card"><div class="eyebrow">EVIDENCE FROM THIS SESSION</div><div class="loop-kpis"><span>${sum?.evidence?.changes||0} live changes</span><span>${sum?.evidence?.captures||0} captures</span><span>${sum?.evidence?.timedSets||0} timed sets</span></div><p class="muted">Evidence supports the coaching picture; it does not replace the plan or delivered-session truth.</p></section>
-      <details class="page-card"><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
+      <details class="page-card" data-loop-hub-diagnostics><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><p class="muted">Hub section timings: ${esc(Object.entries(diag.timings).map(([k,v])=>`${k} ${v}ms`).join(' · ')||'none yet')}${tripped.length?` · skipped: ${esc(tripped.join(', '))}`:''}${diag.renderStalled&&!diag.renderStalled.sectionTripped?` · an earlier open stalled outside the guarded sections (${esc(diag.renderStalled.startedAt)})`:''}${Object.keys(diag.errors).length?` · errors: ${esc(Object.entries(diag.errors).map(([k,v])=>`${k}: ${v}`).join('; '))}`:''}</p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
     h.querySelector('[data-loop-board]')?.addEventListener('click',()=>go('board',{restore:true}));
     h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));
     h.querySelector('[data-loop-meet]')?.addEventListener('click',()=>go('meet'));
@@ -153,6 +199,7 @@
     h.querySelector('[data-loop-data]')?.addEventListener('click',()=>go('data'));
     h.querySelector('[data-loop-guardian]')?.addEventListener('click',()=>go('guardian'));
     h.querySelector('[data-loop-connection]')?.addEventListener('click',()=>go('connection'));
+    h.querySelector('[data-loop-hub-retry]')?.addEventListener('click',()=>{resetTripped();h.dataset.loopHubRenderedAt='0';renderCoachHub();});
     finish();
   }
   L.renderCoachHub=renderCoachHub;
