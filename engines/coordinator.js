@@ -42,7 +42,15 @@
   // same item/athlete. Falls back to a direct adaptItem call when the bridge hasn't loaded (e.g. this module used
   // standalone in a test harness without engines/bridge.js) -- identical to this function's pre-fix behaviour in
   // that case. See tests/prescription-bridge-descent-preservation-20260921.cjs.
+  // prescribedItem() (5 Oct 2026): the volume-only half of prescription() -- the same normalize -> context ->
+  // bridge-adapt path, WITHOUT compute()/applyPolicy() target work. applyPolicy only rewrites timing
+  // (syncDerivedTiming), never reps/distance/stroke, so reps/distance/stroke here are identical to
+  // prescription().item's. Exists for engines/dosage.js, which needs every present swimmer's adapted
+  // volume for every item in one synchronous pass on Coach Hub; computing full race-pace/T400/pathway
+  // targets for all of them there froze Andy's phone (Hub stall trace, 5 Oct: "Stuck at: Dosage /
+  // stimulus card"). See tests/dosage-volume-without-targets-20261005.cjs.
+  function prescribedItem(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item;return adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session);}
   function prescription(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item,modified=adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session),rawTarget=compute(session,modified,ath,state,overrideStroke(modified,ath,state,session)),planned=applyPolicy(modified,rawTarget,ath,state),target=enforceExecutable(planned.target,planned.item);return{item:planned.item,target,athlete:ath,sessionId:session?.id,prescriptionTiming:planned.plan,evidence:{source:target?.source||'',status:target?.status||'none',conflict:target?.conflict||''}}}
   function clearCache(){cache.clear()}
-  return{VERSION,targetForItem,peekTarget,prescription,normalizeIntent,overrideStroke,explicitStroke,needsContext,contextualStroke,resolvePrescriptionContext,suppress,targetConflict,enforceExecutable,applyPolicy,policyPlan,syncDerivedTiming,rewriteCycleText,clearCache};
+  return{VERSION,targetForItem,peekTarget,prescription,prescribedItem,normalizeIntent,overrideStroke,explicitStroke,needsContext,contextualStroke,resolvePrescriptionContext,suppress,targetConflict,enforceExecutable,applyPolicy,policyPlan,syncDerivedTiming,rewriteCycleText,clearCache};
 });

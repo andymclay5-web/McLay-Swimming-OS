@@ -1,6 +1,6 @@
 'use strict';
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Evidence=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='2.4.2-current-t400';
+  const VERSION='2.4.3-alias-memo';
   const STORAGE_KEY='mclay_swimming_os_v4',LEGACY_KEY='mclay_swimming_os_v1',REF_DB='mclay_swimming_v4_reference_cache',LEGACY_REF_DB='mclay_swimming_v374_heavy_cache';
   const VERIFIED_T400=[{name:'Conor Fischer',stroke:'Breaststroke',seconds:545.2,source_label:'Coach-confirmed Breaststroke T400'}];
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),key=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,'');
@@ -15,7 +15,23 @@
   function blank(){return{athletes:[],trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],adaptationOverrides:[],coachResults:[],resultsEventHistory:[],resultsPbBoard:[],courseConversions:[],worldAquaticsBaseTimes:[],_refs:{}};}
   function readDb(name){return new Promise(resolve=>{try{const req=indexedDB.open(name);req.onerror=()=>resolve(null);req.onupgradeneeded=()=>{try{req.transaction.abort();}catch{}resolve(null);};req.onsuccess=()=>{const db=req.result;if(!db.objectStoreNames.contains('state')){db.close();resolve(null);return;}const q=db.transaction('state','readonly').objectStore('state').get('latest');q.onerror=()=>{db.close();resolve(null);};q.onsuccess=()=>{const row=q.result||null;db.close();resolve(row?.payload||null);};};}catch{resolve(null);}});}
   function aliasNames(ath){const out=new Set();for(const v of [ath?.full_name,ath?.display_name,ath?.preferred_name,ath?.match_name])if(v)out.add(text(v));for(const list of [ath?.aliases,ath?.match_names,ath?.matchNames]){if(Array.isArray(list))for(const v of list)if(v)out.add(text(v));else if(typeof list==='string')for(const v of list.split(/\s*\|\s*/))if(v)out.add(text(v));}return out;}
-  function athleteAliases(ath,state){const ids=new Set();for(const v of [ath?.id,ath?.athlete_id,ath?.legacy_id,ath?.legacy_athlete_id,ath?.source_id,ath?.membership_number])if(v)ids.add(v);const names=aliasNames(ath);for(const a of state?.athletes||[]){const matched=[...names].some(n=>[...aliasNames(a)].some(m=>sameName(n,m)));if(!matched)continue;for(const v of [a?.id,a?.athlete_id,a?.legacy_id,a?.legacy_athlete_id,a?.source_id,a?.membership_number])if(v)ids.add(v);}return ids;}
+  // athleteAliases() scans the whole roster with fuzzy name matching (roster x alias x alias sameName), and
+  // is called per item x swimmer x reference-squad candidate by Modification.profile()/relativeEvidence()
+  // and per lookup by identityFor() -- O(roster^2) per prescription. Measured as the dominant cost of Coach
+  // Hub's dosage card (5 Oct 2026 stall trace from Andy's phone: "Stuck at: Dosage / stimulus card"), and
+  // growing with roster size. Memoised per roster array + length + storage revision (every roster edit
+  // saves, which bumps the revision); returns a fresh Set so callers can never mutate the cache.
+  // See tests/evidence-athlete-aliases-memo-20261005.cjs.
+  const aliasMemo=typeof WeakMap==='function'?new WeakMap():null;
+  function aliasMemoKey(ath){return JSON.stringify([ath?.id,ath?.athlete_id,ath?.legacy_id,ath?.legacy_athlete_id,ath?.source_id,ath?.membership_number,ath?.full_name,ath?.display_name,ath?.preferred_name,ath?.match_name,ath?.aliases,ath?.match_names,ath?.matchNames]);}
+  function athleteAliases(ath,state){
+    const roster=state?.athletes;if(!aliasMemo||!Array.isArray(roster))return computeAthleteAliases(ath,state);
+    const sig=`${roster.length}|${state?.settings?.storageRevision??''}`;let entry=aliasMemo.get(roster);if(!entry||entry.sig!==sig){entry={sig,map:new Map(),byObj:new WeakMap()};aliasMemo.set(roster,entry);}
+    const isObj=ath&&typeof ath==='object';let hit=isObj?entry.byObj.get(ath):null;
+    if(!hit){const k=aliasMemoKey(ath);hit=entry.map.get(k);if(!hit){hit=computeAthleteAliases(ath,state);entry.map.set(k,hit);}if(isObj)entry.byObj.set(ath,hit);}
+    return new Set(hit);
+  }
+  function computeAthleteAliases(ath,state){const ids=new Set();for(const v of [ath?.id,ath?.athlete_id,ath?.legacy_id,ath?.legacy_athlete_id,ath?.source_id,ath?.membership_number])if(v)ids.add(v);const names=aliasNames(ath);for(const a of state?.athletes||[]){const matched=[...names].some(n=>[...aliasNames(a)].some(m=>sameName(n,m)));if(!matched)continue;for(const v of [a?.id,a?.athlete_id,a?.legacy_id,a?.legacy_athlete_id,a?.source_id,a?.membership_number])if(v)ids.add(v);}return ids;}
   function identityFor(ath,state){const ids=athleteAliases(ath,state),names=aliasNames(ath),nameKeys=new Set([...names].map(key));return{ids,names,nameKeys};}
   function sameAthleteWithIdentity(row,identity){if(identity.ids.has(row?.athlete_id)||identity.ids.has(row?.swimmer_id)||identity.ids.has(row?.athleteId)||identity.ids.has(row?.membership_number))return true;const rn=rowName(row);if(rn&&(identity.nameKeys.has(key(rn))||[...identity.names].some(n=>sameName(rn,n))))return true;for(const n of row?.match_names||row?.aliases||[])if(identity.nameKeys.has(key(n))||[...identity.names].some(a=>sameName(n,a)))return true;return false;}
   function sameAthlete(row,ath,state){return sameAthleteWithIdentity(row,identityFor(ath,state));}

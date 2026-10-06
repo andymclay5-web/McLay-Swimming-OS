@@ -162,8 +162,11 @@
     c.stage='idle';
     c.open={};writeHubCrumb(c);hubCrumbCache=c;return c;
   }
+  // A section tripped under an older build gets one automatic retry on a new build (that build may be the
+  // fix); if it freezes again it re-trips under the new build and stays skipped until Retry.
+  function expireOldTrips(c){let changed=false;for(const [n,t] of Object.entries(c.tripped||{}))if(t?.build&&M.BUILD&&t.build!==M.BUILD){delete c.tripped[n];changed=true;}if(changed)writeHubCrumb(c);}
   function runSection(name,fn,fallback){
-    const c=hubCrumb(),fb=()=>typeof fallback==='function'?fallback():fallback;
+    const c=hubCrumb(),fb=()=>typeof fallback==='function'?fallback():fallback;expireOldTrips(c);
     if(c.tripped[name])return fb();
     const prevStage=c.stage;c.open[name]={at:now(),build:M.BUILD||''};c.stage='sec:'+name;c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);
     const t0=msNow();
@@ -171,13 +174,46 @@
     catch(e){c.errors[name]=text(e?.message||e).slice(0,200);return fb();}
     finally{delete c.open[name];c.timings[name]=Math.round(msNow()-t0);c.lastRunAt=now();c.stage=prevStage&&prevStage!=='idle'?prevStage:'hub:done';writeHubCrumb(c);}
   }
-  function trippedSections(){return Object.keys(hubCrumb().tripped);}
+  function trippedSections(){const c=hubCrumb();expireOldTrips(c);return Object.keys(c.tripped);}
   function resetTripped(){const c=hubCrumb();c.tripped={};writeHubCrumb(c);}
   function hubDiagnostics(){const c=hubCrumb();return{timings:{...c.timings},tripped:{...c.tripped},errors:{...c.errors},lastRunAt:c.lastRunAt||'',renderStalled:c.renderStalled||null,lastStall:c.lastStall||null,storage:c.lsFailed?`localStorage failing (${c.lsFailed})`:'ok'};}
   function acknowledgeStall(){const c=hubCrumb();if(c.lastStall)c.lastStall.acknowledged=true;writeHubCrumb(c);}
   L.setStage=setStage;L.acknowledgeStall=acknowledgeStall;
   L.runSection=runSection;L.trippedSections=trippedSections;L.resetTripped=resetTripped;L.hubDiagnostics=hubDiagnostics;L.HUB_CRUMB_KEY=HUB_CRUMB_KEY;
   L._resetCrumbCacheForTests=()=>{hubCrumbCache=null;};
+
+  // Hub display honesty (5 Oct 2026, Andy: "at the moment I'm showing all last season's data. But now we
+  // need to be able to move on to the planning phase."). planContext() still picks the best-scoring season
+  // and week exactly as before (the session-methodology check depends on that); this only labels whether
+  // the picked season/week actually covers this session's date, and finds an already-planned next season,
+  // so Hub can say "between seasons" instead of presenting last season as current.
+  function withPlanStatus(ctx,session){
+    const date=session?.identity?.date||'';if(!date)return ctx;
+    const start=r=>String(r?.start_date||r?.startDate||r?.effective_from||'').slice(0,10),end=r=>String(r?.end_date||r?.endDate||'').slice(0,10);
+    const ss=sessionSquads(session),forSquads=r=>{const ps=planSquads(r);return!ps.length||!ss.length||ps.some(x=>ss.includes(x));};
+    ctx.seasonStatus=!ctx.season?'none':inSeason(date,ctx.season)?'current':(start(ctx.season)>date?'upcoming':'ended');
+    ctx.seasonEnded=ctx.seasonStatus==='ended'?end(ctx.season):'';
+    ctx.weekCurrent=!!(ctx.week&&dateInWeek(date,ctx.week.week_start||ctx.week.weekStart||ctx.week.start_date));
+    // A stale week from last season must not feed Today / carry-forward either.
+    if(ctx.week&&!ctx.weekCurrent){ctx.todayFocus=text(session?.metadata?.primarySystem||session?.metadata?.planCue||'');ctx.carry='';ctx.staleWeek=ctx.week.week_start||'';}
+    if(ctx.seasonStatus!=='current'){const next=seasonRows({}).filter(r=>start(r)>date&&forSquads(r)).sort((a,b)=>start(a).localeCompare(start(b)))[0];if(next)ctx.nextSeason={name:text(next.name||'Next season'),start:start(next)};}
+    return ctx;
+  }
+  const niceDay=v=>{const t=Date.parse(`${String(v||'').slice(0,10)}T12:00:00`);return Number.isFinite(t)?new Date(t).toLocaleDateString('en-NZ',{day:'numeric',month:'short'}):String(v||'');};
+  function seasonCardHtml(ctx){
+    const owner=(M.access?.role?.()||'owner')==='owner',btn=owner?'<div class="loop-quick"><button data-msos-plan-season>Plan next season</button></div>':'';
+    if(ctx.seasonStatus==='ended'||ctx.seasonStatus==='upcoming'||(!ctx.season&&ctx.linkStatus!=='skipped')){
+      const next=ctx.nextSeason?`<p><b>${esc(ctx.nextSeason.name)}</b> starts ${esc(niceDay(ctx.nextSeason.start))}.</p>`:'';
+      const was=ctx.seasonStatus==='ended'?`${esc(ctx.seasonName||'Last season')} finished ${esc(niceDay(ctx.seasonEnded))}. `:'';
+      return`<article class="page-card" data-loop-season-between><div class="eyebrow">SEASON DIRECTION</div><h2>Between seasons</h2><p>${was}${ctx.nextSeason?'':'Next season is not planned yet.'}</p>${next}${ctx.nextSeason?(owner?'<div class="loop-quick"><button data-msos-plan-season>Review season plan</button></div>':''):btn}</article>`;
+    }
+    return`<article class="page-card"><div class="eyebrow">SEASON DIRECTION</div><h2>${esc(ctx.seasonName||'Season link needs repair')}</h2><p>${esc(ctx.seasonGoal||'No season goal available from the linked source.')}</p></article>`;
+  }
+  function weekCardHtml(ctx){
+    if(ctx.week&&ctx.weekCurrent===false)return`<article class="page-card"><div class="eyebrow">THIS WEEK</div><h2>No week planned for this week</h2><p class="muted">The weekly focus shows here once a season plan covers this week.</p></article>`;
+    return`<article class="page-card"><div class="eyebrow">THIS WEEK</div><h2>${esc(ctx.weeklyFocus||'Weekly focus needs repair')}</h2><p>${esc(ctx.technicalFocus||'No separate weekly technical focus loaded.')}</p></article>`;
+  }
+  L.withPlanStatus=withPlanStatus;
 
   L.hubRenderRuns=0;
   function renderCoachHub(){
@@ -189,7 +225,7 @@
     const finish=()=>{{const c=hubCrumb();delete c.renderOpen;c.stage='hub:done';if(c.lastStall)c.lastStall.acknowledged=true;c.stageAt=now();writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
     const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}
     const emptyCtx={season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'skipped'};
-    const ctx=runSection('plan',()=>planContext(s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
+    const ctx=runSection('plan',()=>withPlanStatus(planContext(s),s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
     const tripped=trippedSections(),diag=hubDiagnostics();
     setStage('hub:html');
     h.innerHTML=`
@@ -201,8 +237,8 @@
       </section>
       ${tripped.length?`<section class="page-card" data-loop-hub-tripped><div class="eyebrow">COACH HUB · SKIPPED TO KEEP THE PHONE RESPONSIVE</div><p>${esc(tripped.map(n=>HUB_SECTION_LABELS[n]||n).join(', '))} froze the phone on an earlier open, so ${tripped.length===1?'it is':'they are'} skipped for now. Everything else below is live.</p><div class="loop-quick"><button data-loop-hub-retry>Retry skipped sections</button></div></section>`:''}
       <section class="loop-context-grid">
-        <article class="page-card"><div class="eyebrow">SEASON DIRECTION</div><h2>${esc(ctx.seasonName||'Season link needs repair')}</h2><p>${esc(ctx.seasonGoal||'No season goal available from the linked source.')}</p></article>
-        <article class="page-card"><div class="eyebrow">THIS WEEK</div><h2>${esc(ctx.weeklyFocus||'Weekly focus needs repair')}</h2><p>${esc(ctx.technicalFocus||'No separate weekly technical focus loaded.')}</p></article>
+        ${seasonCardHtml(ctx)}
+        ${weekCardHtml(ctx)}
         <article class="page-card loop-today"><div class="eyebrow">TODAY</div><h2>${esc(ctx.todayFocus||sum?.purpose?.label||'Coach-authored purpose not loaded')}</h2><div class="loop-kpis"><span>${planned.toLocaleString()}m planned</span><span>${delivered.toLocaleString()}m ${sum?.finished||s.finish?'delivered':'current'}</span><span>${sum?.attendance?.here||0} here</span><span>${sum?.attendance?.modified||0} modified</span></div></article>
         <article class="page-card"><div class="eyebrow">CARRY FORWARD</div><h2>${esc(carry||'No carry-forward recorded')}</h2><small>${ctx.week?'Linked weekly-plan / prior delivered evidence':'Prior delivered evidence only'}</small></article>
       </section>

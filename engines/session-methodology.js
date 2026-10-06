@@ -23,7 +23,7 @@
   const M=g.MSOS4,E=g.MSOSEngines;
   if(!M?.state||!M?.util||!E?.Modification||!M?.dosageEngine||!M?.boardEngine||!M?.ui)return;
   const U=M.util,D=M.dosageEngine,B=M.boardEngine,UI=M.ui;
-  const SM=M.sessionMethodology={build:'v4-session-methodology-20260911a'};
+  const SM=M.sessionMethodology={build:'v4-session-methodology-20261006-brief'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):text(v);
   const now=()=>new Date().toISOString();
@@ -109,26 +109,75 @@
   // via the season-planner vocabulary lookup above) -- never invents a target from silence. A session with
   // no weekly plan linked, or a weekly plan whose free text doesn't name a system, returns checked:false and
   // is never treated as a failure.
-  function planTargetCheck(session,state){
+  // ---------------------------------------------------------------------------
+  // Today's brief (6 Oct 2026, Andy: the app is "to help write and assess a training session and ... have
+  // all the tools in front of you to ensure that the session that you're writing hits the brief of those
+  // overriding plans"). brief() is the ONE place that answers "what is this session supposed to be":
+  //   1. the season plan's week covering this date (its day/slot row first, then the week's own focus);
+  //   2. otherwise the standing weekly template for this squad/day/slot (engines/season-planner.js's
+  //      M.state.weeklyTemplates -- Andy's "standard that stays as is unless specifically changed"),
+  //      labelled as such;
+  //   3. otherwise nothing (unknown remains unknown).
+  // A week from a season that does not cover this date is ignored -- previously the best-scoring week from
+  // last season was used, which is exactly the "showing all last season's data" Andy reported.
+  // ---------------------------------------------------------------------------
+  const WEEKDAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const lc=v=>text(v).toLowerCase();
+  function weekCovers(week,date){const st=String(week?.week_start||week?.weekStart||week?.start_date||'').slice(0,10);if(!st||!date)return null;const d=Date.parse(`${date}T12:00:00Z`),s0=Date.parse(`${st}T12:00:00Z`);return Number.isFinite(d)&&Number.isFinite(s0)?d>=s0&&d<s0+7*86400000:null;}
+  function weekdayOf(date){const t=Date.parse(`${date}T12:00:00Z`);return Number.isFinite(t)?WEEKDAYS[new Date(t).getUTCDay()]:'';}
+  function templateDay(session,state){
+    const date=session?.identity?.date||'',day=weekdayOf(date),part=lc(session?.identity?.dayPart);if(!day)return null;
+    const squads=(session?.identity?.squads||[]).map(lc);
+    for(const t of state?.weeklyTemplates||[]){if(squads.length&&!squads.some(s=>s===lc(t.squad)||s.includes(lc(t.squad))||lc(t.squad).includes(s)))continue;
+      const rows=(t.days||[]).filter(d=>lc(d.day)===day);const hit=rows.find(d=>!part||lc(d.dayPart)===part)||(rows.length===1?rows[0]:null);if(hit)return{squad:t.squad,row:hit};}
+    return null;
+  }
+  function brief(session,state=M.state){
+    if(!session)return null;
     let ctx=null;try{ctx=M.coachLoopUI?.planContext?.(session);}catch{}
-    const focusText=text([ctx?.weeklyFocus,ctx?.todayFocus,ctx?.technicalFocus].filter(Boolean).join(' '));
-    if(!focusText)return{checked:false};
-    // Season-planner vocabulary is checked first (its own phrases aren't dosageEngine keywords at all, so
-    // there's no real ambiguity to resolve either way); dosageEngine's own classifier remains the fallback
-    // authority for every other weekly-plan free-text phrasing, same as before this change.
-    const named=seasonPlannerSystem(focusText)||D.systemFrom(focusText);
-    if(named==='Unclassified')return{checked:false};
-    let dose;try{dose=D.session(session,state,{delivered:false});}catch{return{checked:false};}
-    const ranked=Object.entries(dose.systems||{}).filter(([,v])=>v.pctDose>0).sort((a,b)=>b[1].pctDose-a[1].pctDose);
-    if(!ranked.length)return{checked:false};
-    const dominantSystem=ranked[0][0];
+    const date=session?.identity?.date||'';
+    const covers=ctx?.week?weekCovers(ctx.week,date):null;
+    if(ctx&&covers!==false&&(ctx.todayFocus||ctx.weeklyFocus||ctx.technicalFocus)){
+      const ws=ctx.weekSession||{},wk=ctx.week||{};
+      return{source:'season',seasonName:text(ctx.seasonName),slot:text([ws.day,ws.dayPart].filter(Boolean).join(' ')),
+        system:text(ctx.todayFocus),sessionFocus:text(ws.session_focus||ws.focus||''),
+        technical:text(ws.technical_focus||ctx.technicalFocus||''),weekFocus:text(ctx.weeklyFocus),phase:text(wk.phase||wk.focus||''),
+        mental:text(ctx.psychologicalFocus||''),weekStart:text(wk.week_start||'')};
+    }
+    const tpl=templateDay(session,state);
+    if(tpl){const r=tpl.row;return{source:'standard',squad:tpl.squad,slot:text([r.day,r.dayPart].filter(Boolean).join(' ')),system:text(r.primary_system),sessionFocus:text(r.session_focus),technical:text(r.technical_focus),weekFocus:'',phase:'',mental:'',staleWeek:covers===false};}
+    return{source:'none',staleWeek:covers===false};
+  }
+  SM.brief=brief;
+  function namedSystem(t){const x=text(t);if(!x)return null;const s=seasonPlannerSystem(x)||D.systemFrom(x);return s&&s!=='Unclassified'?s:null;}
+  function mainBlocks(session){return(session?.blocks||[]).filter(b=>b?.type==='main_set'||b?.type==='main'||/\bmain\b/i.test(text(b?.title)));}
+  function rankedSystems(dose){return Object.entries(dose?.systems||{}).filter(([,v])=>v.pctDose>0).sort((a,b)=>b[1].pctDose-a[1].pctDose);}
+  // The check the brief panel, the Board banner and the assistant-coach review all share. Today's slot
+  // system is checked first, then the week's focus, then technical text -- previously all three were run
+  // together and the first vocabulary phrase found won, so a week named "Aerobic Power" could override a
+  // day row that said "Aerobic Capacity". The session side is the MAIN SET's dominant classified system
+  // when the session has a main set (warm-up / pull / kick volume would otherwise outweigh the purpose of
+  // almost any session), else the whole session.
+  function planTargetCheck(session,state,b=undefined){
+    if(b===undefined)b=brief(session,state);
+    if(!b||b.source==='none')return{checked:false};
+    let named=null,from='';for(const [k,v] of [['day',b.system],['week',b.weekFocus],['technical',b.technical]]){named=namedSystem(v);if(named){from=k;break;}}
+    if(!named)return{checked:false,source:b.source};
+    let dose;try{dose=D.session(session,state,{delivered:false});}catch{return{checked:false,source:b.source};}
+    const ranked=rankedSystems(dose);if(!ranked.length)return{checked:false,source:b.source};
+    const mains=mainBlocks(session);let basis='whole session',mainRanked=null;
+    if(mains.length){try{const md=D.session({...session,id:`${session.id||'session'}#main`,blocks:mains},state,{delivered:false});const r=rankedSystems(md);if(r.length){mainRanked=r;basis='main set';}}catch{}}
+    const top=(mainRanked||ranked)[0],dominantSystem=top[0];
     const matches=dominantSystem===named||isKnownCrossover(named,dominantSystem);
-    return{checked:true,plannedSystem:named,dominantSystem,matches};
+    const planned=dose.systems?.[named]||{metres:0,pctMetres:0};
+    return{checked:true,plannedSystem:named,plannedFrom:from,dominantSystem,dominantPct:Math.round(top[1].pctMetres||top[1].pctDose||0),basis,matches,source:b.source,
+      plannedMetres:Math.round(planned.metres||0),plannedPct:Math.round(planned.pctMetres||0),totalMetres:Math.round(dose.rawMetres||0),
+      mix:[...ranked].sort((a,b)=>(b[1].pctMetres||0)-(a[1].pctMetres||0)).slice(0,3).map(([label,v])=>({label,pct:Math.round(v.pctMetres||0)}))};
   }
   function evaluate(session,state=M.state){
     const drift=stimulusDrift(session,state),plan=planTargetCheck(session,state);
     const reasons=drift.map(d=>`${d.athleteName}: intended ${d.squadSystem} but delivered as ${d.athSystem}${d.reason?` (${d.reason})`:''}`);
-    if(plan.checked&&!plan.matches)reasons.push(`Weekly focus names ${plan.plannedSystem}, but this session's dominant classified system is ${plan.dominantSystem}`);
+    if(plan.checked&&!plan.matches)reasons.push(`Weekly focus names ${plan.plannedSystem}, but this session's ${plan.basis==='main set'?'main set':'dominant classified system'} is ${plan.basis==='main set'?'mostly ':''}${plan.dominantSystem}`);
     return{approved:reasons.length===0,drift,plan,reasons};
   }
   SM.evaluate=evaluate;
@@ -221,13 +270,81 @@
     const pending=s.pendingMethodologyReview||(remote?{reasons:[remote.body],remote:true,alertId:remote.id}:null);
     const section=document.createElement('section');
     section.dataset.methodologyBanner='1';section.className='page-card msos-methodology-banner';
-    section.innerHTML=`<div class="eyebrow">SESSION METHODOLOGY</div><p>${esc(sum.dosageLine)}${sum.weeklyFocus?` · Weekly focus: ${esc(sum.weeklyFocus)}`:''}</p>${pending?`<div class="context-note msos-pending-methodology"><b>⚑ Flagged for review:</b> ${esc(pending.reasons.join('; '))}${owner?'':' Only Andy can mark this reviewed.'}</div>${owner?'<div class="hub-actions"><button type="button" data-methodology-reviewed>Mark reviewed</button></div>':''}`:(s.methodologyVerdict?.approved?'<div class="context-note ok">✓ Evidence check: this session\'s individual modifications preserve the intended stimulus.</div>':'')}`;
+    // Board stays a whiteboard (CLAUDE.md 2.52): one collapsed line naming the brief and whether the
+    // session is on it; tap to open the full brief.
+    let bf=null,bc=null;try{bf=brief(s);bc=bf&&bf.source!=='none'?planTargetCheck(s,M.state,bf):null;}catch{}
+    const briefLine=!bf||bf.source==='none'?'No plan covers this session yet':`${esc(bf.sessionFocus||bf.system||'Session focus')}${bc?.checked?(bc.matches?' · ✓ on brief':' · ⚠ off brief'):''}`;
+    section.innerHTML=`<details class="msos-brief-board"><summary><span class="eyebrow">TODAY'S BRIEF</span> ${briefLine}</summary>${briefHtml(s,M.state,{compact:true})}<p class="muted">${esc(sum.dosageLine)}</p></details>${pending?`<div class="context-note msos-pending-methodology"><b>⚑ Flagged for review:</b> ${esc(pending.reasons.join('; '))}${owner?'':' Only Andy can mark this reviewed.'}</div>${owner?'<div class="hub-actions"><button type="button" data-methodology-reviewed>Mark reviewed</button></div>':''}`:(s.methodologyVerdict?.approved?'<div class="context-note ok">✓ Evidence check: this session\'s individual modifications preserve the intended stimulus.</div>':'')}`;
     const anchor=host.querySelector('.board-hero,.session-card,.board-header,.v4-block-nav')||host.firstElementChild;
     if(anchor)anchor.insertAdjacentElement(anchor.classList?.contains('v4-block-nav')?'beforebegin':'afterend',section);else host.prepend(section);
     section.querySelector('[data-methodology-reviewed]')?.addEventListener('click',async()=>{await markReviewed(s,pending.alertId||null);UI.renderBoard?.();});
   }
   const baseBoard2=UI.renderBoard?.bind(UI);
   if(baseBoard2)UI.renderBoard=()=>{baseBoard2();queueMicrotask(installBanner);};
+
+  // ---------------------------------------------------------------------------
+  // Brief panel -- shown while WRITING a session (Add session and Edit workout) and on the Board, so the
+  // coach sees what this session is meant to be and how the text in front of them measures up, as they
+  // type. Display only: never changes the session, Roll or selection. Wraps the existing modal openers
+  // (v4-poolside-core.js / app.js are release-checksum protected) the same way this file already wraps
+  // UI.renderBoard.
+  // ---------------------------------------------------------------------------
+  const COACH_TERM={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power (top)','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Aerobic + Anaerobic Capacity','Skill / Technical':'Skills'};
+  const sysLabel=sys=>COACH_TERM[sys]?`${COACH_TERM[sys]} (${sys})`:sys;
+  function briefHtml(session,state=M.state,{compact=false}={}){
+    const b=brief(session,state),owner=(M.access?.role?.()||'owner')==='owner';
+    if(!b||b.source==='none'){
+      return`<section class="msos-brief msos-brief-none" data-msos-brief><div class="eyebrow">TODAY'S BRIEF</div><p>No plan covers this session yet${b?.staleWeek?' (last season has finished)':''}, so there's nothing to check it against.</p>${owner?'<button type="button" data-msos-plan-season>Plan next season</button>':''}</section>`;
+    }
+    const chk=planTargetCheck(session,state,b);
+    const head=[b.slot,b.source==='standard'?b.squad:''].filter(Boolean).join(' · ');
+    let verdict='';
+    if(chk.checked){
+      const p=sysLabel(chk.plannedSystem);
+      verdict=chk.matches
+        ?`<div class="msos-brief-check ok">✓ ${chk.basis==='main set'?'Main set':'Session'} is ${esc(sysLabel(chk.dominantSystem))} — on brief</div>`
+        :`<div class="msos-brief-check off">⚠ ${chk.basis==='main set'?'Main set':'Session'} is mostly ${esc(sysLabel(chk.dominantSystem))} — brief asks for ${esc(p)}</div>`;
+      verdict+=`<p class="msos-brief-mix">${esc(chk.plannedSystem)} in this session: <b>${chk.plannedMetres.toLocaleString()}m</b> (${chk.plannedPct}%) · Whole session: ${chk.mix.map(x=>`${esc(x.label)} ${x.pct}%`).join(' · ')}</p>`;
+    }else if(b.system&&namedSystem(b.system)){
+      verdict=`<p class="msos-brief-mix muted">Brief asks for ${esc(sysLabel(namedSystem(b.system)))}. Write the session and the check updates as you type.</p>`;
+    }else if(b.system){
+      verdict=`<p class="msos-brief-mix muted">${esc(b.system)} covers several energy systems, so there's no single-system check — use the focus above.</p>`;
+    }
+    const src=b.source==='standard'?`<p class="msos-brief-src">From your standard week — no season plan covers this week yet.${owner?' <button type="button" data-msos-plan-season>Plan next season</button>':''}</p>`:'';
+    return`<section class="msos-brief" data-msos-brief><div class="eyebrow">TODAY'S BRIEF${head?` · ${esc(head)}`:''}</div>
+      <h3>${esc(b.sessionFocus||b.system||'Session focus')}</h3>
+      ${b.technical?`<p><b>Technical:</b> ${esc(b.technical)}</p>`:''}
+      ${!compact&&(b.phase||b.weekFocus)?`<p class="muted"><b>This week:</b> ${esc(b.weekFocus||b.phase)}${b.mental?` · ${esc(b.mental)}`:''}</p>`:''}
+      ${verdict}${src}</section>`;
+  }
+  SM.briefHtml=briefHtml;
+  function liveBrief(host,anchor,getSession){
+    let box=host.querySelector('[data-msos-brief-host]');
+    if(!box){box=document.createElement('div');box.dataset.msosBriefHost='1';anchor.insertAdjacentElement('beforebegin',box);}
+    let t=null;const paint=()=>{try{const s=getSession();box.innerHTML=s?briefHtml(s):'';}catch(e){box.innerHTML='';}};
+    const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
+  }
+  function nzToday(){return new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});}
+  function slotIdentity(slotId){try{const today=nzToday(),slot=(M.calendar?.slots?.(today)||[]).find(x=>x.id===slotId);return slot?M.calendar.identityFromSlot(slot):null;}catch{return null;}}
+  function parseDraft(rawText,identity){if(!text(rawText))return{id:'brief-draft',identity,blocks:[]};try{const s=M.parser.parse(rawText,{...identity,id:'brief-draft'});s.identity={...s.identity,...identity};s.id='brief-draft';return s;}catch{return{id:'brief-draft',identity,blocks:[]};}}
+  function wrapAction(name,install){const base=M.actions?.[name];if(typeof base!=='function'||base.__msosBrief)return;const wrapped=function(...a){const r=base.apply(this,a);Promise.resolve(r).then(()=>{try{install()}catch{}}).catch(()=>{});return r;};wrapped.__msosBrief=true;M.actions[name]=wrapped;}
+  function installNewSessionBrief(){
+    const host=document.querySelector('#modalHost'),raw=host?.querySelector('#coreRaw'),slot=host?.querySelector('#coreSlot');if(!raw||!slot)return;
+    const anchor=host.querySelector('.intake-tabs')||raw.closest('label')||raw;
+    const fallbackId=()=>({date:nzToday(),dayPart:new Date().getHours()>=12?'PM':'AM',squads:['National','Development']});
+    const schedule=liveBrief(host,anchor,()=>{const id=slotIdentity(slot.value)||fallbackId();return parseDraft(raw.value,id);});
+    raw.addEventListener('input',schedule);slot.addEventListener('change',schedule);
+    // Voice/photo transcription fills the box programmatically (no input event): repaint on any change.
+    new MutationObserver(schedule).observe(host.querySelector('#corePreview')||raw,{childList:true,characterData:true,subtree:true});
+  }
+  function installEditBrief(){
+    const host=document.querySelector('#modalHost'),raw=host?.querySelector('#sessionEditText');if(!raw)return;const cur=M.currentSession?.();if(!cur)return;
+    const schedule=liveBrief(host,raw.closest('label')||raw,()=>parseDraft(raw.value,{...cur.identity}));
+    raw.addEventListener('input',schedule);
+  }
+  wrapAction('openNewSession',installNewSessionBrief);
+  wrapAction('openSessionEdit',installEditBrief);
+  SM.installNewSessionBrief=installNewSessionBrief;SM.installEditBrief=installEditBrief;
 
   SM.checks=()=>({build:SM.build,evaluate:typeof evaluate==='function',gate:typeof resolveSessionGate==='function',notify:typeof notifyPendingReview==='function'});
 })(globalThis);

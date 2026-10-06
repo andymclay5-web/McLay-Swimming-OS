@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20260918b'};
+  const D=M.dosageEngine={build:'v4-dosage-20261005-memo'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -83,7 +83,12 @@
     if(either(/\b(?:overload|\bol\b)\b/i))return'Overload';
     if(either(/\b(?:threshold|\bthr\b)\b/i))return'Threshold';
     if(either(/\b(?:clearance|\bcl\b)\b/i))return'Clearance';
-    if(item?.raceIntent||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
+    // 6 Oct 2026: Andy's deck shorthand "@100p" / "@200p" (CLAUDE.md 2.27: race-target intent) was not
+    // recognised here, so "4 x 50 #1 @100p @1:30" fell through to the structural default and dosed as
+    // Development -- found when the new brief check called an Anaerobic Power main set "off brief". Asks
+    // the race-target-intent engine (the one owner of that shorthand) instead of a second regex.
+    let shorthand=null;try{shorthand=E.RaceTargetIntent?.shorthandPace?.(item);}catch{}
+    if(item?.raceIntent||shorthand||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
     if(either(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i))return'Speed / Max';
     if(either(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i))return'Skill / Technical';
     // 23 Sept 2026: an authored heart-rate figure/range is as strong an explicit signal as any keyword above
@@ -180,12 +185,20 @@
   }
   function actualItem(session,item,athlete,state){
     if(!athlete)return item;
+    // Volume only: use the Coordinator's target-free prescribedItem() when available. Full prescription()
+    // also computes race-pace/T400/pathway targets that dosage never reads, and doing that for every
+    // present swimmer x every item synchronously froze Coach Hub on Andy's phone (5 Oct 2026).
+    try{if(typeof E.Coordinator?.prescribedItem==='function'){const it=E.Coordinator.prescribedItem(session,item,athlete,state);if(it)return it;}}catch{}
     try{const p=E.Coordinator?.prescription?.(session,item,athlete,state);if(p?.item)return p.item;}catch{}
     try{const a=E.Modification?.adaptItem?.(item,athlete,state,session);if(a)return a;}catch{}
     return item;
   }
+  const MAX_PER_REP=500;
   function addSet(out,session,item,athlete,state,mult=1){
-    const actual=actualItem(session,item,athlete,state),reps=Math.max(1,Number(actual?.reps)||1),dist=Math.max(0,Number(actual?.distance)||0),stroke=strokeFrom(actual);
+    const actual=actualItem(session,item,athlete,state),rawReps=Number(actual?.reps),reps=Math.max(1,Number.isFinite(rawReps)?rawReps:1),dist=Math.max(0,Number(actual?.distance)||0),stroke=strokeFrom(actual);
+    // Bounded: per-rep classification only for a real swimmable rep count. A non-finite or absurd rep count
+    // (bad data) is dosed once at the item level instead of looping without limit on the main thread.
+    if(!Number.isFinite(rawReps)||reps>MAX_PER_REP){const sys=repSystem(actual,1),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult*(Number.isFinite(rawReps)?reps:1),weight);out.repCountWarnings=(out.repCountWarnings||0)+1;return;}
     for(let rep=1;rep<=reps;rep++){const sys=repSystem(actual,rep),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult,weight);}
   }
   function walk(out,session,node,athlete,state,mult=1){
@@ -199,7 +212,20 @@
     if(session.finish.throughBlockId){const i=(session.blocks||[]).findIndex(b=>b.id===session.finish.throughBlockId);if(i>=0)return{...clone(session),blocks:clone(session.blocks.slice(0,i+1))};}
     return session;
   }
+  // Memo (5 Oct 2026): Hub's dosage card, Reports (per swimmer x every finished session in the window, run
+  // twice per paint) and the athlete page all recompute the same per-swimmer session doses. Keyed by storage
+  // revision -- every edit to a session, Roll, roster or profile saves and bumps it -- plus the session's own
+  // source hash/finish marker, so a changed session can never reuse a stale dose. Results are read-only to
+  // every caller (merge() builds new objects). See tests/dosage-volume-without-targets-20261005.cjs.
+  const doseMemo={rev:null,map:new Map()};
   function sessionDose(session,state=M.state,{athlete=null,delivered=true}={}){
+    const rev=state?.settings?.storageRevision;
+    if(rev===undefined||rev===null||!session?.id)return computeSessionDose(session,state,{athlete,delivered});
+    if(doseMemo.rev!==rev||doseMemo.state!==state){doseMemo.rev=rev;doseMemo.state=state;doseMemo.map.clear();}
+    const k=`${session.id}|${session.currentSource?.hash||''}|${session.updatedAt||''}|${session.finish?(session.finish.throughItemId||session.finish.throughBlockId||'f'):''}|${athlete?.id||''}|${delivered?1:0}`;
+    let hit=doseMemo.map.get(k);if(!hit){hit=computeSessionDose(session,state,{athlete,delivered});if(doseMemo.map.size>5000)doseMemo.map.clear();doseMemo.map.set(k,hit);}return hit;
+  }
+  function computeSessionDose(session,state=M.state,{athlete=null,delivered=true}={}){
     const src=delivered?deliveredProjection(session):session,out=blank();if(!src)return finish(out);for(const b of src.blocks||[])for(const n of b.items||[])walk(out,src,n,athlete,state,1);out.sessionId=session?.id||'';out.athleteId=athlete?.id||'';out.delivery=delivered&&session?.finish?'delivered':'prescribed';out.actualDistance=Number(session?.finish?.actualDistance)||null;return finish(out);
   }
   function attendanceStatus(sessionId,athleteId,state=M.state){return(state?.attendance||[]).find(x=>String(x.session_id||x.sessionId)===String(sessionId)&&String(x.athlete_id||x.athleteId)===String(athleteId))?.status||'';}
