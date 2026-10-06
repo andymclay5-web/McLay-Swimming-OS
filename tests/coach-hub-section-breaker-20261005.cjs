@@ -76,7 +76,7 @@ function run(){
   assert.equal(b.legacyCalls(),1,'planContext must read the legacy store once per Hub open, not three times');
 
   // 2: simulate the phone freezing inside "plan" on a previous page load: the marker was written, never cleared.
-  const frozen=crumb(store);frozen.open={plan:{at:'2026-10-05T13:39:00+13:00',build:'v4-test'}};frozen.renderOpen='2026-10-05T13:39:00+13:00';store.setItem(CRUMB,JSON.stringify(frozen));
+  const frozen=crumb(store);frozen.open={plan:{at:'2026-10-05T13:39:00+13:00',build:b.M.BUILD}};frozen.renderOpen='2026-10-05T13:39:00+13:00';store.setItem(CRUMB,JSON.stringify(frozen));
   b=boot(store); // fresh page load, same persisted storage
   b.M.coachLoopUI.renderCoachHub();
   assert.equal(b.legacyCalls(),0,'the section that froze last time must NOT run again on the next open');
@@ -108,6 +108,12 @@ function run(){
   // 6: dosage-ui uses the breaker for its Hub card.
   const dosageSrc=fs.readFileSync(dosageUiPath,'utf8');
   assert.match(dosageSrc,/guard\('dosage',sessionCard,''\)/,'dosage-ui.js must run its Hub card through coachLoopUI.runSection');
+  // 3b: a section tripped under an OLDER build gets one automatic retry on a new build (it may be the fix).
+  {const st=makeStore();let ob=boot(st);ob.M.coachLoopUI.renderCoachHub();const cc=crumb(st);cc.open={plan:{at:'2026-10-05T13:39:00+13:00',build:'v4-some-older-build'}};st.setItem(CRUMB,JSON.stringify(cc));
+   ob=boot(st);ob.M.coachLoopUI.renderCoachHub();
+   assert.equal(ob.legacyCalls(),1,'a trip recorded under an older build must be retried once on the new build');
+   assert.ok(!crumb(st).tripped?.plan,'the old-build trip must be cleared after the automatic retry succeeds');}
+
   // 8: localStorage full (setItem throws): the cookie must still carry the marker so the breaker works.
   const full=makeStore();full.setItem=()=>{const e=new Error('quota');e.name='QuotaExceededError';throw e;};
   const jar={cookie:''};
