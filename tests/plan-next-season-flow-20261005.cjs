@@ -16,7 +16,9 @@ const assert=require('node:assert/strict');
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
-const cards=page=>page.evaluate(()=>[...document.querySelectorAll('#hubView .loop-context-grid article')].map(a=>a.innerText.replace(/\s+/g,' ').trim()));
+// 7 Oct 2026: Coach Hub now opens on today; the selected session's season/week cards live under the
+// collapsed Session detail, so open it before reading them.
+const cards=page=>page.evaluate(()=>{const d=document.querySelector('#hubView [data-loop-session-detail]');if(d)d.open=true;return[...document.querySelectorAll('#hubView .loop-context-grid article')].map(a=>a.innerText.replace(/\s+/g,' ').trim());});
 async function session(page,id,date,squads){await page.evaluate(({id,date,squads})=>{const M=window.MSOS4;const s=M.parser.parse('MAIN SET\n8 x 100 Free Threshold @1:30',{date,dayPart:'PM',squads,course:'SCM'});s.id=id;M.state.canonicalSessions[id]=s;M.state.settings.selectedSessionId=id;M.store.save(M.state);},{id,date,squads});}
 
 (async()=>{
