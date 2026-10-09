@@ -215,6 +215,79 @@
   }
   L.withPlanStatus=withPlanStatus;
 
+  // ---------------------------------------------------------------------------
+  // Today (7 Oct 2026). Andy, on the Hub: "a page of useless info with no easy add or edit option ... not
+  // easy for a coach to pick up and make sense of ... supposed to say between seasons." The Hub was anchored
+  // to whichever session happened to be SELECTED (24 Sep in his screenshot), so it described last season's
+  // taper week and offered no way to write or edit anything. It now opens on TODAY: where the season is,
+  // and today's + the next days' sessions from the timetable, each with Write / Open / Edit. The selected
+  // session's full analysis is kept, collapsed, underneath.
+  // ---------------------------------------------------------------------------
+  const nzToday=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});
+  const addDay=(iso,n)=>new Date(Date.parse(`${iso}T12:00:00Z`)+n*86400000).toISOString().slice(0,10);
+  const dayLabel=(iso,today)=>{if(iso===today)return'Today';if(iso===addDay(today,1))return'Tomorrow';const t=Date.parse(`${iso}T12:00:00Z`);return new Date(t).toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'});};
+  const shortDate=iso=>{const t=Date.parse(`${String(iso||'').slice(0,10)}T12:00:00Z`);return Number.isFinite(t)?new Date(t).toLocaleDateString('en-NZ',{day:'numeric',month:'short',timeZone:'UTC'}):'';};
+  const clock12=t=>{const m=String(t||'').match(/^(\d{1,2}):(\d{2})/);if(!m)return String(t||'');const h=Number(m[1]);return`${h%12||12}:${m[2]}${h<12?'am':'pm'}`;};
+  function seasonToday(today){
+    const rows=seasonRows({}),start=r=>text(r?.start_date||r?.startDate||r?.effective_from).slice(0,10),end=r=>text(r?.end_date||r?.endDate).slice(0,10);
+    const cur=rows.find(r=>inSeason(today,r)&&start(r)),next=rows.filter(r=>start(r)>today).sort((a,b)=>start(a).localeCompare(start(b)))[0],last=rows.filter(r=>end(r)&&end(r)<today).sort((a,b)=>end(b).localeCompare(end(a)))[0];
+    if(cur){const weeks=weekRows({}).filter(w=>dateInWeek(today,w.week_start||w.weekStart||w.start_date));const w=weeks[0]||null;const n=Math.floor((Date.parse(`${today}T12:00:00Z`)-Date.parse(`${start(cur)}T12:00:00Z`))/(7*86400000))+1,total=end(cur)?Math.ceil((Date.parse(`${end(cur)}T12:00:00Z`)-Date.parse(`${start(cur)}T12:00:00Z`))/(7*86400000))+1:0;
+      return{status:'current',name:text(cur.name||'Season'),line:`Week ${n}${total?` of ${total}`:''}${w?.phase?` · ${text(w.phase)}`:''}`,focus:text(w?.objective||w?.focus||''),meet:text(cur.meets?.[0]?.name||''),meetDate:text(cur.meets?.[0]?.date||end(cur))};}
+    if(next)return{status:'upcoming',name:text(next.name||'Next season'),line:`Starts ${shortDate(start(next))}`,last:last?text(last.name):''};
+    return{status:'between',name:'',line:last?`${text(last.name||'Last season')} finished ${shortDate(end(last))}`:'No season plan yet',last:last?text(last.name):''};
+  }
+  function slotGroups(date){
+    let slots=[];try{slots=M.calendar?.slots?.(date)||[];}catch{}
+    const groups=new Map();
+    for(const x of slots){const k=`${x.dayPart}|${x.start}|${x.end}|${x.venue}`;if(!groups.has(k))groups.set(k,{date,dayPart:x.dayPart,start:x.start,end:x.end,venue:x.venue,squads:[],slotId:x.id});groups.get(k).squads.push(x.squad);}
+    const sessions=Object.values(M.state.canonicalSessions||{}).filter(s=>s?.identity?.date===date&&(!M.access?.sessionAllowed||M.access.sessionAllowed(s)));
+    const out=[...groups.values()].sort((a,b)=>(a.dayPart+a.start).localeCompare(b.dayPart+b.start));
+    for(const g of out){const keys=g.squads.map(x=>text(x).toLowerCase());g.session=sessions.find(s=>String(s.identity?.dayPart||'').toUpperCase()===g.dayPart&&(s.identity?.squads||[]).some(q=>keys.includes(text(q).toLowerCase())))||null;}
+    return out;
+  }
+  // Whose sessions to list: an assistant's assigned squads; for the owner, the squads they've actually
+  // written sessions for in the last 60 days (Andy: National / Development), so Intermediate / Junior /
+  // Fitness-only slots don't bury his own. "Show all squads" lists everything.
+  let hubAllSquads=false;
+  function mySquads(today){
+    if(hubAllSquads)return null;
+    try{if((M.access?.role?.()||'owner')!=='owner'){const a=M.access?.assignedSquads?.();return a&&a.size?a:null;}}catch{}
+    const cut=addDay(today,-60),set=new Set();
+    for(const x of Object.values(M.state.canonicalSessions||{})){const d=x?.identity?.date||'';if(d>=cut&&d<=addDay(today,14))for(const q of x.identity?.squads||[])set.add(text(q).toLowerCase());}
+    return set.size?set:null;
+  }
+  function slotRowHtml(g,canWrite){
+    const s=g.session,total=s?(M.session?.total?.(s)||0):0;
+    let brief='';if(!s){try{const b=M.sessionMethodology?.brief?.({id:'hub-brief',identity:{date:g.date,dayPart:g.dayPart,squads:g.squads},blocks:[]});if(b&&b.source!=='none')brief=text(b.sessionFocus||b.system||'');}catch{}}
+    let check='';if(s){try{const v=M.sessionMethodology?.evaluate?.(s,M.state);if(v?.plan?.checked)check=v.plan.matches?'✓ on brief':'⚠ off brief';}catch{}}
+    const status=s?`<b>${total.toLocaleString()}m written</b>${s.finish?' · finished':''}${check?` · ${esc(check)}`:''}`:`<span class="muted">Not written yet${brief?` · brief: ${esc(brief)}`:''}</span>`;
+    const actions=s?`<button type="button" data-hub-open="${esc(s.id)}">Open</button>${canWrite?`<button type="button" data-hub-edit="${esc(s.id)}">Edit</button>`:''}`:(canWrite?`<button type="button" class="hub-write" data-hub-write="${esc(g.date)}" data-hub-slot="${esc(g.slotId)}">Write session</button>`:'');
+    return`<div class="hub-slot"><div class="hub-slot-main"><div class="hub-slot-when">${esc(g.dayPart)} ${esc(clock12(g.start))}</div><div><b>${esc(g.squads.join(' + '))}</b>${g.venue&&!/aquagym/i.test(g.venue)?` <span class="muted">· ${esc(g.venue)}</span>`:''}<div class="hub-slot-status">${status}</div></div></div><div class="hub-slot-actions">${actions}</div></div>`;
+  }
+  function todayHtml(){
+    const today=nzToday(),owner=(M.access?.role?.()||'owner')==='owner',canWrite=M.access?.can?M.access.can('session.create'):true,season=seasonToday(today);
+    const seasonBtn=owner?(season.status==='current'?'<button type="button" data-msos-plan-season>Season plan</button>':'<button type="button" class="hub-write" data-msos-plan-season>Plan next season</button>'):'';
+    const seasonCard=season.status==='current'
+      ?`<div class="hub-season"><div><div class="eyebrow">SEASON</div><h2>${esc(season.name)}</h2><p>${esc(season.line)}${season.meet?` · peaking for ${esc(season.meet)}${season.meetDate?` (${esc(shortDate(season.meetDate))})`:''}`:''}</p>${season.focus?`<p class="muted">This week: ${esc(season.focus)}</p>`:''}</div>${seasonBtn}</div>`
+      :`<div class="hub-season"><div><div class="eyebrow">SEASON</div><h2>${season.status==='upcoming'?esc(season.name):'Between seasons'}</h2><p>${esc(season.line)}</p></div>${seasonBtn}</div>`;
+    const mine=mySquads(today),keep=g=>!mine||g.squads.some(q=>mine.has(text(q).toLowerCase()));
+    const days=[];for(let i=0;i<7&&days.length<4;i++){const d=addDay(today,i),g=slotGroups(d).filter(keep);if(g.length||i===0)days.push({d,g});}
+    const dayHtml=days.map(({d,g},i)=>`<div class="hub-day${i===0?' hub-day-today':''}"><h3>${esc(dayLabel(d,today))}${i===0?` <span class="muted">· ${esc(shortDate(d))}</span>`:''}</h3>${g.length?g.map(x=>slotRowHtml(x,canWrite)).join(''):'<p class="muted">No sessions on the timetable today.</p>'}</div>`).join('');
+    return`<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button>${owner?'<button data-hub-team>Coach &amp; TV sign-in</button>':''}</div></section>`;
+  }
+  function bindToday(h){
+    h.querySelectorAll('[data-hub-write]').forEach(b=>b.addEventListener('click',()=>{M.actions?.openNewSession?.({date:b.dataset.hubWrite,slotId:b.dataset.hubSlot});}));
+    h.querySelectorAll('[data-hub-open]').forEach(b=>b.addEventListener('click',()=>{if(M.selectSession?.(b.dataset.hubOpen)!==null)go('board',{restore:true});}));
+    h.querySelectorAll('[data-hub-edit]').forEach(b=>b.addEventListener('click',()=>{if(M.selectSession?.(b.dataset.hubEdit)!==null){go('board',{restore:true});setTimeout(()=>M.actions?.openSessionEdit?.(),0);}}));
+    h.querySelector('[data-hub-calendar]')?.addEventListener('click',()=>M.ui?.openSessionCalendar?.());
+    // 9 Oct 2026: the coach-invite and sign-in screen (Connection) was only reachable from Data / diagnostics.
+    h.querySelector('[data-hub-team]')?.addEventListener('click',()=>go('connection'));
+    h.querySelector('[data-hub-squads]')?.addEventListener('click',()=>{hubAllSquads=!hubAllSquads;h.dataset.loopHubRenderedAt='0';renderCoachHub();});
+    // Timetable not loaded yet on a cold open: load once, then repaint the day list only if it now has data.
+    if(!M.calendar?.data&&M.calendar?.load&&!bindToday.loading){bindToday.loading=true;M.calendar.load().then(d=>{bindToday.loading=false;if(d&&M.state?.settings?.view==='hub'){h.dataset.loopHubRenderedAt='0';renderCoachHub();}}).catch(()=>{bindToday.loading=false;});}
+  }
+  L.todayHtml=todayHtml;L.slotGroups=slotGroups;L.seasonToday=seasonToday;
+
   L.hubRenderRuns=0;
   function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;
@@ -223,17 +296,19 @@
     const t0=Date.now();
     {const c=hubCrumb();c.renderOpen=now();c.stage='hub:start';c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);}
     const finish=()=>{{const c=hubCrumb();delete c.renderOpen;c.stage='hub:done';if(c.lastStall)c.lastStall.acknowledged=true;c.stageAt=now();writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
-    const s=currentSession();if(!s){h.innerHTML='<section class="empty-card">Select a session to see the coaching picture.</section>';finish();return;}
+    const s=currentSession();if(!s){h.innerHTML=todayHtml();bindToday(h);h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));h.querySelector('[data-loop-reports]')?.addEventListener('click',()=>go('reports'));finish();return;}
     const emptyCtx={season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'skipped'};
     const ctx=runSection('plan',()=>withPlanStatus(planContext(s),s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
     const tripped=trippedSections(),diag=hubDiagnostics();
     setStage('hub:html');
-    h.innerHTML=`
+    const isToday=s.identity?.date===nzToday();
+    h.innerHTML=`${todayHtml()}
+      <details class="page-card loop-hub-detail" data-loop-session-detail ${isToday?'open':''}><summary><span class="eyebrow">SESSION DETAIL</span> <b>${esc(shortDate(s.identity?.date)||s.identity?.date||'')} ${esc(s.identity?.dayPart||'')} · ${esc((s.identity?.squads||[]).join(' + '))}</b><span class="muted"> — plan, makeup, dosage, evidence</span></summary>
       <section class="page-card loop-hub-hero">
-        <div class="eyebrow">COACH HUB · COACHING BRIEF</div>
+        <div class="eyebrow">SELECTED SESSION</div>
         <h1>${esc(`${s.identity?.date||''} ${s.identity?.dayPart||''}`.trim())}</h1>
         <p>${esc([(s.identity?.squads||[]).join(' + '),s.identity?.venue,s.identity?.course].filter(Boolean).join(' · '))}</p>
-        <div class="loop-quick"><button data-loop-board>Board</button><button data-loop-swimmers>Swimmers</button><button data-loop-meet>Meet</button><button data-loop-reports>Reports</button></div>
+        <div class="loop-quick"><button data-loop-board>Board</button><button data-loop-meet>Meet</button></div>
       </section>
       ${tripped.length?`<section class="page-card" data-loop-hub-tripped><div class="eyebrow">COACH HUB · SKIPPED TO KEEP THE PHONE RESPONSIVE</div><p>${esc(tripped.map(n=>HUB_SECTION_LABELS[n]||n).join(', '))} froze the phone on an earlier open, so ${tripped.length===1?'it is':'they are'} skipped for now. Everything else below is live.</p><div class="loop-quick"><button data-loop-hub-retry>Retry skipped sections</button></div></section>`:''}
       <section class="loop-context-grid">
@@ -246,7 +321,9 @@
       <section class="page-card"><div class="eyebrow">PSYCHOLOGICAL / BEHAVIOURAL INTENT</div>${psy.length?`<div class="loop-chip-row">${psy.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:'<p class="muted">No explicit psychological/behavioural cue was found in the linked plan or authored session. MSOS does not invent one.</p>'}${ctx.psychologicalFocus?`<p>${esc(ctx.psychologicalFocus)}</p>`:''}</section>
       <section class="page-card"><div class="eyebrow">NEXT PERFORMANCE TARGET</div>${meet?`<div class="loop-meet-line"><div><h2>${esc(meet.title)}</h2><p>${esc([meet.date,meet.course,meet.venue].filter(Boolean).join(' · '))}</p></div><strong>${entries.length?`${entries.length} loaded entr${entries.length===1?'y':'ies'}`:'Meet loaded'}</strong></div>`:'<h2>No upcoming meet currently linked</h2>'}</section>
       <section class="page-card"><div class="eyebrow">EVIDENCE FROM THIS SESSION</div><div class="loop-kpis"><span>${sum?.evidence?.changes||0} live changes</span><span>${sum?.evidence?.captures||0} captures</span><span>${sum?.evidence?.timedSets||0} timed sets</span></div><p class="muted">Evidence supports the coaching picture; it does not replace the plan or delivered-session truth.</p></section>
+      </details>
       <details class="page-card" data-loop-hub-diagnostics><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><p class="muted">Hub section timings: ${esc(Object.entries(diag.timings).map(([k,v])=>`${k} ${v}ms`).join(' · ')||'none yet')}${tripped.length?` · skipped: ${esc(tripped.join(', '))}`:''}${diag.lastStall?` · last unfinished attempt stuck at: ${esc(diag.lastStall.label)} (${esc(diag.lastStall.at)})`:''}${diag.storage!=='ok'?` · ${esc(diag.storage)}`:''}${diag.renderStalled&&!diag.renderStalled.sectionTripped?` · an earlier open stalled outside the guarded sections (${esc(diag.renderStalled.startedAt)})`:''}${Object.keys(diag.errors).length?` · errors: ${esc(Object.entries(diag.errors).map(([k,v])=>`${k}: ${v}`).join('; '))}`:''}</p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
+    bindToday(h);
     h.querySelector('[data-loop-board]')?.addEventListener('click',()=>go('board',{restore:true}));
     h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));
     h.querySelector('[data-loop-meet]')?.addEventListener('click',()=>go('meet'));

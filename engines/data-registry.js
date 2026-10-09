@@ -112,7 +112,7 @@
     }
     return[...groups.values()];
   }
-  function apply(type,rows,payload=null){const def=TYPES[type],old=M.state[def.field]||[];if(type==='calendar'){const cal=payload&&Array.isArray(payload.dates)?payload:{schema_version:1,status:'published',dates:rows};M.state.publishedCalendar=cal;if(M.calendar)M.calendar.data=cal;return;}
+  function apply(type,rows,payload=null){const def=TYPES[type],old=M.state[def.field]||[];if(type==='calendar'){const cal=payload&&Array.isArray(payload.dates)?payload:{schema_version:1,status:'published',dates:rows};M.state.publishedCalendar=cal;if(M.calendar){if(typeof M.calendar.reset==='function')M.calendar.reset();else M.calendar.data=cal;}return;}
     if(type==='weekly_plan'){M.state.weeklyPlans=groupWeeklyRows(rows);return;}
     if(def.mode==='replace')M.state[def.field]=rows;else M.state[def.field]=upsert(Array.isArray(old)?old:[],rows);
     if(type==='wa_points'){M.state._refs=M.state._refs||{};M.state._refs.world_aquatics_base_times=rows;}

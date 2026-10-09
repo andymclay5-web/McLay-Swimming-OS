@@ -35,11 +35,11 @@
   const paint=view=>{view=normalView(view);active(view);if(view==='reports'||view==='data'){UI.renderHeader?.();renderExtra(view);active(view);return}UI.renderCurrent?.();active(view);};
 
   const nzToday=()=>{try{const parts=new Intl.DateTimeFormat('en-NZ',{timeZone:'Pacific/Auckland',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`}catch{return new Date().toISOString().slice(0,10)}};
-  let publishedCalendar=null;
+  // 6 Oct 2026: one calendar owner. This used to fetch monthly_calendar.json itself (ignoring an imported
+  // calendar and anything past its coverage); it now asks app.js's M.calendar, which serves the published
+  // dates plus the standing timetable (engines/standard-timetable.js) for dates after them.
   const loadPublishedCalendar=async()=>{
-    if(publishedCalendar)return publishedCalendar;
-    const urls=['monthly_calendar.json?v=20260907-training-calendar-b','monthly_calendar.json'];
-    for(const url of urls){try{const r=await fetch(url,{cache:'no-store'});if(r.ok){const j=await r.json();if(Array.isArray(j?.dates)){publishedCalendar=j;return j}}}catch{}}
+    try{const c=await M.calendar?.load?.();if(Array.isArray(c?.dates))return c;}catch{}
     return {dates:[]};
   };
   const squadsOf=x=>(x||[]).map(v=>String(v||'').trim()).filter(Boolean);
@@ -47,7 +47,9 @@
   const canonicalMatchesSlot=(session,date,slot)=>session?.identity?.date===date&&String(session.identity.dayPart||'').toUpperCase()===String(slot.day_part||'').toUpperCase()&&sameSquads(session.identity.squads,slot.squads);
   const slotTitle=(date,slot)=>`${String(slot.day_part||'').toUpperCase()} · ${slot.start_time||''}${slot.end_time?`–${slot.end_time}`:''} · ${squadsOf(slot.squads).join('+')||'Training'}${slot.venue?` · ${slot.venue}`:''}`;
   const primeNewSessionSlot=(date,slot)=>{
-    M.actions?.openNewSession?.();
+    // Pass the tapped date: the writer used to list only TODAY's slots, so tapping a future AM/PM pill
+    // matched today's same-time slot and created the session on the wrong date.
+    M.actions?.openNewSession?.({date});
     let tries=0;
     const apply=()=>{
       const sel=document.querySelector('#coreSlot');

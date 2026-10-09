@@ -9,3 +9,5 @@
 .page-card button.pn-primary,.pn-card button.pn-primary{background:var(--navy,#0d4566);color:#fff;border-color:var(--navy,#0d4566);font-weight:800;padding:11px 18px}
 .pn-card .sg-squads{gap:8px}.pn-card .sg-squad-choice{border:1px solid #8fb5c5;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:700;background:#fff}.pn-card .sg-squad-choice input{margin:0}
 .pn-foot.page-card{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:96px}
+.tt-rows{display:flex;flex-direction:column;gap:6px;margin:8px 0}.tt-row{display:grid;grid-template-columns:110px 64px 70px 70px minmax(0,1.5fr) minmax(0,1fr) auto;gap:6px;align-items:center}.tt-row input,.tt-row select{max-width:100%;min-width:0}
+@media(max-width:560px){.tt-row{grid-template-columns:1fr 70px 1fr 1fr;border-bottom:1px solid var(--line,#eef2f4);padding-bottom:6px}.tt-row [data-tt="squads"]{grid-column:1/4}.tt-row [data-tt="venue"]{grid-column:1/4}}

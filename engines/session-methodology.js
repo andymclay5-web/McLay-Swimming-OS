@@ -285,9 +285,8 @@
   // ---------------------------------------------------------------------------
   // Brief panel -- shown while WRITING a session (Add session and Edit workout) and on the Board, so the
   // coach sees what this session is meant to be and how the text in front of them measures up, as they
-  // type. Display only: never changes the session, Roll or selection. Wraps the existing modal openers
-  // (v4-poolside-core.js / app.js are release-checksum protected) the same way this file already wraps
-  // UI.renderBoard.
+  // type. Display only: never changes the session, Roll or selection. Called by the modal owners themselves
+  // (v4-poolside-core.js openNewSession, app.js openSessionEdit) -- no wrapper over their actions.
   // ---------------------------------------------------------------------------
   const COACH_TERM={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power (top)','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Aerobic + Anaerobic Capacity','Skill / Technical':'Skills'};
   const sysLabel=sys=>COACH_TERM[sys]?`${COACH_TERM[sys]} (${sys})`:sys;
@@ -327,7 +326,6 @@
   function nzToday(){return new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});}
   function slotIdentity(slotId){try{const today=nzToday(),slot=(M.calendar?.slots?.(today)||[]).find(x=>x.id===slotId);return slot?M.calendar.identityFromSlot(slot):null;}catch{return null;}}
   function parseDraft(rawText,identity){if(!text(rawText))return{id:'brief-draft',identity,blocks:[]};try{const s=M.parser.parse(rawText,{...identity,id:'brief-draft'});s.identity={...s.identity,...identity};s.id='brief-draft';return s;}catch{return{id:'brief-draft',identity,blocks:[]};}}
-  function wrapAction(name,install){const base=M.actions?.[name];if(typeof base!=='function'||base.__msosBrief)return;const wrapped=function(...a){const r=base.apply(this,a);Promise.resolve(r).then(()=>{try{install()}catch{}}).catch(()=>{});return r;};wrapped.__msosBrief=true;M.actions[name]=wrapped;}
   function installNewSessionBrief(){
     const host=document.querySelector('#modalHost'),raw=host?.querySelector('#coreRaw'),slot=host?.querySelector('#coreSlot');if(!raw||!slot)return;
     const anchor=host.querySelector('.intake-tabs')||raw.closest('label')||raw;
@@ -342,8 +340,6 @@
     const schedule=liveBrief(host,raw.closest('label')||raw,()=>parseDraft(raw.value,{...cur.identity}));
     raw.addEventListener('input',schedule);
   }
-  wrapAction('openNewSession',installNewSessionBrief);
-  wrapAction('openSessionEdit',installEditBrief);
   SM.installNewSessionBrief=installNewSessionBrief;SM.installEditBrief=installEditBrief;
 
   SM.checks=()=>({build:SM.build,evaluate:typeof evaluate==='function',gate:typeof resolveSessionGate==='function',notify:typeof notifyPendingReview==='function'});
