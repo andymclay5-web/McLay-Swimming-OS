@@ -336,7 +336,14 @@
     return`<div class="pn-body"><p class="muted">Every week below becomes the weekly focus Coach Hub and the session check use. You can still adjust any single week later.</p>${bySquad.map(({sq,rows})=>`<details class="pn-more" ${bySquad.length===1?'open':''}><summary>${esc(sq)} · ${rows.length} weeks</summary>${rows.map(w=>`<div class="pn-day"><span>${esc(niceDate(w.week_start))}</span><span>${esc(w.objective)}</span></div>`).join('')}</details>`).join('')}
       <div class="pn-actions"><button type="button" class="pn-primary" id="pnCreate">Create season plan</button></div></div>`;}
   function renderPlanner(h){
-    if(!M.seasonPlanner){h.innerHTML='<section class="empty-card">Season planner engine not loaded.</section>';return;}
+    if(!M.seasonPlanner||!M.standardTimetable){
+      h.innerHTML='<section class="empty-card" data-pn-loading><b>Loading the season planner…</b></section>';
+      Promise.all([ensureEngine('engines/season-planner.js',()=>!!M.seasonPlanner),ensureEngine('engines/standard-timetable.js',()=>!!M.standardTimetable)]).then(([sp])=>{
+        if(!planMode)return;if(sp){M.calendar?.reset?.();render();return;}
+        h.innerHTML=`<section class="empty-card"><h2>The season planner didn't load on this device</h2><p>Close the app fully and open it again. If this still shows, send a screenshot of this box.</p><p class="muted" style="font-size:13px">${esc(engineDiag('engines/season-planner.js'))}<br>${esc(engineDiag('engines/standard-timetable.js'))}</p><div class="hub-actions"><button type="button" onclick="location.reload()">Reload app</button></div></section>`;
+      });
+      return;
+    }
     M.seasonPlanner.ensureSeeds();const d=draft();
     if(planResult){h.innerHTML=`<section class="page-card pn-wrap"><div class="eyebrow">PLAN NEXT SEASON</div><h1>✓ ${esc(planResult.name)} is set</h1><p>${esc(planResult.squads.join(' + '))} · ${planResult.weeks} weeks · ${esc(niceDate(planResult.start))} → ${esc(planResult.meet)} ${esc(niceDate(planResult.end))}</p><p class="muted">Coach Hub shows this season from its first week. Single weeks can be adjusted any time under Data & References → Active weekly plan.</p><div class="pn-actions"><button type="button" class="pn-primary" data-pn-exit="hub">Back to Coach Hub</button><button type="button" data-pn-again>Plan another squad</button></div></section>`;bindPlanner(h);return;}
     const pv=d.step>=3?planPreview():null;
@@ -367,6 +374,31 @@
   document.addEventListener('click',e=>{const b=e.target.closest?.('[data-msos-plan-season]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();openPlanner();},true);
   // Leaving through the bottom nav or the other Data shortcuts returns Data & References to its normal page.
   document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav],[data-msos-data],[data-loop-data]'))planMode=false;},true);
+  // ---------------------------------------------------------------------------
+  // Engine self-heal (10 Oct 2026). Andy's phone showed "Season planner engine not loaded" on the Plan
+  // screen while the same build loads both engines fine in a clean browser -- the season-planner (and,
+  // judging by his empty October calendar, standard-timetable) script did not run on that device's page
+  // load. These two engines only build plain helpers on M, so loading the script again is safe. Re-fetch it
+  // once (cache-busted), then report exactly what the browser saw if it still isn't there, instead of a
+  // dead-end message.
+  // ---------------------------------------------------------------------------
+  const engineLoads={};
+  function scriptFor(path){return [...document.querySelectorAll('script[src]')].find(s=>s.getAttribute('src').split('?')[0].replace(/^\.\//,'')===path)||null;}
+  function engineDiag(path){
+    const tag=scriptFor(path),src=tag?.src||'';let ent=null;try{ent=src?performance.getEntriesByName(src)[0]:null;}catch{}
+    const status=ent?(ent.responseStatus||(ent.transferSize===0&&ent.decodedBodySize>0?'cache':ent.decodedBodySize?'ok':'empty')):'no request seen';
+    const sw=navigator.serviceWorker?.controller?.scriptURL?.split('/').pop()||'none';
+    return`${path.split('/').pop()}: ${tag?`in page (${String(tag.getAttribute('src')).split('?v=')[1]||'no version'})`:'not in page'} · ${status} · build ${M.BUILD||'?'} · sw ${sw}${engineLoads[path]?.error?` · retry: ${engineLoads[path].error}`:''}`;
+  }
+  function ensureEngine(path,isReady){
+    if(isReady())return Promise.resolve(true);
+    if(engineLoads[path]?.promise)return engineLoads[path].promise;
+    const tag=scriptFor(path),base=tag?tag.getAttribute('src'):`${path}?v=${encodeURIComponent(M.BUILD||'retry')}`;
+    const rec=engineLoads[path]={};
+    rec.promise=new Promise(resolve=>{const el=document.createElement('script');el.src=`${base}${base.includes('?')?'&':'?'}reload=${Date.now()}`;el.onload=()=>{rec.error=isReady()?'':'loaded but did not start';resolve(isReady());};el.onerror=()=>{rec.error='could not download';resolve(false);};document.head.appendChild(el);});
+    return rec.promise;
+  }
+  A.ensureEngine=ensureEngine;A.engineDiag=engineDiag;
   function ensureShortcut(view){if(!canManage())return;if(view==='hub'){const host=document.querySelector('#hubView');if(host&&!host.querySelector('[data-msos-data]'))host.insertAdjacentHTML('afterbegin','<section class="page-card"><div class="eyebrow">DATA HEALTH</div><div class="hub-actions"><button data-msos-data>Data & References · imports / standards / points</button></div></section>');}if(view==='athletes'){const host=document.querySelector('#athletesView .perf-head .hub-actions');if(host&&!host.querySelector('[data-msos-data]'))host.insertAdjacentHTML('beforeend','<button data-msos-data>Data & References</button>');}if(view==='reports'){const host=document.querySelector('#reportsView .hub-actions');if(host&&!host.querySelector('[data-msos-data]'))host.insertAdjacentHTML('beforeend','<button data-msos-data>Data & References</button>');}}
   document.addEventListener('click',e=>{const b=e.target.closest?.('[data-msos-data]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(!canManage())return M.toast?.('Owner permission required');go('data');},true);
   g.addEventListener?.('msos:data-updated',()=>{if(M.state?.settings?.view==='data')render();});

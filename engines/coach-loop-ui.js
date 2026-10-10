@@ -273,7 +273,14 @@
     const mine=mySquads(today),keep=g=>!mine||g.squads.some(q=>mine.has(text(q).toLowerCase()));
     const days=[];for(let i=0;i<7&&days.length<4;i++){const d=addDay(today,i),g=slotGroups(d).filter(keep);if(g.length||i===0)days.push({d,g});}
     const dayHtml=days.map(({d,g},i)=>`<div class="hub-day${i===0?' hub-day-today':''}"><h3>${esc(dayLabel(d,today))}${i===0?` <span class="muted">· ${esc(shortDate(d))}</span>`:''}</h3>${g.length?g.map(x=>slotRowHtml(x,canWrite)).join(''):'<p class="muted">No sessions on the timetable today.</p>'}</div>`).join('');
-    return`<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button>${owner?'<button data-hub-team>Coach &amp; TV sign-in</button>':''}</div></section>`;
+    // Cloud sync status (10 Oct 2026): sync sat off unnoticed for a month. Owner sees a plain warning
+    // whenever it is off or waiting, with how many changes are queued. Cheap settings reads only -- no
+    // preflight here (that walks every session).
+    let syncCard='';
+    if(owner){const st=M.state?.settings||{},pending=(M.state?.pending||[]).length,sus=st.cloudWritesSuspended,guardOk=M.release?.guardianCurrent?.();
+      let why='';if(!st.cloudWritesEnabled)why=sus?`Switched off because this build's Guardian check failed${sus.failed?.length?` (${sus.failed.join(', ')})`:''}.`:'Your sessions, Roll and captures are only on this phone until it is turned on.';else if(!guardOk)why='Waiting for this build\'s Guardian check before sending.';
+      if(why)syncCard=`<section class="page-card hub-sync" data-hub-sync><div><b>Cloud sync is ${st.cloudWritesEnabled?'waiting':'off'}</b>${pending?` · ${pending.toLocaleString()} change${pending===1?'':'s'} waiting to send`:''}<p>${esc(why)} Other coaches, swimmer phones and the TV only see what reaches the cloud.</p></div><button type="button" class="hub-write" data-hub-sync-btn>${st.cloudWritesEnabled?'Check sync':'Turn on cloud sync'}</button></section>`;}
+    return`${syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button>${owner?'<button data-hub-team>Coach &amp; TV sign-in</button>':''}</div></section>`;
   }
   function bindToday(h){
     h.querySelectorAll('[data-hub-write]').forEach(b=>b.addEventListener('click',()=>{M.actions?.openNewSession?.({date:b.dataset.hubWrite,slotId:b.dataset.hubSlot});}));
@@ -282,7 +289,11 @@
     h.querySelector('[data-hub-calendar]')?.addEventListener('click',()=>M.ui?.openSessionCalendar?.());
     // 9 Oct 2026: the coach-invite and sign-in screen (Connection) was only reachable from Data / diagnostics.
     h.querySelector('[data-hub-team]')?.addEventListener('click',()=>go('connection'));
+    h.querySelector('[data-hub-sync-btn]')?.addEventListener('click',()=>go('connection'));
     h.querySelector('[data-hub-squads]')?.addEventListener('click',()=>{hubAllSquads=!hubAllSquads;h.dataset.loopHubRenderedAt='0';renderCoachHub();});
+    // Standard timetable engine missing on this page load (seen on Andy's phone, 10 Oct): load it again
+    // once, then repaint so today's sessions appear.
+    if(!M.standardTimetable&&M.dataAdminUI?.ensureEngine&&!bindToday.ttRetry){bindToday.ttRetry=true;M.dataAdminUI.ensureEngine('engines/standard-timetable.js',()=>!!M.standardTimetable).then(ok=>{if(ok){M.calendar?.reset?.();if(M.state?.settings?.view==='hub'){h.dataset.loopHubRenderedAt='0';renderCoachHub();}}});}
     // Timetable not loaded yet on a cold open: load once, then repaint the day list only if it now has data.
     if(!M.calendar?.data&&M.calendar?.load&&!bindToday.loading){bindToday.loading=true;M.calendar.load().then(d=>{bindToday.loading=false;if(d&&M.state?.settings?.view==='hub'){h.dataset.loopHubRenderedAt='0';renderCoachHub();}}).catch(()=>{bindToday.loading=false;});}
   }

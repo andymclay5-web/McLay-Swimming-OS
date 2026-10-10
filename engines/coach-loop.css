@@ -8,3 +8,5 @@
 .page-card button.hub-write{background:var(--navy,#0d4566);color:#fff;border-color:var(--navy,#0d4566);font-weight:800}
 .hub-more{margin-top:4px}.loop-hub-detail>summary{cursor:pointer;list-style:none}.loop-hub-detail>summary::-webkit-details-marker{display:none}.loop-hub-detail[open]>summary{margin-bottom:10px}
 @media(max-width:520px){.hub-slot{flex-direction:column;align-items:stretch}.hub-slot-actions{justify-content:flex-end}.hub-today .hub-season{flex-direction:column}}
+.hub-sync{display:flex;justify-content:space-between;align-items:center;gap:12px;border:2px solid #b45309;background:#fff7ed}.hub-sync p{margin:4px 0 0;font-size:14px}.hub-sync b{font-size:17px;color:#7c2d12}
+@media(max-width:520px){.hub-sync{flex-direction:column;align-items:stretch}}

@@ -39,6 +39,7 @@
   // calendar and anything past its coverage); it now asks app.js's M.calendar, which serves the published
   // dates plus the standing timetable (engines/standard-timetable.js) for dates after them.
   const loadPublishedCalendar=async()=>{
+    try{if(!M.standardTimetable&&M.dataAdminUI?.ensureEngine&&await M.dataAdminUI.ensureEngine('engines/standard-timetable.js',()=>!!M.standardTimetable))M.calendar?.reset?.();}catch{}
     try{const c=await M.calendar?.load?.();if(Array.isArray(c?.dates))return c;}catch{}
     return {dates:[]};
   };
