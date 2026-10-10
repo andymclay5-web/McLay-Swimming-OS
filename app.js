@@ -136,8 +136,21 @@
   if(s.cutoverBuild===undefined)s.cutoverBuild='';
   if(s.guardianCutoverUnlocked===undefined)s.guardianCutoverUnlocked=false;
   if(!s.cloudSchemaProbe||typeof s.cloudSchemaProbe!=='object')s.cloudSchemaProbe={};
-  // Write permission NEVER survives a build change.
-  if(s.cloudWritesEnabled&&s.cloudWriteBuild!==M.BUILD){s.cloudWritesEnabled=false;s.cloudWriteBuild='';s.guardianCutoverUnlocked=false;s.cutoverBuild=''}
+  // 10 Oct 2026 (Andy chose this over re-activating by hand after every upload): cloud sync that was on
+  // STAYS on across a build change. Write permission used to be wiped on every new build, and with frequent
+  // uploads it silently sat off from early Sept to 10 Oct -- 636 changes queued on Andy's phone, nothing in
+  // the cloud, assistant coaches seeing none of his sessions. Now this device's earlier acceptance and an
+  // unchanged schema contract carry to the new build; the new build's own Guardian still has to PASS before
+  // anything is written (canWrite -> cutoverReady checks it), and a Guardian FAIL on the new build switches
+  // sync off and records why (cloudWritesSuspended), so a broken build still can't write.
+  const lastRun=M.state?.guardian?.runs?.at?.(-1);
+  if(s.cloudWritesEnabled&&lastRun&&lastRun.build===M.BUILD&&lastRun.ok===false){s.cloudWritesEnabled=false;s.cloudWriteBuild='';s.guardianCutoverUnlocked=false;s.cutoverBuild='';s.cloudWritesSuspended={build:M.BUILD,at:new Date().toISOString(),reason:'Guardian failed on this build',failed:(lastRun.tests||[]).filter(t=>!t.ok).map(t=>t.name).slice(0,6)};}
+  else if(s.cloudWritesEnabled&&s.cloudWriteBuild!==M.BUILD){
+    const prev=s.cloudWriteBuild;s.cloudWriteBuild=M.BUILD;s.cutoverBuild=M.BUILD;s.guardianCutoverUnlocked=true;
+    if(s.deviceAcceptedBuild&&s.deviceAcceptedBuild!==M.BUILD)s.deviceAcceptedBuild=M.BUILD;
+    const probe=s.cloudSchemaProbe;try{if(probe&&probe.build&&probe.build!==M.BUILD&&probe.schemaDigest===U.hash(JSON.stringify(M.cloud?.SCHEMA_CONTRACT||{})))probe.build=M.BUILD;}catch{}
+    s.cloudWritesCarriedFrom=prev;
+  }
   if(s.cutoverBuild&&s.cutoverBuild!==M.BUILD){s.guardianCutoverUnlocked=false;s.cutoverBuild=''}
  };
  R.attestation=()=>M.RELEASE_ATTESTATION||{};
@@ -916,7 +929,7 @@
 
  C.preflight=()=>{const errors=[],warnings=[];if(!Store.config().supabaseUrl)errors.push('Supabase URL missing');if(!Store.config().supabaseAnonKey)errors.push('Supabase anon key missing');if(!Store.auth()?.access_token)errors.push('Signed-in access token missing');if(!C.org())errors.push('Organisation not loaded');const tuples=new Set();for(const a of M.state.attendance||[]){const k=`${a.session_id}|${a.athlete_id}`;if(tuples.has(k))errors.push(`Duplicate local attendance tuple ${k}`);tuples.add(k)}const blockIds=new Set();for(const s of Object.values(M.state.canonicalSessions||{})){const v=M.session.validate(s);if(!v.ok)errors.push(`Session ${s.id} invalid: ${v.errors.join('; ')}`);for(const b of s.blocks||[]){if(blockIds.has(b.id))errors.push(`Duplicate canonical block id ${b.id}`);blockIds.add(b.id)}}for(const c of M.state.captures||[])if(c.block_id&&!C.findBlock(M.state.canonicalSessions?.[c.session_id],c.block_id))warnings.push(`Capture ${c.id} has historical block ${c.block_id}; cloud FK will be null and identity retained in companion link`);return{ok:!errors.length,errors,warnings,pending:(M.state.pending||[]).length,ready:C.ready(),writesEnabled:!!M.state.settings.cloudWritesEnabled}};
  C.probe=async()=>{const pre=C.preflight();if(!pre.ok)return{...pre,probeErrors:{},tables:[],columns:{}};const org=encodeURIComponent(C.org()),probeErrors={},tables=[],columns={};for(const table of C.CORE_WRITE_TABLES){const cols=[...(C.SCHEMA_CONTRACT[table]||['id'])],select=cols.map(encodeURIComponent).join(',');try{await C.fetch(`/rest/v1/${table}?select=${select}&organisation_id=eq.${org}&limit=1`);tables.push(table);columns[table]=cols}catch(e){probeErrors[table]=e.message||String(e);if(C.networkError(e))break}}const result={...pre,ok:!Object.keys(probeErrors).length,probeErrors,tables,columns};if(result.ok)M.release?.recordCloudProbe?.(result);return result};
- C.enableProduction=()=>{const gate=M.release?.unlockCutover?.();if(!gate?.ready)throw new Error('Production cutover gate unavailable');M.state.settings.cloudWritesEnabled=true;M.state.settings.cloudWriteBuild=M.BUILD;Store.save(M.state);return true};
+ C.enableProduction=()=>{const gate=M.release?.unlockCutover?.();if(!gate?.ready)throw new Error('Production cutover gate unavailable');M.state.settings.cloudWritesSuspended=null;M.state.settings.cloudWritesEnabled=true;M.state.settings.cloudWriteBuild=M.BUILD;Store.save(M.state);return true};
  C.disableProduction=()=>{M.state.settings.cloudWritesEnabled=false;M.state.settings.cloudWriteBuild='';M.state.settings.guardianCutoverUnlocked=false;M.state.settings.cutoverBuild='';Store.save(M.state);return true};
 
  C.pullAthletePathway=async(athleteId,{forceReferences=false}={})=>{if(!C.ready())throw new Error('Cloud connection unavailable');const R=M.refs,org=encodeURIComponent(C.org()),ath=encodeURIComponent(athleteId),queries=[['results_pb_board',`/rest/v1/results_pb_board?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],['results_event_history',`/rest/v1/results_event_history?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}&order=result_date.desc`],['coach_results',`/rest/v1/coach_results?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],['results_record_gaps',`/rest/v1/results_record_gaps?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`],['athlete_achievements',`/rest/v1/athlete_achievements?select=*&organisation_id=eq.${org}&athlete_id=eq.${ath}`]],errors={};for(const [key,path] of queries){try{R.merge(key,await C.fetch(path))}catch(e){errors[key]=e.message;if(C.networkError(e))throw e}}if(forceReferences||!R.get('pathway_standards').length)try{R.merge('pathway_standards',await C.fetchPages('/rest/v1/pathway_standards?select=*&active=eq.true&order=progression_order.asc,id.asc'))}catch(e){errors.pathway_standards=e.message;if(C.networkError(e))throw e}if(forceReferences||!R.get('world_aquatics_base_times').length)try{R.merge('world_aquatics_base_times',await C.fetchPages('/rest/v1/world_aquatics_base_times?select=*&active=eq.true'))}catch(e){errors.world_aquatics_base_times=e.message;if(C.networkError(e))throw e}await R.save();return{athleteId,errors,pbs:R.get('results_pb_board').filter(x=>x.athlete_id===athleteId).length,standards:R.get('pathway_standards').length}};
