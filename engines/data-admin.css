@@ -11,3 +11,4 @@
 .pn-foot.page-card{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:96px}
 .tt-rows{display:flex;flex-direction:column;gap:6px;margin:8px 0}.tt-row{display:grid;grid-template-columns:110px 64px 70px 70px minmax(0,1.5fr) minmax(0,1fr) auto;gap:6px;align-items:center}.tt-row input,.tt-row select{max-width:100%;min-width:0}
 @media(max-width:560px){.tt-row{grid-template-columns:1fr 70px 1fr 1fr;border-bottom:1px solid var(--line,#eef2f4);padding-bottom:6px}.tt-row [data-tt="squads"]{grid-column:1/4}.tt-row [data-tt="venue"]{grid-column:1/4}}
+.pn-phase-now{background:#e5f4ea;border-left-color:#1f6b3a}.pn-day-now{background:#e5f4ea;font-weight:700}

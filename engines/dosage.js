@@ -81,7 +81,8 @@
     if(either(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i))return'Regeneration';
     if(either(/\b(?:development|\bdev\b)\b/i))return'Development';
     if(either(/\b(?:overload|\bol\b)\b/i))return'Overload';
-    if(either(/\b(?:threshold|\bthr\b)\b/i))return'Threshold';
+    // "AT" (Anaerobic Threshold) is Andy's shorthand -- matched case-sensitively so the English word "at" never counts.
+    if(either(/\b(?:threshold|\bthr\b)\b/i)||/\bAT\b/.test(v)||/\bAT\b/.test(raw))return'Threshold';
     if(either(/\b(?:clearance|\bcl\b)\b/i))return'Clearance';
     // 6 Oct 2026: Andy's deck shorthand "@100p" / "@200p" (CLAUDE.md 2.27: race-target intent) was not
     // recognised here, so "4 x 50 #1 @100p @1:30" fell through to the structural default and dosed as
@@ -177,7 +178,9 @@
   function merge(rows=[]){const out=blank();for(const r of rows){if(!r)continue;out.rawMetres+=Number(r.rawMetres)||0;out.stimulusUnits+=Number(r.stimulusUnits)||0;out.unclassifiedMetres+=Number(r.unclassifiedMetres)||0;for(const k of SYSTEMS){out.systems[k].metres+=Number(r.systems?.[k]?.metres)||0;out.systems[k].units+=Number(r.systems?.[k]?.units)||0;}for(const k of STROKES){out.strokes[k].metres+=Number(r.strokes?.[k]?.metres)||0;out.strokes[k].units+=Number(r.strokes?.[k]?.units)||0;}}return finish(out);}
   function repSystem(item,rep){
     const p=(item?.repPattern||[]).find(x=>Number(x?.rep)===rep)||(item?.repPattern||[])[rep-1];
-    if(p?.zone)return systemFrom(p.zone,{...item,raw:p.text||item.raw});
+    // Classify the rep's own zone line only -- passing the whole item let its other cue lines ("#1-3 Dev")
+    // win, so a "#4-6 OL" rep dosed as Development (10 Oct 2026, from Andy's methodology examples).
+    if(p?.zone)return systemFrom(p.zone,{raw:p.text||p.zone});
     const ri=(item?.repInstructions||[]).find(x=>Number(x?.rep)===rep)||(item?.repInstructions||[])[rep-1];
     if(ri?.raceIntent)return'Race pace';if(ri?.drill||/\bdrill\b/i.test(txt(ri?.label)))return'Skill / Technical';
     if(item?.zone)return systemFrom(item.zone,item);

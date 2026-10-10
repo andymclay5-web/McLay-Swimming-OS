@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,D=M?.dataRegistry,U=M?.util;if(!M||!D||!U)return;
-  const A=M.dataAdminUI={build:'v4-data-admin-ui-20261005-plan-next-season'};let preview=null,lastRaw='',lastFilename='',genPreview=null,planMode=false,planDraft=null,planResult=null;
+  const A=M.dataAdminUI={build:'v4-data-admin-ui-20261005-plan-next-season'};let preview=null,lastRaw='',lastFilename='',genPreview=null,planMode=false,planDraft=null,planResult=null,planView='overview';
   const esc=v=>U.escape(String(v??'')),canManage=()=>((M.access?.role?.()||'owner')==='owner');
   const F={
     wa_points:[['course','Course (SCM/LCM)'],['sex','Sex (M/F)'],['distance','Distance'],['stroke','Stroke'],['base_seconds','Base time']],
@@ -335,6 +335,28 @@
   function step4Html(d,pv){if(d.step<4||pv.error)return'';const bySquad=pv.seasonRow.squads.map(sq=>({sq,rows:pv.weeklyRows.filter(w=>w.squad===sq)}));
     return`<div class="pn-body"><p class="muted">Every week below becomes the weekly focus Coach Hub and the session check use. You can still adjust any single week later.</p>${bySquad.map(({sq,rows})=>`<details class="pn-more" ${bySquad.length===1?'open':''}><summary>${esc(sq)} · ${rows.length} weeks</summary>${rows.map(w=>`<div class="pn-day"><span>${esc(niceDate(w.week_start))}</span><span>${esc(w.objective)}</span></div>`).join('')}</details>`).join('')}
       <div class="pn-actions"><button type="button" class="pn-primary" id="pnCreate">Create season plan</button></div></div>`;}
+  // ---------------------------------------------------------------------------
+  // Season plan overview (10 Oct 2026, Andy: "the plan season needs to show where season plan is visible").
+  // Opening the planner when a season exists now SHOWS that season -- its blocks, where this week sits,
+  // every week -- instead of always starting the four-step wizard. "Plan a new season" still opens it.
+  // ---------------------------------------------------------------------------
+  function activeSeason(){const today=iso(new Date()),rows=seasonRowsAll().filter(r=>rowStart(r));
+    return rows.find(r=>rowStart(r)<=today&&(!rowEnd(r)||rowEnd(r)>=today))||rows.filter(r=>rowStart(r)>today).sort((a,b)=>rowStart(a).localeCompare(rowStart(b)))[0]||null;}
+  function seasonWeeks(season){const ids=new Set([season.id].filter(Boolean)),sq=(season.squads||[])[0]||'';
+    const rows=(M.state.weeklyPlans||[]).filter(w=>(ids.has(w.season_plan_id)||(String(w.week_start||'')>=rowStart(season)&&(!rowEnd(season)||String(w.week_start||'')<=rowEnd(season))))&&(!sq||!w.squad||w.squad===sq));
+    return rows.sort((a,b)=>String(a.week_start).localeCompare(String(b.week_start)));}
+  function seasonOverviewHtml(season){
+    const today=iso(new Date()),weeks=seasonWeeks(season),blocks=[];
+    for(const w of weeks){const last=blocks[blocks.length-1],ph=w.phase||w.focus||'Week';if(last&&last.phase===ph){last.weeks++;last.end=w.week_start;}else blocks.push({phase:ph,start:w.week_start,end:w.week_start,weeks:1,system:w.primary_system||''});}
+    const curIdx=weeks.findIndex(w=>{const a=Date.parse(`${w.week_start}T12:00:00Z`),t=Date.parse(`${today}T12:00:00Z`);return t>=a&&t<a+7*86400000;});
+    const status=rowStart(season)>today?`Starts ${niceDate(rowStart(season))}`:curIdx>=0?`Week ${curIdx+1} of ${weeks.length} · ${weeks[curIdx].phase||''}`:'';
+    const meet=season.meets?.[0];
+    return`<section class="page-card pn-wrap" data-season-overview><div class="eyebrow">SEASON PLAN</div><h1>${esc(season.name||'Season')}</h1>
+      <p>${esc((season.squads||[]).join(' + '))} · ${esc(niceDate(rowStart(season)))} → ${esc(meet?.name||'target meet')} ${esc(niceDate(meet?.date||rowEnd(season)))} · ${weeks.length} weeks</p>${status?`<p><b>${esc(status)}</b></p>`:''}</section>
+      <section class="page-card"><h2 style="margin-top:0">Blocks</h2>${blocks.map(b=>{const on=curIdx>=0&&weeks[curIdx]&&weeks[curIdx].week_start>=b.start&&weeks[curIdx].week_start<=b.end;return`<div class="pn-phase${on?' pn-phase-now':''}"><div><b>${esc(b.phase)}</b><small>${esc(niceDate(b.start))} · ${b.weeks} week${b.weeks===1?'':'s'}${on?' · this week':''}</small></div><span>${esc(b.system)}</span></div>`;}).join('')||'<p class="muted">No weeks found for this season.</p>'}</section>
+      <section class="page-card"><details class="pn-more"${weeks.length<=8?' open':''}><summary>Every week (${weeks.length})</summary>${weeks.map((w,i)=>`<div class="pn-day${i===curIdx?' pn-day-now':''}"><span>${esc(niceDate(w.week_start))}</span><span>${esc(w.objective||w.focus||'')}</span></div>`).join('')}</details><p class="muted" style="font-size:13px">Change a single week under Data &amp; References → Active weekly plan.</p></section>
+      <section class="page-card pn-foot"><button type="button" class="pn-primary" data-pn-new>Plan a new season</button><button type="button" data-pn-exit="hub">Back to Coach Hub</button><button type="button" data-pn-exit="data">Edit single weeks</button></section>`;
+  }
   function renderPlanner(h){
     if(!M.seasonPlanner||!M.standardTimetable){
       h.innerHTML='<section class="empty-card" data-pn-loading><b>Loading the season planner…</b></section>';
@@ -345,9 +367,10 @@
       return;
     }
     M.seasonPlanner.ensureSeeds();const d=draft();
-    if(planResult){h.innerHTML=`<section class="page-card pn-wrap"><div class="eyebrow">PLAN NEXT SEASON</div><h1>✓ ${esc(planResult.name)} is set</h1><p>${esc(planResult.squads.join(' + '))} · ${planResult.weeks} weeks · ${esc(niceDate(planResult.start))} → ${esc(planResult.meet)} ${esc(niceDate(planResult.end))}</p><p class="muted">Coach Hub shows this season from its first week. Single weeks can be adjusted any time under Data & References → Active weekly plan.</p><div class="pn-actions"><button type="button" class="pn-primary" data-pn-exit="hub">Back to Coach Hub</button><button type="button" data-pn-again>Plan another squad</button></div></section>`;bindPlanner(h);return;}
+    if(!planResult&&planView==='overview'){const season=activeSeason();if(season){h.innerHTML=seasonOverviewHtml(season);bindPlanner(h);return;}}
+    if(planResult){h.innerHTML=`<section class="page-card pn-wrap"><div class="eyebrow">PLAN NEXT SEASON</div><h1>✓ ${esc(planResult.name)} is set</h1><p>${esc(planResult.squads.join(' + '))} · ${planResult.weeks} weeks · ${esc(niceDate(planResult.start))} → ${esc(planResult.meet)} ${esc(niceDate(planResult.end))}</p><p class="muted">Coach Hub shows this season from its first week. Single weeks can be adjusted any time under Data & References → Active weekly plan.</p><div class="pn-actions"><button type="button" class="pn-primary" data-pn-exit="hub">Back to Coach Hub</button><button type="button" data-pn-view>View season plan</button><button type="button" data-pn-again>Plan another squad</button></div></section>`;bindPlanner(h);return;}
     const pv=d.step>=3?planPreview():null;
-    h.innerHTML=`<section class="page-card pn-wrap"><div class="eyebrow">PLAN NEXT SEASON</div><h1>Plan next season</h1><p>${planContextLine()}</p><p class="muted">Four steps. Nothing changes until you press <b>Create season plan</b>.</p></section>
+    h.innerHTML=`<section class="page-card pn-wrap"><div class="eyebrow">PLAN NEXT SEASON</div><h1>Plan next season</h1><p>${planContextLine()}</p>${activeSeason()?'<p><button type="button" data-pn-view>View current season plan</button></p>':''}<p class="muted">Four steps. Nothing changes until you press <b>Create season plan</b>.</p></section>
       <section class="page-card pn-card">${stepHead(1,'Season & target meet',d)}${step1Html(d)}</section>
       <section class="page-card pn-card">${stepHead(2,'Standard week',d)}${step2Html(d)}</section>
       <section class="page-card pn-card">${stepHead(3,'Phases',d)}${pv?step3Html(d,pv):''}</section>
@@ -364,13 +387,15 @@
     h.querySelectorAll('[data-pn-goto]').forEach(b=>b.addEventListener('click',()=>{draft().step=Number(b.dataset.pnGoto);render();}));
     h.querySelectorAll('[data-pn-exit]').forEach(b=>b.addEventListener('click',()=>{const to=b.dataset.pnExit;planMode=false;planResult=null;if(to==='data')render();else go(to);}));
     h.querySelector('[data-pn-again]')?.addEventListener('click',()=>{planResult=null;planDraft=null;render();});
+    h.querySelector('[data-pn-new]')?.addEventListener('click',()=>{planView='wizard';planResult=null;planDraft=null;render();});
+    h.querySelector('[data-pn-view]')?.addEventListener('click',()=>{planView='overview';planResult=null;render();});
     h.querySelector('#pnCreate')?.addEventListener('click',async()=>{if(!canManage())return M.toast?.('Owner permission required');const pv=planPreview();if(pv.error)return M.toast?.(pv.error);const b=h.querySelector('#pnCreate');b.disabled=true;b.textContent='Creating…';
       try{const touched=pv.seasonRow.squads,meta={version:pv.seasonRow.version,effectiveFrom:pv.seasonRow.start_date,source:pv.seasonRow.source};await commitSeasonPlannerType('season_plan',[pv.seasonRow],touched,meta);await commitSeasonPlannerType('weekly_plan',pv.weeklyRows,touched,meta);
         planResult={name:pv.seasonRow.name,squads:touched,weeks:pv.totalWeeks,start:pv.seasonRow.start_date,end:pv.seasonRow.end_date,meet:pv.seasonRow.meets?.[0]?.name||'target meet'};planDraft=null;M.toast?.('Season plan created');render();}
       catch(e){b.disabled=false;b.textContent='Create season plan';M.toast?.(e.message||String(e));}});
   }
-  function openPlanner(){if(!canManage())return M.toast?.('Owner permission required');planMode=true;planResult=null;const mh=document.querySelector('#modalHost');if(mh&&mh.innerHTML){mh.innerHTML='';try{M.nav?.clearTransient?.()}catch{}}go('data');if(M.state?.settings?.view==='data')render();}
-  A.openPlanner=openPlanner;A.planContextLine=planContextLine;A.isPlanMode=()=>planMode;
+  function openPlanner(opts={}){if(!canManage())return M.toast?.('Owner permission required');planMode=true;planResult=null;planView=opts&&opts.new?'wizard':'overview';const mh=document.querySelector('#modalHost');if(mh&&mh.innerHTML){mh.innerHTML='';try{M.nav?.clearTransient?.()}catch{}}go('data');if(M.state?.settings?.view==='data')render();}
+  A.openPlanner=openPlanner;A.activeSeason=()=>{try{return activeSeason();}catch{return null;}};A.planContextLine=planContextLine;A.isPlanMode=()=>planMode;
   document.addEventListener('click',e=>{const b=e.target.closest?.('[data-msos-plan-season]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();openPlanner();},true);
   // Leaving through the bottom nav or the other Data shortcuts returns Data & References to its normal page.
   document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav],[data-msos-data],[data-loop-data]'))planMode=false;},true);

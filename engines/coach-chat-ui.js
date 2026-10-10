@@ -6,7 +6,7 @@
 // role gate needed, matching how Capture/Voice/Edit/Finish work today.
 (function(g){
   const M=g.MSOS4,K=M?.coachChat;if(!M?.state||!K)return;
-  const BUILD='v4-coach-chat-20261004-extensions',U=M.coachChatUI={build:BUILD};
+  const BUILD='v4-coach-chat-20261010-ask-msos',U=M.coachChatUI={build:BUILD};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const timeLabel=iso=>{try{return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});}catch{return'';}};
@@ -15,11 +15,15 @@
   const CAPTURE_ICON={video:'▶',photo:'▣',voice:'♪',note:'✎'};
   function captureLabel(c){const t=String(c?.capture_type||'note').toLowerCase();const name=text(c?.text_content||c?.title);return `${CAPTURE_ICON[t]||'✎'} ${name||(t==='note'?'Note':t.charAt(0).toUpperCase()+t.slice(1))}`;}
 
+  const AI_KEY='msos-ai';
   let panelEl=null,activeKey=K.GROUP_KEY,unsubscribe=null,pendingCaptureId=null;
 
   function channelList(){
     const roster=K.roster();
-    const rows=[
+    // 10 Oct 2026 (Andy): the AI assistant also lives in chat -- "the question is asked in msos and the
+    // answer is given here". Its thread is drawn by engines/msos-assistant.js; nothing is sent to other coaches.
+    const ai=M.assistant?.mountThread?[{key:AI_KEY,label:'✦ Ask MSOS',sub:'AI help — sessions, the plan, your methodology'}]:[];
+    const rows=[...ai,
       {key:K.GROUP_KEY,label:'Whole group',sub:'Everyone on the team'},
       {key:K.COACHES_KEY,label:'Coaches only',sub:'Just the coaching team'},
     ].concat(roster.map(r=>({key:K.dmThreadKey(r.user_id),label:r.display_name,sub:r.role==='owner'?'Owner':'Assistant coach'})));
@@ -30,7 +34,7 @@
     const host=panelEl.querySelector('[data-chat-channels]');if(!host)return;
     const rows=channelList();
     host.innerHTML=rows.map(r=>{
-      const unread=K.unreadCount(r.key);
+      const unread=r.key===AI_KEY?0:K.unreadCount(r.key);
       return `<button type="button" class="cc-channel${r.key===activeKey?' cc-channel-active':''}" data-chat-channel="${esc(r.key)}"><span class="cc-channel-label">${esc(r.label)}</span><span class="cc-channel-sub">${esc(r.sub)}</span>${unread?`<span class="cc-channel-badge">${unread>9?'9+':unread}</span>`:''}</button>`;
     }).join('')||'<p class="cc-empty">No other coaches yet.</p>';
     host.querySelectorAll('[data-chat-channel]').forEach(btn=>{btn.onclick=()=>openChannel(btn.dataset.chatChannel);});
@@ -41,6 +45,7 @@
     const rows=channelList();
     const current=rows.find(r=>r.key===activeKey);
     pendingCaptureId=null;
+    if(activeKey===AI_KEY){host.innerHTML=`<header class="cc-thread-head"><button type="button" data-chat-back>‹ Channels</button><b>${esc(current?.label||'Ask MSOS')}</b></header><div class="cc-ai" data-chat-ai></div>`;host.querySelector('[data-chat-back]').onclick=()=>{activeKey=null;renderPanel();};M.assistant.mountThread(host.querySelector('[data-chat-ai]'));return;}
     host.innerHTML=`<header class="cc-thread-head"><button type="button" data-chat-back>‹ Channels</button><b>${esc(current?.label||'Chat')}</b></header><div class="cc-thread-messages" data-chat-messages></div><div class="cc-attach-chip" data-chat-attach-chip hidden></div><form class="cc-compose" data-chat-compose><button type="button" class="cc-attach-btn" data-chat-attach title="Attach a capture">📎</button><input type="text" maxlength="4000" placeholder="Message…" data-chat-input autocomplete="off"><button type="submit">Send</button></form>`;
     host.querySelector('[data-chat-back]').onclick=()=>{activeKey=null;renderPanel();};
     host.querySelector('[data-chat-attach]').onclick=()=>openAttachPicker(host);
@@ -89,7 +94,7 @@
   }
 
   function paintMessages(){
-    if(!panelEl||activeKey==null)return;
+    if(!panelEl||activeKey==null||activeKey===AI_KEY)return;
     const box=panelEl.querySelector('[data-chat-messages]');if(!box)return;
     const me=M.store.auth()?.user?.id;
     const msgs=K._snapshot(activeKey);

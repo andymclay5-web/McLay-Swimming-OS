@@ -279,8 +279,8 @@
     let syncCard='';
     if(owner){const st=M.state?.settings||{},pending=(M.state?.pending||[]).length,sus=st.cloudWritesSuspended,guardOk=M.release?.guardianCurrent?.();
       let why='';if(!st.cloudWritesEnabled)why=sus?`Switched off because this build's Guardian check failed${sus.failed?.length?` (${sus.failed.join(', ')})`:''}.`:'Your sessions, Roll and captures are only on this phone until it is turned on.';else if(!guardOk)why='Waiting for this build\'s Guardian check before sending.';
-      if(why)syncCard=`<section class="page-card hub-sync" data-hub-sync><div><b>Cloud sync is ${st.cloudWritesEnabled?'waiting':'off'}</b>${pending?` · ${pending.toLocaleString()} change${pending===1?'':'s'} waiting to send`:''}<p>${esc(why)} Other coaches, swimmer phones and the TV only see what reaches the cloud.</p></div><button type="button" class="hub-write" data-hub-sync-btn>${st.cloudWritesEnabled?'Check sync':'Turn on cloud sync'}</button></section>`;}
-    return`${syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button>${owner?'<button data-hub-team>Coach &amp; TV sign-in</button>':''}</div></section>`;
+      if(why)syncCard=`<section class="page-card hub-sync" data-hub-sync><div><b>Cloud sync is ${st.cloudWritesEnabled?'waiting':'off'}</b>${pending?` · ${pending.toLocaleString()} change${pending===1?'':'s'} waiting to send`:''}<p>${esc(why)} Other coaches, swimmer phones and the TV only see what reaches the cloud.</p><p class="hub-sync-status" data-hub-sync-status></p></div><button type="button" class="hub-write" data-hub-sync-btn>${st.cloudWritesEnabled?'Send now':'Turn on cloud sync'}</button></section>`;}
+    return`${syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button><button data-hub-tv>TV Board</button>${owner?'<button data-hub-team>Coaches &amp; sign-in</button>':''}</div></section>`;
   }
   function bindToday(h){
     h.querySelectorAll('[data-hub-write]').forEach(b=>b.addEventListener('click',()=>{M.actions?.openNewSession?.({date:b.dataset.hubWrite,slotId:b.dataset.hubSlot});}));
@@ -289,7 +289,13 @@
     h.querySelector('[data-hub-calendar]')?.addEventListener('click',()=>M.ui?.openSessionCalendar?.());
     // 9 Oct 2026: the coach-invite and sign-in screen (Connection) was only reachable from Data / diagnostics.
     h.querySelector('[data-hub-team]')?.addEventListener('click',()=>go('connection'));
-    h.querySelector('[data-hub-sync-btn]')?.addEventListener('click',()=>go('connection'));
+    // 10 Oct 2026, Andy: "When I tried to load tv board it just threw me back to here" -- the only TV button on
+    // the Hub was the sign-in link ("Coach & TV sign-in"), which opens Connection. The Hub now has a real TV
+    // Board button (same view as the header's TV Board) and the sign-in link no longer says TV.
+    h.querySelector('[data-hub-tv]')?.addEventListener('click',()=>go('tv',{restoreScroll:false}));
+    // 10 Oct 2026, Andy: "simplify the whole sync thing -- 1 push". The Hub button does it right here
+    // (app.js C.turnOnSync owns the steps); a failure shows the plain reason in the card.
+    h.querySelector('[data-hub-sync-btn]')?.addEventListener('click',async e=>{const b=e.currentTarget,out=h.querySelector('[data-hub-sync-status]');b.disabled=true;try{const r=await M.cloud.turnOnSync(t=>{if(out)out.textContent=t});M.toast?.(M.cloud.syncLine(r));h.dataset.loopHubRenderedAt='0';renderCoachHub();}catch(err){if(out)out.textContent=err.message||String(err);b.disabled=false;}});
     h.querySelector('[data-hub-squads]')?.addEventListener('click',()=>{hubAllSquads=!hubAllSquads;h.dataset.loopHubRenderedAt='0';renderCoachHub();});
     // Standard timetable engine missing on this page load (seen on Andy's phone, 10 Oct): load it again
     // once, then repaint so today's sessions appear.
