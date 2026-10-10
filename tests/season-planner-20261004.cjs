@@ -54,8 +54,15 @@ function loadInto(g, srcPath, src = fs.readFileSync(srcPath, 'utf8')) {
     const HIST_DATES = ['2026-05-11','2026-05-18','2026-05-25','2026-06-01','2026-06-08','2026-06-15','2026-06-22','2026-06-29','2026-07-06','2026-07-13','2026-07-20','2026-07-27','2026-08-03','2026-08-10','2026-08-17','2026-08-24','2026-08-31','2026-09-07','2026-09-14','2026-09-21','2026-09-28'];
     const starts = P.weekStarts('2026-05-11', '2026-09-28');
     assert.deepEqual(starts, HIST_DATES, 'weekStarts() must reproduce the exact 21 week_start dates already shipped in engines/plan-reference-2026.js\'s real Winter 2026 data');
+    // 10 Oct 2026 (Andy): spare weeks now go to the first aerobic block, counting back from the meet --
+    // superseding the Winter 2026 4/4/4/4/5 split this test used to reproduce. Same 21 dates: Base takes
+    // the 3 spare weeks, taper keeps its set 2.
     const alloc = P.allocatePhases(starts.length, P.SEED_PHASES);
-    assert.deepEqual(alloc.map((a) => a.weeks), [4, 4, 4, 4, 5], 'the real historical season was authored as 4/4/4/4/5 weeks (base/underwater/turns/finish/taper) -- the generator must reproduce that exact split for the same dates, not an approximation');
+    assert.deepEqual(alloc.map((a) => a.weeks), [7, 4, 4, 4, 2], 'spare weeks go to Base Skills; later phases and taper keep their set lengths');
+    // Summer 2026/27: Mon 12 Oct 2026 -> NAGS Sun 11 Apr 2027 = 27 week rows.
+    const summer = P.weekStarts('2026-10-12', '2027-04-11');
+    assert.equal(summer.length, 27);
+    assert.deepEqual(P.allocatePhases(summer.length, P.SEED_PHASES).map((a) => a.weeks), [13, 4, 4, 4, 2]);
     console.log('SEASON_PLANNER_HISTORICAL_MATCH_PASS');
   }
 
@@ -64,15 +71,16 @@ function loadInto(g, srcPath, src = fs.readFileSync(srcPath, 'utf8')) {
   {
     const TAPER_LINE = 'const taperWeeks=totalWeeks-weeksPerPhase.reduce((a,b)=>a+b,0);';
     assert.ok(originalPlanner.includes(TAPER_LINE), 'expected the exact taper-remainder line in the real source -- refusing to run against unexpected state');
-    const brokenSrc = originalPlanner.replace(TAPER_LINE, 'const taperWeeks=taperMin;');
+    // Fail-before: without the spare-weeks-to-Base line, the old behaviour (taper absorbs the remainder)
+    // returns -- a 7-week taper for Summer.
+    const BASE_LINE = 'if(weeksPerPhase.length)weeksPerPhase[0]+=availableForNonTaper-sumDesired;';
+    assert.ok(originalPlanner.includes(BASE_LINE), 'expected the spare-weeks-to-Base line in the real source');
+    const brokenSrc = originalPlanner.replace(BASE_LINE, '');
     const g = makeSandbox();
     loadInto(g, PLANNER_PATH, brokenSrc);
     const P = g.MSOS4.seasonPlanner;
-    const starts = P.weekStarts('2026-05-11', '2026-09-28');
-    const alloc = P.allocatePhases(starts.length, P.SEED_PHASES);
-    assert.notDeepEqual(alloc.map((a) => a.weeks), [4, 4, 4, 4, 5], 'fail-before: with taper hardcoded to its minimum instead of absorbing the remainder, the historical split is NOT reproduced -- confirms test 1 is actually exercising that line, not passing by accident');
-    const totalAllocated = alloc.reduce((n, a) => n + a.weeks, 0);
-    assert.notEqual(totalAllocated, starts.length, 'the broken version also silently drops weeks (allocated total no longer matches the real week count) -- a second, independent symptom of the same bug');
+    const alloc = P.allocatePhases(P.weekStarts('2026-10-12', '2027-04-11').length, P.SEED_PHASES);
+    assert.deepEqual(alloc.map((a) => a.weeks), [4, 4, 4, 4, 11], 'fail-before: without that line the spare weeks pile into taper');
     console.log('SEASON_PLANNER_TAPER_REMAINDER_FAILBEFORE_PASS');
   }
 

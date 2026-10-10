@@ -43,7 +43,9 @@ const OFF='WARM UP\n400 free\nMAIN SET\n6 x 200 free steady 20s rest\nWARM DOWN\
     assert.equal(r.shorthandRP,200,'"@100p" shorthand must dose as Race pace');assert.equal(r.shorthandDev,0);
 
     // 4: Add session modal -- live update.
-    await page.tap('#newSessionBtn');await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
+    // Fixed weekday (Tue 13 Oct 2026): today's slot can be one whose brief has no single-system check
+    // (e.g. Saturday's Rainbow Set), which would make this live-update assertion depend on the day it runs.
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
     await page.fill('#coreRaw',OFF);await page.waitForTimeout(600);
     const t1=await page.evaluate(()=>document.querySelector('#modalHost [data-msos-brief]').innerText);
     await page.fill('#coreRaw','');await page.waitForTimeout(600);
