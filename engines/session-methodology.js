@@ -324,13 +324,13 @@
     const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
   }
   function nzToday(){return new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});}
-  function slotIdentity(slotId){try{const today=nzToday(),slot=(M.calendar?.slots?.(today)||[]).find(x=>x.id===slotId);return slot?M.calendar.identityFromSlot(slot):null;}catch{return null;}}
+  function slotIdentity(slotId,date){try{const d=date||nzToday(),slot=(M.calendar?.slots?.(d)||[]).find(x=>x.id===slotId);return slot?M.calendar.identityFromSlot(slot):null;}catch{return null;}}
   function parseDraft(rawText,identity){if(!text(rawText))return{id:'brief-draft',identity,blocks:[]};try{const s=M.parser.parse(rawText,{...identity,id:'brief-draft'});s.identity={...s.identity,...identity};s.id='brief-draft';return s;}catch{return{id:'brief-draft',identity,blocks:[]};}}
-  function installNewSessionBrief(){
+  function installNewSessionBrief(opts={}){
     const host=document.querySelector('#modalHost'),raw=host?.querySelector('#coreRaw'),slot=host?.querySelector('#coreSlot');if(!raw||!slot)return;
     const anchor=host.querySelector('.intake-tabs')||raw.closest('label')||raw;
-    const fallbackId=()=>({date:nzToday(),dayPart:new Date().getHours()>=12?'PM':'AM',squads:['National','Development']});
-    const schedule=liveBrief(host,anchor,()=>{const id=slotIdentity(slot.value)||fallbackId();return parseDraft(raw.value,id);});
+    const forDate=/^\d{4}-\d{2}-\d{2}$/.test(String(opts?.date||''))?opts.date:nzToday();const fallbackId=()=>({date:forDate,dayPart:new Date().getHours()>=12?'PM':'AM',squads:['National','Development']});
+    const schedule=liveBrief(host,anchor,()=>{const id=slotIdentity(slot.value,forDate)||fallbackId();return parseDraft(raw.value,id);});
     raw.addEventListener('input',schedule);slot.addEventListener('change',schedule);
     // Voice/photo transcription fills the box programmatically (no input event): repaint on any change.
     new MutationObserver(schedule).observe(host.querySelector('#corePreview')||raw,{childList:true,characterData:true,subtree:true});

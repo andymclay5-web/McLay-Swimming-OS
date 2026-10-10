@@ -110,11 +110,9 @@
     out.push(targetMeetDate);
     return out;
   }
-  // Allocates totalWeeks across phases in order. Each non-taper phase gets its own declared `weeks` when
-  // there is room; taper always gets at least its own `weeks` (a minimum here, not a target) and absorbs
-  // whatever is left over -- so a normal-length season gives taper the real remainder (the historical Winter
-  // 2026 data: 21 weeks total, 4 each for the first four phases, taper absorbs the remaining 5), while a
-  // short season compresses the EARLIER phases first rather than ever cutting into taper's minimum.
+  // Allocates totalWeeks across phases in order. Each phase gets its own declared `weeks` counting back from
+  // the meet; spare weeks in a long season go to the first phase (Base Skills); a short season compresses
+  // the earlier phases first rather than ever cutting into taper's set length.
   function allocatePhases(totalWeeks,phases){
     const nonTaper=phases.filter(p=>p.key!=='taper');
     const taper=phases.find(p=>p.key==='taper')||{key:'taper',weeks:2};
@@ -124,7 +122,12 @@
     const sumDesired=desired.reduce((a,b)=>a+b,0);
     let weeksPerPhase;
     if(sumDesired<=availableForNonTaper){
+      // 10 Oct 2026, Andy: "i would add to the first aerobic block then count down from there." Spare weeks
+      // in a long season go to the FIRST phase (Base Skills, the aerobic block); every later phase keeps its
+      // own length counting back from the meet, and taper stays at its set length. (Previously the spare
+      // weeks went to taper -- a 23-week season got a 7-week taper.)
       weeksPerPhase=desired.slice();
+      if(weeksPerPhase.length)weeksPerPhase[0]+=availableForNonTaper-sumDesired;
     }else{
       // Compress proportionally, floor, then hand out any leftover weeks (from flooring) one at a time to
       // the phases with the largest remainder, then guarantee every phase keeps at least 1 week if any are
