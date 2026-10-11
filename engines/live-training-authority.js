@@ -1,6 +1,6 @@
 'use strict';
 (function(g){
-  const BUILD='v4-live-training-authority-20260910a-cloud-broadcast';
+  const BUILD='v4-live-training-authority-20261012-tv-overlay';
   function install(){
     const M=g.MSOS4,U=M?.util,L=M?.live;
     if(!M||!U||!L||M.liveTrainingAuthority?.build===BUILD)return false;
@@ -16,7 +16,7 @@
     // liveTimesPanel there). Scoped to the current session, same as attendance/adaptationOverrides just
     // below, rather than cloned whole like trainingTestResults already was -- there is no reason for a TV
     // showing tonight's session to receive every timed set from the whole season on every publish.
-    L.payload=state=>{const sid=state?.settings?.selectedSessionId||'';return{kind:'v4-live-state',build:M.BUILD,from:L.instanceId,at:U.now(),authority:sourceAuthority(),sourceView:currentView(),sourceRole:currentRole(),surfaceMode:state?.settings?.surfaceMode||'training',sessionId:sid,session:sid?clone(state.canonicalSessions?.[sid]||null):null,attendance:clone((state.attendance||[]).filter(x=>!sid||x.session_id===sid)),adaptationOverrides:clone((state.adaptationOverrides||[]).filter(x=>!sid||x.sessionId===sid)),timedSets:clone((state.timedSets||[]).filter(x=>!sid||x.session_id===sid)),trainingTestResults:clone(state.trainingTestResults||[]),revision:Number(state?.settings?.liveRevision||0)}};
+    L.payload=state=>{const sid=state?.settings?.selectedSessionId||'';return{kind:'v4-live-state',build:M.BUILD,from:L.instanceId,at:U.now(),authority:sourceAuthority(),sourceView:currentView(),sourceRole:currentRole(),surfaceMode:state?.settings?.surfaceMode||'training',sessionId:sid,session:sid?clone(state.canonicalSessions?.[sid]||null):null,attendance:clone((state.attendance||[]).filter(x=>!sid||x.session_id===sid)),adaptationOverrides:clone((state.adaptationOverrides||[]).filter(x=>!sid||x.sessionId===sid)),timedSets:clone((state.timedSets||[]).filter(x=>!sid||x.session_id===sid)),trainingTestResults:clone(state.trainingTestResults||[]),tvOverlay:clone(state?.settings?.tvOverlay||null),revision:Number(state?.settings?.liveRevision||0)}};
     L.apply=msg=>{
       if(!msg||msg.kind!=='v4-live-state'||msg.from===L.instanceId||msg.build!==M.BUILD)return false;
       const view=currentView();
@@ -40,6 +40,8 @@
         if(msg.session?.id)M.state.canonicalSessions[msg.session.id]=clone(msg.session);
         if(msg.sessionId){M.state.attendance=(M.state.attendance||[]).filter(x=>x.session_id!==msg.sessionId).concat(clone(msg.attendance||[]));M.state.adaptationOverrides=(M.state.adaptationOverrides||[]).filter(x=>x.sessionId!==msg.sessionId).concat(clone(msg.adaptationOverrides||[]));M.state.timedSets=(M.state.timedSets||[]).filter(x=>x.session_id!==msg.sessionId).concat(clone(msg.timedSets||[]));}
         if(Array.isArray(msg.trainingTestResults))M.state.trainingTestResults=clone(msg.trainingTestResults);
+        // 12 Oct 2026: what the coach put on top of the TV Board (engines/tv-display.js) travels with the session.
+        if(view==='tv'&&Object.prototype.hasOwnProperty.call(msg,'tvOverlay'))M.state.settings.tvOverlay=clone(msg.tvOverlay);
         M.state.settings.view=view;M.state.settings.activeRole=role;M.state.settings.activeUserAthleteId=aid;M.state.settings.assistantId=assistantId;
         if(msg.session?.id&&((view==='tv'&&role!=='swimmer')||(view==='swimmer'&&role==='swimmer'&&M.access?.sessionAllowed?.(msg.session))))M.state.settings.selectedSessionId=msg.session.id;
         M.state.settings.liveRevision=Math.max(Number(M.state.settings.liveRevision||0),Number(msg.revision||0));

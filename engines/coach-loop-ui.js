@@ -264,7 +264,7 @@
     const actions=s?`<button type="button" data-hub-open="${esc(s.id)}">Open</button>${canWrite?`<button type="button" data-hub-edit="${esc(s.id)}">Edit</button>`:''}`:(canWrite?`<button type="button" class="hub-write" data-hub-write="${esc(g.date)}" data-hub-slot="${esc(g.slotId)}">Write session</button>`:'');
     return`<div class="hub-slot"><div class="hub-slot-main"><div class="hub-slot-when">${esc(g.dayPart)} ${esc(clock12(g.start))}</div><div><b>${esc(g.squads.join(' + '))}</b>${g.venue&&!/aquagym/i.test(g.venue)?` <span class="muted">· ${esc(g.venue)}</span>`:''}<div class="hub-slot-status">${status}</div></div></div><div class="hub-slot-actions">${actions}</div></div>`;
   }
-  function todayHtml(){
+  function hubParts(){
     const today=nzToday(),owner=(M.access?.role?.()||'owner')==='owner',canWrite=M.access?.can?M.access.can('session.create'):true,season=seasonToday(today);
     const seasonBtn=owner?(season.status==='current'?'<button type="button" data-msos-plan-season>Season plan</button>':'<button type="button" class="hub-write" data-msos-plan-season>Plan next season</button>'):'';
     const seasonCard=season.status==='current'
@@ -280,8 +280,21 @@
     if(owner){const st=M.state?.settings||{},pending=(M.state?.pending||[]).length,sus=st.cloudWritesSuspended,guardOk=M.release?.guardianCurrent?.();
       let why='';if(!st.cloudWritesEnabled)why=sus?`Switched off because this build's Guardian check failed${sus.failed?.length?` (${sus.failed.join(', ')})`:''}.`:'Your sessions, Roll and captures are only on this phone until it is turned on.';else if(!guardOk)why='Waiting for this build\'s Guardian check before sending.';
       if(why)syncCard=`<section class="page-card hub-sync" data-hub-sync><div><b>Cloud sync is ${st.cloudWritesEnabled?'waiting':'off'}</b>${pending?` · ${pending.toLocaleString()} change${pending===1?'':'s'} waiting to send`:''}<p>${esc(why)} Other coaches, swimmer phones and the TV only see what reaches the cloud.</p><p class="hub-sync-status" data-hub-sync-status></p></div><button type="button" class="hub-write" data-hub-sync-btn>${st.cloudWritesEnabled?'Send now':'Turn on cloud sync'}</button></section>`;}
-    return`${syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${seasonCard}</section><section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button><button data-loop-swimmers>Swimmers</button><button data-loop-reports>Reports</button><button data-hub-tv>TV Board</button>${owner?'<button data-hub-team>Coaches &amp; sign-in</button>':''}</div></section>`;
+    return{syncCard,seasonCard,days:`<section class="page-card hub-days" data-hub-days>${dayHtml}<div class="loop-quick hub-more">${mine||hubAllSquads?`<button data-hub-squads>${hubAllSquads?'Just my squads':'Show all squads'}</button>`:''}<button data-hub-calendar>All sessions (calendar)</button></div></section>`,owner};
   }
+  // 12 Oct 2026 (Andy, voice): Coach Hub is the control panel -- "where you go to retrieve, to find, to input" --
+  // with "buttons for each action ... and the information behind that button, rather than being all sprawled
+  // down that screen". The Board stays where you live poolside. Everyday buttons large, setup ones smaller; an
+  // assistant coach sees only Today, Write session, Swimmers, Reports, Meet and Chat.
+  // Hidden markers stop older modules from injecting their own Hub cards (reporting, data health, dosage).
+  function hubButton(key,label,sub,cls=''){return`<button type="button" class="hub-btn ${cls}" ${key}><b>${label}</b>${sub?`<small>${sub}</small>`:''}</button>`;}
+  function homeHtml(){const p=hubParts(),owner=p.owner,canWrite=M.access?.can?M.access.can('session.create'):true;let unread=0;try{unread=M.coachChat?.totalUnread?.()||0;}catch{}
+    const big=[hubButton('data-hub-panel="today"','Today','sessions · write · open'),canWrite?hubButton('data-hub-write-now','Write session','straight into the writer'):'',owner?hubButton('data-hub-panel="input"','Input data','T400s · results · test sets'):'',hubButton('data-hub-panel="reports"','Reports &amp; analysis','session · week · season · tests'),hubButton('data-hub-panel="swimmers"','Swimmers','profiles · who has the app'),owner?hubButton('data-hub-tv','TV Board','show the session on the TV'):''].filter(Boolean);
+    const small=[owner?hubButton('data-msos-plan-season','Season plan','','small'):'',hubButton('data-hub-go="meet"','Meet','','small'),hubButton('data-hub-chat',`Coach chat${unread?` <span class="hub-badge">${unread>9?'9+':unread}</span>`:''}`,'','small'),owner?hubButton('data-hub-team','Coaches &amp; devices','','small'):'',owner?hubButton('data-msos-data','Data &amp; references','','small'):''].filter(Boolean);
+    return`${p.syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${p.seasonCard}</section><section class="hub-launch" data-hub-home><div class="hub-grid">${big.join('')}</div><div class="hub-grid hub-grid-small">${small.join('')}</div></section><span hidden data-msos-reports></span><span hidden data-msos-dosage="hub"></span>`;}
+  function backBar(title){return`<div class="hub-back"><button type="button" data-hub-back>‹ Coach Hub</button><h2>${title}</h2></div>`;}
+  // Old name kept for the session-detail path below.
+  function todayHtml(){const p=hubParts();return`${backBar('Today')}${p.days}${MARKERS}`;}
   function bindToday(h){
     h.querySelectorAll('[data-hub-write]').forEach(b=>b.addEventListener('click',()=>{M.actions?.openNewSession?.({date:b.dataset.hubWrite,slotId:b.dataset.hubSlot});}));
     h.querySelectorAll('[data-hub-open]').forEach(b=>b.addEventListener('click',()=>{if(M.selectSession?.(b.dataset.hubOpen)!==null)go('board',{restore:true});}));
@@ -305,6 +318,18 @@
   }
   L.todayHtml=todayHtml;L.slotGroups=slotGroups;L.seasonToday=seasonToday;
 
+  let hubPanel=null;
+  const PANEL_TITLES={input:'Input data',reports:'Reports &amp; analysis',swimmers:'Swimmers',today:'Today',session:'Session detail'};
+  const MARKERS='<span hidden data-msos-reports></span><span hidden data-msos-data></span><span hidden data-msos-dosage="hub"></span>';
+  function openPanel(p){hubPanel=p||null;const h=document.querySelector('#hubView');if(h)h.dataset.loopHubRenderedAt='0';renderCoachHub();try{window.scrollTo(0,0);}catch{}}
+  L.openHubPanel=openPanel;L.hubPanel=()=>hubPanel;L.setHubPanel=p=>{hubPanel=p||null;};
+  function bindHome(h){
+    h.querySelectorAll('[data-hub-panel]').forEach(b=>b.addEventListener('click',()=>openPanel(b.dataset.hubPanel)));
+    h.querySelector('[data-hub-back]')?.addEventListener('click',()=>openPanel(null));
+    h.querySelector('[data-hub-write-now]')?.addEventListener('click',()=>M.actions?.openNewSession?.({}));
+    h.querySelectorAll('[data-hub-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.hubGo)));
+    h.querySelector('[data-hub-chat]')?.addEventListener('click',()=>M.coachChatUI?.openPanel?.());
+  }
   L.hubRenderRuns=0;
   function renderCoachHub(){
     const h=document.querySelector('#hubView');if(!h)return;
@@ -313,14 +338,21 @@
     const t0=Date.now();
     {const c=hubCrumb();c.renderOpen=now();c.stage='hub:start';c.stageAt=now();c.stageBuild=M.BUILD||'';writeHubCrumb(c);}
     const finish=()=>{{const c=hubCrumb();delete c.renderOpen;c.stage='hub:done';if(c.lastStall)c.lastStall.acknowledged=true;c.stageAt=now();writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
-    const s=currentSession();if(!s){h.innerHTML=todayHtml();bindToday(h);h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));h.querySelector('[data-loop-reports]')?.addEventListener('click',()=>go('reports'));finish();return;}
+    if(!hubPanel){setStage('hub:home');h.innerHTML=homeHtml();bindToday(h);bindHome(h);finish();return;}
+    if(hubPanel!=='today'&&hubPanel!=='session'){setStage(`hub:${hubPanel}`);h.innerHTML=`${backBar(PANEL_TITLES[hubPanel]||'')}<div data-hub-panel-body="${esc(hubPanel)}"></div>${MARKERS}`;bindHome(h);const body=h.querySelector('[data-hub-panel-body]');
+      try{if(hubPanel==='input')M.inputData?.render?.(body);else if(hubPanel==='reports')M.hubPanels?.renderReports?.(body);else if(hubPanel==='swimmers')M.hubPanels?.renderSwimmers?.(body);}catch(e){body.innerHTML=`<p class="warn-text">${esc(e.message||e)}</p>`;}
+      finish();return;}
+    // Today is the day list only. The full per-session page (plan, makeup, dosage, evidence -- below) is no longer
+    // the Hub page Andy called sprawled; it opens on its own as Session detail (Reports & analysis > This session).
+    if(hubPanel==='today'){setStage('hub:today');h.innerHTML=todayHtml();bindToday(h);bindHome(h);finish();return;}
+    const s=currentSession();if(!s){h.innerHTML=hubPanel==='session'?`${backBar('Session detail')}<p class="page-card muted">No session open. Open one from Today or the Board.</p>${MARKERS}`:todayHtml();bindToday(h);bindHome(h);h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));h.querySelector('[data-loop-reports]')?.addEventListener('click',()=>go('reports'));finish();return;}
     const emptyCtx={season:null,week:null,weekSession:null,seasonName:'',seasonGoal:'',weeklyFocus:'',carry:'',todayFocus:'',technicalFocus:'',psychologicalFocus:'',linkStatus:'skipped'};
     const ctx=runSection('plan',()=>withPlanStatus(planContext(s),s),emptyCtx),sum=runSection('summary',()=>M.analysis?.summary?.(s,M.state)||{},{})||{},mix=runSection('mix',()=>sessionMix(s),()=>({total:0,zones:{},strokes:{},movement:{}})),meetInfo=runSection('meet',()=>{const meet=upcomingMeet(ctx,s);return{meet,entries:meet?.id&&M.meet?.visibleEntries?M.meet.visibleEntries(meet.id):[]};},()=>({meet:null,entries:[]})),meet=meetInfo.meet,entries=meetInfo.entries||[],carry=ctx.carry||runSection('carry',()=>recentCarry(s),''),psy=intentRows(ctx,s),zoneRows=topRows(mix.zones,mix.total),strokeRows=topRows(mix.strokes,mix.total),moveRows=topRows(mix.movement,mix.total),planned=Number(M.session?.total?.(s)||mix.total)||0,delivered=Number(sum?.delivered?.total??s.finish?.actualDistance??planned)||0;
     const tripped=trippedSections(),diag=hubDiagnostics();
     setStage('hub:html');
     const isToday=s.identity?.date===nzToday();
-    h.innerHTML=`${todayHtml()}
-      <details class="page-card loop-hub-detail" data-loop-session-detail ${isToday?'open':''}><summary><span class="eyebrow">SESSION DETAIL</span> <b>${esc(shortDate(s.identity?.date)||s.identity?.date||'')} ${esc(s.identity?.dayPart||'')} · ${esc((s.identity?.squads||[]).join(' + '))}</b><span class="muted"> — plan, makeup, dosage, evidence</span></summary>
+    h.innerHTML=`${hubPanel==='session'?backBar('Session detail'):todayHtml()}
+      <details class="page-card loop-hub-detail" data-loop-session-detail ${isToday||hubPanel==='session'?'open':''}><summary><span class="eyebrow">SESSION DETAIL</span> <b>${esc(shortDate(s.identity?.date)||s.identity?.date||'')} ${esc(s.identity?.dayPart||'')} · ${esc((s.identity?.squads||[]).join(' + '))}</b><span class="muted"> — plan, makeup, dosage, evidence</span></summary>
       <section class="page-card loop-hub-hero">
         <div class="eyebrow">SELECTED SESSION</div>
         <h1>${esc(`${s.identity?.date||''} ${s.identity?.dayPart||''}`.trim())}</h1>
@@ -340,7 +372,7 @@
       <section class="page-card"><div class="eyebrow">EVIDENCE FROM THIS SESSION</div><div class="loop-kpis"><span>${sum?.evidence?.changes||0} live changes</span><span>${sum?.evidence?.captures||0} captures</span><span>${sum?.evidence?.timedSets||0} timed sets</span></div><p class="muted">Evidence supports the coaching picture; it does not replace the plan or delivered-session truth.</p></section>
       </details>
       <details class="page-card" data-loop-hub-diagnostics><summary>Data / diagnostics</summary><p>Plan link: <b>${esc(ctx.linkStatus)}</b></p><p class="muted">Hub section timings: ${esc(Object.entries(diag.timings).map(([k,v])=>`${k} ${v}ms`).join(' · ')||'none yet')}${tripped.length?` · skipped: ${esc(tripped.join(', '))}`:''}${diag.lastStall?` · last unfinished attempt stuck at: ${esc(diag.lastStall.label)} (${esc(diag.lastStall.at)})`:''}${diag.storage!=='ok'?` · ${esc(diag.storage)}`:''}${diag.renderStalled&&!diag.renderStalled.sectionTripped?` · an earlier open stalled outside the guarded sections (${esc(diag.renderStalled.startedAt)})`:''}${Object.keys(diag.errors).length?` · errors: ${esc(Object.entries(diag.errors).map(([k,v])=>`${k}: ${v}`).join('; '))}`:''}</p><div class="loop-quick"><button data-loop-data>Data & References</button><button data-loop-guardian>Guardian</button><button data-loop-connection>Connection</button></div></details>`;
-    bindToday(h);
+    bindToday(h);bindHome(h);
     h.querySelector('[data-loop-board]')?.addEventListener('click',()=>go('board',{restore:true}));
     h.querySelector('[data-loop-swimmers]')?.addEventListener('click',()=>go('athletes'));
     h.querySelector('[data-loop-meet]')?.addEventListener('click',()=>go('meet'));

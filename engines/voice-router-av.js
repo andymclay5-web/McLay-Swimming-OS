@@ -62,7 +62,7 @@
     // cloud storage, not just the transcript, with zero app.js changes. parsed.mediaId is undefined for
     // every existing call site (live browser STT never had an audio file), so this is purely additive.
     if(parsed.mediaId)cap.media_id=parsed.mediaId;
-    state.captures=state.captures||[];state.captures.push(cap);M.store?.save?.(state);M.cloud?.stageCapture?.(cap);notifyOwnerIfAssistant(cap,parsed);return{ok:true,speak:`Saved${parsed.athlete?` for ${athleteName(parsed.athlete)}`:cap.squad?` for ${cap.squad}`:''}.`,data:cap};
+    state.captures=state.captures||[];state.captures.push(cap);M.store?.save?.(state);M.cloud?.stageCapture?.(cap);notifyOwnerIfAssistant(cap,parsed);if(state===M.state)setTimeout(()=>M.inputData?.offerFromNote?.(cap),0);return{ok:true,speak:`Saved${parsed.athlete?` for ${athleteName(parsed.athlete)}`:cap.squad?` for ${cap.squad}`:''}.`,data:cap};
   }
   // 2 Oct 2026 (Andy, after the South Island Champs garbled-transcript report, and his own explicit
   // follow-up): "quality is going to be probably the most important thing... I'd really like it to be the

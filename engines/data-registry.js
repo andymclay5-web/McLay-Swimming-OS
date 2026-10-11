@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,U=M?.util;if(!M||!U)return;
-  const D=M.dataRegistry={build:'v4-data-registry-20260822bg'};
+  const D=M.dataRegistry={build:'v4-data-registry-20261011-recover-active'};
   const DB='mclay_swimming_v4_data_registry',STORE='datasets';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),lc=v=>text(v).toLowerCase(),now=()=>new Date().toISOString();
   const TYPES={
@@ -126,5 +126,22 @@
   function activeRowsSync(type){const def=TYPES[type];if(!def)return[];if(type==='calendar')return M.state.publishedCalendar?.dates||[];return Array.isArray(M.state[def.field])?M.state[def.field]:[];}
   function catalog(){const reg=ensureState();return TYPE_ORDER.map(id=>({id,...TYPES[id],active:activeMeta(id),rows:activeRowsSync(id).length}));}
   D.TYPES=TYPES;D.TYPE_ORDER=TYPE_ORDER;D.ensureState=ensureState;D.parseText=parseText;D.detect=detect;D.normalizeRow=normalizeRow;D.normalized=normalized;D.preview=preview;D.commit=commit;D.activate=activate;D.getDataset=getDataset;D.activeMeta=activeMeta;D.activeRowsSync=activeRowsSync;D.catalog=catalog;D.invalidate=invalidate;D.exposeStandards=exposeStandards;
+  // 11 Oct 2026 (Andy: "the plans not set. I've done a season plan and confirmed the weekly"): until the storage
+  // fix in engines/storage.js (same build), every reload dropped which dataset was active and the old seed took
+  // its place; later saves then wrote that seed back over the saved copy. The committed datasets themselves were
+  // never lost -- they sit in this registry's own IndexedDB store. Once storage has hydrated, any planning or
+  // reference type with no active version gets its most recently committed dataset re-activated (the version the
+  // coach last saved). Only replace-mode types, so no rows are ever merged twice.
+  const RECOVER_TYPES=['season_plan','weekly_plan','calendar','national_standards','meet_qualifying','wa_points'];
+  async function listDatasets(){const db=await openDb();return new Promise((resolve,reject)=>{const q=db.transaction(STORE,'readonly').objectStore(STORE).getAll();q.onsuccess=()=>{const v=q.result||[];db.close();resolve(v)};q.onerror=()=>{const e=q.error;db.close();reject(e)}});}
+  async function recoverActive(){const reg=ensureState(),recovered=[];let all=[];try{all=await listDatasets();}catch{return recovered;}
+    for(const type of RECOVER_TYPES){if(reg.active[type])continue;const latest=all.filter(d=>d?.type===type&&Array.isArray(d.rows)&&d.rows.length).sort((a,b)=>String(b.importedAt||'').localeCompare(String(a.importedAt||'')))[0];if(!latest)continue;
+      const meta={id:latest.id,type,label:latest.label||TYPES[type]?.label,owner:latest.owner||TYPES[type]?.owner,version:latest.version||'',effectiveFrom:latest.effectiveFrom||'',source:latest.source||'',rowCount:latest.rowCount||latest.rows.length,importedAt:latest.importedAt||'',status:'active',impact:TYPES[type]?.impact||[],recovered:now()};
+      for(const v of reg.versions)if(v.type===type&&v.status==='active')v.status='superseded';if(!reg.versions.some(v=>v.id===latest.id))reg.versions.push(meta);else for(const v of reg.versions)if(v.id===latest.id)v.status='active';
+      reg.active[type]=latest.id;apply(type,latest.rows,latest.payload||null);recovered.push(type);}
+    if(recovered.length){M.store?.save?.(M.state);for(const t of recovered)invalidate(t,TYPES[t]?.impact||[]);}
+    D.lastRecovered=recovered;return recovered;}
+  D.recoverActive=recoverActive;D.listDatasets=listDatasets;
   ensureState();exposeStandards();
+  Promise.resolve(M.storageEngine?.readyPromise).then(()=>recoverActive()).catch(()=>{});
 })(globalThis);

@@ -288,10 +288,16 @@
     let bf=null,bc=null;try{bf=brief(s);bc=bf&&bf.source!=='none'?planTargetCheck(s,M.state,bf):null;}catch{}
     const briefLine=!bf||bf.source==='none'?'No plan covers this session yet':`${esc(bf.sessionFocus||bf.system||'Session focus')}${bc?.checked?(bc.matches?' · ✓ on brief':' · ⚠ off brief'):''}`;
     section.innerHTML=`<details class="msos-brief-board"><summary><span class="eyebrow">TODAY'S BRIEF</span> ${briefLine}</summary>${briefHtml(s,M.state,{compact:true})}<p class="muted">${esc(sum.dosageLine)}</p></details>${pending?`<div class="context-note msos-pending-methodology"><b>⚑ Flagged for review:</b> ${esc(pending.reasons.join('; '))}${owner?'':' Only Andy can mark this reviewed.'}</div>${owner?'<div class="hub-actions"><button type="button" data-methodology-reviewed>Mark reviewed</button></div>':''}`:(s.methodologyVerdict?.approved?'<div class="context-note ok">✓ Evidence check: this session\'s individual modifications preserve the intended stimulus.</div>':'')}`;
+    // Two renders in quick succession both awaited fetchOpenReview above, then both inserted a banner (Andy's
+    // Board showed TODAY'S BRIEF twice, 11 Oct). Clear again right before inserting so only the latest stays.
+    host.querySelectorAll('[data-methodology-banner]').forEach(x=>x.remove());if(currentSession()?.id!==s.id)return;
     const anchor=host.querySelector('.board-hero,.session-card,.board-header,.v4-block-nav')||host.firstElementChild;
     if(anchor)anchor.insertAdjacentElement(anchor.classList?.contains('v4-block-nav')?'beforebegin':'afterend',section);else host.prepend(section);
     section.querySelector('[data-methodology-reviewed]')?.addEventListener('click',async()=>{await markReviewed(s,pending.alertId||null);UI.renderBoard?.();});
   }
+  SM.refreshBanner=()=>{if((M.state?.settings?.view||'board')==='board')installBanner();};
+  // A plan restored or changed in Data & References repaints only the brief banner (not the Board).
+  try{addEventListener('msos:data-updated',e=>{if(['season_plan','weekly_plan','weeklyTemplates','standardTimetable'].includes(e?.detail?.type))SM.refreshBanner();});}catch{}
   const baseBoard2=UI.renderBoard?.bind(UI);
   if(baseBoard2)UI.renderBoard=()=>{baseBoard2();queueMicrotask(installBanner);};
 

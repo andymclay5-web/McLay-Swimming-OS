@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.store)return;
-  const S=M.storageEngine={build:'v4-storage-owner-operational-authority-20260901'};
+  const S=M.storageEngine={build:'v4-storage-owner-planning-restore-20261011'};
   const DB='mclay_swimming_v4_operational_state',STORE='state',KEY='latest',UI_KEY='mclay_swimming_os_v4_ui',GUARDIAN_KEY='guardian';
   let ready=false,hydrateDone=false,writeTimer=0,writeRunning=false,writeAgain=false,compactAfterPending=false,metaTimer=0,uiCache=null,knownAttendance=new Map(),persistWaiters=[],meetCompactSignature='';
   const now=()=>M.util?.now?.()||new Date().toISOString();
@@ -76,11 +76,46 @@
     local.attendanceSnapshots=local.attendanceSnapshots||{};for(const[k,v]of Object.entries(full?.attendanceSnapshots||{}))if(local.attendanceSnapshots[k]===undefined)local.attendanceSnapshots[k]=safeClone(v);
     for(const key of ['meetFieldDeck','meetOps','meetProgramBA'])if(local[key]==null&&full?.[key]!=null)local[key]=safeClone(full[key]);
     if((local.meetImports||[]).length===0&&Array.isArray(full?.meetImports))local.meetImports=safeClone(full.meetImports);
+    S.restoredPlanning=mergePlanningAndReference(local,full);
     S.backgroundHydrationMerged=true;return local;
+  }
+  // 11 Oct 2026, Andy: "the plans not set. I've done a season plan and confirmed the weekly." Root cause: on a
+  // normal page load the app is already live when this hydration runs, so only the operational keys above were
+  // restored -- everything the coach set up in Data & References (season plan, weekly plan, published calendar,
+  // standards, base times, standard timetable, standing weekly template, phase cycle) and the data registry that
+  // records which version is active were silently dropped on every reload, and the old Winter 2026 seed took
+  // their place. These are coach-authored planning records, not background sync: the saved copy is the truth.
+  // A version the coach activated during this page load (before hydration finished) is kept.
+  const REGISTRY_FIELDS={season_plan:'seasonPlans',weekly_plan:'weeklyPlans',calendar:'publishedCalendar',swimmers:'athletes',results:'resultsEventHistory',tm_results:'resultsEventHistory',test_sets:'trainingTestTypes',test_results:'trainingTestResults',meet_schedule:'meets',meet_entries:'meetEntries',live_meet_results:'meetRaces',national_standards:'nationalStandards',meet_qualifying:'meetQualifyingTimes',wa_points:'worldAquaticsBaseTimes'};
+  const PLANNING_KEYS=['weeklyTemplates','standardTimetable','standardTimetableMeta','seasonPhaseTemplate'];
+  function mergePlanningAndReference(local,full){
+    const restored=[],fr=full?.dataRegistry;
+    if(fr&&typeof fr==='object'&&Array.isArray(fr.versions)){
+      const lr=local.dataRegistry&&typeof local.dataRegistry==='object'?local.dataRegistry:{active:{},versions:[],lastImport:null};
+      const touched=new Set(Object.entries(lr.active||{}).filter(([t,id])=>id&&id!==fr.active?.[t]).map(([t])=>t));
+      const byId=new Map();for(const v of[...(fr.versions||[]),...(lr.versions||[])])if(v?.id)byId.set(v.id,safeClone(v));
+      const active={...(fr.active||{})};for(const t of touched)active[t]=lr.active[t];
+      const versions=[...byId.values()].slice(-150);for(const v of versions)if(active[v.type])v.status=v.id===active[v.type]?'active':(v.status==='active'?'superseded':v.status);
+      const last=[lr.lastImport,fr.lastImport].filter(Boolean).sort((a,b)=>String(b.importedAt||'').localeCompare(String(a.importedAt||'')))[0]||null;
+      local.dataRegistry={...lr,active,versions,lastImport:last};
+      const types=M.dataRegistry?.TYPES||{};
+      for(const t of Object.keys(fr.active||{})){if(touched.has(t)||!fr.active[t])continue;const field=types[t]?.field||REGISTRY_FIELDS[t];if(!field||full[field]===undefined)continue;
+        const replace=(types[t]?.mode||(['season_plan','weekly_plan','calendar','national_standards','meet_qualifying','wa_points'].includes(t)?'replace':'upsert'))==='replace';
+        if(replace)local[field]=safeClone(full[field]);else if(Array.isArray(full[field]))local[field]=mergeMissingById(local[field],full[field]);restored.push(t);}
+    }
+    for(const key of PLANNING_KEYS)if(full?.[key]!=null){local[key]=safeClone(full[key]);restored.push(key);}
+    return restored;
+  }
+  function afterPlanningRestore(restored){
+    if(!restored?.length)return;
+    try{if(restored.includes('calendar'))M.calendar?.reset?.();}catch{}
+    try{if(restored.includes('wa_points')){M.state._refs=M.state._refs||{};M.state._refs.world_aquatics_base_times=M.state.worldAquaticsBaseTimes||[];}}catch{}
+    try{M.dataRegistry?.exposeStandards?.();}catch{}
+    const D=M.dataRegistry;for(const t of restored){try{D?.invalidate?.(t,D?.TYPES?.[t]?.impact||['planning']);}catch{}}
   }
   function operationalAlreadyLive(){if(M.navigationEngine?.initialized===true)return true;if(typeof document==='undefined')return false;return document.readyState!=='loading'||document.body?.dataset?.msosView!==undefined}
 
   S.save=M.store.save;S.saveUi=saveUi;S.readUi=readUi;S.applyUi=applyUi;S.compact=compact;S.getFull=getFull;S.ensurePresence=ensurePresence;S.saveGuardianResult=saveGuardianResult;S.scheduleFull=scheduleFull;S.whenPersisted=whenPersisted;S.meetDurableSignature=meetDurableSignature;S.mergeBackgroundDurable=mergeBackgroundDurable;Object.defineProperty(S,'ready',{get:()=>ready});
-  async function hydrate(){try{const row=await getFull(),local=M.state||{},live=operationalAlreadyLive();if(row?.payload){const full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full),localRicher=localSessions>fullSessions,useFull=!live&&(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;if(useFull){for(const k of Object.keys(local))delete local[k];Object.assign(local,safeClone(full));M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true}else if(live){mergeBackgroundDurable(local,full);S.liveOperationalStatePreserved=true}else if(localRicher)S.recoveredRicherLocalState=true;S.lastPersistedRevision=fullRev}if(!live)applyUi(M.state,{operationalSavedAt:Number(row?.savedAt)||0});await loadGuardian();knownAttendance=new Map((M.state.attendance||[]).filter(x=>(x?.session_id||x?.sessionId)&&(x?.athlete_id||x?.athleteId)).map(x=>[attendanceKey(x),`${x.status||''}|${x.updated_at||''}`]));M.state.settings=M.state.settings||{};M.state.settings.storageMode='indexeddb';meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true;if(!row?.payload)scheduleFull(250,{compactAfter:true})}catch(e){S.lastError=String(e?.message||e);const live=operationalAlreadyLive();if(!live)applyUi(M.state);meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true}}
+  async function hydrate(){try{const row=await getFull(),local=M.state||{},live=operationalAlreadyLive();if(row?.payload){const full=row.payload,localRev=Number(local?.settings?.storageRevision||0),fullRev=Number(row.revision||full?.settings?.storageRevision||0),localSessions=sessionCount(local),fullSessions=sessionCount(full),localRicher=localSessions>fullSessions,useFull=!live&&(local?.settings?.storageMode==='indexeddb'||fullRev>=localRev)&&!localRicher;if(useFull){for(const k of Object.keys(local))delete local[k];Object.assign(local,safeClone(full));M.state=local;M.release?.ensure?.();S.hydratedFromIndexedDb=true}else if(live){mergeBackgroundDurable(local,full);S.liveOperationalStatePreserved=true;afterPlanningRestore(S.restoredPlanning)}else if(localRicher)S.recoveredRicherLocalState=true;S.lastPersistedRevision=fullRev}if(!live)applyUi(M.state,{operationalSavedAt:Number(row?.savedAt)||0});await loadGuardian();knownAttendance=new Map((M.state.attendance||[]).filter(x=>(x?.session_id||x?.sessionId)&&(x?.athlete_id||x?.athleteId)).map(x=>[attendanceKey(x),`${x.status||''}|${x.updated_at||''}`]));M.state.settings=M.state.settings||{};M.state.settings.storageMode='indexeddb';meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true;if(!row?.payload)scheduleFull(250,{compactAfter:true})}catch(e){S.lastError=String(e?.message||e);const live=operationalAlreadyLive();if(!live)applyUi(M.state);meetCompactSignature=meetDurableSignature(M.state);S.lastMeetCompactSignature=meetCompactSignature;ready=true;hydrateDone=true}}
   S.readyPromise=hydrate();S.hydrated=()=>hydrateDone;
 })(globalThis);
