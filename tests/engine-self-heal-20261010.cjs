@@ -33,7 +33,7 @@ async function boot(page,{failAlways=false}={}){
       await page.waitForSelector('#pnName',{timeout:8000});
       assert.equal(await page.evaluate(()=>!!window.MSOS4.seasonPlanner&&!!window.MSOS4.standardTimetable),true,'Plan next season must load both engines again');
       await page.evaluate(()=>window.MSOS4.nav.show('board',{restoreScroll:false}));
-      await page.tap('[data-nav="hub"]');await page.waitForSelector('[data-hub-days]');await page.waitForTimeout(800);
+      await page.tap('[data-nav="hub"]');await page.waitForSelector('[data-hub-panel="today"]');await page.tap('[data-hub-panel="today"]');await page.waitForSelector('[data-hub-days]');await page.waitForTimeout(800);
       const today=await page.evaluate(()=>new Date().toLocaleDateString('en-US',{timeZone:'Pacific/Auckland',weekday:'long'}));
       if(today!=='Sunday')assert.ok(await page.$('[data-hub-days] .hub-slot'),'Coach Hub must list timetable sessions once the engine is back');
       assert.deepEqual(errors,[],`page errors: ${errors.join(' | ')}`);

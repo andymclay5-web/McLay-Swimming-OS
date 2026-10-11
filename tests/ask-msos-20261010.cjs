@@ -71,6 +71,8 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.tap('[data-save-session-edit]');await page.waitForTimeout(500);
     assert.equal(await page.evaluate(()=>window.MSOS4.currentSession().metadata.coachFocus),null,'back to following the plan');
 
+    // A real past session for the squad: the assistant sizes sessions from the coach's own recent work (12 Oct).
+    await page.evaluate(()=>{const M=window.MSOS4;const s=M.parser.parse('WARM UP\n800 free\nPRE SET\n8 x 50 kick @1:00\nMAIN SET\n10 x 200 Dev 10sR\nWARM DOWN\n200 easy',{date:'2026-10-06',dayPart:'PM',squads:['National']});s.id='past-national';s.identity={...s.identity,date:'2026-10-06',dayPart:'PM',squads:['National'],start:'18:30',end:'20:00'};M.store.putSession(M.state,s);});
     // 2a. Ask MSOS in the writer: answered in the app; the suggested session only goes in when the coach taps.
     await page.evaluate(()=>{const M=window.MSOS4;window.__asks=[];M.assistant.available=()=>true;
       const fake=async(path,opts)=>{const body=JSON.parse(opts.body);window.__asks.push({path,body});if(/fail/.test(body.question))throw new Error('Network down');return{answer:'Put the race-pace work after a build.',session_text:'MAIN SET\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace',model:'stub'};};
@@ -86,6 +88,8 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.match(req.body.context,/Draft session text:\nWARM UP\n400 free\nMAIN SET\n8 x 200 free steady @3:00/,'the draft goes with the question');
     assert.match(req.body.context,/Plan brief \(season plan "Summer 2026\/27"\)/,'the brief goes with the question');
     assert.match(req.body.context,/App session check:/,'the app\'s own check goes with the question');
+    assert.match(req.body.context,/The coach's own recent sessions for these squads[\s\S]*2026-10-06 PM · 3,?400m/,'his recent real sessions go with the question');
+    assert.match(req.body.context,/Slot length: \d+ min[\s\S]*fill the slot/,'the slot length and sizing go with the question');
     assert.match(await page.textContent('.msos-ask-wrap .ask-ai'),/Put the race-pace work after a build/);
     assert.match(await page.inputValue('#coreRaw'),/8 x 200 free steady/,'nothing changes until the coach taps');
     await page.tap('.msos-ask-wrap [data-ask-use][data-mode="append"]');await page.waitForTimeout(300);
@@ -110,7 +114,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     // 3. Hub: TV Board opens the TV Board; the sign-in link no longer says TV.
     await page.evaluate(()=>window.MSOS4.nav.show('hub'));await page.waitForSelector('[data-hub-tv]',{timeout:8000});
-    assert.equal(await page.textContent('[data-hub-team]'),'Coaches & sign-in');
+    assert.match(await page.textContent('[data-hub-team]'),/^Coaches & (sign-in|devices)/,'the sign-in link no longer says TV');
     await page.tap('[data-hub-tv]');await page.waitForTimeout(500);
     assert.equal(await page.evaluate(()=>window.MSOS4.state.settings.view),'tv');
     assert.equal(await page.evaluate(()=>document.querySelector('#tvView').hidden),false);

@@ -105,7 +105,9 @@ function runFailBefore(){
   // rather than pinned verbatim; the coalescing guard under test is asserted explicitly below.
   const openStart=realSrc.indexOf('  L.hubRenderRuns=0;\n  function renderCoachHub(){');
   const openEndMarker="finish();return;}";
-  const openEnd=realSrc.indexOf(openEndMarker,openStart);
+  // 12 Oct 2026: the Hub home/panel routing (Coach Hub as buttons) now sits between the guard and the
+  // no-session branch; the opening under test runs through that branch.
+  const openEnd=realSrc.indexOf(openEndMarker,realSrc.indexOf('const s=currentSession();if(!s){',openStart));
   assert.ok(openStart>0&&openEnd>openStart,'test setup error: could not locate renderCoachHub opening');
   const fixedOpen=realSrc.slice(openStart,openEnd+openEndMarker.length);
   assert.match(fixedOpen,/Date\.now\(\)-\(Number\(h\.dataset\.loopHubRenderedAt\)\|\|0\)<400/,'the coalescing guard must still be present in the real opening');

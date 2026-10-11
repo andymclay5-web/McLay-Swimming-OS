@@ -15,7 +15,7 @@ const M=global.MSOS4,L=M.live;
 // L.publishCloud/L.pullCloud plus a `timedSets` field on L.payload/L.apply). This assertion is intentionally
 // updated to the new tag rather than left pointing at the pre-Phase-4 build -- see the Phase 4 commit and
 // tests/live-broadcast-tv-20260910.cjs for coverage of the new behavior itself.
-assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20260910a-cloud-broadcast');
+assert.equal(M.liveTrainingAuthority.build,'v4-live-training-authority-20261012-tv-overlay');
 assert.equal(M.liveTrainingAuthority.mode,'derived-displays-only');
 assert.equal(M.liveTrainingAuthority.stripMeetChrome,undefined,'Meet is now an owned bottom-nav tab; training authority must not strip its chrome');
 const payload=L.payload(M.state);assert.equal(payload.authority,'coach-operational');assert.equal(payload.sourceView,'board');

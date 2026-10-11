@@ -62,20 +62,21 @@ M.state.settings.view='xyz-fixture-sanity-view';
   assert.equal(calls,1,'fixture sanity: a render with no role-based view correction needed must still configure chrome exactly once');
 }
 
-// THE FIX: an assistant coach landing on 'hub' (corrected to 'board') must configure chrome exactly ONCE, and
-// only ever with the CORRECTED view -- never transiently with the stale pre-correction 'hub'.
+// THE FIX: an assistant coach landing on an owner-only view (corrected to 'board') must configure chrome exactly
+// ONCE, and only ever with the CORRECTED view -- never transiently with the stale pre-correction view.
+// 12 Oct 2026: assistant coaches now have their own Coach Hub (Andy), so the owner-only view used here is Guardian.
 M.state.settings.activeRole='assistant';
-M.state.settings.view='hub';
+M.state.settings.view='guardian';
 for(const fn of ['renderBoard','renderTV','renderHub','renderSwimmer','renderMeet','renderAthletes','renderRoll','renderTimes','renderConnection','renderGuardian'])UI[fn]=()=>{};
 {
   let calls=0;const seenViews=[];const orig=UI.configureRoleChrome;
   UI.configureRoleChrome=function(...a){calls++;const r=orig.apply(this,a);seenViews.push(bodyNode.dataset.msosView);return r};
   UI.renderCurrent();
   UI.configureRoleChrome=orig;
-  assert.equal(calls,1,`an assistant coach's corrected 'hub'->'board' render must configure the Board chrome exactly once, not twice -- got ${calls} calls`);
-  assert.deepEqual(seenViews,['board'],`chrome must only ever be configured against the CORRECTED view -- must never transiently show 'hub' (the stale pre-correction view) even for one render pass: saw ${JSON.stringify(seenViews)}`);
+  assert.equal(calls,1,`an assistant coach's corrected 'guardian'->'board' render must configure the Board chrome exactly once, not twice -- got ${calls} calls`);
+  assert.deepEqual(seenViews,['board'],`chrome must only ever be configured against the CORRECTED view -- must never transiently show 'guardian' (the stale pre-correction view) even for one render pass: saw ${JSON.stringify(seenViews)}`);
 }
-assert.equal(M.state.settings.view,'board','the role correction itself must still take effect (assistant coaches never land on hub)');
+assert.equal(M.state.settings.view,'board','the role correction itself must still take effect (assistant coaches never land on Guardian)');
 
 console.log('RENDER_CURRENT_SINGLE_CHROME_PASS');
 

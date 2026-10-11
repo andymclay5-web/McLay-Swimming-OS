@@ -33,15 +33,19 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       mk('hub-written',target.date,target.dayPart,['National'],'WARM UP\n400 free\nMAIN SET\n6 x 100 free @1:30');
       M.state.settings.selectedSessionId='hub-old';M.store.save(M.state);return{today,target};});
     await page.tap('[data-nav="hub"]');await page.waitForSelector('[data-hub-today]');await page.waitForTimeout(500);
-    const top=await page.evaluate(()=>({season:document.querySelector('[data-hub-today]').innerText,days:document.querySelector('[data-hub-days]').innerText,detailOpen:document.querySelector('[data-loop-session-detail]')?.open,detail:document.querySelector('[data-loop-session-detail] summary')?.innerText}));
-    assert.match(top.season,/Between seasons[\s\S]*Winter 2026[\s\S]*finished/,`season card: ${top.season}`);
+    // 12 Oct 2026: the Hub home is buttons (Andy); the day list is behind Today.
+    const season=await page.evaluate(()=>document.querySelector('[data-hub-today]').innerText);
+    assert.equal(await page.evaluate(()=>!!document.querySelector('[data-loop-session-detail]')),false,'an old selected session no longer fills the Hub');
     assert.ok(await page.$('[data-hub-today] [data-msos-plan-season]'),'Plan next season must be on the Hub');
+    await page.tap('[data-hub-panel="today"]');await page.waitForSelector('[data-hub-days]');
+    const top=await page.evaluate(()=>({days:document.querySelector('[data-hub-days]').innerText}));top.season=season;
+    assert.match(top.season,/Between seasons[\s\S]*Winter 2026[\s\S]*finished/,`season card: ${top.season}`);
     assert.match(top.days,/^Today/,'the day list starts with today');
     assert.match(top.days,/1,000m written|1000m written/,`the written session must show its metres: ${top.days}`);
     assert.doesNotMatch(top.days,/\bJunior\b/,'squads the coach does not write for are hidden by default');
+    await page.tap('[data-hub-back]');await page.waitForSelector('[data-hub-home]');
     assert.ok(await page.$('[data-hub-team]'),'the owner can reach coach invites / sign-in from the Hub');
-    assert.equal(top.detailOpen,false,'an old selected session\'s detail stays collapsed');
-    assert.match(top.detail,/24 Sept AM/);
+    await page.tap('[data-hub-panel="today"]');await page.waitForSelector('[data-hub-days]');
 
     // 2: show all squads
     await page.tap('[data-hub-squads]');await page.waitForTimeout(300);

@@ -57,6 +57,8 @@ function boot(store,coachSrcPath=coachLoopPath,jar={cookie:''},boardEl=null){
   for(const k of ['athletes','attendance','captures','meets','meetRaces','athleteReflections'])M.state[k]=M.state[k]||[];
   M.state.weeklyPlans=[];M.state.seasonPlans=[];
   M.state.settings.storageRevision=1;
+  // 12 Oct 2026: the per-session sections now render on the Hub's own Session detail screen (Coach Hub as buttons).
+  M.coachLoopUI.setHubPanel?.('session');
   let legacyCalls=0;const realLegacy=M.store.legacy;M.store.legacy=(...a)=>{legacyCalls++;return realLegacy.apply(M.store,a);};
   return{M,hubEl,legacyCalls:()=>legacyCalls};
 }
