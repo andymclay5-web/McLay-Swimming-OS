@@ -50,8 +50,10 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.tap('[data-nav="hub"]');await page.waitForSelector('[data-hub-sync]');
     const banner=await page.evaluate(()=>document.querySelector('[data-hub-sync]').innerText);
     assert.match(banner,/Cloud sync is off[\s\S]*2 changes waiting/);
+    // 10 Oct 2026 (one-press sync): the button now turns sync on right here; not signed in -> plain reason in the card.
     await page.tap('[data-hub-sync-btn]');await page.waitForTimeout(400);
-    assert.equal(await page.evaluate(()=>window.MSOS4.state.settings.view),'connection','the warning links to the sync screen');
+    assert.equal(await page.evaluate(()=>window.MSOS4.state.settings.view),'hub','the Hub button acts in place');
+    assert.match(await page.evaluate(()=>document.querySelector('[data-hub-sync-status]')?.textContent||''),/Sign in first/,'not signed in -> says so in the card');
     await page.evaluate(()=>{const M=window.MSOS4,s=M.state.settings;s.cloudWritesEnabled=true;s.cloudWriteBuild=M.BUILD;M.state.guardian.runs.push({build:M.BUILD,ok:true,tests:[]});});
     await page.tap('[data-nav="hub"]');await page.waitForTimeout(600);
     assert.equal(await page.$('[data-hub-sync]'),null,'no warning when sync is on and this build has passed Guardian');

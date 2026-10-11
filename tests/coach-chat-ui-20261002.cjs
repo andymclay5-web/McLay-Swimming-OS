@@ -94,7 +94,8 @@ const ORG_ID = '33333333-3333-3333-3333-333333333333';
     await chatBtn.click();
     await page.waitForSelector('[data-chat-channels] [data-chat-channel]');
     const channelLabels = await page.$$eval('[data-chat-channels] .cc-channel-label', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(channelLabels, ['Whole group', 'Coaches only', 'Jordan'], 'the channel list must show the whole-group channel, then the coaches-only channel, then one row per real other coach from the roster');
+    // 10 Oct 2026: the in-app AI assistant thread (engines/msos-assistant.js) sits first; it sends nothing to other coaches.
+    assert.deepEqual(channelLabels, ['✦ Ask MSOS', 'Whole group', 'Coaches only', 'Jordan'], 'the channel list must show Ask MSOS, the whole-group channel, then the coaches-only channel, then one row per real other coach from the roster');
     console.log('COACH_CHAT_UI_PANEL_ROSTER_PASS');
 
     // --- 2. composing and sending in the group channel actually calls the real REST endpoint and renders

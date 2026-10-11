@@ -89,10 +89,12 @@ function run(){
 }
 
 function runFailBefore(){
+  // (10 Oct 2026: the component-push line also excludes lines carrying their own rest or zone -- see
+  // tests/session-guide-20261010.cjs; both strings below track it, the _wholeSwim fix under test is unchanged.)
   // Fail-before: revert to the exact pre-fix component-push line and attachPostCues body, and confirm Andy's
   // real warm-up ladder wrongly reports only 400m -- the exact bug his screenshots showed.
-  const fixedPush=`if(current&&node.distance<current.distance&&!/\\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy)\\b/i.test(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order,_wholeSwim:node});`;
-  const buggyPush=`if(current&&node.distance<current.distance&&!/\\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy)\\b/i.test(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order});`;
+  const fixedPush=`if(current&&node.distance<current.distance&&!/\\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy)\\b/i.test(line)&&!/\\d\\s*s(?:ec)?\\s*R\\b|\\d\\s*SR\\b/i.test(line)&&!zoneName(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order,_wholeSwim:node});`;
+  const buggyPush=`if(current&&node.distance<current.distance&&!/\\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy)\\b/i.test(line)&&!/\\d\\s*s(?:ec)?\\s*R\\b|\\d\\s*SR\\b/i.test(line)&&!zoneName(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order});`;
   assert.ok(app.slice(start,end).includes(fixedPush),'test setup error: could not locate the fixed component-push line -- its wording changed in a way this test does not expect');
 
   const fixedAttach=` function attachPostCues(items){\n   for(let i=0;i<items.length;i++){\n     const parent=items[i];if(parent.kind!=='set')continue;\n     // Consecutive numeric components following a larger parent, e.g. 500 / 300 Free / 200 Reverse IM.\n     let j=i+1, comps=[];while(j<items.length&&items[j].kind==='component'){comps.push(items[j]);j++}\n     if(!comps.length)continue;\n     const sum=comps.reduce((n,c)=>n+c.distance,0);`;
