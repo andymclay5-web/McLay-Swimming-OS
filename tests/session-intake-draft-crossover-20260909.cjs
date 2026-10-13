@@ -83,14 +83,17 @@ const MORNING_TEXT='WARM-UP\n4 x 100 Free @ 1:30\nMAIN SET\n8 x 100 Threshold @ 
     assert.equal(eveningText,'','reopening the intake in the evening must not silently repopulate the text box with this morning\'s AM draft -- that crossover produces a PM-identified session built from AM-authored blocks, the exact coaching failure reported live (architecture/RUNTIME_AUDIT_20260909.md §1)');
     assert.doesNotMatch(eveningText,/Threshold/,'the evening intake must not contain any fragment of the morning draft text');
 
-    // --- Switching dayPart mid-session (still evening) must also clear any text the coach had already typed ---
+    // --- Switching dayPart by hand (an explicit coach choice) keeps what was typed and says which session it will save as.
+    // 13 Oct 2026: clearing it threw away Andy's writing when he moved the box to tonight's slot. The stale-draft
+    // protection above (no restore of another time's draft) is unchanged. ---
     await page.fill('#coreRaw','1 x 200 Easy');
     const morningSlotId=morningSelected.value;
     const hasMorningSlotOption=await page.locator(`#coreSlot option[value="${morningSlotId}"]`).count();
     if(hasMorningSlotOption>0){
       await page.selectOption('#coreSlot',morningSlotId);
-      const clearedText=await page.inputValue('#coreRaw');
-      assert.equal(clearedText,'','manually switching the intake dropdown to a different dayPart must clear any text already authored under the previous dayPart, so a stale draft can never survive a dayPart change');
+      const keptText=await page.inputValue('#coreRaw');
+      assert.equal(keptText,'1 x 200 Easy','switching the dropdown by hand keeps the coach\'s own text');
+      assert.match(await page.textContent('#coreStatus'),/Kept your text — it will save as the AM session/);
     }
 
     assert.deepEqual(errors,[],`browser errors: ${errors.join('\n')}`);

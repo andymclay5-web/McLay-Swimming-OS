@@ -78,6 +78,9 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       const fake=async(path,opts)=>{const body=JSON.parse(opts.body);window.__asks.push({path,body});if(/fail/.test(body.question))throw new Error('Network down');return{answer:'Put the race-pace work after a build.',session_text:'MAIN SET\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace',model:'stub'};};
       if(M.cloudSessionEngine)M.cloudSessionEngine.fetch=fake;M.cloud.fetch=fake;});
     await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    // 13 Oct: the writer skips slots already written (PM National was saved above), so choose it explicitly.
+    await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.waitForTimeout(300);
     await page.fill('#coreRaw','WARM UP\n400 free\nMAIN SET\n8 x 200 free steady @3:00');await page.waitForTimeout(400);
     await page.tap('.msos-ask-wrap > summary');
     await page.fill('.msos-ask-wrap [data-ask-input]','How can I improve this draft?');await page.tap('.msos-ask-wrap .ask-form button');
