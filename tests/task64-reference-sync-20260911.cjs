@@ -347,7 +347,7 @@ async function testMeetTypesNeverStageAnything() {
 async function testFailBeforePassAfterCommitWiring() {
   const realSrc = loadRegistrySource();
   assert.match(realSrc, /syncToCloud\(pre\.type,pre\.rows\)/, 'sanity: real source must contain the fix this test protects');
-  const buggySrc = realSrc.replace('invalidate(pre.type,TYPES[pre.type].impact);syncToCloud(pre.type,pre.rows);return meta;', 'invalidate(pre.type,TYPES[pre.type].impact);return meta;');
+  const buggySrc = realSrc.replace('invalidate(pre.type,TYPES[pre.type].impact);syncToCloud(pre.type,pre.rows);shareSoon(pre.type);return meta;', 'invalidate(pre.type,TYPES[pre.type].impact);shareSoon(pre.type);return meta;');
   assert.notStrictEqual(buggySrc, realSrc, 'sanity: bug injection must actually change the source');
 
   const { D: buggyD, calls: buggyCalls } = buildRegistryEnv(buggySrc);
