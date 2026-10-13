@@ -340,6 +340,9 @@
     const finish=()=>{{const c=hubCrumb();delete c.renderOpen;c.stage='hub:done';if(c.lastStall)c.lastStall.acknowledged=true;c.stageAt=now();writeHubCrumb(c);}h.dataset.loopHubRev=String(rev);h.dataset.loopHubRenderedAt=String(Date.now());L.hubRenderRuns++;M.viewTimings=M.viewTimings||{};M.viewTimings.hub=Date.now()-t0;};
     if(!hubPanel){setStage('hub:home');h.innerHTML=homeHtml();bindToday(h);bindHome(h);finish();return;}
     if(hubPanel!=='today'&&hubPanel!=='session'){setStage(`hub:${hubPanel}`);h.innerHTML=`${backBar(PANEL_TITLES[hubPanel]||'')}<div data-hub-panel-body="${esc(hubPanel)}"></div>${MARKERS}`;bindHome(h);const body=h.querySelector('[data-hub-panel-body]');
+      // A panel whose file didn't load says so and fetches it again -- never an empty screen (13 Oct 2026).
+      const need=hubPanel==='input'?['engines/input-data.js',()=>!!M.inputData?.render]:['engines/hub-panels.js',()=>!!M.hubPanels?.renderReports];
+      if(!need[1]()){const want=hubPanel;body.innerHTML=`<p class="page-card muted">Loading this screen…</p>`;Promise.resolve(M.dataAdminUI?.ensureEngine?.(need[0],need[1])).then(ok=>{if(hubPanel!==want)return;if(ok)openPanel(want);else if(body.isConnected)body.innerHTML=`<section class="page-card"><b>This screen didn't load on this phone.</b><p class="muted">Usually a weak connection while the app opened.</p><button type="button" data-hub-reload>Reload the app</button></section>`,body.querySelector('[data-hub-reload]')?.addEventListener('click',()=>location.reload());});finish();return;}
       try{if(hubPanel==='input')M.inputData?.render?.(body);else if(hubPanel==='reports')M.hubPanels?.renderReports?.(body);else if(hubPanel==='swimmers')M.hubPanels?.renderSwimmers?.(body);}catch(e){body.innerHTML=`<p class="warn-text">${esc(e.message||e)}</p>`;}
       finish();return;}
     // Today is the day list only. The full per-session page (plan, makeup, dosage, evidence -- below) is no longer
