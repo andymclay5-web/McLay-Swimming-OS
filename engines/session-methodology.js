@@ -95,6 +95,14 @@
     for(const[re,sys]of SEASON_PHASE_VOCAB)if(re.test(focusText))return sys;
     return null;
   }
+  // 13 Oct 2026 (Andy built Tue AM from the suggestions and the check said "off brief"): a combination day such as
+  // "Aerobic + Anaerobic Capacity" asks for BOTH systems -- aerobic capacity (Development) and top-end speed
+  // (Speed / Max) -- not for Overload. Read each half on its own; the session is on brief when its main set has
+  // real work in both. Suggestions and drafts offer both.
+  function comboSystems(focusText){const t=String(focusText||'');if(!/\+|&|\band\b/i.test(t))return null;const parts=t.split(/\s*(?:\+|&|\band\b)\s*/i).map(x=>x.trim()).filter(Boolean);if(parts.length<2)return null;
+    const noun=(parts[parts.length-1].match(/\b(capacity|power)\b/i)||[])[1]||'';const out=[];for(let p of parts){if(noun&&!/\b(capacity|power|skills?)\b/i.test(p))p=`${p} ${noun}`;const sys=seasonPlannerSystem(p)||(D.systemFrom?(x=>x&&x!=='Unclassified'?x:null)(D.systemFrom(p)):null);if(sys&&!out.includes(sys))out.push(sys);}
+    return out.length>=2?out:null;}
+  SM.comboSystems=comboSystems;SM.planTargetCheck=(...a)=>planTargetCheck(...a);
   // Rushton's HR bands are continuous, not hard walls -- Andy's own correction above explicitly named one
   // real overlap ("clearance fitting into the top of aerobic power"), so a session genuinely delivered at
   // Clearance intensity against a Threshold-named target is a real crossover, not a methodology drift, and
@@ -174,23 +182,29 @@
   function planTargetCheck(session,state,b=undefined){
     if(b===undefined)b=brief(session,state);
     if(!b||b.source==='none')return{checked:false};
+    const combo=b.coachFocus?null:comboSystems(b.system);
     let named=null,from='';for(const [k,v] of [['day',b.system],['week',b.weekFocus],['technical',b.technical]]){named=namedSystem(v);if(named){from=k;break;}}
+    if(combo){named=combo[0];from='day';}
     if(!named)return{checked:false,source:b.source};
     let dose;try{dose=D.session(session,state,{delivered:false});}catch{return{checked:false,source:b.source};}
     const ranked=rankedSystems(dose);if(!ranked.length)return{checked:false,source:b.source};
     const mains=mainBlocks(session);let basis='whole session',mainRanked=null;
     if(mains.length){try{const md=D.session({...session,id:`${session.id||'session'}#main`,blocks:mains},state,{delivered:false});const r=rankedSystems(md);if(r.length){mainRanked=r;basis='main set';}}catch{}}
     const top=(mainRanked||ranked)[0],dominantSystem=top[0];
-    const matches=dominantSystem===named||isKnownCrossover(named,dominantSystem);
+    // A tie for the most work counts as the planned system being on top.
+    const pctOf=(rows,k)=>Number((rows||[]).find(([x])=>x===k)?.[1]?.pctMetres||0);const basisRows=mainRanked||ranked;
+    let matches=dominantSystem===named||isKnownCrossover(named,dominantSystem)||(pctOf(basisRows,named)>0&&pctOf(basisRows,named)>=Number(top[1].pctMetres||0)-0.5);
+    let comboInfo=null;if(combo){const share=combo.map(k=>({k,pct:Math.round(pctOf(basisRows,k))}));const missing=share.filter(x=>x.pct<10).map(x=>x.k);matches=!missing.length;comboInfo={systems:combo,share,missing};}
     const planned=dose.systems?.[named]||{metres:0,pctMetres:0};
-    return{checked:true,plannedSystem:named,plannedFrom:from,dominantSystem,dominantPct:Math.round(top[1].pctMetres||top[1].pctDose||0),basis,matches,source:b.source,
+    return{checked:true,combo:comboInfo,plannedSystem:named,plannedFrom:from,dominantSystem,dominantPct:Math.round(top[1].pctMetres||top[1].pctDose||0),basis,matches,source:b.source,
       plannedMetres:Math.round(planned.metres||0),plannedPct:Math.round(planned.pctMetres||0),totalMetres:Math.round(dose.rawMetres||0),
       mix:[...ranked].sort((a,b)=>(b[1].pctMetres||0)-(a[1].pctMetres||0)).slice(0,3).map(([label,v])=>({label,pct:Math.round(v.pctMetres||0)}))};
   }
   function evaluate(session,state=M.state){
     const drift=stimulusDrift(session,state),plan=planTargetCheck(session,state);
     const reasons=drift.map(d=>`${d.athleteName}: intended ${d.squadSystem} but delivered as ${d.athSystem}${d.reason?` (${d.reason})`:''}`);
-    if(plan.checked&&!plan.matches)reasons.push(`Weekly focus names ${plan.plannedSystem}, but this session's ${plan.basis==='main set'?'main set':'dominant classified system'} is ${plan.basis==='main set'?'mostly ':''}${plan.dominantSystem}`);
+    if(plan.checked&&!plan.matches&&plan.combo)reasons.push(`Brief asks for ${plan.combo.systems.join(' + ')}, but the ${plan.basis} has no ${plan.combo.missing.join(' or ')}`);
+    else if(plan.checked&&!plan.matches)reasons.push(`Weekly focus names ${plan.plannedSystem}, but this session's ${plan.basis==='main set'?'main set':'dominant classified system'} is ${plan.basis==='main set'?'mostly ':''}${plan.dominantSystem}`);
     return{approved:reasons.length===0,drift,plan,reasons};
   }
   SM.evaluate=evaluate;
@@ -360,6 +374,20 @@
     {id:'reset-scull',section:'MAIN SET',label:'Scull reset',text:'100 Scull',fits:['Skill / Technical']},
     {id:'post-bands',section:'POST SET',label:'Bands / swim builds',text:'16 x 50 Bands / Swim Build',for:['aerobic','mixed']},
     {id:'post-pull-uw',section:'POST SET',label:'Pull desc + UW fins',text:'8 x 75 Pull @1:30 Desc 1-4\n8 x 25 UW Fins @0:45',for:['speed','race','threshold','skill']},
+    // 13 Oct 2026 (Andy: "I love the sets to select, we just need to increase the range a bit") -- more of his
+    // documented formats.
+    {id:'wu-e',section:'WARM UP',label:'4 x 200 Free / Rev IM (800)',text:'4 x 200 (100 Free / 100 Reverse IM) 15sR',for:['aerobic','threshold','mixed','acanc']},
+    {id:'pre-kick',section:'PRE SET',label:'Kick builds (400)',text:'8 x 50 Kick Build @1:00',for:['speed','race','mixed','acanc']},
+    {id:'reg-200',section:'MAIN SET',label:'4 x 200 Regeneration',text:'4 x 200 Reg 10sR',fits:['Regeneration']},
+    {id:'dev-400',section:'MAIN SET',label:'3 x 400 Development',text:'3 x 400 Dev 15sR',fits:['Development']},
+    {id:'dev-8x200',section:'MAIN SET',label:'8 x 200 Development',text:'8 x 200 Dev 10sR',fits:['Development']},
+    {id:'ol-at-6',section:'MAIN SET',label:'6 x 100 OL → AT',text:'6 x 100 10sR\n#1-3 OL\n#4-6 AT',fits:['Overload','Threshold']},
+    {id:'at-200',section:'MAIN SET',label:'5 x 200 Threshold',text:'5 x 200 AT 20sR',fits:['Threshold']},
+    {id:'at-3r',section:'MAIN SET',label:'3 rounds 3 x 100 AT',text:'3 Rounds:\n3 x 100 AT 10sR\n100 Easy',fits:['Threshold']},
+    {id:'rp-6x50',section:'MAIN SET',label:'6 x 50 @ 200 pace',text:'6 x 50 @200 Pace @1:30',fits:['Race pace']},
+    {id:'rp-ladder',section:'MAIN SET',label:'Race-pace ladder 15 → 65',text:'5 x 15 @100 Pace @1:30\n100 Scull\n4 x 25 @100 Pace @2:00\n100 Scull\n3 x 35 @100 Pace @2:30\n100 Scull\n2 x 50 @100 Pace @3:00\n100 Scull\n1 x 65 @100 Pace',fits:['Race pace']},
+    {id:'max-4x50',section:'MAIN SET',label:'4 x 50 MAX',text:'4 x 50 MAX @3:00',fits:['Speed / Max']},
+    {id:'post-paddles',section:'POST SET',label:'Paddles descend (400)',text:'4 x 100 Pull Paddles Desc 1-4 10sR',for:['aerobic','threshold','mixed','acanc']},
     {id:'wd',section:'WARM DOWN',label:'200 easy',text:'200 Easy',for:['all']}
   ];
   SM.LIB=LIB;
@@ -368,7 +396,10 @@
   // Main-set sequences for a draft, following his progressions (METHODOLOGY 1 "Session progression",
   // 12-13 "Combining energy systems"): builds before race pace, aerobic resets between race-pace sections,
   // short high-quality speed with recovery. Components are added in order while the session still fits.
+  function comboKind(combo){const k=(combo||[]).slice().sort().join('+');return({'Development+Speed / Max':'acanc','Race pace+Threshold':'apanp'})[k]||'mixed';}
   const MAIN_SEQ={
+    acanc:['dev-200','max-12','dev-100','reset-scull','max-25','dev-mix'],
+    apanp:['at-rounds','rp-25','dev-100','rp-50','cl-100'],
     aerobic:['dev-200','dev-mix','reg-prog','dev-100'],
     threshold:['dev-100','ol-at-rounds','at-rounds','cl-100'],
     race:['rp-25','dev-100','rp-50','reset-scull','rp-200','ol-at-100'],
@@ -376,11 +407,23 @@
     mixed:['reg-400','max-12','rp-25','ol-at-100','reset-scull','rp-50','max-100'],
     skill:['reg-400','dev-mix','dev-100']
   };
-  const libById=id=>LIB.find(x=>x.id===id);
+  const libById=id=>LIB.find(x=>x.id===id)||mySets().find(x=>x.id===id);
+  // "Does it remember new sets that are added?" (Andy, 13 Oct 2026) -- yes: every set in a session he writes and
+  // saves is offered back under YOUR SETS, newest first, tagged by what the parser and dosage engine make of it.
+  // Nothing extra to save; it follows his real sessions. Library sets are not repeated here.
+  const SECTION_OF=b=>{const t=`${b?.type||''} ${b?.title||''}`.toLowerCase();return/warm.?up/.test(t)?'WARM UP':/pre/.test(t)?'PRE SET':/post/.test(t)?'POST SET':/warm.?down|swim.?down/.test(t)?'WARM DOWN':/main/.test(t)?'MAIN SET':null;};
+  let mineCache={rev:-1,list:[]};
+  function mySets(){const rev=Number(M.state?.settings?.storageRevision)||0;if(mineCache.rev===rev)return mineCache.list;
+    const seen=new Set(LIB.map(x=>lc(x.text))),out=[];const sessions=Object.values(M.state?.canonicalSessions||{}).filter(x=>x?.identity?.date&&(x.blocks||[]).length).sort((a,b)=>String(b.identity.date+b.identity.dayPart).localeCompare(String(a.identity.date+a.identity.dayPart))).slice(0,40);
+    for(const ses of sessions)for(const blk of ses.blocks||[]){const sec=SECTION_OF(blk);if(!sec)continue;for(const it of blk.items||[]){if(it.kind!=='set'&&it.kind!=='group')continue;let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'').trim();}catch{t=String(it.raw||'').trim();}if(!t||t.length>400)continue;const key=lc(t);if(seen.has(key))continue;seen.add(key);
+      let fits=[];try{const d=D.session({id:`mine-probe`,identity:ses.identity,blocks:[{id:'b',type:blk.type,title:blk.title,items:[it]}]},M.state,{delivered:false});fits=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres).map(([k])=>k);}catch{}
+      const first=t.split('\n')[0];out.push({id:`mine-${out.length}-${first.replace(/[^a-z0-9]+/gi,'-').slice(0,24)}`,section:sec,label:first,text:t,fits,for:['all'],mine:true,from:`${ses.identity.date} ${ses.identity.dayPart||''}`.trim()});if(out.length>=60)break;}}
+    mineCache={rev,list:out};return out;}
+  SM.mySets=mySets;
   function pick(section,kind){return LIB.find(x=>x.section===section&&(x.for||[]).includes(kind))||LIB.find(x=>x.section===section);}
   function composeText(parts){const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];return order.filter(h=>parts[h]?.length).map(h=>`${h}\n${parts[h].join('\n')}`).join('\n\n');}
   function draftFromBrief(identity,state=M.state,{focus=null}={}){
-    const probe={id:'draft-probe',identity,blocks:[],metadata:focus?{coachFocus:focus}:{}},b=brief(probe,state),named=b&&b.source!=='none'?(namedSystem(b.system)||namedSystem(b.weekFocus)):null,kind=briefKind(named);
+    const probe={id:'draft-probe',identity,blocks:[],metadata:focus?{coachFocus:focus}:{}},b=brief(probe,state),combo=b&&b.source!=='none'&&!b.coachFocus?comboSystems(b.system):null,named=b&&b.source!=='none'?(combo?combo[0]:(namedSystem(b.system)||namedSystem(b.weekFocus))):null,kind=combo?comboKind(combo):briefKind(named);
     const parts={'WARM UP':[pick('WARM UP',kind).text],'PRE SET':[pick('PRE SET',kind).text],'MAIN SET':[],'POST SET':[],'WARM DOWN':[libById('wd').text]};
     const limit=(slotMinutes(identity)||90)*60;const dur=()=>{try{const s=M.parser.parse(composeText(parts),{...identity,id:'draft-probe'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return 0;}};
     // A component that would overrun the slot is skipped and the next (usually shorter) one is tried.
@@ -389,10 +432,13 @@
     // the chosen system went in, try each one at the end; if none fits, shorten the warm-up and pre-set to
     // the quickest of his options and try again (METHODOLOGY 1: "there should normally be a clear primary
     // purpose").
-    const primary=c=>!!named&&named!=='Skill / Technical'&&(c.fits||[]).includes(named);
-    const hasPrimary=()=>parts['MAIN SET'].some(t=>LIB.some(c=>c.text===t&&primary(c)));
-    const tryPrimary=()=>{for(const c of(MAIN_SEQ[kind]||[]).map(libById).filter(c=>c&&primary(c))){parts['MAIN SET'].push(c.text);if(dur()<=limit-5*60)return true;parts['MAIN SET'].pop();}return false;};
-    if(named&&named!=='Skill / Technical'&&!hasPrimary()&&!tryPrimary()){
+    // A combination day needs a set of EACH system (13 Oct 2026).
+    const needs=(combo||[named]).filter(k=>k&&k!=='Skill / Technical');
+    const fitsAny=(c,k)=>(c.fits||[]).includes(k);
+    const missingNeed=()=>needs.find(k=>!parts['MAIN SET'].some(t=>LIB.some(c=>c.text===t&&fitsAny(c,k))))||null;
+    const hasPrimary=()=>!missingNeed();
+    const tryPrimary=()=>{let k=missingNeed();while(k){let ok=false;for(const c of(MAIN_SEQ[kind]||[]).map(libById).filter(c=>c&&fitsAny(c,k))){parts['MAIN SET'].push(c.text);if(dur()<=limit-5*60){ok=true;break;}parts['MAIN SET'].pop();}if(!ok)return false;k=missingNeed();}return true;};
+    if(needs.length&&!hasPrimary()&&!tryPrimary()){
       const before={...parts,'MAIN SET':[...parts['MAIN SET']]};
       const quickest=sec=>{let best=null,bt=Infinity;for(const c of LIB.filter(x=>x.section===sec)){const t=(()=>{try{const s=M.parser.parse(`${sec}\n${c.text}`,{...identity,id:'q'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return Infinity;}})();if(t<bt){bt=t;best=c;}}return best;};
       const wu=quickest('WARM UP'),pre=quickest('PRE SET');if(wu)parts['WARM UP']=[wu.text];if(pre)parts['PRE SET']=[pre.text];
@@ -415,20 +461,22 @@
   }
   SM.insertComponent=insertComponent;
   function suggestionsHtml(session,state,b,chk){
-    if(!b||b.source==='none')return`<div class="msos-fits">${moreHtml('mixed',null)}</div>`;const named=chk?.plannedSystem||namedSystem(b.system);const kind=briefKind(named);
-    const used=lc(sessionWords(session));const mains=LIB.filter(x=>x.section==='MAIN SET'&&named&&(x.fits||[]).includes(named)).slice(0,4);
+    if(!b||b.source==='none')return`<div class="msos-fits">${moreHtml('mixed',null)}</div>`;const combo=chk?.combo?.systems||(b.coachFocus?null:comboSystems(b.system));const named=chk?.plannedSystem||namedSystem(b.system);const kind=combo?comboKind(combo):briefKind(named);
+    const used=lc(sessionWords(session));const mains=combo?(()=>{const missing=chk?.combo?.missing?.length?chk.combo.missing:combo;const order=[...missing,...combo.filter(k=>!missing.includes(k))];const out=[];for(const k of order)for(const x of LIB.filter(x=>x.section==='MAIN SET'&&(x.fits||[]).includes(k)).slice(0,3))if(!out.includes(x))out.push(x);return out.slice(0,6);})():LIB.filter(x=>x.section==='MAIN SET'&&named&&(x.fits||[]).includes(named)).slice(0,4);
     const hasPre=(session.blocks||[]).some(x=>/pre/i.test(`${x.type} ${x.title}`)),hasWU=(session.blocks||[]).some(x=>/warm.?up|warm_up/i.test(`${x.type} ${x.title}`));
     const extra=[!hasWU&&pick('WARM UP',kind),!hasPre&&pick('PRE SET',kind)].filter(Boolean);
-    const list=[...extra,...mains].filter(x=>!used.includes(lc(x.text.split('\n')[0]).slice(0,14)));
-    return`<div class="msos-fits">${list.length?`<div class="msos-check-title">FROM YOUR PROGRAMMING${named?` · ${esc(sysLabel(named))}`:''}</div>${list.map(fitRow).join('')}`:''}${moreHtml(kind,named)}</div>`;
+    let mineFit=[];try{mineFit=mySets().filter(x=>x.section==='MAIN SET'&&(combo?combo.some(k=>(x.fits||[])[0]===k):named&&(x.fits||[])[0]===named)).slice(0,3).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}
+    const list=[...extra,...mains,...mineFit].filter(x=>!used.includes(lc(x.text.split('\n')[0]).slice(0,14)));
+    return`<div class="msos-fits">${list.length?`<div class="msos-check-title">FROM YOUR PROGRAMMING${combo?` · ${esc(combo.map(k=>COACH_TERM[k]||k).join(' + '))}`:named?` · ${esc(sysLabel(named))}`:''}</div>${list.map(fitRow).join('')}`:''}${moreHtml(kind,named)}</div>`;
   }
   function fitRow(x){return`<div class="msos-fit"><div><b>${esc(x.label)}</b><small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div><button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
   // Every component, by section, so the coach can lead: pick any piece of his programming, not only the
   // ones matched to today's focus. Matched pieces are listed first within each section.
   function moreHtml(kind,named){
-    const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];
+    const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];let mine=[];try{mine=mySets();}catch{}
+    const mineHtml=mine.length?`<div class="msos-more-sec"><div class="msos-check-title">YOUR SETS · from sessions you've written</div>${mine.slice().sort((a,b)=>(named&&(b.fits||[]).includes(named)?1:0)-(named&&(a.fits||[]).includes(named)?1:0)).slice(0,25).map(x=>fitRow({...x,label:`${x.label}${x.fits?.[0]?` · ${COACH_TERM[x.fits[0]]||x.fits[0]}`:''}`})).join('')}</div>`:'';
     const rank=x=>x.section==='MAIN SET'?((named&&(x.fits||[]).includes(named))?0:1):(((x.for||[]).includes(kind)||(x.for||[]).includes('all'))?0:1);
-    return`<details class="msos-more" data-msos-more><summary>All your components (${LIB.length})</summary>${order.map(sec=>{const rows=LIB.filter(x=>x.section===sec).sort((a,b)=>rank(a)-rank(b));return`<div class="msos-more-sec"><div class="msos-check-title">${esc(sec)}</div>${rows.map(fitRow).join('')}</div>`;}).join('')}</details>`;
+    return`<details class="msos-more" data-msos-more><summary>All your components (${LIB.length+mine.length})</summary>${mineHtml}${order.map(sec=>{const rows=LIB.filter(x=>x.section===sec).sort((a,b)=>rank(a)-rank(b));return`<div class="msos-more-sec"><div class="msos-check-title">${esc(sec)}</div>${rows.map(fitRow).join('')}</div>`;}).join('')}</details>`;
   }
   function startersHtml(identity,focus=null){const last=lastSameSlot(identity);const day=weekdayOf(identity?.date||'');const label=day?`${day[0].toUpperCase()}${day.slice(1)} ${identity?.dayPart||''}`.trim():'';
     const plan=planBrief({id:'focus-probe',identity,blocks:[]});const planNamed=plan&&plan.source!=='none'?(namedSystem(plan.system)||namedSystem(plan.weekFocus)):null;
@@ -511,7 +559,12 @@
     const chk=planTargetCheck(session,state,b);
     const head=[b.slot,b.source==='standard'?b.squad:''].filter(Boolean).join(' · ');
     let verdict='';
-    if(chk.checked){
+    if(chk.checked&&chk.combo){
+      const where=chk.basis==='main set'?'Main set':'Session',names=chk.combo.systems.map(sysLabel);
+      verdict=chk.matches?`<div class="msos-brief-check ok">✓ ${where} has both ${esc(names.join(' and '))} — on brief</div>`
+        :`<div class="msos-brief-check off">⚠ ${where} has no ${esc(chk.combo.missing.map(sysLabel).join(' or '))} yet — ${b.coachFocus?'you chose':'brief asks for'} ${esc(b.system)}</div>`;
+      verdict+=`<p class="msos-brief-mix">${chk.combo.share.map(x=>`${esc(COACH_TERM[x.k]||x.k)} ${x.pct}%`).join(' · ')} of the ${esc(chk.basis)} · Whole session: ${chk.mix.map(x=>`${esc(x.label)} ${x.pct}%`).join(' · ')}</p>`;
+    }else if(chk.checked){
       const p=sysLabel(chk.plannedSystem);
       verdict=chk.matches
         ?`<div class="msos-brief-check ok">✓ ${chk.basis==='main set'?'Main set':'Session'} is ${esc(sysLabel(chk.dominantSystem))} — on brief</div>`
@@ -534,7 +587,7 @@
   function liveBrief(host,anchor,getSession,textarea=null){
     let box=host.querySelector('[data-msos-brief-host]');
     if(!box){box=document.createElement('div');box.dataset.msosBriefHost='1';anchor.insertAdjacentElement('beforebegin',box);
-      box.addEventListener('click',e=>{const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;const c=LIB.find(x=>x.id===btn.dataset.msosInsert);if(!c)return;textarea.value=insertComponent(textarea.value,c.section,c.text);textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
+      box.addEventListener('click',e=>{const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;const c=libById(btn.dataset.msosInsert);if(!c)return;textarea.value=insertComponent(textarea.value,c.section,c.text);textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
     let t=null;const paint=()=>{const more=box.querySelector('[data-msos-more]')?.open,y=box.querySelector('[data-msos-more]')?.scrollTop;try{const s=getSession();box.innerHTML=s?briefHtml(s):'';}catch(e){box.innerHTML='';}if(more){const d=box.querySelector('[data-msos-more]');if(d){d.open=true;if(y)d.scrollTop=y;}}};
     const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
   }

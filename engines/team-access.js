@@ -19,7 +19,7 @@
 // screen remains as the offline/no-account fallback it always was.
 (function(g){
   const M=g.MSOS4,U=M?.util;if(!M?.state||!M?.store||!M?.access)return;
-  const T=M.teamAccess={build:'v4-team-access-20260911'};
+  const T=M.teamAccess={build:'v4-team-access-20261012-join-link'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const now=()=>U?.now?.()||new Date().toISOString();
 
@@ -151,4 +151,48 @@
     M.store.save(M.state);
   }
   T.applyMembership=applyMembership;
+
+  // ---------------------------------------------------------------------------
+  // Join link (12 Oct 2026, Andy: "Tried to get Jordan set up -- didn't work"). Jordan's phone never reached the
+  // sign-in step: the old way needed him to find the Connection screen, receive an emailed code (Supabase's
+  // built-in email only reaches the project's own team) and paste a 48-character code. Now Andy sends a link;
+  // opening it on Jordan's phone signs him in as the invited email (supabase/functions/msos-coach-join issues a
+  // one-time sign-in for a live, unaccepted invite -- no email involved), accepts the invite with the existing
+  // database check, switches this phone to Assistant coach for his squads and turns cloud sync on.
+  T.joinLink=token=>{const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('coach_invite',text(token));return u.toString();};
+  T.joinWithInvite=async(token,onStep=()=>{})=>{
+    token=text(token);if(!token)throw new Error('This join link is missing its code.');
+    const c=cfg();if(!c.supabaseUrl||!c.supabaseAnonKey)throw new Error('Supabase is not configured on this device yet.');
+    const step=t=>{try{onStep(t)}catch{}};
+    step('Checking your invite…');
+    const res=await fetch(`${String(c.supabaseUrl).replace(/\/$/,'')}/functions/v1/msos-coach-join`,{method:'POST',headers:{apikey:c.supabaseAnonKey,'Content-Type':'application/json'},body:JSON.stringify({token})});
+    const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=null}
+    if(!res.ok||!data?.token_hash)throw new Error(data?.error||`Could not open this invite (${res.status}).`);
+    step(`Signing in as ${data.email}…`);
+    let ses=null;try{ses=await authRequest('/auth/v1/verify',{type:'magiclink',token_hash:data.token_hash});}catch(e){ses=await authRequest('/auth/v1/verify',{type:'email',token_hash:data.token_hash});}
+    if(!ses?.access_token)throw new Error('Sign-in did not return an access token.');
+    const exp=Number(ses.expires_at)||Math.floor(Date.now()/1000)+Number(ses.expires_in||3600);
+    M.store.saveAuth({access_token:ses.access_token,refresh_token:ses.refresh_token||'',expires_at:exp,user:ses.user||null});
+    step('Joining the team…');
+    const row=await T.acceptInvite(token);
+    step('Turning on cloud sync…');
+    let sync=null;try{sync=await M.cloud?.turnOnSync?.(step);}catch(e){sync={error:e?.message||String(e)};}
+    return{row,email:data.email,sync};
+  };
+  function joinScreen(token){
+    const host=document.querySelector('#modalHost');if(!host)return;
+    host.innerHTML=`<div class="modal-backdrop" data-coach-join><section class="modal"><header><h2>Join McLay Swimming</h2></header><div class="modal-body"><p>You've been invited as an <b>assistant coach</b>. This sets up this phone with your squads' sessions, Roll, Times, Capture and coach chat.</p><div class="hub-actions"><button type="button" class="primary" data-coach-join-go>Join on this phone</button></div><pre data-coach-join-status></pre></div><footer><button type="button" data-coach-join-later>Not now</button></footer></section></div>`;
+    try{M.nav?.openLayer?.('modal');}catch{}
+    const out=host.querySelector('[data-coach-join-status]');
+    const clearUrl=()=>{try{const u=new URL(location.href);u.searchParams.delete('coach_invite');history.replaceState(history.state,'',u.toString());}catch{}};
+    host.querySelector('[data-coach-join-later]').onclick=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
+    host.querySelector('[data-coach-join-go]').onclick=async e=>{const b=e.currentTarget;b.disabled=true;
+      try{const r=await T.joinWithInvite(token,t=>{out.textContent=t;});clearUrl();
+        out.textContent=`Done — you're an assistant coach for ${(r.row.assigned_squads||[]).join(', ')||'your squads'}, signed in as ${r.email}.${r.sync?.error?`\nCloud sync is not on yet: ${r.sync.error}`:''}`;
+        b.textContent='Open the Board';b.disabled=false;b.onclick=()=>{host.innerHTML='';try{M.nav?.clearTransient?.();M.nav?.show?.('board',{restoreScroll:false});M.ui?.renderCurrent?.();}catch{}};
+      }catch(err){out.textContent=err.message||String(err);b.disabled=false;}};
+  }
+  T.joinScreen=joinScreen;
+  function checkJoinLink(){try{const t=new URL(location.href).searchParams.get('coach_invite');if(t)setTimeout(()=>joinScreen(t),300);}catch{}}
+  if(typeof document!=='undefined'){if(document.readyState==='complete')checkJoinLink();else if(typeof addEventListener==='function')addEventListener('load',checkJoinLink,{once:true});}
 })(globalThis);
