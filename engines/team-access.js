@@ -86,11 +86,15 @@
   // Owner-only: creates a real, revocable invite. Andy shares the returned link/code with Jordan himself (text,
   // WhatsApp, whatever) -- there is no email-sending step here, so this has no dependency on Supabase's email
   // deliverability/rate limits, which the one-time sign-in code above already uses.
+  // 13 Oct 2026: invites used to carry NO permissions, so the database refused everything Jordan saved (his
+  // session never reached anyone). An assistant coach can run their assigned squads' sessions: write/finish
+  // sessions, Roll, times, tests, notes, lanes, chat -- not athletes, plans, results admin or meets admin.
+  T.ASSISTANT_PERMISSIONS=Object.freeze({edit_sessions:true,complete_sessions:true,mark_attendance:true,add_session_participants:true,add_notes:true,record_times:true,record_tests:true,view_adaptations:true,edit_lanes:true,view_plans:true,view_results:true,view_pacing:true,view_test_speeds:true,view_meets:true,view_reports:true,view_goals:true,create_communications:true});
   T.createInvite=async({email,displayName='',squads=[]}={})=>{
     const org=M.cloud?.org?.();if(!org)throw new Error('Organisation not loaded on this device yet.');
     email=text(email).toLowerCase();if(!email)throw new Error("Enter the assistant coach's email address.");
     if(!Array.isArray(squads)||!squads.length)throw new Error('Choose at least one squad for this assistant coach.');
-    const row=firstRow(await authedRpc('mclay_create_assistant_invite',{target_org:org,target_email:email,target_display_name:text(displayName),target_squads:squads,target_permissions:{}}));
+    const row=firstRow(await authedRpc('mclay_create_assistant_invite',{target_org:org,target_email:email,target_display_name:text(displayName),target_squads:squads,target_permissions:T.ASSISTANT_PERMISSIONS}));
     if(!row?.invite_token)throw new Error('The invite was not created.');
     return row;
   };
@@ -127,7 +131,9 @@
     if(!userId)throw new Error('Missing member id.');
     await authedRpc('mclay_revoke_assistant_access',{target_org:org,target_user:userId});
   };
-  T.updateAccess=async({userId,displayName='',squads=[],permissions={},active=true}={})=>{
+  T.updateAccess=async({userId,displayName='',squads=[],permissions=null,active=true}={})=>{
+    // Changing a coach's squads or name must not strip their permissions (an empty set locks them out of the cloud).
+    if(!permissions||!Object.keys(permissions).length)permissions=T.ASSISTANT_PERMISSIONS;
     const org=M.cloud?.org?.();if(!org)throw new Error('Organisation not loaded on this device yet.');
     if(!userId)throw new Error('Missing member id.');
     await authedRpc('mclay_update_assistant_access',{target_org:org,target_user:userId,target_display_name:text(displayName),target_squads:squads,target_permissions:permissions,target_active:active});

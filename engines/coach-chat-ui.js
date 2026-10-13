@@ -125,6 +125,9 @@
   }
 
   function openPanel(){
+    // 13 Oct 2026 (Andy: chat button does nothing on my phone): the panel lives in #modalHost, which every other
+    // pop-up clears when it closes -- after that the button was un-hiding a panel no longer on the page. Rebuild it.
+    if(panelEl&&!panelEl.isConnected)panelEl=null;
     if(!panelEl){
       const host=document.querySelector('#modalHost')||document.body;
       panelEl=document.createElement('div');panelEl.className='cc-backdrop';

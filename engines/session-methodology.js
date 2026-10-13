@@ -400,10 +400,13 @@
   const MAIN_SEQ={
     acanc:['dev-200','max-12','dev-100','reset-scull','max-25','dev-mix'],
     apanp:['at-rounds','rp-25','dev-100','rp-50','cl-100'],
-    aerobic:['dev-200','dev-mix','reg-prog','dev-100'],
-    threshold:['dev-100','ol-at-rounds','at-rounds','cl-100'],
-    race:['rp-25','dev-100','rp-50','reset-scull','rp-200','ol-at-100'],
-    speed:['max-12','dev-100','max-25','reg-400','max-100'],
+    // 13 Oct 2026 (Andy: an Anaerobic Power night should not have offered a "12 x 100 Dev / OL / AT / CL" -- "the sets
+    // that popped up in the main set should have all been specific anaerobic power"): each sequence now stays in
+    // its own system; the resets between demanding pieces are scull/easy, not another training zone.
+    aerobic:['dev-200','dev-400','dev-100','dev-8x200'],
+    threshold:['at-rounds','at-200','at-3r','cl-100'],
+    race:['rp-25','reset-scull','rp-50','reset-scull','rp-200','rp-6x50','rp-ladder'],
+    speed:['max-12','reset-scull','max-25','reset-scull','max-15','max-4x50','max-100'],
     mixed:['reg-400','max-12','rp-25','ol-at-100','reset-scull','rp-50','max-100'],
     skill:['reg-400','dev-mix','dev-100']
   };
@@ -416,7 +419,7 @@
   function mySets(){const rev=Number(M.state?.settings?.storageRevision)||0;if(mineCache.rev===rev)return mineCache.list;
     const seen=new Set(LIB.map(x=>lc(x.text))),out=[];const sessions=Object.values(M.state?.canonicalSessions||{}).filter(x=>x?.identity?.date&&(x.blocks||[]).length).sort((a,b)=>String(b.identity.date+b.identity.dayPart).localeCompare(String(a.identity.date+a.identity.dayPart))).slice(0,40);
     for(const ses of sessions)for(const blk of ses.blocks||[]){const sec=SECTION_OF(blk);if(!sec)continue;for(const it of blk.items||[]){if(it.kind!=='set'&&it.kind!=='group')continue;let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'').trim();}catch{t=String(it.raw||'').trim();}if(!t||t.length>400)continue;const key=lc(t);if(seen.has(key))continue;seen.add(key);
-      let fits=[];try{const d=D.session({id:`mine-probe`,identity:ses.identity,blocks:[{id:'b',type:blk.type,title:blk.title,items:[it]}]},M.state,{delivered:false});fits=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres).map(([k])=>k);}catch{}
+      let fits=[];try{const d=D.session({id:`mine-probe-${ses.id}-${blk.id||''}-${it.id||out.length}`,identity:ses.identity,blocks:[{id:'b',type:blk.type,title:blk.title,items:[it]}]},M.state,{delivered:false});fits=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres).map(([k])=>k);}catch{}
       const first=t.split('\n')[0];out.push({id:`mine-${out.length}-${first.replace(/[^a-z0-9]+/gi,'-').slice(0,24)}`,section:sec,label:first,text:t,fits,for:['all'],mine:true,from:`${ses.identity.date} ${ses.identity.dayPart||''}`.trim()});if(out.length>=60)break;}}
     mineCache={rev,list:out};return out;}
   SM.mySets=mySets;
@@ -448,6 +451,8 @@
     // A reset only belongs between demanding sections -- never as the last thing in the main set.
     while(parts['MAIN SET'].length&&parts['MAIN SET'][parts['MAIN SET'].length-1]===libById('reset-scull').text)parts['MAIN SET'].pop();
     const post=pick('POST SET',kind);parts['POST SET'].push(post.text);if(dur()>limit)parts['POST SET']=[];
+    // Base/aerobic phase: the anaerobic pieces keep their purpose with a little more recovery.
+    parts['MAIN SET']=parts['MAIN SET'].map(t=>{const c=LIB.find(x=>x.text===t);return c?adjustForPhase(c,b).text:t;});
     return{text:composeText(parts),kind,named,minutes:Math.round(dur()/60),limit:Math.round(limit/60)};
   }
   SM.draftFromBrief=draftFromBrief;
@@ -460,23 +465,48 @@
     lines.splice(end,0,setText);return lines.join('\n');
   }
   SM.insertComponent=insertComponent;
+  // In an aerobic/base phase, anaerobic pieces keep their purpose but get a little more recovery (Andy, 13 Oct
+  // 2026: "if anything, slightly extended in the recovery because it's an aerobic training phase"): +15s on each
+  // send-off of a Race-pace or Speed/Max set.
+  const PHASE_EXTRA_S=15;
+  function baseLike(b){return /base|aerobic|general/i.test(`${b?.phase||''} ${b?.weekFocus||''}`);}
+  function adjustForPhase(c,b){if(!c||c.section!=='MAIN SET'||!baseLike(b)||!(c.fits||[]).some(k=>k==='Race pace'||k==='Speed / Max'))return c;
+    const t=c.text.replace(/@\s*(\d{1,2}):(\d{2})/g,(m,mm,ss)=>{const v=Number(mm)*60+Number(ss)+PHASE_EXTRA_S;return`@${Math.floor(v/60)}:${String(v%60).padStart(2,'0')}`;});
+    return t===c.text?c:{...c,text:t,label:`${c.label} · +${PHASE_EXTRA_S}s recovery (base phase)`};}
+  SM.adjustForPhase=adjustForPhase;
+  // Sets this squad has swum in the last few days are not offered again as suggestions (Andy: Jordan "kind of did
+  // the same set I did last night").
+  function recentSetKeys(session,days=3){const id=session?.identity||{},squads=new Set(id.squads||[]),date=id.date||'';if(!date)return new Set();const from=new Date(Date.parse(date)-days*864e5).toISOString().slice(0,10);const keys=new Set();
+    for(const s of Object.values(M.state?.canonicalSessions||{})){const d=s?.identity?.date||'';if(!s||s.id===session.id||d<from||d>date||!(s.identity.squads||[]).some(q=>squads.has(q)))continue;
+      for(const blk of s.blocks||[])for(const it of blk.items||[]){let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'');}catch{t=String(it.raw||'');}const k=lc(t.split('\n')[0]).replace(/\s+/g,' ').trim();if(k)keys.add(k);}}
+    return keys;}
+  const firstKey=x=>lc(String(x.text||'').split('\n')[0]).replace(/\s+/g,' ').trim();
   function suggestionsHtml(session,state,b,chk){
-    if(!b||b.source==='none')return`<div class="msos-fits">${moreHtml('mixed',null)}</div>`;const combo=chk?.combo?.systems||(b.coachFocus?null:comboSystems(b.system));const named=chk?.plannedSystem||namedSystem(b.system);const kind=combo?comboKind(combo):briefKind(named);
+    if(!b||b.source==='none')return`<div class="msos-fits"><p class="muted">No season or weekly plan on this phone for this session yet, so these aren't matched to a brief. The head coach's plan arrives automatically once this phone is signed in and online.</p>${moreHtml('mixed',null)}</div>`;const combo=chk?.combo?.systems||(b.coachFocus?null:comboSystems(b.system));const named=chk?.plannedSystem||namedSystem(b.system);const kind=combo?comboKind(combo):briefKind(named);
     const used=lc(sessionWords(session));const mains=combo?(()=>{const missing=chk?.combo?.missing?.length?chk.combo.missing:combo;const order=[...missing,...combo.filter(k=>!missing.includes(k))];const out=[];for(const k of order)for(const x of LIB.filter(x=>x.section==='MAIN SET'&&(x.fits||[]).includes(k)).slice(0,3))if(!out.includes(x))out.push(x);return out.slice(0,6);})():LIB.filter(x=>x.section==='MAIN SET'&&named&&(x.fits||[]).includes(named)).slice(0,4);
     const hasPre=(session.blocks||[]).some(x=>/pre/i.test(`${x.type} ${x.title}`)),hasWU=(session.blocks||[]).some(x=>/warm.?up|warm_up/i.test(`${x.type} ${x.title}`));
     const extra=[!hasWU&&pick('WARM UP',kind),!hasPre&&pick('PRE SET',kind)].filter(Boolean);
-    let mineFit=[];try{mineFit=mySets().filter(x=>x.section==='MAIN SET'&&(combo?combo.some(k=>(x.fits||[])[0]===k):named&&(x.fits||[])[0]===named)).slice(0,3).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}
-    const list=[...extra,...mains,...mineFit].filter(x=>!used.includes(lc(x.text.split('\n')[0]).slice(0,14)));
-    return`<div class="msos-fits">${list.length?`<div class="msos-check-title">FROM YOUR PROGRAMMING${combo?` · ${esc(combo.map(k=>COACH_TERM[k]||k).join(' + '))}`:named?` · ${esc(sysLabel(named))}`:''}</div>${list.map(fitRow).join('')}`:''}${moreHtml(kind,named)}</div>`;
+    // One of his own sets is only suggested when everything it delivers is the session's system (easy/skill work
+    // allowed) -- a mixed Dev/OL/AT/CL set is never offered on an Anaerobic Power night.
+    const allowed=new Set([...(combo||[named]).filter(Boolean),'Skill / Technical','Regeneration']);const onBrief=x=>(x.fits||[]).length>0&&(x.fits||[]).every(k=>allowed.has(k))&&(x.fits||[]).some(k=>k!=='Skill / Technical'&&k!=='Regeneration');
+    const recent=recentSetKeys(session);
+    let mineFit=[];try{mineFit=mySets().filter(x=>x.section==='MAIN SET'&&onBrief(x)&&!recent.has(firstKey(x))).slice(0,3).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}
+    const list=[...extra,...mains.filter(x=>!recent.has(firstKey(x))),...mineFit].filter(x=>!used.includes(lc(x.text.split('\n')[0]).slice(0,14))).map(x=>adjustForPhase(x,b));
+    return`<div class="msos-fits">${list.length?`<div class="msos-check-title">FROM YOUR PROGRAMMING${combo?` · ${esc(combo.map(k=>COACH_TERM[k]||k).join(' + '))}`:named?` · ${esc(sysLabel(named))}`:''}</div>${list.map(fitRow).join('')}`:''}${moreHtml(kind,named,combo,b)}</div>`;
   }
   function fitRow(x){return`<div class="msos-fit"><div><b>${esc(x.label)}</b><small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div><button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
   // Every component, by section, so the coach can lead: pick any piece of his programming, not only the
   // ones matched to today's focus. Matched pieces are listed first within each section.
-  function moreHtml(kind,named){
+  function moreHtml(kind,named,combo=null,b=null){
     const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];let mine=[];try{mine=mySets();}catch{}
-    const mineHtml=mine.length?`<div class="msos-more-sec"><div class="msos-check-title">YOUR SETS · from sessions you've written</div>${mine.slice().sort((a,b)=>(named&&(b.fits||[]).includes(named)?1:0)-(named&&(a.fits||[]).includes(named)?1:0)).slice(0,25).map(x=>fitRow({...x,label:`${x.label}${x.fits?.[0]?` · ${COACH_TERM[x.fits[0]]||x.fits[0]}`:''}`})).join('')}</div>`:'';
-    const rank=x=>x.section==='MAIN SET'?((named&&(x.fits||[]).includes(named))?0:1):(((x.for||[]).includes(kind)||(x.for||[]).includes('all'))?0:1);
-    return`<details class="msos-more" data-msos-more><summary>All your components (${LIB.length+mine.length})</summary>${mineHtml}${order.map(sec=>{const rows=LIB.filter(x=>x.section===sec).sort((a,b)=>rank(a)-rank(b));return`<div class="msos-more-sec"><div class="msos-check-title">${esc(sec)}</div>${rows.map(fitRow).join('')}</div>`;}).join('')}</details>`;
+    // With a brief, main-set pieces for today's system come first; everything else is still there to lead with,
+    // under "Other systems", so the coach can override -- but it is never mixed in with today's.
+    const want=new Set((combo||[named]).filter(Boolean)),hasBrief=want.size>0,fitsBrief=x=>hasBrief&&(x.fits||[]).some(k=>want.has(k))&&(x.fits||[]).every(k=>want.has(k)||k==='Skill / Technical'||k==='Regeneration');
+    const tag=x=>({...x,label:`${x.label}${x.fits?.[0]?` · ${(x.fits||[]).map(k=>COACH_TERM[k]||k).filter((v,i,a)=>a.indexOf(v)===i).join(' / ')}`:''}`});
+    const split=(rows,title)=>{if(!hasBrief)return`<div class="msos-check-title">${esc(title)}</div>${rows.map(fitRow).join('')}`;const on=rows.filter(x=>x.section!=='MAIN SET'||fitsBrief(x)),off=rows.filter(x=>x.section==='MAIN SET'&&!fitsBrief(x));return`<div class="msos-check-title">${esc(title)}</div>${on.map(x=>fitRow(adjustForPhase(x,b))).join('')}${off.length?`<div class="msos-check-title msos-other">Other systems (not today's focus)</div>${off.map(fitRow).join('')}`:''}`;};
+    const mineHtml=mine.length?`<div class="msos-more-sec">${split(mine.slice(0,25).map(tag),"YOUR SETS · from sessions you've written")}</div>`:'';
+    const rank=x=>x.section==='MAIN SET'?(fitsBrief(x)?0:1):(((x.for||[]).includes(kind)||(x.for||[]).includes('all'))?0:1);
+    return`<details class="msos-more" data-msos-more><summary>All your components (${LIB.length+mine.length})</summary>${mineHtml}${order.map(sec=>{const rows=LIB.filter(x=>x.section===sec).sort((a,b)=>rank(a)-rank(b));return`<div class="msos-more-sec">${sec==='MAIN SET'?split(rows.map(tag),sec):`<div class="msos-check-title">${esc(sec)}</div>${rows.map(fitRow).join('')}`}</div>`;}).join('')}</details>`;
   }
   function startersHtml(identity,focus=null){const last=lastSameSlot(identity);const day=weekdayOf(identity?.date||'');const label=day?`${day[0].toUpperCase()}${day.slice(1)} ${identity?.dayPart||''}`.trim():'';
     const plan=planBrief({id:'focus-probe',identity,blocks:[]});const planNamed=plan&&plan.source!=='none'?(namedSystem(plan.system)||namedSystem(plan.weekFocus)):null;
@@ -587,7 +617,7 @@
   function liveBrief(host,anchor,getSession,textarea=null){
     let box=host.querySelector('[data-msos-brief-host]');
     if(!box){box=document.createElement('div');box.dataset.msosBriefHost='1';anchor.insertAdjacentElement('beforebegin',box);
-      box.addEventListener('click',e=>{const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;const c=libById(btn.dataset.msosInsert);if(!c)return;textarea.value=insertComponent(textarea.value,c.section,c.text);textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
+      box.addEventListener('click',e=>{const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}textarea.value=insertComponent(textarea.value,c.section,c.text);textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
     let t=null;const paint=()=>{const more=box.querySelector('[data-msos-more]')?.open,y=box.querySelector('[data-msos-more]')?.scrollTop;try{const s=getSession();box.innerHTML=s?briefHtml(s):'';}catch(e){box.innerHTML='';}if(more){const d=box.querySelector('[data-msos-more]');if(d){d.open=true;if(y)d.scrollTop=y;}}};
     const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
   }
