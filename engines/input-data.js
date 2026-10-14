@@ -103,7 +103,7 @@
 
   // ---------- screen ----------
   const KINDS={
-    t400:{title:'T400s',tier:1,blurb:'Sets every swimmer\'s aerobic training targets. The newest valid T400 is the one the Board uses.',example:'William 4:24.2\nCharlotte Murphy 5:41.2 IM\nMatt K 454.2, Elsie 5:02',fields:['stroke','date','course']},
+    t400:{title:'T400s',tier:1,blurb:'Sets every swimmer\'s aerobic training targets. Each swimmer\'s fastest T400 for that stroke is the one the Board uses.',example:'William 4:24.2\nCharlotte Murphy 5:41.2 IM\nMatt K 454.2, Elsie 5:02',fields:['stroke','date','course']},
     race:{title:'Race results',tier:1,blurb:'Feed PBs, pathway gaps and race-pace targets. Write the event with each time or set it once below.',example:'Luke Thompson 200 free 2:03.07\nCoral 50 fly 34.43\nWilliam 100 fly 59.53 LC',fields:['meet','distance','stroke','date','course']},
     test:{title:'Other test sets',tier:2,blurb:'Kept, measured and tracked over time. They don\'t change training targets.',example:'Ashley 2:31.4\nMolly 2:28.9',fields:['test','distance','stroke','date','course']}
   };

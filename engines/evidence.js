@@ -47,6 +47,11 @@
   // already uses. wantedCourse='' (the default) means "caller has no course context", so no filter
   // is applied — every current call site that hasn't been updated to pass a course keeps working.
   function t400Course(row){return text(row?.pool_course||row?.course||row?.metadata?.pool_course||row?.metadata?.course||'SCM').toUpperCase();}
-  function t400Rows(ath,state,wantedStroke='Freestyle',wantedCourse=''){const wanted=stroke(wantedStroke),wc=text(wantedCourse).toUpperCase(),refs=state?._refs||{},rows=[...(state?.trainingTestResults||state?.training_test_results||[]),...(refs.training_test_results||[])],ident=identityFor(ath,state);return rows.filter(r=>sameAthleteWithIdentity(r,ident)&&isT400(state,r)&&t400Stroke(state,r)===wanted&&r.valid_for_anchor!==false&&Number.isFinite(seconds(r))&&seconds(r)>0&&(!wc||t400Course(r)===wc)).sort((a,b)=>{const ad=resultDateMs(a),bd=resultDateMs(b);if(ad!=null||bd!=null){if(ad==null)return 1;if(bd==null)return-1;if(ad!==bd)return bd-ad;}return seconds(a)-seconds(b);});}
-  return{VERSION,hydrate,merge,key,text,nameTokens,sameName,stroke,seconds,course,distance,rowStroke,rowName,points,athleteAliases,sameAthlete,pbRows,t400Rows,t400Stroke,t400Course,isT400,ensureVerified,resultDateMs};
+  function t400Rows(ath,state,wantedStroke='Freestyle',wantedCourse=''){const wanted=stroke(wantedStroke),wc=text(wantedCourse).toUpperCase(),refs=state?._refs||{},rows=[...(state?.trainingTestResults||state?.training_test_results||[]),...(refs.training_test_results||[])],ident=identityFor(ath,state);return rows.filter(r=>sameAthleteWithIdentity(r,ident)&&isT400(state,r)&&t400Stroke(state,r)===wanted&&r.valid_for_anchor!==false&&Number.isFinite(seconds(r))&&seconds(r)>0&&(!wc||t400Course(r)===wc)).sort(t400Order);}
+  // 15 Oct 2026 (Andy: "the fastest time 400 of that stroke, not the latest" -- Ashley Brown's targets were set
+  // off a slow 6:09.8 instead of her 5:27.3): the training anchor is the swimmer's FASTEST valid T400 for that
+  // stroke (and course, where one is asked for). Same time twice -> the newer one. A test the coach marks not
+  // valid for anchor is never used. This replaces the 31 Aug 2026 latest-first rule (PR #117).
+  function t400Order(a,b){const as=seconds(a),bs=seconds(b);if(as!==bs)return as-bs;const ad=resultDateMs(a),bd=resultDateMs(b);return(bd??-Infinity)-(ad??-Infinity);}
+  return{VERSION,hydrate,merge,key,text,nameTokens,sameName,stroke,seconds,course,distance,rowStroke,rowName,points,athleteAliases,sameAthlete,pbRows,t400Rows,t400Order,t400Stroke,t400Course,isT400,ensureVerified,resultDateMs};
 });

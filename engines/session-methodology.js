@@ -110,8 +110,10 @@
   // the same physiology applies whether "Threshold" came from this file's own vocabulary lookup above or
   // from a plain "Threshold week" weekly-plan phrase classified by dosageEngine.systemFrom() directly. No
   // other crossover is assumed here -- only the one Andy actually stated.
+  // 15 Oct 2026: Andy's reference library defines Aerobic Power as "stronger aerobic output, threshold/overload", so
+  // an Overload main set on an Aerobic Power day is on brief too (his AP01 "3 Rounds of 8 x 100 Overload").
   function isKnownCrossover(plannedSystem,dominantSystem){
-    return plannedSystem==='Threshold'&&dominantSystem==='Clearance';
+    return plannedSystem==='Threshold'&&(dominantSystem==='Clearance'||dominantSystem==='Overload');
   }
   // Only fires when the weekly plan's free text names one of dosageEngine's own system labels (directly, or
   // via the season-planner vocabulary lookup above) -- never invents a target from silence. A session with
@@ -194,9 +196,15 @@
     // A tie for the most work counts as the planned system being on top.
     const pctOf=(rows,k)=>Number((rows||[]).find(([x])=>x===k)?.[1]?.pctMetres||0);const basisRows=mainRanked||ranked;
     let matches=dominantSystem===named||isKnownCrossover(named,dominantSystem)||(pctOf(basisRows,named)>0&&pctOf(basisRows,named)>=Number(top[1].pctMetres||0)-0.5);
+    // 15 Oct 2026 (Andy: "in an aerobic capacity phase ... there might be slightly more of an aerobic feel to some of
+    // those higher intensity sets"): in the Base Skills / aerobic phase, a harder day whose main set is mostly
+    // aerobic but still has real work of the planned system (at least 15% of the main set) is the aerobic-phase
+    // version of that day -- on brief, and said so (his AP05 "early-season aerobic power touch").
+    let aerobicPhase=false;
+    if(!matches&&!combo&&baseLike(b)&&['Threshold','Race pace','Speed / Max'].includes(named)&&['Development','Regeneration'].includes(dominantSystem)&&pctOf(basisRows,named)>=15){matches=true;aerobicPhase=true;}
     let comboInfo=null;if(combo){const share=combo.map(k=>({k,pct:Math.round(pctOf(basisRows,k))}));const missing=share.filter(x=>x.pct<10).map(x=>x.k);matches=!missing.length;comboInfo={systems:combo,share,missing};}
     const planned=dose.systems?.[named]||{metres:0,pctMetres:0};
-    return{checked:true,combo:comboInfo,plannedSystem:named,plannedFrom:from,dominantSystem,dominantPct:Math.round(top[1].pctMetres||top[1].pctDose||0),basis,matches,source:b.source,
+    return{checked:true,combo:comboInfo,aerobicPhase,plannedSystem:named,plannedFrom:from,dominantSystem,dominantPct:Math.round(top[1].pctMetres||top[1].pctDose||0),basis,matches,source:b.source,
       plannedMetres:Math.round(planned.metres||0),plannedPct:Math.round(planned.pctMetres||0),totalMetres:Math.round(dose.rawMetres||0),
       mix:[...ranked].sort((a,b)=>(b[1].pctMetres||0)-(a[1].pctMetres||0)).slice(0,3).map(([label,v])=>({label,pct:Math.round(v.pctMetres||0)}))};
   }
@@ -390,7 +398,82 @@
     {id:'post-paddles',section:'POST SET',label:'Paddles descend (400)',text:'4 x 100 Pull Paddles Desc 1-4 10sR',for:['aerobic','threshold','mixed','acanc']},
     {id:'wd',section:'WARM DOWN',label:'200 easy',text:'200 Easy',for:['all']}
   ];
-  SM.LIB=LIB;
+  // ---------------------------------------------------------------------------
+  // Andy's Session Writing Reference Library (15 Oct 2026, built with ChatGPT from the sessions he has been
+  // writing; "HISTORICAL" = sessions he dictated, "NEW" = examples in his style). Kept in his wording; where the
+  // app's parser would have read a line differently from what he meant, it is written the way the parser counts it
+  // (e.g. "4 x 50 #1 @ 1:15 @ 200 Pace" instead of "200 Pace" on its own line, which counted as an extra 200m) --
+  // checked in tests/session-library-stages-20261015.cjs.
+  //   focus  -- which session focus the set serves: aerobic (Aerobic Capacity), threshold (Aerobic Power), race
+  //             (Anaerobic Power), speed (Anaerobic Capacity), mixed, skill, all (fits any session).
+  //   phases -- season phases it suits: base, underwater, turns, finish, taper, any. strict = only in those phases.
+  //   use    -- his note on when to use it, shown with the suggestion.
+  // ---------------------------------------------------------------------------
+  const REFLIB=[
+ // WARM-UPS
+ {id:'W01',origin:'H',section:'WARM UP',focus:['threshold','mixed','all'],phases:['any'],label:'Mixed-stroke base',text:'4 x 200\n50 Free\n100 Reverse IM\n50 Reverse IM Order\n15sR',use:'Aerobic-power evenings, mixed-stroke preparation, technical rhythm before overload.'},
+ {id:'W02',origin:'H',section:'WARM UP',focus:['race','aerobic'],phases:['any'],label:'Long ladder',text:'500 Choice\n400 Free\n300 Back\n200 Breast\n100 Fly\n15sR',use:'Race-pace evening, large aerobic preparation without aggressive intensity.'},
+ {id:'W03',origin:'H',section:'WARM UP',focus:['aerobic'],phases:['base','any'],label:'Simple choice + kick',text:'800 Choice\n12 x 50 Kick @ 1:10 Desc 1-3\n200 IM',use:'Aerobic-capacity morning, kick conditioning and stroke balance.'},
+ {id:'W04',origin:'H',section:'WARM UP',focus:['speed','skill'],phases:['turns','taper'],label:'Race-skills long course',text:'800\n200 Free / 200 Choice / Repeat',use:'Short session before starts, turns and finish skills.'},
+ {id:'W05',origin:'H',section:'WARM UP',focus:['race'],phases:['finish','any'],label:'Speed-endurance preparation',text:'2 Rounds:\n300 Free 15sR\n200 IM 15sR\n100 #1 15sR',use:'Anaerobic-power main set, broad warm-up before quality 200-pace repeats.'},
+ {id:'W06',origin:'H',section:'WARM UP',focus:['mixed','aerobic'],phases:['any'],label:'Rainbow warm-up',text:'4 x 250 15sR\n100 IM\n100 Free\n50 #1 Hands by Side\n4 x 100 Kick @ 2:20 Desc 1-4\n4 x 75 Fins @ 1:45\n25 Swim / 25 Kick Streamline Build / 25 Underwater\n400 FOB\nIncrease underwater distance every 100',use:'Long mixed-zone rainbow session, aerobic and technical preparation.'},
+ {id:'W07',origin:'N',section:'WARM UP',focus:['aerobic','skill','all'],phases:['base'],label:'Base skills (week one)',text:'600 Choice\n4 x 100 @ 2:00\n25 Hands by Side / 25 Scull / 50 Swim',use:'Early-season aerobic-capacity day, quiet entry and body line.'},
+ {id:'W08',origin:'N',section:'WARM UP',focus:['speed'],phases:['turns','any'],label:'Speed-day technical',text:'400 Free\n4 x 100 Choice 15sR\n8 x 50 #1 @ 1:15\nOdd Minimum Stroke Count / Even Build',use:'Anaerobic-capacity top-end speed, prepare nervous system without fatigue.'},
+ {id:'W09',origin:'H',section:'WARM UP',focus:['race','speed'],phases:['taper'],label:'Own race warm-up (45 min)',text:'45 min Own Race Warm-Up\nSwimmer explains planned race warm-up to coach\nComplete individual warm-up',use:'Taper or race rehearsal; conversation and swimmer ownership are part of session, not swimming distance.'},
+ // PRE-SETS
+ {id:'P01',origin:'H',section:'PRE SET',focus:['threshold'],phases:['base','underwater','any'],label:'Bands and body line',text:'8 x 50 Bands Only @ 1:30 Build\n200 #1 Hands by Side',use:'Aerobic-power evening, reinforce catch and body alignment before overload.'},
+ {id:'P02',origin:'H',section:'PRE SET',focus:['speed','race'],phases:['underwater','turns'],label:'Underwater and MAX prep',text:'8 x 25 #1 @ 0:45 15m MAX\n200 #1 Drill\n4 x 50 #1 @ 2:00 35m MAX',use:'Speed-quality session; strong activation but monitor fatigue.'},
+ {id:'P03',origin:'H',section:'PRE SET',focus:['race'],phases:['taper','underwater'],label:'Fins race prep',text:'2 Rounds:\n2 x 25 Underwater Fins\n2 x 25 15m MAX Fins\n100 #1 Drill\n300 #1 Stroke Check',use:'200-pace session in taper; underwater and breakout precision.'},
+ {id:'P04',origin:'H',section:'PRE SET',focus:['skill','speed'],phases:['turns'],label:'Turn and breakout',text:'4 Rounds:\n3 x Turn + Breakout\nStart at Flags\nInto Turn\nUnderwater + Breakout 15-20m\n50 Scull',use:'Technical day, race turns without large metabolic load.'},
+ {id:'P05',origin:'H',section:'PRE SET',focus:['speed','race'],phases:['turns','finish'],label:'Dive start progression',text:'4 x 50 #1 Dive Start @ 2:00\n#1 15m MAX\n#2 25m MAX\n#3 35m MAX\n#4 50m MAX\n200 Easy',use:'Speed or race-quality day; increase exposure progressively.'},
+ {id:'P06',origin:'H',section:'PRE SET',focus:['speed','skill'],phases:['taper','turns'],label:'Kick progression',text:'100 Kick Steady @ 2:30\n50 Kick Build @ 1:30\n100 Kick Steady @ 2:30\n2 x 50 Kick @ 1:30\n#1 Build / #2 Fast',use:'Race-skills morning, activation without excessive fatigue.'},
+ {id:'P07',origin:'H',section:'PRE SET',focus:['speed'],phases:['taper','any'],label:'Kick MAX',text:'12 x 12.5 Kick MAX @ 0:45\n150 Scull',use:'Pre-main activation before moderate kick set, or short speed touch.'},
+ {id:'P08',origin:'N',section:'PRE SET',focus:['threshold','aerobic'],phases:['base'],label:'Aerobic economy',text:'8 x 50 @ 1:10\n#1-2 Minimum Stroke Count\n#3-4 Build\nRepeat',use:'Week-one aerobic power touch, preserve length and quiet catch.'},
+ {id:'P09',origin:'N',section:'PRE SET',focus:['race'],phases:['base'],label:'Anaerobic power primer (aerobic week)',text:'4 x 50 #1 @ 1:30\n25 Build / 25 Easy\n4 x 25 #1 @ 1:00\n15m Race Speed / Easy Finish\n200 Easy',use:'Short quality primer while keeping overall weekly aerobic load dominant.'},
+ {id:'P10',origin:'N',section:'PRE SET',focus:['speed'],phases:['turns','any'],label:'Top-end speed primer',text:'4 x 25 Fins @ 1:30\n15m MAX / Easy Finish\n200 Easy\n4 x Dive Start 15m MAX\nFull Recovery',use:'Anaerobic-capacity session, high speed with recovery; not a lactate tolerance set.'},
+ // MAIN SETS -- AEROBIC CAPACITY
+ {id:'AC01',origin:'H',section:'MAIN SET',focus:['aerobic'],phases:['base','underwater'],label:'Progressive distance',text:'400 Freestyle Regeneration 10sR\n2 x 200 Freestyle Development 10sR\n2 x 25 15m Underwater MAX @ 1:00\n400 Freestyle Regeneration 10sR\n4 x 100 Freestyle Development 10sR\n2 x 25 15m Underwater MAX @ 1:00',use:'Aerobic-capacity session with small neuromuscular touches, not a full speed session.'},
+ {id:'AC02',origin:'H',section:'MAIN SET',focus:['aerobic'],phases:['base','any'],label:'Pull and IM mix',text:'400 Pull 20sR\n4 x 100 IM 20sR\n4 x 100 Paddles 20sR\n400 Pull 20sR\n4 x 100 IM Order 20sR',use:'Aerobic-capacity morning, mixed-stroke technique and pull conditioning.'},
+ {id:'AC03',origin:'H',section:'MAIN SET',focus:['aerobic'],phases:['underwater','any'],label:'Kick capacity',text:'12 x 100 Kick @ 2:10 Desc 1-3\n8 x 25 @ 0:45 15m Underwater MAX\n4 x 200 Kick with Fins @ 3:30 Desc 1-4\n8 x 25 Kick @ 1:00 MAX',use:'Kick-focused aerobic-capacity session with speed inserts; substantial load.'},
+ {id:'AC04',origin:'N',section:'MAIN SET',focus:['aerobic'],phases:['base'],label:'LCM early base',text:'3 Rounds:\n300 Regeneration 15sR\n2 x 200 Development 20sR\n4 x 50 Build @ 1:15\n100 Easy',use:'Week-one LCM aerobic-capacity development, repeatability and stroke economy.'},
+ {id:'AC05',origin:'N',section:'MAIN SET',focus:['aerobic'],phases:['finish'],label:'Aerobic maintenance (anaerobic power phase)',text:'3 x 400 Pull 20sR\n6 x 100 #1 Drill / Swim 15sR\n200 Easy',use:'Between demanding speed-endurance sessions; avoid threshold escalation.'},
+ {id:'AC06',origin:'N',section:'MAIN SET',focus:['aerobic'],phases:['base','turns'],label:'Capacity with short race feel',text:'2 Rounds:\n400 Regeneration 15sR\n4 x 100 Development 15sR\n4 x 25 #1 Race Breakout @ 1:00\n200 Easy',use:'Aerobic block maintaining starts and race familiarity.'},
+ // AEROBIC POWER
+ {id:'AP01',origin:'H',section:'MAIN SET',focus:['threshold'],phases:['underwater'],label:'Overload volume',text:'3 Rounds:\n8 x 100 Overload 10sR',use:'Full aerobic-power loading session, not an appropriate unmodified race-week prescription.'},
+ {id:'AP02',origin:'H',section:'MAIN SET',focus:['threshold'],phases:['any'],label:'Minimum stroke count + threshold',text:'3 Rounds:\n200 Minimum Stroke Count @ 3:30\n3 x 100 Threshold 30sR\n100 Minimum Stroke Count\n3 x 50 #1 @ 1:10 Desc 1-3\n#3 @ 200 Pace',use:'Aerobic-power evening, technical economy before strong aerobic work and race-specific finish.'},
+ {id:'AP03',origin:'H',section:'MAIN SET',focus:['threshold'],phases:['underwater','any'],label:'Threshold ladder',text:'5 x 100 #1 Threshold 10sR\n300 Choice\n6 x 100 IM Threshold 10sR\n300 Easy\n7 x 100 Free Threshold 10sR\n200 Easy',use:'Mixed-stroke aerobic power with controlled recovery between blocks.'},
+ {id:'AP04',origin:'H',section:'MAIN SET',focus:['threshold'],phases:['any'],label:'Stroke count + HR',text:'4 Rounds:\n200 Minimum Stroke Count @ 3:30\n2 x 100 @ 1:45\n#1 Build\n#2 Clearance Heart Rate 170-180',use:'Aerobic-power day, stroke economy before controlled higher effort. HR target is historical, not universally appropriate.'},
+ {id:'AP05',origin:'N',strict:true,section:'MAIN SET',focus:['threshold'],phases:['base'],label:'Early-season aerobic power touch',text:'3 Rounds:\n200 Regeneration 15sR\n2 x 200 Development 20sR\n4 x 50 #1 @ 1:15\n#1-2 Smooth Build\n#3-4 Threshold (controlled aerobic power)\n100 Easy',use:'Week-one LCM capacity session containing limited aerobic-power work.'},
+ {id:'AP06',origin:'N',section:'MAIN SET',focus:['threshold'],phases:['taper','finish'],label:'Aerobic power (race-prep week)',text:'2 Rounds:\n3 x 100 Threshold 20sR\n200 Easy\n4 x 50 #1 @ 1:30 @ 200 Pace with technical control',use:'Reduced volume, maintain rhythm and specificity rather than chase fatigue.'},
+ // ANAEROBIC CAPACITY / TOP-END SPEED
+ {id:'ANC01',origin:'H',section:'MAIN SET',focus:['speed'],phases:['turns','any'],label:'Starts, cords, parachutes',text:'2 Rounds:\n4 x Assisted / Resisted Cords\n50 Scull\n4 x 25 Small Parachute 15m MAX\n4 x 25 Big Parachute 15m MAX\n50 Scull\n200 #1 Drill',use:'Top-end speed, resisted power and technical restoration. Give sufficient recovery; cords distance unspecified.'},
+ {id:'ANC02',origin:'H',section:'MAIN SET',focus:['speed'],phases:['turns','taper'],label:'Starts and breakouts',text:'6 x Dive Start 15-20m Race Pace\n400 Scull / Swim\n4 x Turn 20-25m Race Intensity\n400 Drill / Swim\n4 x 15m Finish MAX\n400 Choice',use:'Pre-meet race skills, mostly race-intensity skill rehearsal rather than continuous maximal speed.'},
+ {id:'ANC03',origin:'H',section:'MAIN SET',focus:['speed'],phases:['any'],label:'Short MAX finish',text:'16 x 12.5 Bands Only MAX @ 0:40',use:'Short power/speed touch after aerobic work. Rest and technical quality determine whether it is truly top-end speed.'},
+ {id:'ANC04',origin:'N',section:'MAIN SET',focus:['speed'],phases:['turns'],label:'Pure top-end speed',text:'3 Rounds:\n4 x 15 Dive Start MAX\nFull Recovery Between Reps\n200 Easy',use:'Anaerobic-capacity emphasis, maximal velocity and high quality; stop when speed deteriorates.'},
+ {id:'ANC05',origin:'N',section:'MAIN SET',focus:['speed'],phases:['underwater'],label:'Underwater velocity',text:'3 Rounds:\n4 x 25 Fins @ 1:30 15m Underwater MAX / Easy Finish\n200 Easy',use:'Speed day, underwater power and body-line control; individualize underwater distance safely.'},
+ // ANAEROBIC POWER / SPEED ENDURANCE
+ {id:'ANP01',origin:'H',section:'MAIN SET',focus:['race'],phases:['finish'],label:'200 pace repeats',text:'3 Rounds:\n3 x 100 #1 @ 200 Pace @ 3:00\n300 Easy\n100 Scull\n100 Drill\n100 Swim',use:'Anaerobic-power evening, repeated race-speed 100s and substantial recovery.'},
+ {id:'ANP02',origin:'H',section:'MAIN SET',focus:['race'],phases:['taper'],label:'200 pace (taper)',text:'3 Rounds:\n4 x 50 #1 @ 1:15 @ 200 Pace\n300 Easy\nRound 1 Swim\nRound 2 Fins\nRound 3 Paddles',use:'Race-week speed endurance maintenance, reduced metabolic cost.'},
+ {id:'ANP03',origin:'H',section:'MAIN SET',focus:['race'],phases:['finish','any'],label:'Progressive race pace',text:'4 x 50 #1 @ 1:30\n#1-2 200 Pace\n#3-4 100 Pace\n2 Rounds:\n25 Dive Start Easy Speed @ 1:00\n50 @ 100 Race Pace @ 1:00\n200 Easy',use:'Race-speed progression following aerobic work.'},
+ {id:'ANP04',origin:'H',section:'MAIN SET',focus:['race'],phases:['finish'],label:'Repeated 200-pace blocks',text:'4 Rounds:\n5 x 50 #1 @ 1:10 @ 200 Pace\n250 Easy',use:'Significant race-specific quality volume; better in loading phase than final taper.'},
+ {id:'ANP05',origin:'N',section:'MAIN SET',focus:['race'],phases:['finish','any'],label:'Broken 200',text:'3 Rounds:\n4 x 50 #1 @ 1:20 @ 200 Race Pace\n300 Easy',use:'Specific speed endurance, accurate race speed and recovery.'},
+ {id:'ANP06',origin:'N',section:'MAIN SET',focus:['race'],phases:['finish','turns'],label:'Short-course race quality',text:'3 Rounds:\n2 x 75 #1 @ 2:30 @ 200 Pace\n50 at 200 Pace / 25 Strong Finish\n200 Easy',use:'200-race speed endurance with final turn/finish emphasis.'},
+ // MIXED ZONE / RAINBOW
+ {id:'MX01',origin:'H',section:'MAIN SET',focus:['mixed'],phases:['any'],label:'Rainbow progression',text:'400 Regeneration\n3 x 200 Development 10sR\n3 x 100 IM @ 1:45 Desc 1-3\n4 x 150 Overload to Threshold 30sR\n100 #1 Drill @ 2:30\n100 #1 Build @ 2:00\n3 x 50 #1 @ 200 Pace\n#1 @ 1:00 / #2 @ 1:15 / #3 @ 1:30\n100 #1 @ 200 Pace @ 2:00\n4 x 25 @ 0:45\n12.5 Kayak Kick / 12.5 Slip Hold Body Line\n100 #1 Build @ 2:00\n3 x 50 #1 @ 200 Pace\n#1 @ 1:00 / #2 @ 1:15 / #3 @ 1:30\n100 #1 @ 200 Pace @ 2:00\n4 x 25 @ 0:45\n12.5 Kayak Kick / 12.5 Slip Hold Body Line',use:'Mixed-zone aerobic-to-race progression, not one uniform energy system.'},
+ {id:'MX02',origin:'N',section:'MAIN SET',focus:['mixed','aerobic'],phases:['base'],label:'Base week rainbow',text:'2 Rounds:\n300 Regeneration 15sR\n200 Development 15sR\n100 Overload 20sR\n4 x 50 #1 Build @ 1:15\n200 Easy',use:'Early-season progression through controlled aerobic zones.'},
+ // POST-SETS / RECOVERY
+ {id:'PS01',origin:'H',section:'POST SET',focus:['mixed','aerobic','all'],phases:['any'],label:'Technical pull',text:'5 x 200 Pull 10sR',use:'After mixed-zone session, low-intensity aerobic restoration and catch mechanics.'},
+ {id:'PS02',origin:'H',section:'POST SET',focus:['aerobic','speed'],phases:['any'],label:'Fins and paddles',text:'800 Fins & Paddles\nMinimum Stroke Count',use:'After kick-quality session, smooth technique and aerobic continuation.'},
+ {id:'PS03',origin:'H',section:'POST SET',focus:['aerobic','threshold'],phases:['underwater'],label:'Underwater finish',text:'8 x 100 Fins 20sR\nOdd 25 Underwater / 75 Choice\nEven 75 Choice / 25 Underwater',use:'Technical underwater volume after aerobic work; manage fatigue and safe breath control.'},
+ {id:'PS04',origin:'H',section:'POST SET',focus:['threshold'],phases:['any'],label:'Paddle build',text:'12 x 50 Paddles @ 1:00\nBuild',use:'Aerobic-power session, controlled catch pressure and technical rhythm.'},
+ {id:'PS05',origin:'H',section:'POST SET',focus:['race','all'],phases:['any'],label:'Minimum stroke count pull',text:'6 x 200 Pull\nMinimum Stroke Count',use:'After race-pace session, aerobic restoration without chasing intensity.'},
+ {id:'PS06',origin:'H',section:'POST SET',focus:['mixed','skill'],phases:['any'],label:'Kick with fins',text:'4 x 150 Kick with Fins',use:'After mixed technical or aerobic work, kick maintenance.'},
+ {id:'PS07',origin:'N',section:'POST SET',focus:['speed','race'],phases:['any'],label:'Speed-day reset',text:'4 x 100 Choice 15sR\n25 Scull / 25 Drill / 50 Swim\n200 Easy',use:'After top-end speed or anaerobic power, restore movement quality.'},
+ {id:'PS08',origin:'N',section:'POST SET',focus:['aerobic'],phases:['base'],label:'Aerobic base technique',text:'4 x 150 Pull 15sR\n50 Scull / 100 Swim\nMinimum Stroke Count',use:'Early-season LCM base work, quiet catch and alignment.'},
+];
+  for(const r of REFLIB){r.ref=true;r.id=`ref-${r.id.toLowerCase()}`;r.code=r.id.replace(/^ref-/,'').toUpperCase();if(r.section!=='MAIN SET')r.for=r.focus;}
+  LIB.push(...REFLIB);
+  SM.LIB=LIB;SM.REFLIB=REFLIB;
   // Which kind of session a brief asks for, from its named system.
   function briefKind(named){return({'Development':'aerobic','Regeneration':'aerobic','Threshold':'threshold','Clearance':'threshold','Overload':'mixed','Race pace':'race','Speed / Max':'speed','Skill / Technical':'skill'})[named]||'mixed';}
   // Main-set sequences for a draft, following his progressions (METHODOLOGY 1 "Session progression",
@@ -443,7 +526,7 @@
     const tryPrimary=()=>{let k=missingNeed();while(k){let ok=false;for(const c of(MAIN_SEQ[kind]||[]).map(libById).filter(c=>c&&fitsAny(c,k))){parts['MAIN SET'].push(c.text);if(dur()<=limit-5*60){ok=true;break;}parts['MAIN SET'].pop();}if(!ok)return false;k=missingNeed();}return true;};
     if(needs.length&&!hasPrimary()&&!tryPrimary()){
       const before={...parts,'MAIN SET':[...parts['MAIN SET']]};
-      const quickest=sec=>{let best=null,bt=Infinity;for(const c of LIB.filter(x=>x.section===sec)){const t=(()=>{try{const s=M.parser.parse(`${sec}\n${c.text}`,{...identity,id:'q'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return Infinity;}})();if(t<bt){bt=t;best=c;}}return best;};
+      const quickest=sec=>{let best=null,bt=Infinity;for(const c of LIB.filter(x=>x.section===sec&&!x.ref)){const t=(()=>{try{const s=M.parser.parse(`${sec}\n${c.text}`,{...identity,id:'q'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return Infinity;}})();if(t<bt){bt=t;best=c;}}return best;};
       const wu=quickest('WARM UP'),pre=quickest('PRE SET');if(wu)parts['WARM UP']=[wu.text];if(pre)parts['PRE SET']=[pre.text];
       while(parts['MAIN SET'].length&&!tryPrimary())parts['MAIN SET'].pop();
       if(!hasPrimary())Object.assign(parts,before);
@@ -469,39 +552,107 @@
   // 2026: "if anything, slightly extended in the recovery because it's an aerobic training phase"): +15s on each
   // send-off of a Race-pace or Speed/Max set.
   const PHASE_EXTRA_S=15;
-  function baseLike(b){return /base|aerobic|general/i.test(`${b?.phase||''} ${b?.weekFocus||''}`);}
-  function adjustForPhase(c,b){if(!c||c.section!=='MAIN SET'||!baseLike(b)||!(c.fits||[]).some(k=>k==='Race pace'||k==='Speed / Max'))return c;
-    const t=c.text.replace(/@\s*(\d{1,2}):(\d{2})/g,(m,mm,ss)=>{const v=Number(mm)*60+Number(ss)+PHASE_EXTRA_S;return`@${Math.floor(v/60)}:${String(v%60).padStart(2,'0')}`;});
-    return t===c.text?c:{...c,text:t,label:`${c.label} · +${PHASE_EXTRA_S}s recovery (base phase)`};}
+  // 15 Oct 2026: which season phase a brief is in -- the season planner's phases (Base Skills, Under Water, Dives &
+  // Turns, Finish & Breath Control, Taper & Race), read from the phase label first, then the week's focus text.
+  // Replaces a looser test that matched "aerobic" anywhere, so "Anaerobic Power" / "Anaerobic Capacity" weeks
+  // (which contain the letters "aerobic") were wrongly treated as the aerobic base phase.
+  function phaseKey(b){const tests=[[/\bbase\b|general\s+prep/i,'base'],[/under\s*-?\s*water/i,'underwater'],[/\bdives?\b|\bturns?\b/i,'turns'],[/\bfinish|breath\s+control/i,'finish'],[/\btaper|\brace\s+(?:week|prep)|peak/i,'taper']];
+    for(const t of [b?.phase,b?.weekFocus]){const x=String(t||'');for(const[re,k]of tests)if(re.test(x))return k;}
+    return /(^|[^n])aerobic\s+capacity/i.test(String(b?.weekFocus||''))?'base':'';}
+  SM.phaseKey=phaseKey;
+  function baseLike(b){return phaseKey(b)==='base';}
+  // 15 Oct 2026 (Andy: "in an aerobic capacity phase there might be longer recovery between swims"): his library's
+  // Aerobic Power / Anaerobic Power / Anaerobic Capacity main sets get the same treatment -- +15s on each send-off
+  // and +10s on each "NNsR" rest -- so the harder sets keep their purpose with a more aerobic feel.
+  const PHASE_EXTRA_REST_S=10;
+  function hardSet(c){return(c.fits||[]).some(k=>k==='Race pace'||k==='Speed / Max')||(c.ref&&(c.focus||[]).some(k=>['race','speed','threshold'].includes(k)));}
+  function adjustForPhase(c,b){if(!c||c.section!=='MAIN SET'||!baseLike(b)||!hardSet(c))return c;
+    let t=c.text.replace(/@\s*(\d{1,2}):(\d{2})/g,(m,mm,ss)=>{const v=Number(mm)*60+Number(ss)+PHASE_EXTRA_S;return`@${Math.floor(v/60)}:${String(v%60).padStart(2,'0')}`;});
+    if(c.ref)t=t.replace(/\b(\d{1,2})sR\b/g,(m,n)=>`${Number(n)+PHASE_EXTRA_REST_S}sR`);
+    return t===c.text?c:{...c,text:t,label:`${c.label} · +recovery (aerobic phase)`,phaseAdjusted:true};}
   SM.adjustForPhase=adjustForPhase;
   // Sets this squad has swum in the last few days are not offered again as suggestions (Andy: Jordan "kind of did
   // the same set I did last night").
+  // 15 Oct 2026: a set is identified by its first real line -- for a rounds block, the "N Rounds:" line plus the
+  // first line inside it, so two different "3 Rounds:" sets are not mistaken for each other.
+  function setKey(t){const ls=String(t||'').split('\n').map(x=>lc(x).replace(/\s+/g,' ').trim()).filter(Boolean);if(!ls.length)return'';return /^\d+\s*(?:x\s*)?rounds?\s*:?$/.test(ls[0])&&ls[1]?`${ls[0]} ${ls[1]}`:ls[0];}
+  function itemKeys(session){const keys=new Set();for(const blk of session?.blocks||[])for(const it of blk.items||[]){let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'');}catch{t=String(it.raw||'');}const k=setKey(t);if(k)keys.add(k);}return keys;}
   function recentSetKeys(session,days=3){const id=session?.identity||{},squads=new Set(id.squads||[]),date=id.date||'';if(!date)return new Set();const from=new Date(Date.parse(date)-days*864e5).toISOString().slice(0,10);const keys=new Set();
     for(const s of Object.values(M.state?.canonicalSessions||{})){const d=s?.identity?.date||'';if(!s||s.id===session.id||d<from||d>date||!(s.identity.squads||[]).some(q=>squads.has(q)))continue;
-      for(const blk of s.blocks||[])for(const it of blk.items||[]){let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'');}catch{t=String(it.raw||'');}const k=lc(t.split('\n')[0]).replace(/\s+/g,' ').trim();if(k)keys.add(k);}}
+      for(const k of itemKeys(s))keys.add(k);}
     return keys;}
-  const firstKey=x=>lc(String(x.text||'').split('\n')[0]).replace(/\s+/g,' ').trim();
-  function suggestionsHtml(session,state,b,chk){
-    if(!b||b.source==='none')return`<div class="msos-fits"><p class="muted">No season or weekly plan on this phone for this session yet, so these aren't matched to a brief. The head coach's plan arrives automatically once this phone is signed in and online.</p>${moreHtml('mixed',null)}</div>`;const combo=chk?.combo?.systems||(b.coachFocus?null:comboSystems(b.system));const named=chk?.plannedSystem||namedSystem(b.system);const kind=combo?comboKind(combo):briefKind(named);
-    const used=lc(sessionWords(session));const mains=combo?(()=>{const missing=chk?.combo?.missing?.length?chk.combo.missing:combo;const order=[...missing,...combo.filter(k=>!missing.includes(k))];const out=[];for(const k of order)for(const x of LIB.filter(x=>x.section==='MAIN SET'&&(x.fits||[]).includes(k)).slice(0,3))if(!out.includes(x))out.push(x);return out.slice(0,6);})():LIB.filter(x=>x.section==='MAIN SET'&&named&&(x.fits||[]).includes(named)).slice(0,4);
-    const hasPre=(session.blocks||[]).some(x=>/pre/i.test(`${x.type} ${x.title}`)),hasWU=(session.blocks||[]).some(x=>/warm.?up|warm_up/i.test(`${x.type} ${x.title}`));
-    const extra=[!hasWU&&pick('WARM UP',kind),!hasPre&&pick('PRE SET',kind)].filter(Boolean);
-    // One of his own sets is only suggested when everything it delivers is the session's system (easy/skill work
-    // allowed) -- a mixed Dev/OL/AT/CL set is never offered on an Anaerobic Power night.
-    const allowed=new Set([...(combo||[named]).filter(Boolean),'Skill / Technical','Regeneration']);const onBrief=x=>(x.fits||[]).length>0&&(x.fits||[]).every(k=>allowed.has(k))&&(x.fits||[]).some(k=>k!=='Skill / Technical'&&k!=='Regeneration');
-    const recent=recentSetKeys(session);
-    let mineFit=[];try{mineFit=mySets().filter(x=>x.section==='MAIN SET'&&onBrief(x)&&!recent.has(firstKey(x))).slice(0,3).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}
-    const list=[...extra,...mains.filter(x=>!recent.has(firstKey(x))),...mineFit].filter(x=>!used.includes(lc(x.text.split('\n')[0]).slice(0,14))).map(x=>adjustForPhase(x,b));
-    return`<div class="msos-fits">${list.length?`<div class="msos-check-title">FROM YOUR PROGRAMMING${combo?` · ${esc(combo.map(k=>COACH_TERM[k]||k).join(' + '))}`:named?` · ${esc(sysLabel(named))}`:''}</div>${list.map(fitRow).join('')}`:''}${moreHtml(kind,named,combo,b)}</div>`;
+  const firstKey=x=>setKey(x.text);
+  // ---------------------------------------------------------------------------
+  // Stage-by-stage suggestions (15 Oct 2026, Andy: "when you're writing ... it's the start of the set you're
+  // writing the warm-up, warm-up options come; once you've got the warm-up sussed then it comes up with preset
+  // options and all of those options need to be tied back to the weekly plan objective and then have cues from
+  // the season plan"). The panel offers options for ONE part of the session at a time, in his order. The stage
+  // is the first part not written yet -- except that a main set which is off brief keeps the main-set stage
+  // until it hits the brief. The coach can tap any stage to lead instead. Options are drawn from his reference
+  // library and earlier components, narrowed to the session's focus and ranked by the season phase and the
+  // week's technical focus; anything swum by this squad in the last 3 days, or already in the session, is left out.
+  // ---------------------------------------------------------------------------
+  const STAGES=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];
+  const STAGE_LABEL={'WARM UP':'Warm-up','PRE SET':'Pre-set','MAIN SET':'Main set','POST SET':'Post-set','WARM DOWN':'Warm-down'};
+  let writerStage;SM.writerStage=()=>writerStage;
+  function filledStages(session){const out=new Set();for(const blk of session?.blocks||[]){const sec=SECTION_OF(blk);if(sec&&(blk.items||[]).some(i=>i.kind==='set'||i.kind==='group'||i.kind==='component'))out.add(sec);}return out;}
+  function autoStage(session,chk){const f=filledStages(session);if(f.has('MAIN SET')&&chk?.checked&&!chk.matches)return'MAIN SET';return STAGES.find(x=>!f.has(x))||null;}
+  SM.autoStage=autoStage;SM.filledStages=filledStages;
+  function sessionKinds(b,chk){if(!b||b.source==='none')return{kinds:['mixed'],systems:[],combo:null};const combo=chk?.combo?.systems||(b.coachFocus?null:comboSystems(b.system));const named=chk?.plannedSystem||namedSystem(b.system);
+    const systems=(combo||[named]).filter(Boolean);const kinds=[...new Set(systems.map(briefKind))];if(combo)kinds.push(comboKind(combo));return{kinds:kinds.length?kinds:['mixed'],systems,combo,named};}
+  const entryKinds=x=>x.focus||(x.section==='MAIN SET'?(x.fits||[]).map(briefKind):(x.for||[]));
+  function fitsFocus(x,k){if(x.section==='MAIN SET'){if(x.focus)return x.focus.some(f=>k.kinds.includes(f))||(k.kinds.includes('mixed')&&!k.systems.length);
+      if(!k.systems.length)return true;const allowed=new Set([...k.systems,'Skill / Technical','Regeneration']);return(x.fits||[]).length>0&&(x.fits||[]).every(z=>allowed.has(z))&&(x.fits||[]).some(z=>z!=='Skill / Technical'&&z!=='Regeneration');}
+    const ek=entryKinds(x);return ek.includes('all')||ek.some(f=>k.kinds.includes(f));}
+  function scoreFor(x,k,phase,techWords){let sc=0;const ek=entryKinds(x);
+    if(x.section!=='MAIN SET')sc+=ek.some(f=>k.kinds.includes(f))?3:ek.includes('all')?1:0;else sc+=3;
+    const ph=x.phases||['any'];sc+=phase?(ph.includes(phase)?2:ph.includes('any')?1:0):1;
+    if(techWords.length){const t=lc(`${x.label} ${x.text} ${x.use||''}`);if(techWords.some(w=>t.includes(w)))sc+=1;}
+    if(x.ref)sc+=0.5;return sc;}
+  function stageOptions(session,state,b,chk,stage){
+    const k=sessionKinds(b,chk),phase=b&&b.source!=='none'?phaseKey(b):'',techWords=b?.technical?focusTerms(b.technical).flatMap(x=>x.words):[];
+    // Warm-downs are meant to repeat; everything else already in this session or swum by the squad in the last 3
+    // days is left out.
+    const here=itemKeys(session),recent=recentSetKeys(session);
+    const keysOf=x=>{const a=firstKey(x);let b2=a;try{b2=b?firstKey(adjustForPhase(x,b)):a;}catch{}return[a,b2];};
+    const notUsed=x=>stage==='WARM DOWN'||keysOf(x).every(k=>!here.has(k)&&!recent.has(k));
+    const inPhase=x=>!x.strict||(x.phases||[]).includes(phase);
+    let pool=LIB.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x)&&fitsFocus(x,k));
+    if(!pool.length&&stage!=='MAIN SET')pool=LIB.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x));
+    const ranked=pool.map((x,i)=>({x,sc:scoreFor(x,k,phase,techWords),i})).sort((p,q)=>q.sc-p.sc||p.i-q.i).map(o=>o.x);
+    // A phase-specific set from another phase is kept for "more", never the top list.
+    const top=ranked.filter(x=>!phase||(x.phases||['any']).includes(phase)||(x.phases||['any']).includes('any')).slice(0,5);
+    let mine=[];if(stage==='MAIN SET'&&k.systems.length){try{const allowed=new Set([...k.systems,'Skill / Technical','Regeneration']);mine=mySets().filter(x=>x.section==='MAIN SET'&&(x.fits||[]).length&&(x.fits||[]).every(z=>allowed.has(z))&&(x.fits||[]).some(z=>z!=='Skill / Technical'&&z!=='Regeneration')&&notUsed(x)).slice(0,2).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}}
+    // On a combination day, the system the main set is still missing comes first.
+    if(stage==='MAIN SET'&&k.combo&&chk?.combo?.missing?.length){const miss=chk.combo.missing.map(briefKind);top.sort((p,q)=>(entryKinds(q).some(f=>miss.includes(f))?1:0)-(entryKinds(p).some(f=>miss.includes(f))?1:0));}
+    return{top:[...top,...mine],more:ranked.filter(x=>!top.includes(x)),phase,k};
   }
-  function fitRow(x){return`<div class="msos-fit"><div><b>${esc(x.label)}</b><small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div><button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
+  SM.stageOptions=stageOptions;
+  const PHASE_LABEL={base:'Base Skills (aerobic) phase',underwater:'Under Water phase',turns:'Dives & Turns phase',finish:'Finish & Breath Control phase',taper:'Taper & Race phase'};
+  function suggestionsHtml(session,state,b,chk){
+    const noPlan=!b||b.source==='none';
+    const filled=filledStages(session),auto=autoStage(session,noPlan?null:chk),stage=writerStage||auto||'MAIN SET';
+    const opts=stageOptions(session,state,noPlan?null:b,noPlan?null:chk,stage);
+    const k=opts.k,focusLabel=k.combo?k.combo.map(x=>COACH_TERM[x]||x).join(' + '):k.named?sysLabel(k.named):'';
+    const chips=`<div class="msos-stages" data-msos-stages>${STAGES.map(x=>`<button type="button" data-msos-stage="${esc(x)}" class="${x===stage?'on':''}${filled.has(x)?' done':''}">${filled.has(x)?'✓ ':''}${esc(STAGE_LABEL[x])}</button>`).join('')}</div>`;
+    const squads=(session?.identity?.squads||[]).map(lc);
+    const squadNote=squads.length&&!squads.some(q=>/national/.test(q))?`<p class="msos-stage-note">These sets are written for the National squad — scale or simplify them for ${esc((session.identity.squads||[]).join(' + '))}. Sets for the younger squads are the next step.</p>`:'';
+    const phaseNote=!noPlan&&opts.phase?`<p class="msos-stage-note">${esc(PHASE_LABEL[opts.phase]||'')}${opts.phase==='base'?' — harder sets shown with longer recovery':''}${b.technical?` · technical focus: ${esc(b.technical)}`:''}</p>`:'';
+    const planNote=noPlan?`<p class="muted">No season or weekly plan on this phone for this session yet, so these aren't matched to a brief. The head coach's plan arrives automatically once this phone is signed in and online.</p>`:'';
+    const rows=opts.top.map(x=>noPlan?x:adjustForPhase(x,b));
+    const head=`<div class="msos-check-title">FROM YOUR PROGRAMMING${focusLabel?` · ${esc(focusLabel)}`:''} · ${esc(STAGE_LABEL[stage].toUpperCase())} OPTIONS</div>`;
+    const list=rows.length?rows.map(fitRow).join(''):`<p class="muted">Nothing in your programming for this part yet${stage==='MAIN SET'&&!noPlan?" matches today's focus":''} — write it in, or pick another part above.</p>`;
+    const more=opts.more.length?`<details class="msos-more" data-msos-stage-more><summary>More ${esc(STAGE_LABEL[stage].toLowerCase())} options (${opts.more.length})</summary>${opts.more.map(x=>fitRow(noPlan?x:adjustForPhase(x,b))).join('')}</details>`:'';
+    return`<div class="msos-fits" data-msos-stage-panel="${esc(stage)}">${planNote}${chips}${phaseNote}${squadNote}${head}${list}${more}${moreHtml(k.kinds[0]||'mixed',k.named||null,k.combo,noPlan?null:b)}</div>`;
+  }
+  function fitRow(x){return`<div class="msos-fit"><div><b>${esc(x.label)}</b>${x.use?`<small class="msos-use">${esc(x.use)}${x.ref?` · ${x.origin==='N'?'example in your style':'from your sessions'}`:''}</small>`:''}<small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div><button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
   // Every component, by section, so the coach can lead: pick any piece of his programming, not only the
   // ones matched to today's focus. Matched pieces are listed first within each section.
   function moreHtml(kind,named,combo=null,b=null){
     const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];let mine=[];try{mine=mySets();}catch{}
     // With a brief, main-set pieces for today's system come first; everything else is still there to lead with,
     // under "Other systems", so the coach can override -- but it is never mixed in with today's.
-    const want=new Set((combo||[named]).filter(Boolean)),hasBrief=want.size>0,fitsBrief=x=>hasBrief&&(x.fits||[]).some(k=>want.has(k))&&(x.fits||[]).every(k=>want.has(k)||k==='Skill / Technical'||k==='Regeneration');
+    const want=new Set((combo||[named]).filter(Boolean)),hasBrief=want.size>0,wantKinds=new Set([...want].map(briefKind)),fitsBrief=x=>hasBrief&&(x.focus?x.focus.some(f=>wantKinds.has(f)):(x.fits||[]).some(k=>want.has(k))&&(x.fits||[]).every(k=>want.has(k)||k==='Skill / Technical'||k==='Regeneration'));
     const tag=x=>({...x,label:`${x.label}${x.fits?.[0]?` · ${(x.fits||[]).map(k=>COACH_TERM[k]||k).filter((v,i,a)=>a.indexOf(v)===i).join(' / ')}`:''}`});
     const split=(rows,title)=>{if(!hasBrief)return`<div class="msos-check-title">${esc(title)}</div>${rows.map(fitRow).join('')}`;const on=rows.filter(x=>x.section!=='MAIN SET'||fitsBrief(x)),off=rows.filter(x=>x.section==='MAIN SET'&&!fitsBrief(x));return`<div class="msos-check-title">${esc(title)}</div>${on.map(x=>fitRow(adjustForPhase(x,b))).join('')}${off.length?`<div class="msos-check-title msos-other">Other systems (not today's focus)</div>${off.map(fitRow).join('')}`:''}`;};
     const mineHtml=mine.length?`<div class="msos-more-sec">${split(mine.slice(0,25).map(tag),"YOUR SETS · from sessions you've written")}</div>`:'';
@@ -596,7 +747,9 @@
       verdict+=`<p class="msos-brief-mix">${chk.combo.share.map(x=>`${esc(COACH_TERM[x.k]||x.k)} ${x.pct}%`).join(' · ')} of the ${esc(chk.basis)} · Whole session: ${chk.mix.map(x=>`${esc(x.label)} ${x.pct}%`).join(' · ')}</p>`;
     }else if(chk.checked){
       const p=sysLabel(chk.plannedSystem);
-      verdict=chk.matches
+      verdict=chk.matches&&chk.aerobicPhase
+        ?`<div class="msos-brief-check ok">✓ ${chk.basis==='main set'?'Main set':'Session'} is the aerobic-phase version of ${esc(sysLabel(chk.plannedSystem))} — mostly aerobic, with ${chk.plannedPct}% ${esc(COACH_TERM[chk.plannedSystem]||chk.plannedSystem)} — on brief</div>`
+        :chk.matches
         ?`<div class="msos-brief-check ok">✓ ${chk.basis==='main set'?'Main set':'Session'} is ${esc(sysLabel(chk.dominantSystem))} — on brief</div>`
         :`<div class="msos-brief-check off">⚠ ${chk.basis==='main set'?'Main set':'Session'} is mostly ${esc(sysLabel(chk.dominantSystem))} — ${b.coachFocus?'you chose':'brief asks for'} ${esc(p)}</div>`;
       verdict+=`<p class="msos-brief-mix">${esc(chk.plannedSystem)} in this session: <b>${chk.plannedMetres.toLocaleString()}m</b> (${chk.plannedPct}%) · Whole session: ${chk.mix.map(x=>`${esc(x.label)} ${x.pct}%`).join(' · ')}</p>`;
@@ -617,7 +770,14 @@
   function liveBrief(host,anchor,getSession,textarea=null){
     let box=host.querySelector('[data-msos-brief-host]');
     if(!box){box=document.createElement('div');box.dataset.msosBriefHost='1';anchor.insertAdjacentElement('beforebegin',box);
-      box.addEventListener('click',e=>{const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}textarea.value=insertComponent(textarea.value,c.section,c.text);textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
+      box.addEventListener('click',e=>{
+        // A stage chip: show that part's options now; it stays chosen until a set is added.
+        const st=e.target.closest?.('[data-msos-stage]');if(st){writerStage=st.dataset.msosStage;paint();return;}
+        const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}
+        textarea.value=insertComponent(textarea.value,c.section,c.text);
+        // Once a part is written the panel moves on to the next part (the coach can tap back).
+        writerStage=undefined;
+        textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
     let t=null;const paint=()=>{const more=box.querySelector('[data-msos-more]')?.open,y=box.querySelector('[data-msos-more]')?.scrollTop;try{const s=getSession();box.innerHTML=s?briefHtml(s):'';}catch(e){box.innerHTML='';}if(more){const d=box.querySelector('[data-msos-more]');if(d){d.open=true;if(y)d.scrollTop=y;}}};
     const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
   }
@@ -630,7 +790,7 @@
   let writerFocus;SM.writerFocus=()=>writerFocus;
   function installNewSessionBrief(opts={}){
     const host=document.querySelector('#modalHost'),raw=host?.querySelector('#coreRaw'),slot=host?.querySelector('#coreSlot');if(!raw||!slot)return;
-    writerFocus=undefined;
+    writerFocus=undefined;writerStage=undefined;
     const anchor=host.querySelector('.intake-tabs')||raw.closest('label')||raw;
     const forDate=/^\d{4}-\d{2}-\d{2}$/.test(String(opts?.date||''))?opts.date:nzToday();const fallbackId=()=>({date:forDate,dayPart:new Date().getHours()>=12?'PM':'AM',squads:['National','Development']});
     const ident=()=>slotIdentity(slot.value,forDate)||fallbackId();
@@ -650,7 +810,7 @@
   }
   function installEditBrief(){
     const host=document.querySelector('#modalHost'),raw=host?.querySelector('#sessionEditText');if(!raw)return;const cur=M.currentSession?.();if(!cur)return;
-    writerFocus=undefined;
+    writerFocus=undefined;writerStage=undefined;
     const anchor=raw.closest('label')||raw;
     const getSession=()=>parseDraft(raw.value,{...cur.identity},writerFocus===undefined?(cur.metadata?.coachFocus||null):writerFocus);
     const schedule=liveBrief(host,anchor,getSession,raw);

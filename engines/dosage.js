@@ -78,7 +78,14 @@
     // to also check the item's authored cue text, not just its own raw/text.
     const raw=txt([base,...(item?.cues||[])].filter(Boolean).join(' ')||v);
     const either=re=>re.test(v)||re.test(raw);
-    if(either(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i))return'Regeneration';
+    // 15 Oct 2026 (Andy's reference library: "4 x 15m Dive Start MAX / Full Recovery Between Reps", "4 x 25 Fins
+    // 15m Underwater MAX / Easy Finish"): wording about the REST or the swim-out of a hard rep ("full recovery",
+    // "recovery between reps", "easy finish", "easy swim out") describes how the rep is recovered, not the rep's
+    // purpose -- it used to classify a MAX set as Regeneration. Only the zone test below ignores those phrases;
+    // a plain "200 Easy" or "Recovery" line is still Regeneration.
+    const restWords=/\b(?:full\s+recovery|recovery\s+between(?:\s+reps)?|easy\s+(?:finish|swim[\s-]?out)|\d+\s*s(?:ec(?:onds?)?)?\s+recovery)\b/gi;
+    const eitherZone=re=>either({test:x=>re.test(String(x??'').replace(restWords,' '))});
+    if(eitherZone(/\b(?:regeneration|regen|\breg\b|easy|recovery|loosen|warm.?down|cool.?down)\b/i))return'Regeneration';
     if(either(/\b(?:development|\bdev\b)\b/i))return'Development';
     if(either(/\b(?:overload|\bol\b)\b/i))return'Overload';
     // "AT" (Anaerobic Threshold) is Andy's shorthand -- matched case-sensitively so the English word "at" never counts.
