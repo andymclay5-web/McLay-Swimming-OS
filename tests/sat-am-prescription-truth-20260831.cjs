@@ -38,8 +38,9 @@ assert.equal(p.item.distance,200);assert.equal(p.target.status,'pattern');
 assert.ok(Math.abs(p.target.rows[0].seconds-307.935)<.02,`Charlotte 200 REG should be recalculated from 9:00 T400, got ${p.target.rows[0].seconds}`);
 p=Coordinator.prescription(session,aerobic,mckenzie,state);
 assert.equal(p.item.distance,250);assert.equal(p.target.status,'pattern');
-assert.ok(Math.abs(p.target.rows[0].seconds-346.8)<.02,`McKenzie 250 REG should use current 8:00 T400, got ${p.target.rows[0].seconds}`);
-assert.match(p.target.source||'',/8:00|8:00\.0/,'current T400 must be the source');
+// 15 Oct 2026 (Andy): the anchor is the FASTEST valid T400 (7:21, March), no longer the latest (8:00, August).
+assert.ok(Math.abs(p.target.rows[0].seconds-318.6225)<.02,`McKenzie 250 REG should use her fastest 7:21 T400, got ${p.target.rows[0].seconds}`);
+assert.match(p.target.source||'',/7:21/,'fastest T400 must be the source');
 
 // McKenzie kick: 21 Sept 2026 revision (Andy, live, direct instruction: "why would we reduce reps if she was
 // capable of going on the same send off" -- see engines/modification.js and tests/mckenzie-kick-interval-not-

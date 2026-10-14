@@ -18,10 +18,10 @@ const state={
   ]
 };
 
-// Legacy callers that pass no course still get the pre-fix "newest across both courses" behaviour
-// (no context to filter on) -- this must keep working exactly as before.
+// Callers that pass no course have no context to filter on, so every course is considered. Since 15 Oct 2026 the
+// anchor is the FASTEST valid test (Andy), so here that is the SCM 7:30, not the newer, slower LCM 8:20.
 let rows=E.t400Rows(ath,state,'Freestyle');
-assert.equal(rows[0].id,'lcm-newer-slower','no course context: newest valid test across all courses still wins');
+assert.equal(rows[0].id,'scm-older','no course context: fastest valid test across all courses wins');
 
 // A caller that supplies a course must never see the other course's evidence pooled in.
 rows=E.t400Rows(ath,state,'Freestyle','SCM');

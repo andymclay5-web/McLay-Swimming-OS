@@ -107,13 +107,13 @@ function runGroup1(T, label) {
     assert.equal(r.result_seconds, 300, 'a row saved before per-stroke tagging existed must default to Freestyle');
   });
 
-  test('a MORE RECENT IM time trial must never become the freestyle anchor', () => {
+  test('a MORE RECENT, FASTER IM time trial must never become the freestyle anchor', () => {
     const state = { trainingTestTypes: [{ id: 'tt', test_key: 't400_freestyle' }], trainingTestResults: [
       { athlete_id: 'a', test_type_id: 'tt', result_seconds: 300, result_date: '2026-08-01', stroke: 'Freestyle', valid_for_anchor: true },
-      { athlete_id: 'a', test_type_id: 'tt', result_seconds: 340, result_date: '2026-09-11', stroke: 'IM', valid_for_anchor: true },
+      { athlete_id: 'a', test_type_id: 'tt', result_seconds: 290, result_date: '2026-09-11', stroke: 'IM', valid_for_anchor: true }, // 15 Oct 2026: faster as well as newer (anchor is now the fastest valid T400)
     ] };
     const r = T.t400({ id: 'a' }, state, '');
-    assert.equal(r.result_seconds, 300, `must pick the Freestyle row, not the newer IM row (got ${r.result_seconds})`);
+    assert.equal(r.result_seconds, 300, `must pick the Freestyle row, not the newer, faster IM row (got ${r.result_seconds})`);
   });
 
   test('with NO Freestyle history at all, an IM-only history correctly yields no anchor', () => {
@@ -303,14 +303,14 @@ function main() {
     const realT = buildT400(appSrc);
     const state = { trainingTestTypes: [{ id: 'tt', test_key: 't400_freestyle' }], trainingTestResults: [
       { athlete_id: 'a', test_type_id: 'tt', result_seconds: 300, result_date: '2026-08-01', stroke: 'Freestyle', valid_for_anchor: true },
-      { athlete_id: 'a', test_type_id: 'tt', result_seconds: 340, result_date: '2026-09-11', stroke: 'IM', valid_for_anchor: true },
+      { athlete_id: 'a', test_type_id: 'tt', result_seconds: 290, result_date: '2026-09-11', stroke: 'IM', valid_for_anchor: true }, // 15 Oct 2026: faster as well as newer (anchor is now the fastest valid T400)
     ] };
     const before = buggyT.t400({ id: 'a' }, state, '');
-    assert.equal(before.result_seconds, 340, 'sanity: the reverted (buggy) code really does let the newer IM row win (fail-before)');
+    assert.equal(before.result_seconds, 290, 'sanity: the reverted (buggy) code really does let the IM row win (fail-before)');
     const after = realT.t400({ id: 'a' }, state, '');
     assert.equal(after.result_seconds, 300, 'the real, fixed code must anchor off the Freestyle row instead (pass-after)');
     allTests.push({ name: 'FAIL-BEFORE/PASS-AFTER: freestyle-anchor stroke guard', fn: () => {
-      assert.equal(before.result_seconds, 340); assert.equal(after.result_seconds, 300);
+      assert.equal(before.result_seconds, 290); assert.equal(after.result_seconds, 300);
     } });
   }
 

@@ -32,6 +32,10 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.fill('#coreRaw','WARM UP\n400 free\nMAIN SET\n4 x 50 @2:30\n#1 Build\n#2-4 @100 Pace');await page.waitForTimeout(800);
+    // 15 Oct 2026: suggestions come stage by stage -- with a warm-up and an on-brief main set written, the next part
+    // is the pre-set; the coach taps "Main set" to see more main-set options.
+    assert.equal(await page.getAttribute('[data-msos-stage-panel]','data-msos-stage-panel'),'PRE SET','next part to write is the pre-set');
+    await page.click('#modalHost [data-msos-stage="MAIN SET"]');await page.waitForTimeout(300);
     const sug=await page.evaluate(()=>{const box=document.querySelector('#modalHost [data-msos-brief] .msos-fits');const top=[...box.querySelectorAll(':scope > .msos-fit')].map(r=>r.textContent.replace(/\s+/g,' ').trim());return{head:box.querySelector('.msos-check-title')?.textContent||'',top};});
     assert.match(sug.head,/Anaerobic Power/,`tonight's brief is Anaerobic Power: ${sug.head}`);
     const mainTop=sug.top.filter(t=>/MAIN SET/.test(t));
@@ -40,7 +44,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.ok(!sug.top.some(t=>/10 x 100/.test(t)),'his mixed Dev/OL/AT set from last night is not suggested');
     assert.ok(!sug.top.some(t=>/6 x 25 → 100 pace/.test(t)),"last night's 6 x 25 race-pace set isn't offered again");
     assert.ok(sug.top.some(t=>/8 x 25 @100 Pace/.test(t)&&/yours/.test(t)),'his own older race-pace set is offered');
-    assert.ok(sug.top.some(t=>/\+15s recovery \(base phase\)/.test(t)),'base phase: race-pace sets carry extra recovery');
+    assert.ok(sug.top.some(t=>/\+recovery \(aerobic phase\)/.test(t)),'base phase: race-pace sets carry extra recovery');
     // Adding one inserts the extended send-offs.
     const rpBtn=await page.evaluate(()=>[...document.querySelectorAll('#modalHost [data-msos-brief] .msos-fits > .msos-fit')].find(r=>/200 pace rounds/.test(r.textContent))?.querySelector('[data-msos-insert]')?.dataset.msosInsert);
     assert.equal(rpBtn,'rp-200');

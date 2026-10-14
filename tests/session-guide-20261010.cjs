@@ -48,8 +48,14 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.fill('#coreRaw','WARM UP\n400 free\nMAIN SET\n8 x 200 free steady @3:00\nWARM DOWN\n200 easy');await page.waitForTimeout(800);
+    // 15 Oct 2026: suggestions come stage by stage. The main set is off brief (steady 200s on an Anaerobic Power
+    // day), so the panel stays on main-set options, with his reference-library race sets first; the older
+    // components are under "More main set options".
+    assert.equal(await page.getAttribute('[data-msos-stage-panel]','data-msos-stage-panel'),'MAIN SET','an off-brief main set keeps the main-set stage');
+    assert.match(await page.textContent('[data-msos-stage-panel]'),/200 pace repeats|Progressive race pace/,'his library race sets are offered');
     assert.ok(await page.$('[data-msos-insert="rp-25"]'),'race-pace components are suggested for an Anaerobic Power brief');
-    await page.tap('[data-msos-insert="rp-25"]');await page.waitForTimeout(500);
+    await page.evaluate(()=>{const d=document.querySelector('[data-msos-stage-more]');if(d)d.open=true;});
+    await page.tap('[data-msos-stage-more] [data-msos-insert="rp-25"]');await page.waitForTimeout(500);
     assert.match(await page.inputValue('#coreRaw'),/MAIN SET\n8 x 200 free steady @3:00\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace\nWARM DOWN/,'Add inserts at the end of the main set');
     page.once('dialog',d=>d.accept());await page.tap('[data-msos-start="draft"]');await page.waitForTimeout(600);
     assert.match(await page.inputValue('#coreRaw'),/^WARM UP[\s\S]*PRE SET[\s\S]*MAIN SET[\s\S]*@100 Pace[\s\S]*WARM DOWN/);

@@ -68,7 +68,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>window.MSOS4.coachLoopUI.openHubPanel('reports'));await page.waitForSelector('[data-hp-reports]');
     for(const k of ['session','week','season','tests','times','swimmer']){await page.tap(`[data-hp-report="${k}"]`);await page.waitForSelector(`[data-hp-out="${k}"]`);assert.doesNotMatch(await page.textContent(`[data-hp-out="${k}"]`),/could not be built/,k);}
     await page.tap('[data-hp-report="tests"]');await page.waitForSelector('[data-hp-out="tests"]');
-    assert.match(await page.textContent('[data-hp-out="tests"]'),/T400s · these set training targets[\s\S]*William Callow[\s\S]*4:20\.1/);
+    assert.match(await page.textContent('[data-hp-out="tests"]'),/T400s · the fastest for each stroke sets training targets[\s\S]*William Callow[\s\S]*4:20\.1/);
 
     // F. Swimmers: every swimmer listed (14 Oct 2026: Andy needs all profiles, not only those with the app), plus
     // who has the app in its own App access section (owner list stubbed -- no cloud here).
