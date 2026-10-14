@@ -87,7 +87,9 @@
     drainAwaitingReview();paintPendingBadge();
   }
   function contextBadge(){const board=document.querySelector('#boardView');if(!board)return;board.querySelector('[data-av-context]')?.remove();const ctx=C.now();if(ctx.status!=='active')return;const el=document.createElement('div');el.dataset.avContext='1';el.className='av-context-badge';el.innerHTML=`<b>${Math.round(ctx.confidence*100)}%</b><span>${text(ctx.blockLabel)}${ctx.rep?` · rep ${ctx.rep}`:''}</span><small>${ctx.source}${ctx.driftSeconds?` · ${ctx.driftSeconds>0?'+':''}${Math.round(ctx.driftSeconds/60)}m`:''}</small>`;const anchor=board.querySelector('.msos-board-block')||board.firstElementChild;if(anchor)anchor.insertAdjacentElement('beforebegin',el);else board.prepend(el);}
-  const priorBoard=M.ui?.renderBoard?.bind(M.ui);if(priorBoard)M.ui.renderBoard=()=>{priorBoard();requestAnimationFrame(contextBadge);};
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{install();requestAnimationFrame(contextBadge);},{once:true});else{install();requestAnimationFrame(contextBadge);}
+  // 14 Oct 2026 (Andy: "warm up 48% up the top ... makes no sense to me"): that badge was the voice engine's own
+  // guess of where the session is up to by the clock, with its confidence as a percentage -- internal engine detail,
+  // not coaching information. It no longer goes on the Board; voice notes still use the guess to tag the block.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{install();},{once:true});else{install();}
   U.install=install;U.contextBadge=contextBadge;U.confirmCapture=confirmCapture;U.handleTranscribed=handleTranscribed;U.paintPendingBadge=paintPendingBadge;U.drainAwaitingReview=drainAwaitingReview;
 })(globalThis);

@@ -9,7 +9,7 @@
 //    seen, account vs QR link, revoke QR links). The list comes from msos_owner_swimmer_access() (owner-only).
 (function(g){
   const M=g.MSOS4;if(!M?.state)return;
-  const P=M.hubPanels={build:'v4-hub-panels-20261012'};
+  const P=M.hubPanels={build:'v4-hub-panels-20261014'};
   const U=M.util||{},E=g.MSOSEngines||{};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),lc=v=>text(v).toLowerCase();
@@ -94,15 +94,37 @@
   let access=null,accessErr='',accessAt=0;
   async function loadAccess(){try{const rows=await M.swimmerInviteBN?.rpc?.('msos_owner_swimmer_access',{});access=Array.isArray(rows)?rows:[];accessErr='';}catch(e){accessErr=e?.message||String(e);}accessAt=Date.now();}
   function ago(ts){if(!ts)return'';const d=(Date.now()-Date.parse(ts))/86400000;return d<1?'today':d<2?'yesterday':d<14?`${Math.floor(d)} days ago`:new Date(ts).toLocaleDateString('en-NZ',{day:'numeric',month:'short'});}
-  function renderSwimmers(host){const owner=(M.access?.role?.()||'owner')==='owner',list=athletes(),by=new Map((access||[]).map(r=>[r.athlete_id,r]));
-    const withApp=list.filter(a=>{const r=by.get(a.id);return r&&(r.devices>0||r.has_account);});
-    const row=a=>{const r=by.get(a.id)||{};const how=[r.has_account?'account':'',r.devices?`${r.devices} QR device${r.devices===1?'':'s'}`:''].filter(Boolean).join(' + ');
-      return`<div class="hp-row hp-static" data-hp-swim="${esc(a.id)}"><span><b>${esc(a.full_name)}</b><small>${esc(a.squad||'')}${how?` · ${esc(how)}`:''}${r.last_seen_at?` · seen ${esc(ago(r.last_seen_at))}`:''}${r.last_published_at?` · updated ${esc(ago(r.last_published_at))}`:''}${r.open_invites?` · ${r.open_invites} invite open`:''}</small></span><span class="hp-acts">${owner?`<button type="button" data-hp-profile="${esc(a.id)}">Profile</button>`:''}${owner&&r.devices?`<button type="button" class="danger" data-hp-revoke="${esc(a.id)}">Revoke QR</button>`:''}</span></div>`;};
-    host.innerHTML=`${owner?`<section class="page-card"><div class="hp-grid"><button type="button" class="hp-btn" data-hp-go="athletes">Swimmer profiles</button>`:''}${owner?'<button type="button" class="hp-btn" data-hp-give>Give a swimmer the app</button><button type="button" class="hp-btn" data-hp-join>Join requests</button></div></section>':''}
-      ${owner?`<section class="page-card"><h3>Swimmers with the app</h3>${access==null?`<p class="muted" data-hp-access-status>${accessErr?esc(accessErr):'Checking…'}</p>`:accessErr?`<p class="warn-text">${esc(accessErr)}</p>`:withApp.length?withApp.map(row).join(''):'<p class="muted">No swimmer has the app linked yet.</p>'}${access!=null?'<div class="hub-actions"><button type="button" data-hp-refresh>Refresh</button></div>':''}</section>`:''}
-      <section class="page-card"><h3>${owner?'Everyone else':'Your squads'}</h3>${list.filter(a=>!withApp.includes(a)).map(row).join('')||'<p class="muted">—</p>'}</section>`;
-    host.querySelectorAll('[data-hp-profile]').forEach(b=>b.onclick=()=>{M.state.settings.selectedAthleteId=b.dataset.hpProfile;M.storageEngine?.saveUi?.(M.state);M.nav?.show?.('athletes',{restoreScroll:false});});
-    host.querySelector('[data-hp-go]')?.addEventListener('click',()=>M.nav?.show?.('athletes',{restoreScroll:false}));
+  // 14 Oct 2026 (Andy: "it only shows the ones who have the app. But I still need to see all the sort of
+  // information like I used to"). The roster is the screen: every swimmer, by squad, with their key numbers on the
+  // row (latest T400, sessions in the last 4 weeks, latest race), and one tap opens their full profile. Having the
+  // app is a tag on the row; the app-access detail (devices, last seen, revoke) sits underneath as its own section.
+  let sState={q:'',squad:''};
+  function swimmerFacts(id){const out={t4:null,sessions:0,race:null};try{const types=new Map((M.state.trainingTestTypes||[]).map(t=>[t.id,t]));
+      out.t4=(M.state.trainingTestResults||[]).filter(r=>r.athlete_id===id&&Number(r.result_seconds)>0&&/t400|timed 400/i.test(`${types.get(r.test_type_id)?.test_key||''} ${types.get(r.test_type_id)?.name||''} ${r.source_label||''}`)).sort((x,y)=>String(y.result_date).localeCompare(String(x.result_date)))[0]||null;}catch{}
+    try{const cut=addDay(nzToday(),-28),byS=new Map(Object.values(M.state.canonicalSessions||{}).map(s=>[s.id,s]));out.sessions=new Set((M.state.attendance||[]).filter(r=>(r.athlete_id||r.athleteId)===id&&/present|here|late|attend/i.test(String(r.status||''))).map(r=>r.session_id||r.sessionId).filter(sid=>String(byS.get(sid)?.identity?.date||'')>=cut)).size;}catch{}
+    try{out.race=(M.state.coachResults||[]).filter(r=>r.athlete_id===id&&Number(r.result_seconds||r.time_seconds)>0).sort((x,y)=>String(y.result_date||y.date||'').localeCompare(String(x.result_date||x.date||'')))[0]||null;}catch{}
+    return out;}
+  function renderSwimmers(host){const owner=(M.access?.role?.()||'owner')==='owner',all=athletes(),by=new Map((access||[]).map(r=>[r.athlete_id,r]));
+    const hasApp=a=>{const r=by.get(a.id);return!!(r&&(r.devices>0||r.has_account));};
+    const squads=[...new Set(all.map(a=>text(a.squad)||'No squad'))].sort();
+    const q=lc(sState.q),list=all.filter(a=>(!sState.squad||(text(a.squad)||'No squad')===sState.squad)&&(!q||lc(a.full_name).includes(q)));
+    const card=a=>{const f=swimmerFacts(a.id),race=f.race;const raceTxt=race?`${[race.distance,race.stroke].filter(Boolean).join(' ')} ${clock(race.result_seconds||race.time_seconds)}`:'';
+      return`<button type="button" class="hp-row" data-hp-card="${esc(a.id)}"><span><b>${esc(a.full_name)}${hasApp(a)?' <small class="good-text">· app</small>':''}</b><small>${esc(a.squad||'')}${raceTxt?` · ${esc(raceTxt)}`:''}</small></span><span><b>${f.t4?esc(clock(f.t4.result_seconds)):'—'}</b><small>T400 · ${f.sessions} session${f.sessions===1?'':'s'} / 4 wks</small></span></button>`;};
+    const groups=sState.squad?[sState.squad]:squads;
+    const roster=groups.map(sq=>{const rows=list.filter(a=>(text(a.squad)||'No squad')===sq);return rows.length?`<h4>${esc(sq)} · ${rows.length}</h4>${rows.map(card).join('')}`:'';}).join('');
+    const appRow=a=>{const r=by.get(a.id)||{};const how=[r.has_account?'account':'',r.devices?`${r.devices} QR device${r.devices===1?'':'s'}`:''].filter(Boolean).join(' + ');
+      return`<div class="hp-row hp-static"><span><b>${esc(a.full_name)}</b><small>${esc(how)}${r.last_seen_at?` · seen ${esc(ago(r.last_seen_at))}`:''}${r.last_published_at?` · updated ${esc(ago(r.last_published_at))}`:''}${r.open_invites?` · ${r.open_invites} invite open`:''}</small></span><span class="hp-acts">${r.devices?`<button type="button" class="danger" data-hp-revoke="${esc(a.id)}">Revoke QR</button>`:''}</span></div>`;};
+    const withApp=all.filter(hasApp);
+    host.innerHTML=`${owner?'<section class="page-card"><div class="hp-grid"><button type="button" class="hp-btn" data-hp-give>Give a swimmer the app</button><button type="button" class="hp-btn" data-hp-join>Join requests</button></div></section>':''}
+      <section class="page-card"><h3>${owner?'All swimmers':'Your squads'} · ${all.length}</h3><p class="muted">${owner?'Tap a swimmer for their full profile.':'Tap a swimmer for their training and results.'}</p>
+        <label class="hp-pick">Find<input type="search" data-hp-q value="${esc(sState.q)}" placeholder="Name" style="border:1px solid #9fbecb;border-radius:10px;padding:8px;font:inherit"></label>
+        <label class="hp-pick">Squad<select data-hp-sq><option value="">All squads</option>${squads.map(x=>`<option${x===sState.squad?' selected':''}>${esc(x)}</option>`).join('')}</select></label>
+        <div data-hp-roster>${roster||'<p class="muted">No swimmer matches.</p>'}</div></section>
+      ${owner?`<section class="page-card"><h3>App access</h3>${access==null?`<p class="muted" data-hp-access-status>${accessErr?esc(accessErr):'Checking…'}</p>`:accessErr?`<p class="warn-text">${esc(accessErr)}</p>`:withApp.length?withApp.map(appRow).join(''):'<p class="muted">No swimmer has the app linked yet.</p>'}${access!=null?'<div class="hub-actions"><button type="button" data-hp-refresh>Refresh</button></div>':''}</section>`:''}`;
+    const open=id=>{if(owner){M.state.settings.selectedAthleteId=id;M.storageEngine?.saveUi?.(M.state);M.nav?.show?.('athletes',{restoreScroll:false});}else{rState.report='swimmer';rState.athleteId=id;M.coachLoopUI?.openHubPanel?.('reports');}};
+    host.querySelectorAll('[data-hp-card]').forEach(b=>b.onclick=()=>open(b.dataset.hpCard));
+    const qi=host.querySelector('[data-hp-q]');qi?.addEventListener('input',e=>{sState.q=e.target.value;const pos=e.target.selectionStart;renderSwimmers(host);const n=host.querySelector('[data-hp-q]');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch{}}});
+    host.querySelector('[data-hp-sq]')?.addEventListener('change',e=>{sState.squad=e.target.value;renderSwimmers(host);});
     host.querySelector('[data-hp-give]')?.addEventListener('click',()=>{M.nav?.show?.('athletes',{restoreScroll:false});M.toast?.('Pick the swimmer, then tap Give swimmer access');});
     host.querySelector('[data-hp-join]')?.addEventListener('click',()=>{M.nav?.show?.('athletes',{restoreScroll:false});setTimeout(()=>document.querySelector('[data-bn-link-requests]')?.click(),300);});
     host.querySelector('[data-hp-refresh]')?.addEventListener('click',async()=>{access=null;renderSwimmers(host);await loadAccess();if(host.isConnected)renderSwimmers(host);});

@@ -35,8 +35,10 @@
   const esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??''),text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const selected=()=>{const id=M.state?.settings?.selectedAthleteId;return(M.state?.athletes||[]).find(a=>a.id===id)||null;};
   const cfg=()=>M.store?.config?.()||g.MCLAY_CONFIG||{},auth=()=>M.store?.auth?.()||{};
+  // 14 Oct 2026: title and note kept apart (the note was dropped when a title existed), plus media kind.
+  const sharedRow=c=>({id:c.id||'',title:c.title||c.context_label||'',type:String(c.capture_type||c.type||c.evidence_type||'note').toLowerCase(),text:c.capture_note||c.metadata?.capture_note||(c.title?'':c.text_content)||c.text||'',created_at:c.created_at||'',media_path:c.media_path||null,mime_type:c.mime_type||null});
   const ownCapture=(c,a)=>{const ids=[c?.athlete_id,c?.athleteId,...(c?.athlete_ids||[]),...(c?.athleteIds||[])].filter(Boolean).map(String);return ids.includes(String(a?.id))&&['shared','swimmer'].includes(String(c?.audience||''));};
-  async function rpc(name,body){const c=cfg(),token=auth().access_token;if(!c.supabaseUrl||!c.supabaseAnonKey)throw new Error('Supabase is not configured.');if(!token)throw new Error('Coach sign-in is required before creating swimmer access.');const res=await fetch(`${String(c.supabaseUrl).replace(/\/$/,'')}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:c.supabaseAnonKey,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=raw}if(!res.ok)throw new Error(data?.message||data?.hint||`Secure access failed (${res.status})`);return data;}
+  async function rpc(name,body){/* 14 Oct 2026: renew an expired sign-in first -- background publishes otherwise failed silently an hour after sign-in. */if(M.cloudSessionEngine?.ensureFresh)try{await M.cloudSessionEngine.ensureFresh()}catch{}const c=cfg(),token=auth().access_token;if(!c.supabaseUrl||!c.supabaseAnonKey)throw new Error('Supabase is not configured.');if(!token)throw new Error('Coach sign-in is required before creating swimmer access.');const res=await fetch(`${String(c.supabaseUrl).replace(/\/$/,'')}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:c.supabaseAnonKey,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});const raw=await res.text();let data=null;try{data=raw?JSON.parse(raw):null}catch{data=raw}if(!res.ok)throw new Error(data?.message||data?.hint||`Secure access failed (${res.status})`);return data;}
   function safeTraining(a){try{const v=M.swimmerTrainingBG?.viewFor?.(a);if(!v)return{};const pick=w=>w?{confirmedDeliveredMetres:Number(w.confirmedDeliveredMetres)||0,sessions:Number(w.sessions)||0,strokes:w.strokes||{},tags:w.tags||{},zones:w.zones||{}}:{};const r=v.today;return{today:r?{title:r.title||'',date:r.date||'',delivery:r.delivery||'',deliveredMetres:Number(r.deliveredMetres)||0,prescribedMetres:Number(r.prescribedMetres)||0,strokes:r.strokes||{},tags:r.tags||{},zones:r.zones||{}}:null,week:pick(v.week),month:pick(v.month),upcoming:(v.upcoming||[]).slice(0,6).map(x=>({date:x.date||'',title:x.title||'',prescribedMetres:Number(x.prescribedMetres)||0,zones:x.plannedZones||x.zones||{}}))};}catch{return{}}}
   // safeSession now takes an optional explicit session (falling back to the coach's currently-open one, the
   // original behaviour) -- this is what lets sessionsFor build a real, individually-projected payload for
@@ -102,7 +104,7 @@
     step('training');const training=safeTraining(a);
     step('tests');const tests=safeTests(a);
     step('meet');const meet=safeMeet(a);
-    step('shared_evidence');const sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(c=>({id:c.id||'',title:c.title||c.context_label||'',type:c.type||c.evidence_type||'',text:c.text_content||c.capture_note||c.text||'',created_at:c.created_at||''}));
+    step('shared_evidence');const sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(sharedRow);
     return{schema:'msos-swimmer-portal-v6',publishedAt:new Date().toISOString(),athlete:athleteShapeFor(a),session,sessions,performance,training,tests,meet,sharedEvidence};
   }
   // Real coaching failure this fixes (Andy, live, 20 Sept 2026: "we need to get them to be able to see all
@@ -146,7 +148,7 @@
       ['training',()=>{out.training=safeTraining(a);}],
       ['tests',()=>{out.tests=safeTests(a);}],
       ['meet',()=>{out.meet=safeMeet(a);}],
-      ['shared_evidence',()=>{out.sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(c=>({id:c.id||'',title:c.title||c.context_label||'',type:c.type||c.evidence_type||'',text:c.text_content||c.capture_note||c.text||'',created_at:c.created_at||''}));}],
+      ['shared_evidence',()=>{out.sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(sharedRow);}],
     ];
     let truncatedAt='';
     for(const[name,run]of stages){
@@ -615,8 +617,11 @@
       for(const a of athletes){
         await new Promise(resolve=>setTimeout(resolve,0));
         try{
-          const payload=corePayloadFor(a,()=>{});
-          await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
+          // 14 Oct 2026: this publish carries the session only. It used to send empty results/tests/shared-notes
+          // too, which replaced everything else on every swimmer's portal at each session save (every portal had
+          // 0 results, 0 T400s, 0 notes). The publish now merges, and only the session parts are sent.
+          const{schema,publishedAt,athlete,session:sess,sessions}=corePayloadFor(a,()=>{});
+          await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:{schema,publishedAt,athlete,session:sess,sessions}});
         }catch{}
       }
     }catch{}
@@ -789,5 +794,34 @@
   function installButton(){if((M.access?.role?.()||'owner')!=='owner')return;const a=selected(),head=document.querySelector('#athletesView .cn-owner-actions')||document.querySelector('#athletesView .perf-head .hub-actions')||document.querySelector('#athletesView .perf-head');if(!a||!head||head.querySelector('[data-bn-access]'))return;const b=document.createElement('button');b.dataset.bnAccess='1';b.className='bn-access-btn';b.textContent='Give swimmer access';b.onclick=()=>modal(a);head.append(b);}
   function install(){requestAnimationFrame(()=>{installButton();installLinkRequestsButton();});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
+  // 14 Oct 2026 (Andy: Jordan took videos and notes for Matthew, ticked share to swimmer, and nothing reached
+  // Matthew's phone). Only the owner's phone may publish to a swimmer's portal, so: a shared capture saved on the
+  // owner's phone, or arriving from another coach's phone, republishes just that swimmer's shared notes. A
+  // video/photo goes with a private link that lasts 14 days (renewed on every republish); the cloud folder stays
+  // coaches-only.
+  const isOwner=()=>(M.access?.role?.()||'owner')==='owner';
+  async function signedUrl(path){const c=cfg();if(!path||!M.cloud?.fetch)return null;try{const r=await M.cloud.fetch(`/storage/v1/object/sign/${encodeURIComponent(c.mediaBucket||'swimming-media')}/${path}`,{method:'POST',body:JSON.stringify({expiresIn:14*86400})});const u=r?.signedURL||r?.signedUrl;return u?`${c.supabaseUrl.replace(/\/$/,'')}/storage/v1${u.startsWith('/')?'':'/'}${u}`:null}catch{return null}}
+  async function sharedEvidenceFor(a){const rows=(M.state.captures||[]).filter(c=>ownCapture(c,a)).sort((x,y)=>String(x.created_at||'').localeCompare(String(y.created_at||''))).slice(-12).reverse().map(sharedRow);
+    for(const r of rows){if(r.media_path&&['video','photo','voice'].includes(r.type))r.url=await signedUrl(r.media_path);delete r.media_path;}return rows;}
+  let sharedQueue=new Set(),sharedTimer=null;
+  function publishShared(ids){if(!isOwner())return;for(const id of [].concat(ids||[]))if(id)sharedQueue.add(String(id));clearTimeout(sharedTimer);sharedTimer=setTimeout(async()=>{const list=[...sharedQueue];sharedQueue=new Set();
+    for(const id of list){const a=(M.state.athletes||[]).find(x=>String(x.id)===id);if(!a)continue;try{await rpc('msos_publish_swimmer_payload',{p_athlete_id:id,p_payload:{sharedEvidence:await sharedEvidenceFor(a),publishedAt:new Date().toISOString()}});}catch{}await new Promise(r=>setTimeout(r,0));}},1500);}
+  const capIds=c=>[c?.athlete_id,...(c?.athlete_ids||[])].filter(Boolean);
+  (function installSharedCaptureHook(){const C=M.cloud;if(!C?.stageCapture||C.stageCapture.__msosShared)return;const prev=C.stageCapture;
+    const wrapped=cap=>{const r=prev(cap);try{if(['shared','swimmer'].includes(String(cap?.audience||''))||cap?._wasShared)publishShared(capIds(cap));if(cap)cap._wasShared=['shared','swimmer'].includes(String(cap.audience||''));}catch{}return r};
+    wrapped.__msosShared=true;C.stageCapture=wrapped;})();
+  // Results, T400s and the training record for swimmers who actually have the app: rebuilt in the background on
+  // the owner's phone, one swimmer per call, each at most every 6 hours (the session-save publish no longer
+  // touches them).
+  async function refreshAppSwimmers(){if(!isOwner()||!M.cloud?.ready?.()||refreshAppSwimmers.busy)return null;refreshAppSwimmers.busy=true;
+    try{const rows=await rpc('msos_owner_swimmer_access',{});const st=M.state.settings,done=st.portalFullAt||(st.portalFullAt={}),now=Date.now();
+      const due=(Array.isArray(rows)?rows:[]).filter(r=>(r.devices>0||r.has_account)&&now-(Date.parse(done[r.athlete_id]||'')||0)>6*3600e3).map(r=>(M.state.athletes||[]).find(a=>String(a.id)===String(r.athlete_id))).filter(Boolean);
+      const a=due[0];if(!a)return{refreshed:null};
+      const{payload,truncatedAt}=await payloadForAsync(a,()=>{});const part={performance:payload.performance,training:payload.training,tests:payload.tests,meet:payload.meet,publishedAt:payload.publishedAt};
+      {const order=['performance','training','tests','meet'],i=order.indexOf(truncatedAt);if(i>=0)for(const k of order.slice(i))delete part[k];}/* a stage that ran out of time is left as it was on the portal, never blanked */
+      part.sharedEvidence=await sharedEvidenceFor(a);
+      await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:part});done[a.id]=new Date().toISOString();M.store?.save?.(M.state);return{refreshed:a.id,truncatedAt};
+    }catch(e){return{error:e?.message||String(e)}}finally{refreshAppSwimmers.busy=false}}
+  X.publishShared=publishShared;X.sharedEvidenceFor=sharedEvidenceFor;X.refreshAppSwimmers=refreshAppSwimmers;
   X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;X.installLinkRequestsButton=installLinkRequestsButton;X.linkRequestsModal=linkRequestsModal;X.linkRequestsBadge=linkRequestsBadge;
 })(globalThis);
