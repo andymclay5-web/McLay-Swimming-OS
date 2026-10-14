@@ -362,10 +362,9 @@
         .filter(r=>r.valid_for_anchor!==false)
         .filter(r=>!course||t400Course(r)===String(course).toUpperCase())
         .filter(r=>Number.isFinite(resultSeconds(r)))
-        // Owner behaviour (evidence.js / evidence-index.js): newest valid like-for-like test
-        // is the current anchor, not the fastest ever recorded. A swimmer who has slowed since
-        // a taper-week PB must still see their present-day pace, not a stale fast number.
-        .sort((a,b)=>String(b.result_date||'').localeCompare(String(a.result_date||''))||resultSeconds(a)-resultSeconds(b))[0]||null;
+        // 15 Oct 2026, owner rule (engines/evidence.js t400Order): the FASTEST valid like-for-like test is the
+        // anchor (Andy: "the fastest time 400 of that stroke, not the latest"); same time -> the newer one.
+        .sort((a,b)=>resultSeconds(a)-resultSeconds(b)||String(b.result_date||'').localeCompare(String(a.result_date||'')))[0]||null;
     };
 
     T.aerobic=(anchor,distance,zone,authoredRest=10)=>{
@@ -1569,13 +1568,13 @@
             {id:'gf',test_key:'t400_freestyle'},{id:'gb',test_key:'t400_backstroke'}
           ],
           trainingTestResults:[
-            {athlete_id:'g',test_type_id:'gf',result_seconds:270,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-06-01'},
+            {athlete_id:'g',test_type_id:'gf',result_seconds:280,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-09-01'},
             {athlete_id:'g',test_type_id:'gf',result_seconds:269,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-08-01'},
             {athlete_id:'g',test_type_id:'gb',result_seconds:300,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-08-01'}
           ]
         };
         const ath={id:'g',full_name:'Guardian Swimmer'};
-        tests.push(gtest('T400 uses newest valid exact-stroke anchor',resultSeconds(M.targets.t400(ath,st,'SCM','Freestyle'))===269&&resultSeconds(M.targets.t400(ath,st,'SCM','Backstroke'))===300));
+        tests.push(gtest('T400 uses fastest valid exact-stroke anchor (not a newer slower test)',resultSeconds(M.targets.t400(ath,st,'SCM','Freestyle'))===269&&resultSeconds(M.targets.t400(ath,st,'SCM','Backstroke'))===300));
         tests.push(gtest('Named-stroke T400 never silently falls back to Freestyle',M.targets.t400(ath,st,'SCM','Butterfly')===null));
         const dev=M.targets.aerobic(269,100,'Development',10);
         tests.push(gtest('T400 Development target keeps authored rest model and practical cycle',Math.abs(dev.seconds-72.63)<.02&&dev.sendOff===85));
