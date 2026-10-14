@@ -70,9 +70,10 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.tap('[data-hp-report="tests"]');await page.waitForSelector('[data-hp-out="tests"]');
     assert.match(await page.textContent('[data-hp-out="tests"]'),/T400s · these set training targets[\s\S]*William Callow[\s\S]*4:20\.1/);
 
-    // F. Swimmers: who has the app (owner list stubbed -- no cloud here).
+    // F. Swimmers: every swimmer listed (14 Oct 2026: Andy needs all profiles, not only those with the app), plus
+    // who has the app in its own App access section (owner list stubbed -- no cloud here).
     await page.evaluate(()=>{const M=window.MSOS4;M.swimmerInviteBN=M.swimmerInviteBN||{};M.swimmerInviteBN.rpc=async n=>n==='msos_owner_swimmer_access'?[{athlete_id:'mrob',devices:1,last_seen_at:new Date().toISOString(),has_account:false,last_published_at:null,open_invites:0}]:0;M.coachLoopUI.openHubPanel('swimmers');});
-    await page.waitForFunction(()=>/Swimmers with the app[\s\S]*Matthew Robertson/.test(document.querySelector('#hubView')?.textContent||''),{timeout:5000});
+    await page.waitForFunction(()=>/All swimmers[\s\S]*William Callow[\s\S]*App access[\s\S]*Matthew Robertson/.test(document.querySelector('#hubView')?.textContent||''),{timeout:5000});
     assert.match(await page.textContent('#hubView'),/Matthew Robertson[\s\S]*1 QR device[\s\S]*seen today/);
 
     // G. Assistant coach: a Hub with their buttons only, and only their squads.
@@ -82,7 +83,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     for(const no of ['Input data','TV Board','Season plan','Coaches & devices','Data & references'])assert.ok(!asst.buttons.some(x=>x.startsWith(no)),`assistant must not see ${no}: ${asst.buttons}`);
     for(const yes of ['Today','Write session','Reports & analysis','Swimmers','Meet','Coach chat'])assert.ok(asst.buttons.some(x=>x.startsWith(yes)),`assistant sees ${yes}`);
     await page.evaluate(()=>window.MSOS4.coachLoopUI.openHubPanel('swimmers'));await page.waitForTimeout(300);
-    const t=await page.textContent('#hubView');assert.match(t,/Elsie Knowles/);assert.doesNotMatch(t,/William Callow|Swimmers with the app/,'only their squads, no app management');
+    const t=await page.textContent('#hubView');assert.match(t,/Elsie Knowles/);assert.doesNotMatch(t,/William Callow|App access/,'only their squads, no app management');
     await page.evaluate(()=>{const M=window.MSOS4;M.access.setRole('owner');M.state.settings.assistantSquads=[];});
 
     assert.deepEqual(errors,[],`page errors: ${errors.join(' | ')}`);

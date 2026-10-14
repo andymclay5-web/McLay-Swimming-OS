@@ -77,7 +77,7 @@ function trainingSectionFrom(p){
   return fn(p);
 }
 const html=trainingSectionFrom(payload);
-assert.match(html,/From Andy/,'the portal must show a "From Andy" section when shared evidence is present');
+assert.match(html,/From your coaches/,'the portal must show a "From your coaches" section (14 Oct 2026: assistant coaches share too) when shared evidence is present');
 assert.match(html,/Great streamline off the wall/,"Ruby's shared capture text must render in her portal");
 assert.doesNotMatch(html,/Watch her taper fatigue closely/,"Andy's private coaching note must never render in Ruby's portal");
 assert.doesNotMatch(html,/Jonah start work/,"another swimmer's shared capture must never render in Ruby's portal");

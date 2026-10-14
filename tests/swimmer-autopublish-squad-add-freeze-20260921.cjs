@@ -35,8 +35,11 @@ const fixedFn=`  async function autoPublishSessionToSwimmers(session){
       for(const a of athletes){
         await new Promise(resolve=>setTimeout(resolve,0));
         try{
-          const payload=corePayloadFor(a,()=>{});
-          await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
+          // 14 Oct 2026: this publish carries the session only. It used to send empty results/tests/shared-notes
+          // too, which replaced everything else on every swimmer's portal at each session save (every portal had
+          // 0 results, 0 T400s, 0 notes). The publish now merges, and only the session parts are sent.
+          const{schema,publishedAt,athlete,session:sess,sessions}=corePayloadFor(a,()=>{});
+          await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:{schema,publishedAt,athlete,session:sess,sessions}});
         }catch{}
       }
     }catch{}
@@ -47,8 +50,8 @@ const buggyFn=`  function autoPublishSessionToSwimmers(session){
       for(const a of athletes){
         Promise.resolve().then(async()=>{
           try{
-            const payload=corePayloadFor(a,()=>{});
-            await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:payload});
+            const{schema,publishedAt,athlete,session:sess,sessions}=corePayloadFor(a,()=>{});
+            await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:{schema,publishedAt,athlete,session:sess,sessions}});
           }catch{}
         });
       }
