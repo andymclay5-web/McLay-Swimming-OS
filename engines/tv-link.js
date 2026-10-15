@@ -98,7 +98,8 @@
     if(out.kind!=='note'){const live=(M.state.captures||[]).find(x=>x.id===c.id);const path=live?.media_path||c.media_path;if(path){try{out.url=await signedUrl(path);}catch{}}if(!out.url)out.waiting=true;}
     return out;}
   async function buildFrame(){const session=M.currentSession?.();const frame={v:1,at:new Date().toISOString(),mode:boardMode()};
-    if(!session){frame.empty='No session selected on the coach\'s phone.';frame.overlay=await overlayFrame(null,null);return frame;}
+    if(!session){frame.tvv=TV_PAGE;frame.empty='No session selected on the coach\'s phone.';frame.overlay=await overlayFrame(null,null);return frame;}
+    frame.tvv=TV_PAGE;
     const pool=present(),mods=modified(),modIds=new Set(mods.map(a=>a.id)),ctx={pool,mods,group:pool.filter(a=>!modIds.has(a.id))};
     const id=session.identity||{},finished=session.finish,active=activeBlock(session);
     frame.session={title:text(id.title||`${id.dayPart||''} · ${(id.squads||[]).join(' + ')}`)||'Session',date:id.date||'',distance:Number(finished?.actualDistance)||B().sessionDistance(session),finished:!!finished,swimmers:pool.length};
@@ -119,13 +120,15 @@
   L.signature=signature;
 
   // ---------- publishing ----------
-  let lastSig='',lastSent=0,busy=false,timer=0,take=false;
+  let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
+  // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
+  const TV_PAGE='20261015d';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
       const r=await rpc('msos_tv_publish',{p_screen:c.screenId,p_device:deviceId(),p_name:coachName(),p_frame:frame,p_take:take});
       if(r?.ok===false){setStatus({state:'taken',controller:r.controller||'another phone',error:''});return r;}
-      take=false;lastSig=sig;lastSent=Date.now();setStatus({state:'live',controller:'',error:'',rev:r?.rev});return r;}
+      take=false;lastSig=sig;lastSent=Date.now();lastFrame=frame;setStatus({state:'live',controller:'',error:'',rev:r?.rev});return r;}
     catch(e){setStatus({state:'error',error:String(e?.message||e)});return null;}
     finally{busy=false;}}
   L.publish=publish;
@@ -164,6 +167,19 @@
   function bindPair(el,reopen){const btn=el.querySelector('[data-tv-pair]');if(!btn)return;btn.onclick=async()=>{const out=el.querySelector('[data-tv-pair-status]');btn.disabled=true;out.textContent='Connecting…';
     try{await L.pair(el.querySelector('[data-tv-code]').value,el.querySelector('[data-tv-label]').value);out.textContent='Connected — the TV now shows your Board.';M.toast?.('TV connected');reopen?.();}catch(e){out.textContent=e.message;btn.disabled=false;}};}
 
+  // Andy, 15 Oct 2026: "If I need to use my phone the video or display I'm showing should close and the tv board should
+  // stay where it was". Leaving MSOS (another app, lock screen) takes whatever is on top of the Board off the TV; the
+  // Board itself stays exactly as it was. The phone may be suspended a moment later, so this send is a keepalive one
+  // built from the last frame (no new target work) and it does not wait for anything.
+  function leaving(){const c=control();if(!c?.screenId||!lastFrame?.overlay||!signedIn()||status.state==='taken')return;
+    try{M.tvDisplay?.clear?.();}catch{}
+    const frame={...lastFrame,overlay:null,at:new Date().toISOString()};lastFrame=frame;
+    const raw=M.cloud?.rawFetch||M.cloud?.fetch;if(!raw)return;
+    try{const p=raw('/rest/v1/rpc/msos_tv_publish',{method:'POST',keepalive:true,body:JSON.stringify({p_screen:c.screenId,p_device:deviceId(),p_name:coachName(),p_frame:frame,p_take:false})});
+      Promise.resolve(p).then(()=>{lastSig=signature();lastSent=Date.now();}).catch(()=>{});}catch{}}
+  L.leaving=leaving;
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')leaving();});
+  addEventListener('pagehide',leaving);
   function boot(){if(control()?.screenId)setStatus({state:'connecting'});loop();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })(globalThis);
