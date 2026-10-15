@@ -17,7 +17,7 @@
 // the Coordinator's prescriptions, so the TV shows exactly the same work and targets as the phone.
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M?.state)return;
-  const L=M.tvLink={build:'v4-tv-link-20261015'};
+  const L=M.tvLink={build:'v4-tv-link-20261015b-remember'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clock=s=>M.util?.clock?M.util.clock(Number(s)):String(s??'');
@@ -41,8 +41,15 @@
   L.rpc=rpc;
 
   // ---------- which TV this phone drives ----------
-  const control=()=>settings().tvControl||null;
-  function setControl(v){settings().tvControl=v;saveUi();}
+  // Which TV this phone drives is a fact about THIS phone, kept in this phone's own storage (like deviceId above).
+  // 15 Oct 2026, first real use: it was kept in settings, which the app does not keep across a close/reopen, so after
+  // Andy reopened MSOS his phone silently stopped driving the TV and the TV sat on the last thing it was sent.
+  let memControl;
+  function control(){if(memControl)return memControl;let v=null;try{v=JSON.parse(localStorage.getItem('msos-tv-control')||'null');}catch{}
+    if(!v&&settings().tvControl?.screenId){v=settings().tvControl;try{localStorage.setItem('msos-tv-control',JSON.stringify(v));}catch{}}
+    return v&&v.screenId?v:null;}
+  function setControl(v){memControl=v&&v.screenId?{screenId:v.screenId,label:v.label||'Pool TV'}:null;try{if(memControl)localStorage.setItem('msos-tv-control',JSON.stringify(memControl));else localStorage.removeItem('msos-tv-control');}catch{}
+    if(settings().tvControl){delete settings().tvControl;saveUi();}}
   let status={state:'idle',controller:'',error:''};
   L.status=()=>({...status,control:control()});
   function setStatus(next){status={...status,...next};try{M.tvDisplay?.paintControl?.()}catch{}}
@@ -125,9 +132,10 @@
   // Every 20s the driving phone checks it still has the TV (another coach may have taken over), so its TV button is honest.
   let lastCheck=0;
   L.check=async()=>{const c=control();if(!c?.screenId||!signedIn()||status.state==='taken')return status;lastCheck=Date.now();
-    try{const list=await L.list(),s=list.find(x=>x.id===c.screenId);if(!s){L.stopControl();return status;}if(s.controller_device&&s.controller_device!==deviceId())setStatus({state:'taken',controller:s.controller_name||'another phone'});}catch{}
+    try{if(!org())return status;const list=await L.list(),s=list.find(x=>x.id===c.screenId);if(!s){setStatus({state:'error',error:'This TV is no longer connected'});return status;}if(s.controller_device&&s.controller_device!==deviceId())setStatus({state:'taken',controller:s.controller_name||'another phone'});}catch{}
     return status;};
-  function loop(){clearTimeout(timer);timer=setTimeout(async()=>{try{await publish();if(Date.now()-lastCheck>20000)await L.check();}catch{}loop();},CHECK_MS);}
+  // The loop also keeps the Board's 📺 button drawn (cheap, idempotent) so it can't go missing after a reopen.
+  function loop(){clearTimeout(timer);timer=setTimeout(async()=>{try{M.tvDisplay?.paintControl?.();}catch{}try{await publish();if(Date.now()-lastCheck>20000)await L.check();}catch{}loop();},CHECK_MS);}
   L.takeControl=async(screen)=>{setControl({screenId:screen.id,label:text(screen.label)||'Pool TV'});take=true;lastSig='';setStatus({state:'connecting',controller:'',error:''});return publish({force:true});};
   L.stopControl=()=>{setControl(null);lastSig='';setStatus({state:'idle',controller:'',error:''});};
 
