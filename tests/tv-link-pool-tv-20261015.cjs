@@ -114,6 +114,16 @@ await SHOT(tv,'tv-swimmer');
     assert.match(cardText,/T400[\s\S]*Freestyle[\s\S]*5:27\.3/,'T400 = her fastest (5:27.3), not the latest');
     assert.match(cardText,/BEST TIMES[\s\S]*200 Breast SCM[\s\S]*3:15\.8/);
     assert.ok(await tv.$('.tv-board .tv-block'),'Board still showing behind the swimmer card');
+    // 5b. Andy, 15 Oct 2026: "If I need to use my phone the video or display I'm showing should close and the tv board
+    // should stay where it was". Leaving MSOS takes the corner box off the TV at once; the Board stays as it was.
+    const boardBefore=await tv.textContent('.tv-body');
+    await phone.evaluate(()=>{Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await tv.waitForFunction(()=>!document.querySelector('.tv-overlay'),{timeout:8000});
+    assert.equal(await tv.textContent('.tv-body'),boardBefore,'the TV Board stays exactly where it was');
+    assert.equal(await phone.evaluate(()=>window.MSOS4.tvDisplay.current()),null,'and nothing is left waiting to go back up when the coach returns');
+    await phone.evaluate(()=>{Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
+    // the TV page knows its own version (it reloads itself when the phone expects a newer one)
+    assert.equal(await tv.evaluate(()=>window.MSOS_TV.version),await phone.evaluate(()=>window.MSOS4.tvLink.buildFrame().then(f=>f.tvv)),'the TV page is the version the phone expects');
     // 6. Roll + live edit straight away
     await phone.evaluate(()=>{const M=window.MSOS4,s=M.currentSession();M.state.attendance.push({id:'r3',session_id:s.id,athlete_id:'will',status:'present'});M.store.save(M.state);});
     await tv.waitForFunction(()=>[...document.querySelectorAll('.tv-row .tv-targets .tv-t')].some(x=>/^Will/.test(x.textContent)),{timeout:8000});
