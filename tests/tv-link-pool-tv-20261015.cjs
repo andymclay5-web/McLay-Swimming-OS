@@ -87,7 +87,19 @@ await SHOT(tv,'tv-whole');
     assert.equal(whole.modTimes,0,'no target times for modified swimmers on the whole session');
     await phone.evaluate(()=>{const M=window.MSOS4;M.state.settings.boardFocusMode=true;M.ui.renderBoard();});
     await tv.waitForSelector('.tv-board .tv-set',{timeout:8000});
+    // 3b. Andy, 15 Oct 2026, first real use: closed and reopened MSOS on the phone -> the TV stopped following.
+    // After a reopen the phone must still drive the TV: WHOLE/SET on the phone still moves the TV.
+    await phone.reload();await phone.waitForFunction(()=>window.MSOS4?.tvLink?.status&&window.MSOS4?.storageEngine?.ready&&window.MSOS4?.currentSession?.()?.id==='tv-link-sess',{timeout:25000});
+    assert.ok(await phone.evaluate(()=>!!window.MSOS4.tvLink.status().control?.screenId),'after reopening, the phone still knows it drives the TV');
+    // (race results normally come back from the cloud after a reopen; the stand-in has no cloud, so put Ashley's back)
+    await phone.evaluate((ORG)=>{window.MSOS4.state.settings.organisationId=window.MSOS4.state.settings.organisationId||ORG;},ORG);
+    await phone.evaluate(()=>{window.MSOS4.state.resultsPbBoard=[{athlete_id:'ash',athlete_name:'Ashley Brown',distance:200,stroke:'Breaststroke',pool_course:'SCM',result_seconds:195.88,result_date:'2026-08-20'}];});
+    await phone.evaluate(()=>{const M=window.MSOS4;M.state.settings.boardFocusMode=false;M.ui.renderBoard();});
+    await tv.waitForSelector('.tv-board .tv-whole',{timeout:8000});
+    await phone.evaluate(()=>{const M=window.MSOS4;M.state.settings.boardFocusMode=true;M.ui.renderBoard();});
+    await tv.waitForSelector('.tv-board .tv-set',{timeout:8000});
     // 4. send the note -> corner, Board still up
+    assert.ok(await phone.$('[data-tv-pill]:not([hidden])'),'the Board still has its 📺 button after reopening');await phone.click('[data-tv-pill]');
     await phone.waitForSelector('[data-tv-cap="cap-tv-note"][data-tv-m="corner"]');await phone.click('[data-tv-cap="cap-tv-note"][data-tv-m="corner"]');
     await tv.waitForSelector('.tv-overlay.tvo-corner',{timeout:8000});
     assert.match(await tv.textContent('.tv-overlay'),/Ashley Brown[\s\S]*Long glide off every wall/);
@@ -111,12 +123,12 @@ await SHOT(tv,'tv-swimmer');
     // 7. a second phone
     const ctx2=await browser.newContext({viewport:{width:390,height:844}});const p2=await ctx2.newPage();await wire(p2);p2.on('pageerror',e=>errors.push('phone2: '+e.message));
     await p2.goto(BASE);await p2.waitForFunction(()=>window.MSOS4?.tvLink?.list&&window.MSOS4?.storageEngine?.ready,{timeout:25000});
-    const screenId=await phone.evaluate(()=>window.MSOS4.state.settings.tvControl.screenId);
-    const r2=await p2.evaluate(async({ORG,screenId})=>{const M=window.MSOS4;M.store.saveAuth({access_token:'coach2',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:{email:'kaleb@example.com'}});M.state.settings.organisationId=ORG;M.state.settings.activeRole='assistant';M.state.settings.assistantSquads=['National'];M.state.settings.tvControl={screenId,label:'Pool TV'};
+    const screenId=await phone.evaluate(()=>window.MSOS4.tvLink.status().control.screenId);
+    const r2=await p2.evaluate(async({ORG,screenId})=>{const M=window.MSOS4;M.store.saveAuth({access_token:'coach2',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:{email:'kaleb@example.com'}});M.state.settings.organisationId=ORG;M.state.settings.activeRole='assistant';M.state.settings.assistantSquads=['National'];localStorage.setItem('msos-tv-control',JSON.stringify({screenId,label:'Pool TV'}));
       return M.tvLink.publish({force:true});},{ORG,screenId});
     assert.equal(r2?.ok,false,'the second phone is not allowed to silently overwrite the TV');
     assert.equal(await p2.evaluate(()=>window.MSOS4.tvLink.status().state),'taken');
-    await p2.evaluate(()=>window.MSOS4.tvLink.takeControl({id:window.MSOS4.state.settings.tvControl.screenId,label:'Pool TV'}));
+    await p2.evaluate(()=>window.MSOS4.tvLink.takeControl({id:window.MSOS4.tvLink.status().control.screenId,label:'Pool TV'}));
     await tv.waitForFunction(()=>/No session selected/.test(document.querySelector('.tv-root')?.textContent||''),{timeout:8000});
     await phone.evaluate(()=>window.MSOS4.tvLink.check());
     assert.equal(await phone.evaluate(()=>window.MSOS4.tvLink.status().state),'taken','the first phone now knows another phone drives the TV');
