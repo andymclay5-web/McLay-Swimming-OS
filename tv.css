@@ -2,45 +2,50 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#06283d;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;cursor:none}
 .tv-root{min-height:100vh;padding:1.2em 1.6em;font-size:22px}
-.tv-pairing{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.6em}
+.tv-pairing{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.tv-pairing>*{margin:.3em 0!important}
 .tv-pairing h1{font-size:3em;margin:0}.tv-pairing p{font-size:1.4em;margin:0;opacity:.9}
 .tv-eyebrow{letter-spacing:.15em;font-weight:800;font-size:1em!important;opacity:.7!important}
 .tv-code{font-size:7em;font-weight:900;letter-spacing:.12em;background:#fff;color:#06283d;border-radius:.2em;padding:.1em .5em;margin:.2em 0;font-variant-numeric:tabular-nums}
 .tv-small{font-size:1em!important;opacity:.6!important}
-.tv-top{display:flex;align-items:flex-end;gap:1em;border-bottom:3px solid rgba(255,255,255,.25);padding-bottom:.4em;margin-bottom:.6em}
-.tv-top div{flex:1;min-width:0}.tv-top small{font-weight:800;letter-spacing:.12em;opacity:.7;font-size:.8em}
+.tv-top{display:flex;align-items:flex-end;border-bottom:3px solid rgba(255,255,255,.25);padding-bottom:.4em;margin-bottom:.6em}
+.tv-top div{flex:1;min-width:0;margin-right:1em}.tv-top nav{margin-right:1em}.tv-top small{font-weight:800;letter-spacing:.12em;opacity:.7;font-size:.8em}
 .tv-top h1{margin:0;font-size:2em;line-height:1.1}.tv-top>b{font-size:2em}
-.tv-top nav{display:flex;gap:.3em}.tv-top nav span{padding:.15em .5em;border-radius:.4em;background:rgba(255,255,255,.12);font-weight:800;font-size:.9em}.tv-top nav span.on{background:#ffd34d;color:#06283d}
+.tv-top nav{display:flex}.tv-top nav span{margin-left:.3em;padding:.15em .5em;border-radius:.4em;background:rgba(255,255,255,.12);font-weight:800;font-size:.9em}.tv-top nav span.on{background:#ffd34d;color:#06283d}
 .tv-body.tv-whole{columns:2 22em;column-gap:1.2em}
 .tv-block{break-inside:avoid;background:rgba(255,255,255,.06);border-radius:.6em;padding:.5em .8em;margin-bottom:.8em}
 .tv-block.active{outline:3px solid #ffd34d}
 .tv-set .tv-block{background:none;padding:0;outline:none}
-.tv-block header{display:flex;align-items:baseline;gap:.6em;margin-bottom:.3em}.tv-block header small{font-weight:900;color:#ffd34d}.tv-block header h2{margin:0;flex:1;font-size:1.3em}.tv-block header b{font-size:1.2em}
+.tv-block header{display:flex;align-items:baseline;margin-bottom:.3em}.tv-block header small{font-weight:900;color:#ffd34d;margin-right:.6em}.tv-block header h2{margin:0 .6em 0 0;flex:1;font-size:1.3em}.tv-block header b{font-size:1.2em}
 .tv-set .tv-block header h2{font-size:1.8em}.tv-set .tv-block header b{font-size:1.6em}
 .tv-row{padding:.35em 0;border-top:1px solid rgba(255,255,255,.12)}
 .tv-work b{font-size:1.25em}.tv-work small{display:block;opacity:.8;font-size:.9em;margin-top:.1em}
 .tv-set .tv-work b{font-size:1.7em}.tv-set .tv-work small{font-size:1.1em}
 .tv-rounds{border-left:4px solid #49b6ff;padding-left:.6em;margin:.3em 0}.tv-round-label{font-weight:900;color:#49b6ff;letter-spacing:.08em}
 .tv-cue{opacity:.85;font-style:italic;padding:.2em 0}
-.tv-targets,.tv-mod-people{display:flex;flex-wrap:wrap;gap:.3em .4em;margin-top:.35em}
-.tv-t{display:inline-flex;gap:.4em;align-items:baseline;background:#0e3d5c;border-radius:.4em;padding:.15em .5em;font-size:1.05em}
-.tv-t i{font-style:normal;opacity:.85}.tv-t b{color:#ffd34d;font-variant-numeric:tabular-nums}
+.tv-targets,.tv-mod-people{display:flex;flex-wrap:wrap;margin-top:.35em}
+.tv-t{display:inline-flex;align-items:baseline;margin:0 .4em .3em 0;background:#0e3d5c;border-radius:.4em;padding:.15em .5em;font-size:1.05em}
+.tv-t i{font-style:normal;opacity:.85;margin-right:.4em}.tv-t b{color:#ffd34d;font-variant-numeric:tabular-nums}
 .tv-t.mod{background:#5a2d6e}
 .tv-mod{margin-top:.35em;padding:.3em .5em;border-radius:.4em;background:rgba(160,90,200,.18)}
 .tv-mod-work b{font-size:1.1em}.tv-mod-work small{display:block;opacity:.8}
-.tv-live{margin-top:.6em;background:rgba(255,255,255,.06);border-radius:.6em;padding:.4em .8em}.tv-live small{font-weight:800;letter-spacing:.12em;opacity:.7}.tv-live div{display:flex;gap:1em}.tv-live div span{flex:1;opacity:.8}
+.tv-live{margin-top:.6em;background:rgba(255,255,255,.06);border-radius:.6em;padding:.4em .8em}.tv-live small{font-weight:800;letter-spacing:.12em;opacity:.7}.tv-live div{display:flex}.tv-live div span{flex:1;opacity:.8;margin:0 1em}
 .tv-status{position:fixed;left:1em;bottom:1em;background:#b3261e;color:#fff;padding:.3em .8em;border-radius:.4em;font-weight:800}
 /* overlay: same shapes as the in-app TV overlay */
-.tv-overlay{position:fixed;z-index:60;background:#000;color:#fff;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.45)}
-.tv-overlay.tvo-corner{right:2vw;bottom:2vw;width:34vw;min-width:280px;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:3px solid #fff}
-.tv-overlay.tvo-corner.tvo-swimmer{aspect-ratio:auto;max-height:80vh;width:30vw}
-.tv-overlay.tvo-full{inset:0}
-.tvo-frame{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-.tvo-frame iframe,.tvo-frame video,.tvo-frame img{width:100%;height:100%;border:0;object-fit:contain;background:#000}
-.tvo-text{padding:4%;display:flex;flex-direction:column;gap:12px;font-size:clamp(18px,2.6vw,44px);line-height:1.25;background:#0d4566;width:100%;height:100%;justify-content:center}.tvo-text b{font-size:.8em;opacity:.85}
-.tvo-label{position:absolute;left:0;right:0;bottom:0;padding:6px 12px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-weight:800;font-size:clamp(13px,1.4vw,22px)}
+/* 15 Oct 2026, first real TV: its browser is older than the phone's (no inset / aspect-ratio / flex spacing).
+   Without them the full-screen box never covered the screen and the corner video was cropped to its top-left corner.
+   Everything here is spelled out with plain top/left/width/height so any TV browser lays it out the same. */
+.tv-overlay{position:fixed;z-index:60;background:#000;color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.45);overflow:hidden}
+.tv-overlay.tvo-corner{right:2vw;bottom:2vw;width:42vw;height:23.6vw;border-radius:14px;border:3px solid #fff}
+.tv-overlay.tvo-corner.tvo-swimmer{width:30vw;height:auto;max-height:80vh}
+.tvo-swimmer .tvo-frame{position:static}
+.tv-overlay.tvo-full{top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;border:0;border-radius:0}
+.tvo-frame{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:#000}
+.tvo-frame iframe,.tvo-frame video{display:block;width:100%;height:100%;border:0;object-fit:contain;background:#000}
+.tvo-frame img{display:block;max-width:100%;max-height:100%;width:auto;height:auto}
+.tvo-text{padding:4%;display:flex;flex-direction:column;font-size:clamp(18px,2.6vw,44px);line-height:1.25;background:#0d4566;width:100%;height:100%;justify-content:center}.tvo-text b{font-size:.8em;opacity:.85;margin-bottom:12px}
+.tvo-label{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:6px 12px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-weight:800;font-size:clamp(13px,1.4vw,22px)}
 .tvo-card{width:100%;height:100%;background:#0d4566;padding:1em 1.2em;font-size:clamp(14px,1.5vw,30px);overflow:hidden}
 .tvo-card h3{margin:0;font-size:1.6em}.tvo-card>small{opacity:.8;font-weight:700}
 .tvo-card-sec{margin-top:.6em}.tvo-card-sec label{display:block;font-weight:900;letter-spacing:.1em;font-size:.75em;color:#ffd34d}
-.tvo-card-sec p{display:flex;gap:1em;margin:.15em 0}.tvo-card-sec p span{flex:1;opacity:.9}.tvo-card-sec p b{font-variant-numeric:tabular-nums}
+.tvo-card-sec p{display:flex;margin:.15em 0}.tvo-card-sec p span{flex:1;opacity:.9;margin-right:1em}.tvo-card-sec p b{font-variant-numeric:tabular-nums}
 .tvo-full .tvo-card{font-size:clamp(20px,2.6vw,48px)}
