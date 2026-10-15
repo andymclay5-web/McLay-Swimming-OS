@@ -49,3 +49,36 @@ html,body{margin:0;height:100%;background:#06283d;color:#fff;font-family:system-
 .tvo-card-sec{margin-top:.6em}.tvo-card-sec label{display:block;font-weight:900;letter-spacing:.1em;font-size:.75em;color:#ffd34d}
 .tvo-card-sec p{display:flex;margin:.15em 0}.tvo-card-sec p span{flex:1;opacity:.9;margin-right:1em}.tvo-card-sec p b{font-variant-numeric:tabular-nums}
 .tvo-full .tvo-card{font-size:clamp(20px,2.6vw,48px)}
+/* 15 Oct 2026, Andy at the pool: "some of the times and modified stuff are hard to read with the yellows and purples.
+   It might need to be white screen black writing ... easily seen from a few meters away".
+   High-contrast theme: white screen, black writing, no faded text, no coloured text. Times are the boldest thing on a
+   line. Modified swimmers sit in a light-grey band with a thick black bar so they stand apart without colour. */
+html,body{background:#fff;color:#000}
+.tv-root *{opacity:1!important}
+.tv-eyebrow,.tv-small,.tv-top small,.tv-live small{color:#000}
+.tv-code{background:#000;color:#fff}
+.tv-top{border-bottom:4px solid #000}
+.tv-top nav span{background:#fff;color:#000;border:2px solid #000}
+.tv-top nav span.on{background:#000;color:#fff}
+.tv-block{background:#fff;border:2px solid #000}
+.tv-block.active{outline:none;border:6px solid #000}
+.tv-set .tv-block{border:0}
+.tv-block header small{background:#000;color:#fff;padding:0 .3em;border-radius:.2em}
+.tv-row{border-top:2px solid #000}
+.tv-work b{font-weight:900}
+.tv-work small,.tv-mod-work small{color:#000;font-weight:600}
+.tv-rounds{border-left:6px solid #000}.tv-round-label{color:#000}
+.tv-cue{color:#000;font-weight:600}
+.tv-t{background:#fff;color:#000;border:2px solid #000}
+.tv-t i{color:#000;font-weight:600}
+.tv-t b{color:#000;font-weight:900;font-size:1.15em}
+.tv-t.mod{background:#fff;border:2px solid #000}
+.tv-mod{background:#e8e8e8;border-left:10px solid #000;border-radius:.2em}
+.tv-mod-work b{font-weight:900}
+.tv-live{background:#fff;border:2px solid #000}
+.tv-overlay{box-shadow:0 0 0 4px #000,0 10px 40px rgba(0,0,0,.35)}
+.tv-overlay.tvo-corner{border:4px solid #000}
+.tvo-text,.tvo-card{background:#fff;color:#000}
+.tvo-card-sec label{color:#000;border-bottom:2px solid #000}
+.tvo-card>small,.tvo-text b{opacity:1;color:#000}
+.tvo-card-sec p b{font-weight:900}

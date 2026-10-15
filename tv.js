@@ -8,7 +8,11 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV=g.MSOS_TV={rev:0,frame:null,state:'starting'};
+  const TV_VERSION='20261015d';
+  const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
+  // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
+  function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
+    try{sessionStorage.setItem('msos-tv-upd',want);}catch{}location.replace(`${location.pathname}?v=${encodeURIComponent(want)}&r=${Date.now()}`);return true;}
 
   function secret(){let v='';try{v=localStorage.getItem('msos-tv-secret')||'';}catch{}
     if(v.length<32){const b=new Uint8Array(24);crypto.getRandomValues(b);v=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');try{localStorage.setItem('msos-tv-secret',v);}catch{}}
@@ -43,16 +47,25 @@
     if(o.kind==='photo'||o.kind==='image')return`<img src="${esc(o.url)}" alt="">`;
     if(o.kind==='voice')return`<audio src="${esc(o.url)}" controls autoplay></audio>`;
     return`<div class="tvo-text"><span>${esc(o.label||'')}</span></div>`;}
+  // 15 Oct 2026, pool TV: its browser drew the clip at the clip's own size and cut it off (about a quarter showing),
+  // whatever the CSS said. So the picture is sized here in plain pixels to fit inside the box, centred.
+  function fitMedia(){const el=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(!el)return;const box=ovl.getBoundingClientRect();
+    const w0=el.videoWidth||el.naturalWidth,h0=el.videoHeight||el.naturalHeight;if(!w0||!h0||!box.width||!box.height)return;
+    const k=Math.min(box.width/w0,box.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
+    el.style.position='absolute';el.style.maxWidth='none';el.style.maxHeight='none';el.style.width=`${w}px`;el.style.height=`${h}px`;
+    el.style.left=`${Math.floor((box.width-w)/2)}px`;el.style.top=`${Math.floor((box.height-h)/2)}px`;el.setAttribute('width',w);el.setAttribute('height',h);}
+  TV.fitMedia=fitMedia;
   let overlayKey='';
   function drawOverlay(o){const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.targets:'',o.kind==='swimmer'?o.card:'']):'';if(key===overlayKey)return;overlayKey=key;
     if(!o){ovl.className='';ovl.innerHTML='';return;}
     ovl.className=`tv-overlay tvo-${o.mode==='full'?'full':'corner'} ${o.kind==='swimmer'?'tvo-swimmer':''}`;
-    ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;}
+    ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
+    const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}}
   // Fit the whole board on the screen: shrink the type until nothing spills off the bottom.
   function fit(){let size=g.innerWidth>=1200?22:16;root.style.fontSize=`${size}px`;let guard=0;while(root.scrollHeight>g.innerHeight+2&&size>8&&guard++<40){size-=.5;root.style.fontSize=`${size}px`;}}
-  function draw(f){TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);drawOverlay(f.overlay||null);fit();}
+  function draw(f){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);drawOverlay(f.overlay||null);fit();}
   TV.draw=draw;TV.fit=fit;
-  addEventListener('resize',()=>{if(TV.frame)fit();});
+  addEventListener('resize',()=>{if(TV.frame)fit();fitMedia();});
 
   // ---------- keep it current ----------
   let misses=0,timer=0;
