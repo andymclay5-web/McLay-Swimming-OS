@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261015d';
+  const TV_VERSION='20261015e';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -56,11 +56,35 @@
     el.style.left=`${Math.floor((box.width-w)/2)}px`;el.style.top=`${Math.floor((box.height-h)/2)}px`;el.setAttribute('width',w);el.setAttribute('height',h);}
   TV.fitMedia=fitMedia;
   let overlayKey='';
-  function drawOverlay(o){const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.targets:'',o.kind==='swimmer'?o.card:'']):'';if(key===overlayKey)return;overlayKey=key;
+  function drawOverlay(o){if(!o)stopMirror();const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.targets:'',o.kind==='swimmer'?o.card:'']):'';if(key===overlayKey)return;overlayKey=key;
     if(!o){ovl.className='';ovl.innerHTML='';return;}
     ovl.className=`tv-overlay tvo-${o.mode==='full'?'full':'corner'} ${o.kind==='swimmer'?'tvo-swimmer':''}`;
     ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
+    stopMirror();
+    if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);return;}
     const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}}
+  // 15 Oct 2026, pool TV: full-screen clips play fine, but in the corner the TV's video player ignores the box size and
+  // shows only a cut-off piece. So in the corner the clip plays hidden and each frame is painted into an ordinary
+  // picture (canvas) the size of the box. If this TV can't hand its video frames over (the picture stays black), the
+  // clip goes full screen instead -- a whole clip beats a quarter of one.
+  let mirror=null;
+  function stopMirror(){if(!mirror)return;mirror.stop=true;try{mirror.video.pause();mirror.video.removeAttribute('src');mirror.video.load();}catch{}mirror.video.remove();mirror=null;}
+  function startMirror(o){const frame=ovl.querySelector('.tvo-frame');if(!frame)return;frame.innerHTML='';
+    const v=document.createElement('video');v.muted=true;v.loop=true;v.autoplay=true;v.setAttribute('playsinline','');v.setAttribute('muted','');v.crossOrigin='anonymous';
+    v.style.cssText='position:fixed;left:-4000px;top:-4000px;width:2px;height:2px;opacity:0;pointer-events:none';document.body.appendChild(v);
+    const c=document.createElement('canvas');c.className='tvo-mirror';c.style.cssText='position:absolute;left:0;top:0';frame.appendChild(c);
+    const m=mirror={video:v,canvas:c,stop:false,seen:false,start:Date.now(),blank:0};
+    const size=()=>{const b=ovl.getBoundingClientRect();const w0=v.videoWidth,h0=v.videoHeight;if(!w0||!h0)return;const k=Math.min(b.width/w0,b.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
+      if(c.width!==w||c.height!==h){c.width=w;c.height=h;c.style.width=`${w}px`;c.style.height=`${h}px`;c.style.left=`${Math.floor((b.width-w)/2)}px`;c.style.top=`${Math.floor((b.height-h)/2)}px`;}};
+    const ctx=c.getContext('2d');
+    const tick=()=>{if(m.stop)return;try{if(v.readyState>=2){size();if(c.width){ctx.drawImage(v,0,0,c.width,c.height);
+      if(!m.seen&&v.currentTime>0.4){let lit=false;try{const d=ctx.getImageData(0,0,c.width,c.height).data;for(let i=0;i<d.length;i+=4*97){if(d[i]+d[i+1]+d[i+2]>30){lit=true;break;}}}catch{lit=true;}
+        if(lit)m.seen=true;else if(++m.blank>90)return fallbackFull(o);}}}}catch{}
+      if(!m.seen&&Date.now()-m.start>12000)return fallbackFull(o);
+      requestAnimationFrame(tick);};
+    v.addEventListener('loadeddata',()=>requestAnimationFrame(tick),{once:true});v.src=o.url;try{const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch{}
+    TV.mirror=m;}
+  function fallbackFull(o){stopMirror();ovl.className='tv-overlay tvo-full';const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',fitMedia);setTimeout(fitMedia,300);}TV.fellBackFull=true;}
   // Fit the whole board on the screen: shrink the type until nothing spills off the bottom.
   function fit(){let size=g.innerWidth>=1200?22:16;root.style.fontSize=`${size}px`;let guard=0;while(root.scrollHeight>g.innerHeight+2&&size>8&&guard++<40){size-=.5;root.style.fontSize=`${size}px`;}}
   function draw(f){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);drawOverlay(f.overlay||null);fit();}
