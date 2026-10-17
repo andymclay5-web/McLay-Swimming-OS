@@ -104,16 +104,37 @@ await SHOT(tv,'tv-whole');
     await tv.waitForSelector('.tv-overlay.tvo-corner',{timeout:8000});
     assert.match(await tv.textContent('.tv-overlay'),/Ashley Brown[\s\S]*Long glide off every wall/);
     assert.ok(await tv.$('.tv-board .tv-block'),'the Board is still on the TV under the corner box');
-    // 5. swimmer card in the corner
+    // 5. Swimmer screen (Andy, 16 Oct 2026): "when you bring up a swimmer, the first screen ... is like their profile ...
+    // then be able to, on my phone, flip between different things that are displayed up there". The set's times are
+    // already on the Board, so they are not repeated. A side panel, with the Board narrowed beside it.
+    await phone.route(/\/functions\/v1\/msos-video-search/,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({videos:[{url:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',id:'dQw4w9WgXcQ',title:'Caeleb Dressel butterfly start',channel:'Swim Channel'}]})}));
     await phone.waitForSelector('[data-tv-swimmer="ash"]');await phone.click('[data-tv-swimmer="ash"]');
-    await tv.waitForSelector('.tv-overlay.tvo-corner.tvo-swimmer .tvo-card',{timeout:8000});
-    const cardText=await tv.textContent('.tvo-card');
+    await phone.waitForSelector('[data-tv-swimmer-screen]');
+    const tvPanel=async re=>{await tv.waitForFunction(r=>new RegExp(r).test(document.querySelector('.tv-overlay.tvo-swimmer .tvo-card')?.textContent||''),re,{timeout:8000});return tv.textContent('.tv-overlay .tvo-card');};
+    let cardText=await tvPanel('Ashley Brown[\\s\\S]*Profile');
 await SHOT(tv,'tv-swimmer');
-    assert.match(cardText,/Ashley Brown[\s\S]*National/);
-    assert.match(cardText,/THIS SET[\s\S]*\d/,'her target for this set');
-    assert.match(cardText,/T400[\s\S]*Freestyle[\s\S]*5:27\.3/,'T400 = her fastest (5:27.3), not the latest');
-    assert.match(cardText,/BEST TIMES[\s\S]*200 Breast SCM[\s\S]*3:15\.8/);
-    assert.ok(await tv.$('.tv-board .tv-block'),'Board still showing behind the swimmer card');
+    assert.match(cardText,/National[\s\S]*Best stroke[\s\S]*Best events[\s\S]*200 Breast[\s\S]*3:15\.88[\s\S]*Level/,'profile: squad, best stroke, best events, level');
+    assert.doesNotMatch(cardText,/THIS SET|1:23\.79/,'set targets are not repeated (they are on the Board)');
+    assert.ok(await tv.evaluate(()=>document.body.classList.contains('tv-has-side')&&!!document.querySelector('.tv-board .tv-block')),'Board still showing, narrowed beside the panel');
+    await phone.click('[data-sw-tab="training"]');cardText=await tvPanel('Training');
+await SHOT(tv,'tv-sw-training');await SHOT(phone,'phone-tv-sw-training');
+    assert.match(cardText,/T400[\s\S]*Free[\s\S]*5:27\.30[\s\S]*6:09\.80/,'training: T400 fastest 5:27.3 and latest 6:09.8');
+    await phone.click('[data-sw-tab="performance"]');cardText=await tvPanel('Performance');
+await SHOT(tv,'tv-sw-performance');await SHOT(phone,'phone-tv-sw-performance');
+    assert.match(cardText,/200 Breast[\s\S]*3:15\.88/,'performance: events with SC/LC times');
+    await phone.click('[data-sw-tab="pathway"]');cardText=await tvPanel('Pathway');
+    assert.match(cardText,/pathway/i);
+    await phone.click('[data-sw-tab="videos"]');cardText=await tvPanel('Videos');
+    assert.match(cardText,/Note[\s\S]*Long glide off every wall/,'every capture tagged to the swimmer');
+    await phone.click('[data-sw-cap="cap-tv-note"][data-m="corner"]');
+    await tv.waitForFunction(()=>!document.querySelector('.tvo-swimmer')&&/Long glide off every wall/.test(document.querySelector('.tv-overlay')?.textContent||''),{timeout:8000});
+    await phone.click('[data-sw-back]');cardText=await tvPanel('Profile');
+    // YouTube: say/type what you want, the AI search drops the link in, one tap shows it
+    await phone.click('[data-sw-tab="youtube"]');await phone.fill('[data-sw-q]','Caeleb Dressel fly start');await phone.click('[data-sw-find]');
+    await phone.waitForSelector('[data-sw-yt="0"][data-m="corner"]');assert.match(await phone.textContent('[data-tv-swimmer-screen]'),/Caeleb Dressel butterfly start/);
+    await phone.click('[data-sw-yt="0"][data-m="corner"]');
+    await tv.waitForFunction(()=>/youtube\.com\/embed\/dQw4w9WgXcQ/.test(document.querySelector('.tv-overlay iframe')?.src||''),{timeout:8000});
+    await phone.click('[data-sw-back]');cardText=await tvPanel('Profile');
     // 5b. Andy, 15 Oct 2026: "If I need to use my phone the video or display I'm showing should close and the tv board
     // should stay where it was". Leaving MSOS takes the corner box off the TV at once; the Board stays as it was.
     const boardBefore=await tv.textContent('.tv-body');
