@@ -31,19 +31,14 @@
   T.showCapture=(captureId,mode='corner')=>{const cap=(M.state.captures||[]).find(c=>c.id===captureId);if(!cap)throw new Error('Capture not found');const c=captureSummary(cap);
     return set({id:uid(),mode:mode==='full'?'full':'corner',capture:c,label:[c.who,c.type==='note'?'note':c.type].filter(Boolean).join(' · '),at:new Date().toISOString()});};
   T.showLink=(url,mode='corner',label='')=>{const u=text(url);if(!/^https?:\/\//i.test(u))throw new Error('Paste a full link starting with https://');return set({id:uid(),mode:mode==='full'?'full':'corner',url:u,kind:linkKind(u),label:text(label)||(youtubeId(u)?'YouTube video':'Link'),at:new Date().toISOString()});};
-  // 15 Oct 2026 (TV link): "be able to put swimmer info in corner screen with board still showing".
-  T.showSwimmer=(athleteId,mode='corner')=>{const a=(M.state.athletes||[]).find(x=>x.id===athleteId);if(!a)throw new Error('Swimmer not found');
-    return set({id:uid(),mode:mode==='full'?'full':'corner',swimmer:{id:a.id},label:text(a.full_name),at:new Date().toISOString()});};
-  // The swimmer's card facts: who, squad, fastest valid T400 for each stroke held, and their best times (PBs).
-  function swimmerCard(athleteId){const E=g.MSOSEngines,a=(M.state.athletes||[]).find(x=>x.id===athleteId);if(!a)return null;const clock=s=>M.util?.clock?M.util.clock(Number(s)):String(s);
-    const t400=[];for(const st of ['Freestyle','Backstroke','Breaststroke','Butterfly','IM']){try{const r=(E?.Evidence?.t400Rows?.(a,M.state,st)||[])[0];if(r)t400.push({stroke:st,time:clock(E.Evidence.seconds(r))});}catch{}}
-    const best=new Map();try{for(const r of E?.Evidence?.pbRows?.(a,M.state)||[]){const d=Number(r.distance||r.event_distance),st=E.Evidence.stroke(r.stroke||r.event_stroke||''),c=text(r.pool_course||r.course||'').toUpperCase(),sec=E.Evidence.seconds(r);if(!d||!st||!(sec>0))continue;const k=`${d}|${st}|${c}`,cur=best.get(k);if(!cur||sec<cur.sec)best.set(k,{sec,d,st,c,date:String(r.result_date||r.date||r.meet_date||'')});}}catch{}
-    const short=v=>String(v).replace('Freestyle','Free').replace('Backstroke','Back').replace('Breaststroke','Breast').replace('Butterfly','Fly');
-    const pbs=[...best.values()].sort((x,y)=>(x.c==='SCM'?0:1)-(y.c==='SCM'?0:1)||y.date.localeCompare(x.date)).slice(0,5).map(x=>({event:`${x.d} ${short(x.st)}`,course:x.c,time:clock(x.sec)}));
-    return{id:a.id,name:text(a.full_name),squad:text(a.squad),t400,pbs};}
-  T.swimmerCard=swimmerCard;
-  function cardHtml(c,targets=[]){if(!c)return'<div class="tvo-text">Swimmer not found</div>';
-    return`<div class="tvo-card"><h3>${esc(c.name)}</h3>${c.squad?`<small>${esc(c.squad)}</small>`:''}${targets.length?`<div class="tvo-card-sec"><label>THIS SET</label>${targets.map(t=>`<p><span>${esc(t.work)}</span><b>${esc(t.target)}</b></p>`).join('')}</div>`:''}${c.t400.length?`<div class="tvo-card-sec"><label>T400</label>${c.t400.map(t=>`<p><span>${esc(t.stroke)}</span><b>${esc(t.time)}</b></p>`).join('')}</div>`:''}${c.pbs.length?`<div class="tvo-card-sec"><label>BEST TIMES</label>${c.pbs.map(p=>`<p><span>${esc(p.event)} ${esc(p.course)}</span><b>${esc(p.time)}</b></p>`).join('')}</div>`:''}</div>`;}
+  // Swimmer screen (16 Oct 2026). Andy: "when you bring up a swimmer, the first screen ... is like their profile ... then
+  // be able to, on my phone, flip between different things that are displayed up there". The overlay names the swimmer
+  // and the page; engines/swimmer-brief.js gathers the facts for that page. Set targets are not repeated here (they are
+  // already on the Board).
+  T.showSwimmer=(athleteId,mode='corner',page='profile')=>{const a=(M.state.athletes||[]).find(x=>x.id===athleteId);if(!a)throw new Error('Swimmer not found');
+    const pg=(M.swimmerBrief?.PAGES||[]).includes(page)?page:'profile';
+    return set({id:uid(),mode:mode==='full'?'full':'corner',swimmer:{id:a.id,page:pg},label:text(a.full_name),at:new Date().toISOString()});};
+  function cardHtml(o){const B=M.swimmerBrief;if(!B)return'<div class="tvo-text">Swimmer pages not loaded</div>';return`<div class="tvo-card sb">${B.html(B.page(o.swimmer.id,o.swimmer.page||'profile'))}</div>`;}
   T.cardHtml=cardHtml;
   T.setMode=mode=>{const cur=M.state.settings?.tvOverlay;if(!cur)return null;return set({...cur,mode:mode==='full'?'full':'corner',at:new Date().toISOString()});};
   T.clear=()=>set(null);
@@ -58,7 +53,7 @@
   function frameHtml(o){
     if(o.url){const k=o.kind||linkKind(o.url);if(k==='youtube')return`<iframe src="https://www.youtube.com/embed/${esc(youtubeId(o.url))}?autoplay=1&mute=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
       if(k==='video')return`<video src="${esc(o.url)}" autoplay muted loop playsinline controls></video>`;if(k==='image')return`<img src="${esc(o.url)}" alt="">`;return`<div class="tvo-text"><b>${esc(o.label||'Link')}</b><span>${esc(o.url)}</span></div>`;}
-    if(o.swimmer)return cardHtml(swimmerCard(o.swimmer.id));
+    if(o.swimmer)return cardHtml(o);
     const c=o.capture||{};if(c.type==='note'||!c.media_id&&!c.media_path)return`<div class="tvo-text">${c.who?`<b>${esc(c.who)}</b>`:''}<span>${esc(c.text||'')}</span></div>`;
     return`<div class="tvo-media" data-tvo-media>Loading ${esc(c.type)}…</div>`;}
   async function fillMedia(el,o){const box=el.querySelector('[data-tvo-media]');if(!box)return;const c=o.capture||{};const url=await mediaUrl(c);if(!el.isConnected||el.dataset.key!==o.id+o.mode)return;
@@ -67,7 +62,7 @@
   T.paint=()=>{
     let el=document.querySelector('[data-tv-overlay]');const o=view()==='tv'?T.current():null;
     if(!o){if(el){el.remove();lastKey='';}return;}
-    const key=o.id+o.mode;if(el&&el.dataset.key===key)return;
+    const key=o.id+o.mode+(o.swimmer?.page||'');if(el&&el.dataset.key===key)return;
     if(!el){el=document.createElement('div');el.setAttribute('data-tv-overlay','1');document.body.appendChild(el);}
     el.className=`tv-overlay tvo-${o.mode}${o.swimmer?' tvo-swimmer-card':''}`;el.dataset.key=key;lastKey=key;
     el.innerHTML=`<div class="tvo-frame">${frameHtml(o)}</div>${o.label?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
@@ -98,7 +93,7 @@
     const close=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
     host.querySelectorAll('[data-tv-close]').forEach(b=>b.onclick=close);
     host.querySelectorAll('[data-tv-cap]').forEach(b=>b.onclick=()=>{try{T.showCapture(b.dataset.tvCap,b.dataset.tvM);M.toast?.(`On the TV · ${b.dataset.tvM==='full'?'full screen':'corner'}`);openControls();}catch(e){M.toast?.(e.message);}});
-    host.querySelectorAll('[data-tv-swimmer]').forEach(b=>b.onclick=()=>{try{T.showSwimmer(b.dataset.tvSwimmer,'corner');M.toast?.('Swimmer on the TV · corner');openControls();}catch(e){M.toast?.(e.message);}});
+    host.querySelectorAll('[data-tv-swimmer]').forEach(b=>b.onclick=()=>openSwimmer(b.dataset.tvSwimmer,'profile'));
     try{M.tvLink?.fillPanel?.(host.querySelector('[data-tv-link-panel]'),openControls);}catch{}
     host.querySelectorAll('[data-tv-link]').forEach(b=>b.onclick=()=>{try{T.showLink(host.querySelector('[data-tv-url]').value,b.dataset.tvLink);M.toast?.('On the TV');openControls();}catch(e){M.toast?.(e.message);}});
     host.querySelector('[data-tv-mode]')?.addEventListener('click',e=>{T.setMode(e.currentTarget.dataset.tvMode);openControls();});
@@ -106,6 +101,54 @@
     host.querySelector('[data-tv-open]').onclick=()=>{close();M.nav?.show?.('tv',{restoreScroll:false});};
   }
   T.openControls=openControls;
+
+  // ---------- the swimmer screen on the phone (16 Oct 2026) ----------
+  // "On my phone, I'll just be on the swimmer's screen and linking between the things." Each tab puts that page on the
+  // TV straight away; Videos lists every capture ever tagged to the swimmer (tap one and it goes up); YouTube finds a
+  // clip by description (AI search) or takes a pasted link, and the link is filled in for you -- one tap to show it.
+  const TABS=[['profile','Profile'],['training','Training'],['performance','Performance'],['pathway','Pathway'],['videos','Videos'],['youtube','YouTube']];
+  let sw={id:'',tab:'profile',results:[],searching:false,msg:''};
+  function openSwimmer(athleteId,tab,{noTv=false}={}){const a=(M.state.athletes||[]).find(x=>x.id===athleteId);if(!a)return;
+    if(sw.id!==athleteId)sw={id:athleteId,tab:'profile',results:[],searching:false,msg:''};if(tab)sw.tab=tab;
+    const cur=T.current();if(!noTv&&sw.tab!=='youtube'&&!(sw.tab==='videos'&&cur&&!cur.swimmer&&cur.from===athleteId)&&!(cur?.swimmer?.id===athleteId&&cur.swimmer.page===sw.tab)){try{T.showSwimmer(athleteId,cur?.mode||'corner',sw.tab);}catch{}}
+    paintSwimmer();}
+  T.openSwimmer=openSwimmer;T.swimmerScreen=()=>({id:sw.id,tab:sw.tab});
+  function paintSwimmer(){const host=document.querySelector('#modalHost');if(!host)return;const a=(M.state.athletes||[]).find(x=>x.id===sw.id);if(!a)return;const B=M.swimmerBrief,o=T.current();
+    const onTv=o?(o.swimmer?`${B?.titles?.[o.swimmer.page]||'Profile'} · ${o.mode==='full'?'full screen':'side panel'}`:`${o.label||'clip'} · ${o.mode==='full'?'full screen':'corner'}`):'nothing';
+    let body='';
+    if(sw.tab==='youtube'){body=`<div class="sb-yt"><label class="id-free">What video?<input data-sw-q placeholder="e.g. Caeleb Dressel butterfly start" value="${esc(sw.q||'')}" enterkeyhint="search"></label>
+        <div class="hub-actions"><button type="button" data-sw-find>${sw.searching?'Searching…':'Find on YouTube'}</button><button type="button" data-sw-paste>Paste a link</button><a class="button" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(sw.q||'')}">Open YouTube</a></div>
+        ${sw.msg?`<p class="muted" data-sw-msg>${esc(sw.msg)}</p>`:''}
+        ${sw.results.map((v,i)=>`<div class="sb-yt-row">${v.thumbnail?`<img src="${esc(v.thumbnail)}" alt="">`:''}<span><b>${esc(v.title||v.url)}</b><small>${esc(v.channel||'')}</small></span><span class="tv-cap-acts"><button type="button" data-sw-yt="${i}" data-m="corner">Corner</button><button type="button" data-sw-yt="${i}" data-m="full">Full</button></span></div>`).join('')}</div>`;}
+    else if(sw.tab==='videos'){const rows=B?.captureRows?.(a)||[];body=rows.length?rows.map(v=>`<div class="tv-cap-row"><span><b>${esc(v.type==='note'?'Note':v.type[0].toUpperCase()+v.type.slice(1))}</b> · ${esc(v.date)}<small>${esc(v.text||v.context||'')}</small></span><span class="tv-cap-acts"><button type="button" data-sw-cap="${esc(v.id)}" data-m="corner">Corner</button><button type="button" data-sw-cap="${esc(v.id)}" data-m="full">Full</button></span></div>`).join(''):'<p class="muted">No videos, photos or notes tagged to this swimmer yet.</p>';}
+    else body=`<div class="sb-preview">${B?B.html(B.page(a.id,sw.tab)):'Swimmer pages not loaded'}</div>`;
+    host.innerHTML=`<div class="modal-backdrop" data-tv-swimmer-screen><section class="modal sb-modal"><header><h2>📺 ${esc(a.full_name)}</h2><button data-sw-close>×</button></header>
+      <nav class="sb-tabs">${TABS.map(([k,l])=>`<button type="button" data-sw-tab="${k}" class="${sw.tab===k?'on':''}">${l}</button>`).join('')}</nav>
+      <div class="sb-ontv"><span>On TV: <b>${esc(onTv)}</b></span><span class="tv-cap-acts">${o&&!o.swimmer&&o.from===a.id?`<button type="button" data-sw-back>Back to ${esc(a.full_name.split(' ')[0])}</button>`:''}${o?`<button type="button" data-sw-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?(o.swimmer?'Side panel':'Corner'):'Full screen'}</button><button type="button" class="danger" data-sw-off>Off TV</button>`:`<button type="button" data-sw-show>Show on TV</button>`}</span></div>
+      <div class="modal-body">${body}</div><footer><button type="button" data-sw-controls>TV controls</button><button data-sw-close>Done</button></footer></section></div>`;
+    try{M.nav?.openLayer?.('modal');}catch{}
+    const close=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
+    host.querySelectorAll('[data-sw-close]').forEach(b=>b.onclick=close);
+    host.querySelector('[data-sw-controls]').onclick=()=>openControls();
+    host.querySelectorAll('[data-sw-tab]').forEach(b=>b.onclick=()=>openSwimmer(sw.id,b.dataset.swTab));
+    host.querySelector('[data-sw-mode]')?.addEventListener('click',e=>{T.setMode(e.currentTarget.dataset.swMode);paintSwimmer();});
+    host.querySelector('[data-sw-off]')?.addEventListener('click',()=>{T.clear();M.toast?.('Taken off the TV');paintSwimmer();});
+    host.querySelector('[data-sw-show]')?.addEventListener('click',()=>{T.showSwimmer(sw.id,'corner',sw.tab==='youtube'?'profile':sw.tab);paintSwimmer();});
+    host.querySelector('[data-sw-back]')?.addEventListener('click',()=>{T.showSwimmer(sw.id,'corner',sw.tab==='youtube'||sw.tab==='videos'?'profile':sw.tab);paintSwimmer();});
+    host.querySelectorAll('[data-sw-cap]').forEach(b=>b.onclick=()=>{try{const r=T.showCapture(b.dataset.swCap,b.dataset.m);r.from=sw.id;M.store?.save?.(M.state);M.toast?.('On the TV');paintSwimmer();}catch(e){M.toast?.(e.message);}});
+    host.querySelectorAll('[data-sw-yt]').forEach(b=>b.onclick=()=>{const v=sw.results[Number(b.dataset.swYt)];if(!v)return;try{const r=T.showLink(v.url,b.dataset.m,v.title||'YouTube video');r.from=sw.id;M.store?.save?.(M.state);M.toast?.('On the TV');paintSwimmer();}catch(e){M.toast?.(e.message);}});
+    const q=host.querySelector('[data-sw-q]');if(q){q.oninput=()=>{sw.q=q.value;};q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();find();}};}
+    host.querySelector('[data-sw-find]')?.addEventListener('click',find);
+    host.querySelector('[data-sw-paste]')?.addEventListener('click',async()=>{let t='';try{t=await navigator.clipboard.readText();}catch{}t=text(t);const m=t.match(/https?:\/\/\S+/);
+      if(!m){sw.msg='No link found to paste. In YouTube tap Share → Copy link, then come back and tap Paste a link.';paintSwimmer();return;}
+      sw.results=[{url:m[0],title:youtubeId(m[0])?'YouTube video (pasted link)':'Pasted link',channel:''}];sw.msg='Link pasted — tap Corner or Full to show it.';paintSwimmer();});}
+  async function find(){const q=text(sw.q||document.querySelector('[data-sw-q]')?.value);if(!q){sw.msg='Say or type what you want to find first.';paintSwimmer();return;}
+    sw.q=q;sw.searching=true;sw.msg='';sw.results=[];paintSwimmer();
+    try{const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;const r=await f('/functions/v1/msos-video-search',{method:'POST',body:JSON.stringify({query:q})});
+      sw.results=Array.isArray(r?.videos)?r.videos:[];sw.msg=sw.results.length?`Found ${sw.results.length} — tap Corner or Full to show one.`:(r?.error||'Nothing found. Try different words.');}
+    catch(e){sw.msg=`Search isn't available: ${e.message}. Use Open YouTube, copy the link, then Paste a link.`;}
+    sw.searching=false;if(document.querySelector('[data-tv-swimmer-screen]'))paintSwimmer();}
+  T.findVideo=find;
 
   // "Show on TV" inside any opened capture (engines/capture-ui.js viewer).
   function addToViewer(){const v=document.querySelector('#modalHost .msos-evidence-viewer');if(!v||v.querySelector('[data-tv-from-viewer]')||!can())return;const id=v.dataset.captureId;if(!id)return;

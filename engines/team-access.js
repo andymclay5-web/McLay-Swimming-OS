@@ -94,6 +94,9 @@
   T.createInvite=async({email,displayName='',squads=[]}={})=>{
     const org=M.cloud?.org?.();if(!org)throw new Error('Organisation not loaded on this device yet.');
     email=text(email).toLowerCase();if(!email)throw new Error("Enter the assistant coach's email address.");
+    // 17 Oct 2026: "assistantcoach@aquagymswimclub co.nz" (a space where the dot should be) was accepted here and only
+    // failed later on the coach's phone as "an issue with the email address".
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error(`"${email}" isn't a complete email address — check for a space or a missing dot.`);
     if(!Array.isArray(squads)||!squads.length)throw new Error('Choose at least one squad for this assistant coach.');
     const row=firstRow(await authedRpc('mclay_create_assistant_invite',{target_org:org,target_email:email,target_display_name:text(displayName),target_squads:squads,target_permissions:T.ASSISTANT_PERMISSIONS}));
     if(!row?.invite_token)throw new Error('The invite was not created.');
@@ -180,8 +183,13 @@
     if(!ses?.access_token)throw new Error('Sign-in did not return an access token.');
     const exp=Number(ses.expires_at)||Math.floor(Date.now()/1000)+Number(ses.expires_in||3600);
     M.store.saveAuth({access_token:ses.access_token,refresh_token:ses.refresh_token||'',expires_at:exp,user:ses.user||null});
-    step('Joining the team…');
-    const row=await T.acceptInvite(token);
+    // 17 Oct 2026 (Emma, like Jordan before her): the join link was opened in one copy of MSOS and the coach then used
+    // another (home-screen icon / Safari / a mail app's browser each keep their own sign-in) -- that copy had no data
+    // and the link was already "used". A link already accepted by a coach who is still on the team now signs that
+    // coach in again (until the link expires), and just reloads their access instead of joining a second time.
+    let row=null;
+    if(data.rejoin){step('Welcome back — loading your access…');M.state.settings.organisationId=data.organisation_id||M.state.settings.organisationId;row=await T.refreshMembership();if(!row)throw new Error('Your access could not be loaded. Ask Andy to check you are still on the team.');}
+    else{step('Joining the team…');row=await T.acceptInvite(token);}
     step('Turning on cloud sync…');
     let sync=null;try{sync=await M.cloud?.turnOnSync?.(step);}catch(e){sync={error:e?.message||String(e)};}
     return{row,email:data.email,sync};

@@ -90,10 +90,7 @@
   async function rpcFetch(path,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;return f(path,{method:'POST',body:JSON.stringify(body)});}
   async function overlayFrame(session,ctx){const o=M.tvDisplay?.current?.();if(!o)return null;const base={id:o.id,mode:o.mode==='full'?'full':'corner',label:text(o.label)};
     if(o.url)return{...base,kind:M.tvDisplay.linkKind(o.url),url:o.url,youtube:M.tvDisplay.youtubeId(o.url)};
-    if(o.swimmer){const card=M.tvDisplay.swimmerCard?.(o.swimmer.id);const a=(M.state.athletes||[]).find(x=>x.id===o.swimmer.id);const targets=[];
-      if(a&&session){const blk=activeBlock(session);const walk=items=>{const out=[];for(const n of items||[]){if(n?.kind==='set')out.push(n);else if(n?.kind==='group')out.push(...walk(n.items));}return out;};
-        for(const item of walk(blk?.items).filter(i=>B()?.timingIntent?.(i)).slice(0,6)){const p=prescription(session,item,a);const t=targetText(p?.target);if(t)targets.push({work:text(B().workLabel(p?.item||item)),target:t});}}
-      return{...base,kind:'swimmer',card,targets};}
+    if(o.swimmer){const SB=M.swimmerBrief,page=o.swimmer.page||'profile';return{...base,kind:'swimmer',page,html:SB?SB.html(SB.page(o.swimmer.id,page)):''};}
     const c=o.capture||{};const out={...base,kind:c.type==='note'||(!c.media_id&&!c.media_path)?'note':c.type,who:text(c.who),text:text(c.text)};
     if(out.kind!=='note'){const live=(M.state.captures||[]).find(x=>x.id===c.id);const path=live?.media_path||c.media_path;if(path){try{out.url=await signedUrl(path);}catch{}}if(!out.url)out.waiting=true;}
     return out;}
@@ -115,14 +112,14 @@
     const cap=o?.capture?.id?(M.state.captures||[]).find(c=>c.id===o.capture.id)?.media_path||'':'';
     return JSON.stringify([session?.id||'',session?.currentSource?.hash||'',blocks.length,hash(blocks),boardMode(),session?activeBlock(session)?.id:'',present().map(a=>a.id).sort(),modified().map(a=>a.id).sort(),
       (M.state.adaptationOverrides||[]).filter(r=>r?.sessionId===session?.id).map(r=>[r.id,r.active,r.updatedAt||'',JSON.stringify(r.patch||{})]),
-      (M.state.adaptationProfiles||M.state.adaptations||[]).length,o?.id||'',o?.mode||'',cap,evidenceRev(),(M.state.timedSets||[]).filter(x=>x.session_id===session?.id).length,!!session?.finish]);}
+      (M.state.adaptationProfiles||M.state.adaptations||[]).length,o?.id||'',o?.mode||'',o?.swimmer?.page||'',(M.state.captures||[]).length,cap,evidenceRev(),(M.state.timedSets||[]).filter(x=>x.session_id===session?.id).length,!!session?.finish]);}
   function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return h;}
   L.signature=signature;
 
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261015e';
+  const TV_PAGE='20261016a';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
