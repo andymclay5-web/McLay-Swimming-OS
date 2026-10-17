@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261015e';
+  const TV_VERSION='20261016a';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -36,10 +36,7 @@
     const s=f.session,set=f.mode==='set';
     return`<header class="tv-top"><div><small>${set?'CURRENT SET':'WHOLE SESSION'}${s.finished?' · FINISHED ✓':''}</small><h1>${esc(s.title)}</h1></div>${set&&f.nav?.length?`<nav>${f.nav.map(n=>`<span class="${n.active?'on':''}">${esc(n.code)}</span>`).join('')}</nav>`:''}<b>${Number(s.distance||0).toLocaleString()}m${s.finished?' ✓':''}</b></header>
       <div class="tv-body ${set?'tv-set':'tv-whole'}">${(f.blocks||[]).map(b=>block(b,set)).join('')}${set&&f.live?.length?`<section class="tv-live"><header><small>LIVE TIMES</small></header>${f.live.map(r=>`<div><b>${esc(r.who)}</b><span>${esc(r.label)}</span><b>${esc(r.time)}</b></div>`).join('')}</section>`:''}</div>`;}
-  function card(o){const c=o.card;if(!c)return'<div class="tvo-text">Swimmer not found</div>';
-    const sec=(label,items)=>items?.length?`<div class="tvo-card-sec"><label>${label}</label>${items.join('')}</div>`:'';
-    return`<div class="tvo-card"><h3>${esc(c.name)}</h3>${c.squad?`<small>${esc(c.squad)}</small>`:''}${sec('THIS SET',(o.targets||[]).map(t=>`<p><span>${esc(t.work)}</span><b>${esc(t.target)}</b></p>`))}${sec('T400',(c.t400||[]).map(t=>`<p><span>${esc(t.stroke)}</span><b>${esc(t.time)}</b></p>`))}${sec('BEST TIMES',(c.pbs||[]).map(p=>`<p><span>${esc(p.event)} ${esc(p.course)}</span><b>${esc(p.time)}</b></p>`))}</div>`;}
-  function overlayInner(o){if(o.kind==='swimmer')return card(o);
+  function overlayInner(o){if(o.kind==='swimmer')return`<div class="tvo-card sb">${o.html||'<p class="sb-none">Loading…</p>'}</div>`;
     if(o.kind==='youtube'&&o.youtube)return`<iframe src="https://www.youtube.com/embed/${esc(o.youtube)}?autoplay=1&mute=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
     if(o.kind==='note'||o.kind==='link')return`<div class="tvo-text">${o.who?`<b>${esc(o.who)}</b>`:''}<span>${esc(o.text||o.url||o.label||'')}</span></div>`;
     if(!o.url)return`<div class="tvo-text"><span>${o.waiting?`This ${esc(o.kind)} is still on its way from the phone…`:'Not available'}</span></div>`;
@@ -55,13 +52,19 @@
     el.style.position='absolute';el.style.maxWidth='none';el.style.maxHeight='none';el.style.width=`${w}px`;el.style.height=`${h}px`;
     el.style.left=`${Math.floor((box.width-w)/2)}px`;el.style.top=`${Math.floor((box.height-h)/2)}px`;el.setAttribute('width',w);el.setAttribute('height',h);}
   TV.fitMedia=fitMedia;
+  // The swimmer panel holds a lot: shrink its type until it all fits in the panel.
+  function fitCard(){const c=ovl.querySelector('.tvo-card.sb');if(!c)return;let size=ovl.classList.contains('tvo-full')?34:24,guard=0;c.style.fontSize=`${size}px`;while(c.scrollHeight>c.clientHeight+2&&size>10&&guard++<40){size-=1;c.style.fontSize=`${size}px`;}}
+  TV.fitCard=fitCard;
   let overlayKey='';
-  function drawOverlay(o){if(!o)stopMirror();const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.targets:'',o.kind==='swimmer'?o.card:'']):'';if(key===overlayKey)return;overlayKey=key;
+  function drawOverlay(o){if(!o)stopMirror();const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.page:'',o.kind==='swimmer'?o.html:'']):'';if(key===overlayKey)return;overlayKey=key;
+    // a swimmer side panel narrows the Board to the left so nothing is hidden under it
+    const side=!!(o&&o.kind==='swimmer'&&o.mode!=='full');if(document.body.classList.contains('tv-has-side')!==side){document.body.classList.toggle('tv-has-side',side);if(TV.frame)setTimeout(fit,0);}
     if(!o){ovl.className='';ovl.innerHTML='';return;}
     ovl.className=`tv-overlay tvo-${o.mode==='full'?'full':'corner'} ${o.kind==='swimmer'?'tvo-swimmer':''}`;
     ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
     stopMirror();
     if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);return;}
+    if(o.kind==='swimmer')setTimeout(fitCard,0);
     const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}}
   // 15 Oct 2026, pool TV: full-screen clips play fine, but in the corner the TV's video player ignores the box size and
   // shows only a cut-off piece. So in the corner the clip plays hidden and each frame is painted into an ordinary
@@ -89,7 +92,7 @@
   function fit(){let size=g.innerWidth>=1200?22:16;root.style.fontSize=`${size}px`;let guard=0;while(root.scrollHeight>g.innerHeight+2&&size>8&&guard++<40){size-=.5;root.style.fontSize=`${size}px`;}}
   function draw(f){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);drawOverlay(f.overlay||null);fit();}
   TV.draw=draw;TV.fit=fit;
-  addEventListener('resize',()=>{if(TV.frame)fit();fitMedia();});
+  addEventListener('resize',()=>{if(TV.frame)fit();fitMedia();fitCard();});
 
   // ---------- keep it current ----------
   let misses=0,timer=0;
