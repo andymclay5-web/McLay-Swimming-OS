@@ -76,3 +76,15 @@
 .sb-preview .sb-list{padding-left:18px;margin:4px 0}.sb-preview .sb-none,.sb-preview .sb-note{color:#555;margin:4px 0}
 .sb-yt-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)}.sb-yt-row img{width:88px;height:50px;object-fit:cover;border-radius:6px}.sb-yt-row span:nth-child(2){flex:1;display:flex;flex-direction:column;min-width:0}.sb-yt-row small{opacity:.7}
 .tvo-card.sb{background:#fff;color:#000;padding:10px 12px;overflow:auto}.tvo-card.sb table{width:100%;border-collapse:collapse}
+
+/* 19 Oct 2026: shared TV slot line + Ask a coach picker */
+.tv-slot-line{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:#eef6fa;color:#0d4566;font-weight:600;font-size:.92rem}
+.tv-viewer-acts{flex-wrap:wrap}.tv-handoff{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:6px}.tv-handoff button{padding:6px 10px}
+/* 19 Oct 2026: energy systems in Rushton's Aerobic / Anaerobic groups (engines/dosage.js rushtonHtml) */
+.rushton{display:flex;flex-direction:column;gap:10px}.rushton-group{border:1px solid #e5eef2;border-radius:10px;padding:8px 10px}
+.rushton-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}.rushton-head b{font-size:1rem}.rushton-head span{font-weight:700}
+.rushton-aerobic{border-left:4px solid #1f7a9c}.rushton-anaerobic{border-left:4px solid #b4442e}.rushton-skills{border-left:4px solid #6b7c88}
+.rushton-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:4px 0}.rushton-row span{display:flex;flex-direction:column;min-width:0}.rushton-row small{color:var(--muted,#647b88);font-size:.78rem}
+.rushton-row i{grid-column:1/-1;grid-row:2;display:block;height:6px;border-radius:3px;background:#1f7a9c;min-width:0}.rushton-anaerobic .rushton-row i{background:#b4442e}.rushton-skills .rushton-row i{background:#6b7c88}
+.rushton-row b{grid-column:2;grid-row:1;white-space:nowrap}.rushton-row.none b{color:var(--muted,#647b88);font-weight:600}
+.bd-zone-group{font-weight:700}

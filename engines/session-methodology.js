@@ -200,6 +200,11 @@
     // those higher intensity sets"): in the Base Skills / aerobic phase, a harder day whose main set is mostly
     // aerobic but still has real work of the planned system (at least 15% of the main set) is the aerobic-phase
     // version of that day -- on brief, and said so (his AP05 "early-season aerobic power touch").
+    // 19 Oct 2026 (Andy: "too much weight on sprint components" -- only the MAX metres of a "15m MAX" rep now count as
+    // speed): top-end speed work is small in metres and sits inside long recovery, scull and drill (his methodology:
+    // "MAX efforts, assisted and resisted, long recovery"; his ANC01 cords/parachutes set). A Speed / Max day is on
+    // brief when the main set carries a real share of max work (at least 15%) even though recovery/skill metres are larger.
+    if(!matches&&named==='Speed / Max'&&['Skill / Technical','Development','Regeneration'].includes(dominantSystem)&&pctOf(basisRows,named)>=15)matches=true;
     let aerobicPhase=false;
     if(!matches&&!combo&&baseLike(b)&&['Threshold','Race pace','Speed / Max'].includes(named)&&['Development','Regeneration'].includes(dominantSystem)&&pctOf(basisRows,named)>=15){matches=true;aerobicPhase=true;}
     let comboInfo=null;if(combo){const share=combo.map(k=>({k,pct:Math.round(pctOf(basisRows,k))}));const missing=share.filter(x=>x.pct<10).map(x=>x.k);matches=!missing.length;comboInfo={systems:combo,share,missing};}

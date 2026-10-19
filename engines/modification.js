@@ -228,5 +228,15 @@
 
   function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
 
-  return{VERSION,profile,adaptItem,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,isKick,hasRaceIntent,targetDriven,sameTeamExposure,shapeOverride,AMBER_MODES,AMBER_STROKES,CONOR_MODES,relativeEvidence,commonIntervalSafe,performancePlan,relevantGroupAthletes,internals:{remapRepPattern,remapRepInstructions,remapComposition,rewriteInstructionRanges,descentCueForReps,energyZones,applyCharlotteKickBase,preserveAuthoredTiming,bestEventSeconds,t400Seconds,relevantGroupAthletes,relativeEvidence,performancePlan,imPerformancePlan,applyPerformancePlan,applyIMPerformancePlan,alignIMTeamWindow,alignTimedKickWindow,alignReducedRepsToGroupWindow,invalidateDistanceTarget,rewriteCycle,rewriteLead,repeatCue,syncRepeatBreakdown,nearestPracticalDistance,comparisonEventSpec,referenceValues,strokeOverride}};
+  // 19 Oct 2026 (Andy, Mon AM: Charlotte got the full "5 Rounds: 100 Kick Build / 2 x 25 Kick" -- 750m, the same as the
+  // squad -- in a session where she does just over half). A single 100 or 2 x 25 can't sensibly be shortened, so the
+  // sets inside a round set came back unchanged and nothing reduced her volume. When none of the sets inside the round
+  // set were reduced, she does fewer ROUNDS instead (her volume ratio, at least one round) -- same work, same purpose,
+  // less of it. If the sets themselves were reduced, the rounds stay as written (no double reduction).
+  function adaptGroup(node,ath,state,session){state=state||{};const items=(node?.items||[]).map(x=>x?.kind==='set'?adaptItem(x,ath,state,session):x?.kind==='group'?adaptGroup(x,ath,state,session):x);
+    const base=Math.max(1,Number(node?.rounds)||1),ratio=Number(profile(ath,state)?.ratio);let rounds=base;
+    const sameVolume=(node?.items||[]).every((x,i)=>x?.kind!=='set'||(Number(x.reps||1)===Number(items[i]?.reps||1)&&Number(x.distance||0)===Number(items[i]?.distance||0)));
+    if(Number.isFinite(ratio)&&ratio<0.98&&base>1&&sameVolume)rounds=Math.max(1,Math.round(base*ratio));
+    return{...node,items,rounds,baseRounds:base,roundsAdapted:rounds!==base};}
+  return{VERSION,profile,adaptItem,adaptGroup,samePrescription,poolLength,safeReps,safeDistance,isIM,isAerobic,isQuality,isKick,hasRaceIntent,targetDriven,sameTeamExposure,shapeOverride,AMBER_MODES,AMBER_STROKES,CONOR_MODES,relativeEvidence,commonIntervalSafe,performancePlan,relevantGroupAthletes,internals:{remapRepPattern,remapRepInstructions,remapComposition,rewriteInstructionRanges,descentCueForReps,energyZones,applyCharlotteKickBase,preserveAuthoredTiming,bestEventSeconds,t400Seconds,relevantGroupAthletes,relativeEvidence,performancePlan,imPerformancePlan,applyPerformancePlan,applyIMPerformancePlan,alignIMTeamWindow,alignTimedKickWindow,alignReducedRepsToGroupWindow,invalidateDistanceTarget,rewriteCycle,rewriteLead,repeatCue,syncRepeatBreakdown,nearestPracticalDistance,comparisonEventSpec,referenceValues,strokeOverride}};
 });

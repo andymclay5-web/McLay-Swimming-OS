@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20261005-memo'};
+  const D=M.dosageEngine={build:'v4-dosage-20261019-rushton'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -209,10 +209,18 @@
     // Bounded: per-rep classification only for a real swimmable rep count. A non-finite or absurd rep count
     // (bad data) is dosed once at the item level instead of looping without limit on the main thread.
     if(!Number.isFinite(rawReps)||reps>MAX_PER_REP){const sys=repSystem(actual,1),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult*(Number.isFinite(rawReps)?reps:1),weight);out.repCountWarnings=(out.repCountWarnings||0)+1;return;}
-    for(let rep=1;rep<=reps;rep++){const sys=repSystem(actual,rep),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult,weight);}
+    const part=partialMax(actual,dist);
+    for(let rep=1;rep<=reps;rep++){const sys=repSystem(actual,rep),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;
+      if(part&&sys==='Speed / Max'){add(out,sys,stroke,part.max*mult,weight);add(out,part.rest,stroke,(dist-part.max)*mult,WEIGHTS[part.rest]??WEIGHTS.Unclassified);continue;}
+      add(out,sys,stroke,dist*mult,weight);}
   }
+  // 19 Oct 2026 (Andy: "session analysis is putting too much weight on sprint components of kick set"): "2 x 25 Kick
+  // / 15m MAX" dosed all 25m as Speed / Max. Only the max part is speed work; the rest of the rep is the easy/kick
+  // work around it (dosed as what the line is without the MAX words -- usually Development, Regeneration if easy).
+  function partialMax(item,dist){const t=[item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' ');const m=t.match(/\b(\d{1,3})\s*m?\s+max\b/i);const n=Number(m?.[1]);if(!m||!(n>0)||!(n<dist))return null;
+    const stripped=t.replace(/\b\d{1,3}\s*m?\s+max\b/ig,' ').replace(/\b(?:sprint|max(?:imal)?|speed)\b/ig,' ');let rest=systemFrom('',{raw:stripped,text:stripped,cues:[]});if(!rest||rest==='Speed / Max'||rest==='Unclassified')rest=/\beasy\b/i.test(stripped)?'Regeneration':'Development';return{max:n,rest};}
   function walk(out,session,node,athlete,state,mult=1){
-    if(!node)return;if(node.kind==='set'){addSet(out,session,node,athlete,state,mult);return;}if(node.kind==='group'){const rounds=Math.max(1,Number(node.rounds)||1);for(const x of node.items||[])walk(out,session,x,athlete,state,mult*rounds);}
+    if(!node)return;if(node.kind==='set'){addSet(out,session,node,athlete,state,mult);return;}if(node.kind==='group'){let rounds=Math.max(1,Number(node.rounds)||1);if(athlete&&E.Modification?.adaptGroup){try{const g=E.Modification.adaptGroup(node,athlete,state,session);if(Number(g?.rounds)>0)rounds=Number(g.rounds);}catch{}}for(const x of node.items||[])walk(out,session,x,athlete,state,mult*rounds);}
   }
   function deliveredProjection(session){
     if(!session)return null;if(!session.finish)return session;
@@ -255,6 +263,40 @@
     const cut=days?nowDate().getTime()-Number(days)*86400000:0,rows=[];for(const s of Object.values(state?.canonicalSessions||{})){if(!s?.finish&&!/finished|complete/i.test(txt(s?.status)))continue;const t=sessionDate(s);if(cut&&t&&t<cut)continue;if(!relevant(s,athlete,state))continue;rows.push(sessionDose(s,state,{athlete,delivered:true}));}const dose=merge(rows);dose.sessions=rows.length;dose.days=Number(days)||0;dose.athleteId=athlete?.id||'';return dose;
   }
   function top(map={},field='pctDose',n=4){return Object.entries(map).filter(([,v])=>Number(v?.[field])>0).sort((a,b)=>Number(b[1][field])-Number(a[1][field])).slice(0,n).map(([label,v])=>({label,...v}));}
+  // 19 Oct 2026 (Andy: "it shows volumes of regeneration development overload threshold clearance but there's nothing
+  // to do with the anaerobic side showing up ... We need to probably categorize that and actually display it again, tie
+  // back to Clive Rushton's ethos"). The grouping every report shows, in Andy's own reading of Rushton (verbatim, 4 Oct,
+  // see session-methodology.js): "anaerobic capacity is atp, top end speed, assisted and resisted ... anaerobic power is
+  // race pace work, lactate tolerance etc with clearance fitting into the top of aerobic power ... Ac, ap, anp, anc in
+  // the progression." The systems themselves are unchanged (systemFrom stays the one classifier); this only names and
+  // groups them, and the Anaerobic group is always shown -- 0m is information ("none this week"), not something to hide.
+  const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const RUSHTON=Object.freeze([
+    {group:'Aerobic',note:'aerobic capacity → aerobic power',systems:[
+      {system:'Regeneration',label:'Regeneration',note:'recovery · under 140 bpm'},
+      {system:'Development',label:'Aerobic Capacity',note:'Development · aerobic base'},
+      {system:'Overload',label:'Aerobic Overload',note:'Overload · ~150 bpm'},
+      {system:'Threshold',label:'Aerobic Power',note:'Threshold · 160–165 bpm'},
+      {system:'Clearance',label:'Aerobic Power (top)',note:'Clearance · 165–185 bpm'}]},
+    {group:'Anaerobic',note:'anaerobic power → anaerobic capacity',systems:[
+      {system:'Race pace',label:'Anaerobic Power',note:'race pace · lactate tolerance'},
+      {system:'Speed / Max',label:'Anaerobic Capacity',note:'ATP-PC · top-end speed · assisted / resisted'}]},
+    {group:'Skills',note:'',systems:[{system:'Skill / Technical',label:'Skills',note:'drill · technique'}]}]);
+  const coachLabel=sys=>{for(const g of RUSHTON)for(const r of g.systems)if(r.system===sys)return r.label;return sys;};
+  const groupOf=sys=>{for(const g of RUSHTON)if(g.systems.some(r=>r.system===sys))return g.group;return'';};
+  // metres by system ({system: metres} or a dose's {system:{metres}}) -> the grouped rows; aerobic rows with no metres
+  // are left out, anaerobic rows always stay.
+  function rushton(map){const m=k=>{const v=map?.[k];return Math.max(0,Number(typeof v==='object'&&v?v.metres:v)||0);};
+    const all=RUSHTON.reduce((n,g)=>n+g.systems.reduce((a,r)=>a+m(r.system),0),0);
+    return RUSHTON.map(g=>{const rows=g.systems.map(r=>({...r,metres:m(r.system),pct:all?m(r.system)/all*100:0}));const total=rows.reduce((a,r)=>a+r.metres,0);
+      return{group:g.group,note:g.note,total,pct:all?total/all*100:0,rows:g.group==='Anaerobic'?rows:rows.filter(r=>r.metres>0)};}).filter(g=>g.group==='Anaerobic'||g.total>0);}
+  function rushtonHtml(map,{empty='No classified training yet.'}={}){const groups=rushton(map);if(!groups.some(g=>g.total>0))return`<p class="muted">${esc(empty)}</p>`;
+    const n=v=>Math.round(v).toLocaleString(),p=v=>`${Math.round(v)}%`;
+    return`<div class="rushton" data-rushton>${groups.map(g=>`<div class="rushton-group rushton-${g.group.toLowerCase()}"><div class="rushton-head"><b>${esc(g.group)}</b><span>${p(g.pct)} · ${n(g.total)}m</span></div>${g.rows.map(r=>`<div class="rushton-row${r.metres?'':' none'}" data-rushton-system="${esc(r.system)}"><span>${esc(r.label)}<small>${esc(r.note)}</small></span><i style="width:${Math.max(r.metres?2:0,Math.round(r.pct))}%"></i><b>${r.metres?`${p(r.pct)} · ${n(r.metres)}m`:'none'}</b></div>`).join('')}</div>`).join('')}</div>`;}
+  // one set line (no swimmer) -> {system: metres}, the same per-rep / partial-MAX split the reports use. Used by the
+  // swimmer training history and Session detail so every screen classifies work the same way.
+  function itemSplit(item){if(!item||item.kind!=='set')return{};const out=blank();addSet(out,null,item,null,M.state,1);const r={};for(const[k,v]of Object.entries(out.systems))if(v.metres>0&&k!=='Unclassified')r[k]=v.metres;return r;}
+  D.RUSHTON=RUSHTON;D.coachLabel=coachLabel;D.groupOf=groupOf;D.rushton=rushton;D.rushtonHtml=rushtonHtml;D.itemSplit=itemSplit;
   D.WEIGHTS=WEIGHTS;D.SYSTEMS=SYSTEMS;D.STROKES=STROKES;D.systemFrom=systemFrom;D.strokeFrom=strokeFrom;D.deliveredProjection=deliveredProjection;D.session=sessionDose;D.scopeSummary=scopeSummary;D.athleteWindow=athleteWindow;D.merge=merge;D.top=top;
   if(M.reportingEngine?.registerProvider){
     M.reportingEngine.registerProvider('dosage',({athlete,state,days})=>athleteWindow(athlete,state,days),{

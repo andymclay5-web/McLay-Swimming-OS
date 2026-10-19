@@ -7,6 +7,8 @@
   const pct=v=>`${Math.round(Number(v)||0)}%`;
   const shortStroke=s=>String(s||'').replace('Freestyle','Fr').replace('Backstroke','Bk').replace('Breaststroke','Br').replace('Butterfly','Fly').replace('Choice / unspecified','Choice');
   function rows(map,kind='system'){
+    // 19 Oct 2026: energy systems in Rushton's Aerobic / Anaerobic groups (Anaerobic always shown) -- engines/dosage.js.
+    if(kind==='system'&&D.rushtonHtml)return D.rushtonHtml(map,{empty:'No classified dose yet.'});
     const list=D.top(map,'pctDose',kind==='system'?6:6);if(!list.length)return'<p class="muted">No classified dose yet.</p>';
     return`<div class="summary-grid">${list.map(r=>`<span>${esc(kind==='stroke'?shortStroke(r.label):r.label)}</span><b>${pct(r.pctDose)} · ${num(r.metres)}m · ${num(r.units)}u</b>`).join('')}</div>`;
   }

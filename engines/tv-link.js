@@ -17,7 +17,7 @@
 // the Coordinator's prescriptions, so the TV shows exactly the same work and targets as the phone.
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M?.state)return;
-  const L=M.tvLink={build:'v4-tv-link-20261015b-remember'};
+  const L=M.tvLink={build:'v4-tv-link-20261019-shared-slot'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clock=s=>M.util?.clock?M.util.clock(Number(s)):String(s??'');
@@ -68,7 +68,7 @@
     const timed=!!b.timingIntent?.(item);
     if(withTargets&&timed&&ctx.group.length){row.targets=[];for(const a of ctx.group){row.targets.push({n:b.name(a,ctx.pool),t:athleteTarget(session,item,a)});}await tick();}
     const groups=new Map();
-    for(const a of ctx.mods){let actual=null;try{actual=(withTargets?prescription(session,item,a)?.item:null)||E.Modification.adaptItem(item,a,M.state,session);}catch{actual=item;}
+    for(const a of ctx.mods){let actual=null;try{actual=(withTargets?prescription(session,item,a)?.item:null)||E.Modification.adaptItem(item,a,M.state,session);}catch{actual=item;}if(b.shownItem)actual=b.shownItem(item,actual);
       const changed=!E.Modification.samePrescription?.(item,actual),showTiming=!!b.timingIntent?.(actual);if(!changed&&!showTiming)continue;
       const key=b.modGroupKey?b.modGroupKey(actual):JSON.stringify([b.workLabel(actual),b.cueText(actual)]);
       if(!groups.has(key))groups.set(key,{work:text(b.workLabel(actual)),cue:text(b.cueText(actual)),people:[]});
@@ -77,7 +77,8 @@
     return row;}
   async function nodeRows(session,node,ctx,withTargets){
     if(node?.kind==='set')return[await setRow(session,node,ctx,withTargets)];
-    if(node?.kind==='group'){const rows=[];for(const x of node.items||[])rows.push(...await nodeRows(session,x,ctx,withTargets));return[{k:'rounds',label:`${Math.max(1,Number(node.rounds)||1)} ROUNDS${node.label?` · ${text(node.label)}`:''}`,rows}];}
+    if(node?.kind==='group'){const rows=[];for(const x of node.items||[])rows.push(...await nodeRows(session,x,ctx,withTargets));const modR=[];for(const a of ctx.mods){try{const g=E.Modification.adaptGroup?.(node,a,M.state,session);if(g&&g.rounds!==Math.max(1,Number(node.rounds)||1))modR.push(`${B().name(a,ctx.mods)} ${g.rounds}`);}catch{}}
+    return[{k:'rounds',label:`${Math.max(1,Number(node.rounds)||1)} ROUNDS${node.label?` · ${text(node.label)}`:''}${modR.length?` · ${modR.join(' · ')} rounds`:''}`,rows}];}
     const t=text(node?.text||node?.raw||(Number(node?.distance)>0?`${node.distance}m`:''));return t?[{k:'cue',text:t}]:[];}
   async function blockFrame(session,blk,ctx,withTargets,active){const rows=[];for(const n of blk.items||[])rows.push(...await nodeRows(session,n,ctx,withTargets));
     return{id:blk.id,code:B().blockCode(blk),title:text(blk.title||'Set'),distance:B().blockDistance(blk),active:!!active,rows};}
@@ -95,14 +96,14 @@
     if(out.kind!=='note'){const live=(M.state.captures||[]).find(x=>x.id===c.id);const path=live?.media_path||c.media_path;if(path){try{out.url=await signedUrl(path);}catch{}}if(!out.url)out.waiting=true;}
     return out;}
   async function buildFrame(){const session=M.currentSession?.();const frame={v:1,at:new Date().toISOString(),mode:boardMode()};
-    if(!session){frame.tvv=TV_PAGE;frame.empty='No session selected on the coach\'s phone.';frame.overlay=await overlayFrame(null,null);return frame;}
+    if(!session){frame.tvv=TV_PAGE;frame.empty='No session selected on the coach\'s phone.';if(!slotSupported)frame.overlay=await overlayFrame(null,null);return frame;}
     frame.tvv=TV_PAGE;
     const pool=present(),mods=modified(),modIds=new Set(mods.map(a=>a.id)),ctx={pool,mods,group:pool.filter(a=>!modIds.has(a.id))};
     const id=session.identity||{},finished=session.finish,active=activeBlock(session);
     frame.session={title:text(id.title||`${id.dayPart||''} · ${(id.squads||[]).join(' + ')}`)||'Session',date:id.date||'',distance:Number(finished?.actualDistance)||B().sessionDistance(session),finished:!!finished,swimmers:pool.length};
-    if(frame.mode==='set'&&active){frame.blocks=[await blockFrame(session,active,ctx,true,true)];frame.nav=(session.blocks||[]).map(b=>({code:B().blockCode(b),active:b.id===active.id}));frame.live=liveRows(session);}
-    else{frame.mode='whole';frame.blocks=[];for(const b of session.blocks||[])frame.blocks.push(await blockFrame(session,b,ctx,false,b.id===active?.id));}
-    frame.overlay=await overlayFrame(session,ctx);
+    if(frame.mode==='set'&&active){frame.blocks=[await blockFrame(session,active,ctx,true,true)];frame.nav=(B().workBlocks?B().workBlocks(session):(session.blocks||[])).map(b=>({code:B().blockCode(b),active:b.id===active.id}));frame.live=liveRows(session);}
+    else{frame.mode='whole';frame.blocks=[];for(const b of (B().workBlocks?B().workBlocks(session):(session.blocks||[])))frame.blocks.push(await blockFrame(session,b,ctx,false,b.id===active?.id));}
+    if(!slotSupported)frame.overlay=await overlayFrame(session,ctx);
     return frame;}
   L.buildFrame=buildFrame;
 
@@ -112,14 +113,14 @@
     const cap=o?.capture?.id?(M.state.captures||[]).find(c=>c.id===o.capture.id)?.media_path||'':'';
     return JSON.stringify([session?.id||'',session?.currentSource?.hash||'',blocks.length,hash(blocks),boardMode(),session?activeBlock(session)?.id:'',present().map(a=>a.id).sort(),modified().map(a=>a.id).sort(),
       (M.state.adaptationOverrides||[]).filter(r=>r?.sessionId===session?.id).map(r=>[r.id,r.active,r.updatedAt||'',JSON.stringify(r.patch||{})]),
-      (M.state.adaptationProfiles||M.state.adaptations||[]).length,o?.id||'',o?.mode||'',o?.swimmer?.page||'',(M.state.captures||[]).length,cap,evidenceRev(),(M.state.timedSets||[]).filter(x=>x.session_id===session?.id).length,!!session?.finish]);}
+      (M.state.adaptationProfiles||M.state.adaptations||[]).length,slotSupported?'':o?.id||'',slotSupported?'':o?.mode||'',slotSupported?'':o?.swimmer?.page||'',(M.state.captures||[]).length,cap,evidenceRev(),(M.state.timedSets||[]).filter(x=>x.session_id===session?.id).length,!!session?.finish]);}
   function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return h;}
   L.signature=signature;
 
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261016a';
+  const TV_PAGE='20261019a';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
@@ -135,7 +136,7 @@
     try{if(!org())return status;const list=await L.list(),s=list.find(x=>x.id===c.screenId);if(!s){setStatus({state:'error',error:'This TV is no longer connected'});return status;}if(s.controller_device&&s.controller_device!==deviceId())setStatus({state:'taken',controller:s.controller_name||'another phone'});}catch{}
     return status;};
   // The loop also keeps the Board's 📺 button drawn (cheap, idempotent) so it can't go missing after a reopen.
-  function loop(){clearTimeout(timer);timer=setTimeout(async()=>{try{M.tvDisplay?.paintControl?.();}catch{}try{await publish();if(Date.now()-lastCheck>20000)await L.check();}catch{}loop();},CHECK_MS);}
+  function loop(){clearTimeout(timer);timer=setTimeout(async()=>{try{M.tvDisplay?.paintControl?.();}catch{}try{await publish();if(Date.now()-lastCheck>20000)await L.check();}catch{}try{if(!slotChecked)await probeSlot();await slotTick();}catch{}loop();},CHECK_MS);}
   L.takeControl=async(screen)=>{setControl({screenId:screen.id,label:text(screen.label)||'Pool TV'});take=true;lastSig='';setStatus({state:'connecting',controller:'',error:''});return publish({force:true});};
   L.stopControl=()=>{setControl(null);lastSig='';setStatus({state:'idle',controller:'',error:''});};
 
@@ -168,7 +169,7 @@
   // stay where it was". Leaving MSOS (another app, lock screen) takes whatever is on top of the Board off the TV; the
   // Board itself stays exactly as it was. The phone may be suspended a moment later, so this send is a keepalive one
   // built from the last frame (no new target work) and it does not wait for anything.
-  function leaving(){const c=control();if(!c?.screenId||!lastFrame?.overlay||!signedIn()||status.state==='taken')return;
+  function leaving(){if(slotSupported){leaveSlot();return;}const c=control();if(!c?.screenId||!lastFrame?.overlay||!signedIn()||status.state==='taken')return;
     try{M.tvDisplay?.clear?.();}catch{}
     const frame={...lastFrame,overlay:null,at:new Date().toISOString()};lastFrame=frame;
     const raw=M.cloud?.rawFetch||M.cloud?.fetch;if(!raw)return;
@@ -177,6 +178,41 @@
   L.leaving=leaving;
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')leaving();});
   addEventListener('pagehide',leaving);
+  // ---------- the shared "on top of the Board" slot (19 Oct 2026) ----------
+  // Andy: "other coaches need to be able to ... display that capture ... some sort of priority or rank ... someone else
+  // is on, so you have to wait for them to go off ... any coach has a capture of any swimmer, they get a chance to talk
+  // about it." Decided: the next coach waiting goes up AUTOMATICALLY; anything left 3 MINUTES untouched comes off.
+  // Every coach's phone (not only the one driving the Board) sends what IT wants on top -- a clip, a swimmer page, a
+  // video -- to the TV's shared slot (supabase/20261019_tv_shared_slot.sql). Slot free: up straight away. Someone else
+  // showing: this phone waits in line and goes up automatically. The owner (head coach) always goes straight up.
+  // Each change of page/clip/size counts as the coach still using it. Until the database has the slot, the old way
+  // (the overlay inside the Board frame from the driving phone) keeps working.
+  let slotSupported=false,slotChecked=false,screens=[],screensAt=0,slotSig='',slotState={state:'idle'},slotBusy=false,slotPolledAt=0;
+  L.slot=()=>({...slotState,supported:slotSupported});
+  function chosenScreen(){const c=control();if(c?.screenId)return c.screenId;try{const v=localStorage.getItem('msos-tv-screen');if(v&&screens.some(s=>s.id===v))return v;}catch{}return screens[0]?.id||'';}
+  L.chooseScreen=id=>{try{localStorage.setItem('msos-tv-screen',id);}catch{}};
+  async function refreshScreens(force=false){if(!signedIn()||!org())return screens;if(!force&&Date.now()-screensAt<60000)return screens;screensAt=Date.now();try{screens=await L.list();}catch{}return screens;}
+  async function probeSlot(){if(slotChecked||!signedIn()||!org())return slotSupported;await refreshScreens();const id=chosenScreen();if(!id)return slotSupported;slotChecked=true;
+    try{await rpc('msos_tv_slot_state',{p_screen:id});slotSupported=true;}catch(e){slotSupported=false;if(!/function|schema cache|not find|404/i.test(String(e?.message||'')))slotChecked=false;}return slotSupported;}
+  function mySig(){const o=M.tvDisplay?.current?.();if(!o)return'';const cap=o.capture?.id?(M.state.captures||[]).find(c=>c.id===o.capture.id)?.media_path||'':'';return JSON.stringify([o.id,o.mode,o.swimmer?.page||'',o.url||'',cap]);}
+  function setSlot(next,toast){slotState={...slotState,...next};if(toast)M.toast?.(toast);try{M.tvDisplay?.paintControl?.();M.tvDisplay?.refreshScreens?.();}catch{}}
+  async function slotTick(){if(!slotSupported||slotBusy||!isCoach()||!signedIn())return;const id=chosenScreen();if(!id)return;const sig=mySig();
+    slotBusy=true;try{
+      if(sig&&sig!==slotSig){const o=await overlayFrame(M.currentSession?.(),null);const r=await rpc('msos_tv_slot_put',{p_screen:id,p_name:coachName(),p_overlay:o});slotSig=sig;
+        if(r?.status==='queued')setSlot({state:'queued',position:r.position,by:r.showing_by||''},`${r.showing_by||'Another coach'} is showing something — yours goes up next${r.position>1?` (#${r.position} in line)`:''}.`);
+        else setSlot({state:'showing',by:''},r?.replaced?`On the TV (replaced ${r.replaced}'s)`:'');}
+      else if(!sig&&slotSig){slotSig='';await rpc('msos_tv_slot_clear',{p_screen:id});setSlot({state:'idle',position:0});}
+      if((slotState.state!=='idle'||Date.now()-slotPolledAt>15000)&&Date.now()-slotPolledAt>2500){slotPolledAt=Date.now();const st=await rpc('msos_tv_slot_state',{p_screen:id});
+        const queue=(st?.queue||[]).map(q=>q.name).filter(Boolean),meQueued=(st?.queue||[]).some(q=>q.id===M.tvDisplay?.current?.()?.id);
+        setSlot({showingBy:st?.showing?(st.mine?'':st.by_name||'another coach'):'',waiting:queue,left:st?.touched_at?Math.max(0,180-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null});
+        if(slotState.state==='showing'&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'},st?.showing?`${st.by_name||'Another coach'} is on the TV now`:'Taken off the TV (3 minutes untouched)');}
+        else if(slotState.state==='queued'&&st?.mine){setSlot({state:'showing',position:0},"You're on the TV now");}
+        else if(slotState.state==='queued'&&!meQueued&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'});}}
+    }catch(e){setSlot({error:String(e?.message||e)});}finally{slotBusy=false;}}
+  L.slotTick=slotTick;
+  function leaveSlot(){const id=chosenScreen();if(!id||!signedIn()||slotState.state==='idle'&&!slotSig)return;try{M.tvDisplay?.clear?.();}catch{}slotSig='';setSlot({state:'idle'});
+    const raw=M.cloud?.rawFetch||M.cloud?.fetch;if(!raw)return;try{const p=raw('/rest/v1/rpc/msos_tv_slot_clear',{method:'POST',keepalive:true,body:JSON.stringify({p_screen:id})});Promise.resolve(p).catch(()=>{});}catch{}}
+  L.screens=()=>screens;L.refreshScreens=refreshScreens;
   function boot(){if(control()?.screenId)setStatus({state:'connecting'});loop();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })(globalThis);

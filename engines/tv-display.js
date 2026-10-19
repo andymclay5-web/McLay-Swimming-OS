@@ -11,7 +11,7 @@
 // session, Roll or the Board itself.
 (function(g){
   const M=g.MSOS4;if(!M?.state)return;
-  const T=M.tvDisplay={build:'v4-tv-display-20261015-tv-link'};
+  const T=M.tvDisplay={build:'v4-tv-display-20261019-shared-slot'};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const uid=()=>M.util?.uid?.('tv')||`tv-${Date.now()}`;
@@ -74,7 +74,7 @@
     let pill=document.querySelector('[data-tv-pill]');const show=view()==='board'&&can()&&(M.access?.role?.()||'owner')!=='swimmer';
     if(!show){if(pill)pill.hidden=true;return;}
     if(!pill){pill=document.createElement('button');pill.type='button';pill.className='tv-pill';pill.setAttribute('data-tv-pill','1');pill.onclick=()=>openControls();document.body.appendChild(pill);}
-    const o=T.current(),ls=M.tvLink?.status?.()||{},drive=!!ls.control?.screenId,dot=drive?(ls.state==='live'?'🟢':ls.state==='taken'?'⚪':ls.state==='error'?'🔴':'🟡'):'';pill.hidden=false;pill.classList.toggle('on',!!o||drive&&ls.state==='live');const html=o?`📺${dot} <span>On TV · ${esc(o.mode==='full'?'full':'corner')}</span>`:`📺${dot}`;if(pill.innerHTML!==html)pill.innerHTML=html;if(!pill.isConnected)document.body.appendChild(pill);pill.title=drive?(ls.state==='taken'?`${ls.controller||'Another phone'} is driving the TV`:ls.state==='error'?`TV: ${ls.error}`:'This phone is driving the TV'):o?`TV is showing ${o.label||'something'}`:'Show something on the TV';}
+    const o=T.current(),ls=M.tvLink?.status?.()||{},drive=!!ls.control?.screenId,dot=drive?(ls.state==='live'?'🟢':ls.state==='taken'?'⚪':ls.state==='error'?'🔴':'🟡'):'';pill.hidden=false;pill.classList.toggle('on',!!o||drive&&ls.state==='live');let html=o?`📺${dot} <span>On TV · ${esc(o.mode==='full'?'full':'corner')}</span>`:`📺${dot}`;if(pill.innerHTML!==(html=(M.tvLink?.slot?.()?.state==='queued'?html.replace('📺','📺⏳'):html)))pill.innerHTML=html;if(!pill.isConnected)document.body.appendChild(pill);pill.title=drive?(ls.state==='taken'?`${ls.controller||'Another phone'} is driving the TV`:ls.state==='error'?`TV: ${ls.error}`:'This phone is driving the TV'):o?`TV is showing ${o.label||'something'}`:'Show something on the TV';}
   T.paintControl=paintControl;
   function sessionCaptures(){const s=M.currentSession?.();const all=(M.state.captures||[]).filter(c=>!s||c.session_id===s.id);return all.slice(-12).reverse();}
   function swimmerChips(){const pool=M.boardEngine?.present?.()||M.ui?.presentAthletes?.()||[];if(!pool.length)return'<p class="muted">Mark the Roll to pick a swimmer here.</p>';
@@ -82,7 +82,7 @@
   function openControls(){
     const host=document.querySelector('#modalHost');if(!host)return;const o=T.current(),caps=sessionCaptures();
     host.innerHTML=`<div class="modal-backdrop" data-tv-controls><section class="modal"><header><h2>TV Board</h2><button data-tv-close>×</button></header><div class="modal-body">
-      <div data-tv-link-panel></div><p class="muted">Put a swimmer, clip, photo, note or video link on top of the Board — in the corner or full screen. Nothing goes on the TV unless you send it here.</p>
+      <p class="tv-slot-line" data-tv-slot-line ${slotLine()?'':'hidden'}>${esc(slotLine())}</p><div data-tv-link-panel></div><p class="muted">Put a swimmer, clip, photo, note or video link on top of the Board — in the corner or full screen. Nothing goes on the TV unless you send it here.</p>
       ${o?`<div class="check-card ok"><b>On the TV now:</b> ${esc(o.label||'')} · ${o.mode==='full'?'full screen':'corner'}</div><div class="hub-actions"><button type="button" data-tv-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?'Shrink to corner':'Make it full screen'}</button><button type="button" class="danger" data-tv-clear>Take it off the TV</button></div>`:''}
       <h3>From this session</h3>${caps.length?caps.map(c=>{const sm=captureSummary(c);return`<div class="tv-cap-row"><span><b>${esc(sm.type==='note'?'Note':sm.type[0].toUpperCase()+sm.type.slice(1))}</b>${sm.who?` · ${esc(sm.who)}`:''}<small>${esc((sm.text||sm.context||'').slice(0,70))}</small></span><span class="tv-cap-acts"><button type="button" data-tv-cap="${esc(c.id)}" data-tv-m="corner">Corner</button><button type="button" data-tv-cap="${esc(c.id)}" data-tv-m="full">Full</button></span></div>`;}).join(''):'<p class="muted">No captures in this session yet. Use Capture to take a video, photo or note.</p>'}
       <h3>A swimmer</h3>${swimmerChips()}
@@ -101,6 +101,13 @@
     host.querySelector('[data-tv-open]').onclick=()=>{close();M.nav?.show?.('tv',{restoreScroll:false});};
   }
   T.openControls=openControls;
+  // 19 Oct 2026: shared TV slot status ("On the TV: Jordan's · Kaleb waiting") wherever the coach controls the TV.
+  function slotLine(){const sl=M.tvLink?.slot?.();if(!sl?.supported)return'';const mm=n=>`${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;
+    if(sl.state==='queued')return`⏳ Waiting — ${sl.by||sl.showingBy||'another coach'} is on the TV. Yours goes up next${sl.position>1?` (#${sl.position})`:''}.`;
+    if(sl.state==='showing')return`📺 Yours is on the TV${Number.isFinite(sl.left)&&sl.left!==null?` · comes off in ${mm(sl.left)} unless you use it`:''}${sl.waiting?.length?` · ${sl.waiting.join(', ')} waiting`:''}`;
+    if(sl.showingBy)return`📺 ${sl.showingBy} is using the TV${sl.waiting?.length?` · ${sl.waiting.length} waiting`:''} — anything you send waits its turn.`;return'';}
+  T.slotLine=slotLine;
+  T.refreshScreens=()=>{const t=slotLine();document.querySelectorAll('[data-tv-slot-line]').forEach(el=>{el.textContent=t;el.hidden=!t;});};
 
   // ---------- the swimmer screen on the phone (16 Oct 2026) ----------
   // "On my phone, I'll just be on the swimmer's screen and linking between the things." Each tab puts that page on the
@@ -124,7 +131,7 @@
     else body=`<div class="sb-preview">${B?B.html(B.page(a.id,sw.tab)):'Swimmer pages not loaded'}</div>`;
     host.innerHTML=`<div class="modal-backdrop" data-tv-swimmer-screen><section class="modal sb-modal"><header><h2>📺 ${esc(a.full_name)}</h2><button data-sw-close>×</button></header>
       <nav class="sb-tabs">${TABS.map(([k,l])=>`<button type="button" data-sw-tab="${k}" class="${sw.tab===k?'on':''}">${l}</button>`).join('')}</nav>
-      <div class="sb-ontv"><span>On TV: <b>${esc(onTv)}</b></span><span class="tv-cap-acts">${o&&!o.swimmer&&o.from===a.id?`<button type="button" data-sw-back>Back to ${esc(a.full_name.split(' ')[0])}</button>`:''}${o?`<button type="button" data-sw-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?(o.swimmer?'Side panel':'Corner'):'Full screen'}</button><button type="button" class="danger" data-sw-off>Off TV</button>`:`<button type="button" data-sw-show>Show on TV</button>`}</span></div>
+      <p class="tv-slot-line" data-tv-slot-line ${slotLine()?'':'hidden'}>${esc(slotLine())}</p><div class="sb-ontv"><span>On TV: <b>${esc(onTv)}</b></span><span class="tv-cap-acts">${o&&!o.swimmer&&o.from===a.id?`<button type="button" data-sw-back>Back to ${esc(a.full_name.split(' ')[0])}</button>`:''}${o?`<button type="button" data-sw-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?(o.swimmer?'Side panel':'Corner'):'Full screen'}</button><button type="button" class="danger" data-sw-off>Off TV</button>`:`<button type="button" data-sw-show>Show on TV</button>`}</span></div>
       <div class="modal-body">${body}</div><footer><button type="button" data-sw-controls>TV controls</button><button data-sw-close>Done</button></footer></section></div>`;
     try{M.nav?.openLayer?.('modal');}catch{}
     const close=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
@@ -153,9 +160,20 @@
   // "Show on TV" inside any opened capture (engines/capture-ui.js viewer).
   function addToViewer(){const v=document.querySelector('#modalHost .msos-evidence-viewer');if(!v||v.querySelector('[data-tv-from-viewer]')||!can())return;const id=v.dataset.captureId;if(!id)return;
     const foot=v.querySelector('footer');if(!foot)return;const wrap=document.createElement('span');wrap.setAttribute('data-tv-from-viewer','1');wrap.className='tv-viewer-acts';
-    wrap.innerHTML='<button type="button" data-tvv="corner">📺 TV corner</button><button type="button" data-tvv="full">📺 TV full</button>';foot.prepend(wrap);
+    wrap.innerHTML='<button type="button" data-tvv="corner">📺 TV corner</button><button type="button" data-tvv="full">📺 TV full</button>'+(M.coachChat?.send?'<button type="button" data-tv-handoff>👥 Ask a coach</button>':'');foot.prepend(wrap);
+    wrap.querySelector('[data-tv-handoff]')?.addEventListener('click',()=>handoff(id,wrap));
     wrap.querySelectorAll('[data-tvv]').forEach(b=>b.onclick=()=>{try{T.showCapture(id,b.dataset.tvv);M.toast?.(`On the TV · ${b.dataset.tvv==='full'?'full screen':'corner'}`);}catch(e){M.toast?.(e.message);}});}
   T.addToViewer=addToViewer;
+  // 19 Oct 2026 (Andy: "if I've taken a capture, I could just ask another coach to discuss what they see, and they can put
+  // it on the board and talk to the swimmer about it independently"): sends the capture to that coach in coach chat with
+  // the ask; on their phone the clip opens with the same TV buttons, and it takes its turn on the shared TV slot.
+  async function handoff(captureId,wrap){const K=M.coachChat;let roster=[];try{roster=K.roster?.()||[];if(!roster.length)roster=(await K.refreshRoster?.())||K.roster?.()||[];}catch{}
+    const me=M.store?.auth?.()?.user?.id;roster=roster.filter(r=>r.user_id&&r.user_id!==me);
+    let box=wrap.querySelector('[data-tv-handoff-pick]');if(box){box.remove();return;}box=document.createElement('div');box.setAttribute('data-tv-handoff-pick','1');box.className='tv-handoff';
+    box.innerHTML=roster.length?roster.map(r=>`<button type="button" data-tv-handoff-to="${esc(r.user_id)}">${esc(r.display_name||'Coach')}</button>`).join(''):'<small>No other coaches found — check coach chat is signed in.</small>';wrap.appendChild(box);
+    box.querySelectorAll('[data-tv-handoff-to]').forEach(b=>b.onclick=async()=>{const cap=(M.state.captures||[]).find(c=>c.id===captureId)||{};const sm=captureSummary(cap);
+      try{await K.send(K.dmThreadKey(b.dataset.tvHandoffTo),`Can you talk ${sm.who||'the swimmer'} through this? Open it and tap 📺 TV to put it up — it takes its turn on the TV.`,{captureId});M.toast?.(`Sent to ${b.textContent}`);box.remove();}catch(e){M.toast?.(e.message);}});}
+  T.handoff=handoff;
 
   // Keep the Board's TV button in step with the screen being shown (cheap attribute watch on <body>).
   function boot(){paintControl();try{new MutationObserver(()=>{paintControl();if(view()!=='tv')T.paint();}).observe(document.body,{attributes:true,attributeFilter:['data-msos-view']});}catch{}}
