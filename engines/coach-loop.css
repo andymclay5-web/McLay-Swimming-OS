@@ -88,3 +88,12 @@
 .rushton-row i{grid-column:1/-1;grid-row:2;display:block;height:6px;border-radius:3px;background:#1f7a9c;min-width:0}.rushton-anaerobic .rushton-row i{background:#b4442e}.rushton-skills .rushton-row i{background:#6b7c88}
 .rushton-row b{grid-column:2;grid-row:1;white-space:nowrap}.rushton-row.none b{color:var(--muted,#647b88);font-weight:600}
 .bd-zone-group{font-weight:700}
+/* 19 Oct 2026: meet results inbox (engines/results-inbox.js) */
+.ri h3{margin:14px 0 6px}.ri-msg{padding:8px 10px;border-radius:8px;background:#eef6fa;color:#0d4566;font-weight:600}
+.ri-upload{cursor:pointer}.ri-meet{border:1px solid #e5eef2;border-radius:10px;padding:10px;margin:8px 0}
+.ri-meet header{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}.ri-meet header div{display:flex;flex-direction:column}.ri-meet header small{color:var(--muted,#647b88)}
+.ri-count{font-size:.9rem}.ri-rows{margin-top:6px}.ri-row{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr) auto;gap:6px 8px;align-items:center;padding:6px 0;border-top:1px solid #eef3f6}
+.ri-row.off{opacity:.45}.ri-row small{color:var(--muted,#647b88)}.ri-time{white-space:nowrap;text-align:right}.ri-pb{font-style:normal;background:#1f7a4d;color:#fff;border-radius:6px;padding:0 5px;font-size:.75rem;margin-left:4px}
+.ri-warn{grid-column:2/-1;color:#9a5b00!important}.ri-possible{border:1px solid #f0d9a8;background:#fffaf0;border-radius:10px;padding:8px 10px;margin:10px 0}
+.ri-poss{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0}.ri-poss span{display:flex;flex-direction:column}.ri-poss small{color:var(--muted,#647b88)}
+.ri-other{padding:3px 0}.ri-others,.ri-history{margin-top:10px}
