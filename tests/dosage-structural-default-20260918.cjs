@@ -154,19 +154,23 @@ function runEndToEndOnAndyRealSession(){
 
   const development=dose.systems['Development'];
   assert.ok(development,'dosage report must include a Development system entry');
-  assert.equal(development.metres,3200,
+  // 19 Oct 2026 (Andy, partial MAX): the 160m non-max part of the Parachute 25s (2 x 2 x 4 x 10m) now counts as
+  // Development too, so Development is 3200 + 160 = 3360m.
+  assert.equal(development.metres,3360,
     'both the no-rest lines AND the 1600m post-set 4x400 (which has an authored rest but no intensity keyword) must land on Development now that rest no longer escalates the classification');
 
   const speedMax=dose.systems['Speed / Max'];
-  assert.equal(speedMax.metres,450,'the cues-fix\'s own 450m of Speed / Max work (see tests/dosage-cue-classification-20260918.cjs), which comes from a real MAX keyword, must be unaffected by this fix');
+  /* 19 Oct 2026 (Andy, partial MAX): 290m -- see tests/dosage-cue-classification-20260918.cjs */assert.equal(speedMax.metres,290,'the cues-fix\'s own Speed / Max work (290m since only the 15m MAX part of each 25 counts) (see tests/dosage-cue-classification-20260918.cjs), which comes from a real MAX keyword, must be unaffected by this fix');
 
   assert.ok(!dose.systems['Threshold']||dose.systems['Threshold'].metres===0,
     'no line in this session names "threshold" explicitly, so nothing should land there now that distance+rest alone no longer implies Threshold');
 
   const ranked=Object.entries(dose.systems).filter(([,v])=>v.pctDose>0).sort((a,b)=>b[1].pctDose-a[1].pctDose);
   const banner=ranked.slice(0,2).map(([l,v])=>`${l} ${Math.round(v.pctDose)}%`).join(' · ');
-  assert.equal(banner,'Development 61% · Speed / Max 21%',
-    `the Coach Hub/Board "SESSION METHODOLOGY" banner must now read Development 61% · Speed / Max 21% (no more phantom Threshold from an authored rest alone): got "${banner}"`);
+  // 19 Oct 2026 (Andy, partial MAX): with only the 15m MAX part of the Parachute 25s counted as speed, the second
+  // largest share is now Skill / Technical (scull + drill), not Speed / Max. Still no phantom Threshold.
+  assert.equal(banner,'Development 67% · Skill / Technical 19%',
+    `the Coach Hub/Board "SESSION METHODOLOGY" banner must read Development 67% · Skill / Technical 19% (no phantom Threshold from an authored rest alone): got "${banner}"`);
 
   console.log('DOSAGE_STRUCTURAL_DEFAULT_E2E_PASS');
 }

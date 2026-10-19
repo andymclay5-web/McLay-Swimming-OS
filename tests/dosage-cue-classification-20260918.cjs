@@ -138,7 +138,11 @@ function runEndToEndOnAndyRealSession(){
   // so it is unaffected by anything added after it.
   const speedMax=dose.systems['Speed / Max'];
   assert.ok(speedMax,'dosage report must include a Speed / Max system entry once the Parachute lines are classified');
-  assert.equal(speedMax.metres,450,'the two "4 x 25 ... Parachute" main-set lines (each followed by a "15m MAX" cue) across both rounds must contribute 450m to Speed / Max, recovered from Unclassified');
+  // 19 Oct 2026, Andy: "session analysis is putting too much weight on sprint components of kick set" -- only the
+  // 15m MAX part of each 25 is speed work. The Parachute lines are still classified Speed / Max by their "15m MAX"
+  // cue (that is what this test guards); Speed / Max now counts 15 of each 25: 2 rounds x 2 lines x 4 x 15m = 240m,
+  // plus the "2 x 25 Dive Start / MAX" (a whole-rep MAX, 50m) = 290m. The other 10m of each rep goes to Development.
+  assert.equal(speedMax.metres,290,'the two "4 x 25 ... Parachute" main-set lines (each followed by a "15m MAX" cue) contribute their 15m MAX part (240m) to Speed / Max, plus the 50m whole-rep MAX dive starts');
 
   console.log('DOSAGE_CUE_CLASSIFICATION_E2E_PASS');
 }
