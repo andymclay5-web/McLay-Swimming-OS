@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261016a';
+  const TV_VERSION='20261019a';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -90,7 +90,9 @@
   function fallbackFull(o){stopMirror();ovl.className='tv-overlay tvo-full';const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',fitMedia);setTimeout(fitMedia,300);}TV.fellBackFull=true;}
   // Fit the whole board on the screen: shrink the type until nothing spills off the bottom.
   function fit(){let size=g.innerWidth>=1200?22:16;root.style.fontSize=`${size}px`;let guard=0;while(root.scrollHeight>g.innerHeight+2&&size>8&&guard++<40){size-=.5;root.style.fontSize=`${size}px`;}}
-  function draw(f){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);drawOverlay(f.overlay||null);fit();}
+  function draw(f,slot=false){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);if(!slot)drawOverlay(f.overlay||null);fit();}
+  // 19 Oct 2026: the shared slot -- whatever any coach has put on top, with their name on it.
+  function slotOverlay(r){const o=r.overlay;if(!o)return null;return{...o,label:[o.label,r.overlay_by].filter(Boolean).join(' · ')};}
   TV.draw=draw;TV.fit=fit;
   addEventListener('resize',()=>{if(TV.frame)fit();fitMedia();fitCard();});
 
@@ -98,8 +100,9 @@
   let misses=0,timer=0;
   function net(ok){misses=ok?0:misses+1;statusEl.hidden=misses<4;statusEl.textContent=misses>=4?'Reconnecting…':'';}
   async function poll(){clearTimeout(timer);
-    try{const r=await rpc('msos_tv_frame',{p_secret:secret(),p_rev:TV.rev});net(true);
-      if(r?.status==='frame'){TV.rev=Number(r.rev)||0;TV.state='live';draw(r.frame||{});}
+    try{const r=await rpc('msos_tv_frame',TV.slot?{p_secret:secret(),p_rev:TV.rev,p_orev:TV.orev}:{p_secret:secret(),p_rev:TV.rev});net(true);
+      if(r?.status==='frame'&&r.slot){const boardChanged=Number(r.rev)!==TV.rev||!TV.frame;TV.slot=true;TV.orev=Number(r.orev)||0;TV.rev=Number(r.rev)||0;TV.state='live';if(boardChanged)draw(r.frame||{},true);drawOverlay(slotOverlay(r));}
+      else if(r?.status==='frame'){TV.rev=Number(r.rev)||0;TV.state='live';draw(r.frame||{});}
       else if(r?.status==='same'){if(TV.state!=='live'&&!TV.frame){TV.state='paired';waiting(r.label);}}
       else if(r?.status==='pairing'){if(TV.state!=='pairing'||!root.querySelector('[data-tv-code]'))showCode(r.code);}
       else{TV.rev=0;TV.frame=null;await pair();}}
