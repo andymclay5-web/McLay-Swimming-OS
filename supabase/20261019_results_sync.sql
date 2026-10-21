@@ -94,3 +94,5 @@ select cron.schedule('msos-results-sync-daily','10,25,40,55 17 * * *',$$select p
 -- until the function records it finished; the morning check runs four times so a busy weekend is all read
 select cron.schedule('msos-results-backfill','* * * * *',$$select public.msos_results_sync_tick('backfill','{"years":[2026,2025,2024,2023,2022,2021,2020,2019,2018,2017],"budget_ms":50000}'::jsonb) where not exists (select 1 from public.msos_results_sources where url='backfill:done:2026,2025,2024,2023,2022,2021,2020,2019,2018,2017')$$);
 -- APPLIED to project cwoqjxiniuwmslltsfgi on 19 Oct 2026 (via the Supabase MCP), in this order.
+-- 19 Oct 2026 (later): history backfill finished (311 results files read; 165 SwimInfo links return 404), so the
+-- one-off job was removed:  select cron.unschedule('msos-results-backfill');  -- APPLIED.
