@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261019a';
+  const TV_VERSION='20261019c';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -26,16 +26,65 @@
   async function pair(){const r=await rpc('msos_tv_pair_request',{p_secret:secret()});if(r?.status==='pairing')showCode(r.code);else if(r?.status==='paired'){TV.state='paired';if(!TV.frame)waiting(r.label);}return r;}
   function waiting(label){root.className='tv-root';root.innerHTML=`<section class="tv-pairing"><p class="tv-eyebrow">MCLAY SWIMMING OS · ${esc(label||'POOL TV')}</p><h1>Connected</h1><p>Waiting for the coach's phone…</p></section>`;}
 
-  // ---------- drawing ----------
-  function targets(list){return list?.length?`<div class="tv-targets">${list.map(t=>`<span class="tv-t"><i>${esc(t.n)}</i><b>${esc(t.t)}</b></span>`).join('')}</div>`:'';}
+  // ---------- drawing (19 Oct 2026, after the first pool TV night) ----------
+  // Andy: "the screen ... tiny, probably thirty-two inches ... adaptable for whatever the screen is" / "one block per
+  // page" / "modified swimmers on the right" / "a button where I could swap between black and white or white and black".
+  // One block per screen, as big as the screen allows: the type grows until the block just fits, and never shrinks below
+  // a size readable from the far end of the pool (about 3% of the screen height). A block too long for that is split
+  // into pages that turn by themselves. WHOLE session turns through the blocks one at a time. In landscape, modified
+  // swimmers sit in their own column on the right. Light (black on white) or dark (white on black) and a text-size step
+  // are set per TV from the coach's phone (msos_tv_set).
+  const DISPLAY={theme:'light',size:0};
+  function applyDisplay(d){const theme=d&&d.theme==='dark'?'dark':'light',size=Math.max(-2,Math.min(3,Number(d&&d.size)||0)),key=`${theme}|${size}`;if(key===TV.displayKey)return false;
+    TV.displayKey=key;DISPLAY.theme=theme;DISPLAY.size=size;document.body.classList.toggle('tv-dark',theme==='dark');document.body.classList.toggle('tv-light',theme!=='dark');TV.display={...DISPLAY};layoutCache.clear();return true;}
+  TV.applyDisplay=applyDisplay;
+  const KIND={WU:'wu',PRE:'pre',MAIN:'main',POST:'post',WD:'wd'};
+  function targets(list){return list&&list.length?`<div class="tv-targets">${list.map(t=>`<span class="tv-t"><i>${esc(t.n)}</i><b>${esc(t.t)}</b></span>`).join('')}</div>`:'';}
   function mods(list,showTimes){return(list||[]).map(m=>`<div class="tv-mod"><div class="tv-mod-work"><b>${esc(m.work)}</b>${m.cue?`<small>${esc(m.cue)}</small>`:''}</div><div class="tv-mod-people">${m.people.map(p=>`<span class="tv-t mod"><i>${esc(p.n)}</i>${showTimes&&p.t?`<b>${esc(p.t)}</b>`:''}</span>`).join('')}</div></div>`).join('');}
-  function rows(list,showTimes){return(list||[]).map(r=>{if(r.k==='rounds')return`<div class="tv-rounds"><div class="tv-round-label">${esc(r.label)}</div>${rows(r.rows,showTimes)}</div>`;if(r.k==='cue')return`<div class="tv-cue">${esc(r.text)}</div>`;
-    return`<div class="tv-row"><div class="tv-work"><b>${esc(r.work)}</b>${r.cue?`<small>${esc(r.cue)}</small>`:''}</div>${showTimes?targets(r.targets):''}${mods(r.mods,showTimes)}</div>`;}).join('');}
-  function block(b,showTimes){return`<section class="tv-block ${b.active?'active':''}"><header><small>${esc(b.code)}</small><h2>${esc(b.title)}</h2><b>${Number(b.distance||0).toLocaleString()}m</b></header><div class="tv-block-rows">${rows(b.rows,showTimes)}</div></section>`;}
-  function boardHtml(f){if(f.empty||!f.session)return`<section class="tv-pairing"><p class="tv-eyebrow">MCLAY SWIMMING OS</p><h1>${esc(f.empty||'No session yet')}</h1></section>`;
-    const s=f.session,set=f.mode==='set';
-    return`<header class="tv-top"><div><small>${set?'CURRENT SET':'WHOLE SESSION'}${s.finished?' · FINISHED ✓':''}</small><h1>${esc(s.title)}</h1></div>${set&&f.nav?.length?`<nav>${f.nav.map(n=>`<span class="${n.active?'on':''}">${esc(n.code)}</span>`).join('')}</nav>`:''}<b>${Number(s.distance||0).toLocaleString()}m${s.finished?' ✓':''}</b></header>
-      <div class="tv-body ${set?'tv-set':'tv-whole'}">${(f.blocks||[]).map(b=>block(b,set)).join('')}${set&&f.live?.length?`<section class="tv-live"><header><small>LIVE TIMES</small></header>${f.live.map(r=>`<div><b>${esc(r.who)}</b><span>${esc(r.label)}</span><b>${esc(r.time)}</b></div>`).join('')}</section>`:''}</div>`;}
+  function rowHtml(r,showTimes){if(r.k==='cue')return`<div class="tv-cue">${esc(r.text)}</div>`;const m=!!(r.mods&&r.mods.length);
+    return`<div class="tv-row${m?' has-mods':''}"><div class="tv-main"><div class="tv-work"><b>${esc(r.work)}</b>${r.cue?`<small>${esc(r.cue)}</small>`:''}</div>${showTimes?targets(r.targets):''}</div>${m?`<div class="tv-mods">${mods(r.mods,showTimes)}</div>`:''}</div>`;}
+  // a block as a list of units that can go on separate pages: a rounds group splits between its lines (the label repeats)
+  function units(b,showTimes,live){const out=[];let g=0;
+    for(const r of b.rows||[]){if(r.k==='rounds'){g++;(r.rows||[]).forEach((x,i)=>out.push({group:g,label:r.label,first:i===0,html:rowHtml(x,showTimes)}));if(!(r.rows||[]).length)out.push({group:g,label:r.label,first:true,html:''});}
+      else out.push({group:0,html:rowHtml(r,showTimes)});}
+    if(live&&live.length)out.push({group:0,html:`<section class="tv-live"><header><small>LIVE TIMES</small></header>${live.map(r=>`<div><b>${esc(r.who)}</b><span>${esc(r.label)}</span><b>${esc(r.time)}</b></div>`).join('')}</section>`});
+    return out;}
+  function unitsHtml(list){let h='',open=0;for(const u of list){if(u.group!==open){if(open)h+='</div>';open=u.group;if(open)h+=`<div class="tv-rounds"><div class="tv-round-label">${esc(u.label)}${u.first?'':' · cont.'}</div>`;}h+=u.html;}if(open)h+='</div>';return h;}
+  function anyMods(b){const walk=rs=>(rs||[]).some(r=>r.k==='rounds'?walk(r.rows):!!(r.mods&&r.mods.length));return walk(b.rows);}
+  function pageHtml(f,b,list,pageNo,pageCount){const s=f.session,set=f.mode==='set',kind=KIND[b.code]||'other',cols=anyMods(b);
+    const nav=(f.mode==='set'?f.nav:(f.blocks||[]).map(x=>({code:x.code,active:x===b})))||[];
+    return`<header class="tv-top"><div class="tv-top-title"><small>${set?'CURRENT SET':'WHOLE SESSION'}${s.finished?' · FINISHED ✓':''}</small><h1>${esc(s.title)}</h1></div>${nav.length>1?`<nav>${nav.map(n=>`<span class="${n.active?'on':''}">${esc(n.code)}</span>`).join('')}</nav>`:''}<b class="tv-total">${Number(s.distance||0).toLocaleString()}m${s.finished?' ✓':''}</b></header>
+      <div class="tv-body ${set?'tv-set':'tv-whole'}"><section class="tv-block tv-k-${kind}${cols?' tv-cols':''}"><header class="tv-block-head"><small>${esc(b.code)}</small><h2>${esc(b.title)}</h2>${pageCount>1?`<span class="tv-page">${pageNo}/${pageCount}</span>`:''}<b>${Number(b.distance||0).toLocaleString()}m</b></header>
+      ${cols?`<div class="tv-colheads"><span>${set?'SQUAD':'SET'}</span><span>MODIFIED</span></div>`:''}<div class="tv-block-rows">${unitsHtml(list)}</div></section></div>`;}
+  function emptyHtml(f){return`<section class="tv-pairing"><p class="tv-eyebrow">MCLAY SWIMMING OS</p><h1>${esc(f.empty||'No session yet')}</h1></section>`;}
+  // sizes: px from the screen height (or width, on a screen stood on its end), stepped by the coach's text-size setting
+  function sizes(){const H=Math.min(g.innerHeight||720,(g.innerWidth||1280)*0.75),k=1+0.15*DISPLAY.size;return{max:Math.max(16,H*0.075*k),min:Math.max(14,H*0.032*k)};}
+  const fits=()=>root.scrollHeight<=(g.innerHeight||720)+2;
+  function tryAt(html,px){root.style.fontSize=`${px}px`;root.innerHTML=html;return fits();}
+  function biggest(html,lo,hi){if(tryAt(html,hi))return hi;if(!tryAt(html,lo))return 0;for(let i=0;i<7;i++){const mid=(lo+hi)/2;if(tryAt(html,mid))lo=mid;else hi=mid;}return Math.floor(lo*2)/2;}
+  // a block's pages: [{list,px}] -- one page when it fits at the minimum size, otherwise as many as it needs
+  const layoutCache=new Map();
+  function blockPages(f,b){const set=f.mode==='set',all=units(b,set,set?f.live:null),{min,max}=sizes();
+    const key=JSON.stringify([g.innerWidth,g.innerHeight,DISPLAY,document.body.classList.contains('tv-has-side'),f.session&&f.session.title,f.session&&f.session.distance,f.mode,f.nav,(f.blocks||[]).map(x=>x.code),b]);
+    if(layoutCache.has(key))return layoutCache.get(key);
+    let pages=[];const whole=biggest(pageHtml(f,b,all,1,1),min,max);
+    if(whole)pages=[{list:all,px:whole}];
+    else{let cur=[];for(const u of all){const next=cur.concat(u);if(!cur.length||tryAt(pageHtml(f,b,next,1,2),min))cur=next;else{pages.push(cur);cur=[u];}}if(cur.length)pages.push(cur);
+      pages=pages.map((list,i)=>({list,px:biggest(pageHtml(f,b,list,i+1,pages.length),min,max)||min}));}
+    if(layoutCache.size>40)layoutCache.clear();layoutCache.set(key,pages);return pages;}
+  // all pages of the frame: SET = the coach's block; WHOLE = every block in turn
+  let pages=[],page=0,turnTimer=0;const TURN_MS=g.MSOS_TV_TURN_MS||12000;
+  function layout(){clearTimeout(turnTimer);const f=TV.frame;if(!f)return;
+    if(f.empty||!f.session||!(f.blocks||[]).length){pages=[];root.style.fontSize='';root.innerHTML=emptyHtml(f);return;}
+    const before=pages[page]&&pages[page].block;pages=[];
+    for(const b of f.blocks){const ps=blockPages(f,b);ps.forEach((p,i)=>pages.push({block:b.id,b,list:p.list,px:p.px,no:i+1,of:ps.length}));}
+    // stay on the block on screen; a new frame in SET mode starts at its first page; WHOLE starts at the coach's block
+    let at=pages.findIndex(p=>p.block===before);if(at<0||f.mode==='set')at=Math.max(0,pages.findIndex(p=>p.b.active));if(f.mode==='set'&&pages[at]&&pages[at].block!==before)at=0;
+    page=Math.max(0,at);show();}
+  function show(){clearTimeout(turnTimer);const p=pages[page];if(!p)return;root.style.fontSize=`${p.px}px`;root.innerHTML=pageHtml(TV.frame,p.b,p.list,p.no,p.of);TV.page={index:page,count:pages.length,block:p.block,no:p.no,of:p.of,px:p.px};
+    if(pages.length>1)turnTimer=setTimeout(()=>{page=(page+1)%pages.length;show();},TURN_MS);}
+  TV.pages=()=>pages.map(p=>({block:p.block,no:p.no,of:p.of,px:p.px,units:p.list.length}));
+  TV.turn=()=>{if(pages.length){page=(page+1)%pages.length;show();}};
   function overlayInner(o){if(o.kind==='swimmer')return`<div class="tvo-card sb">${o.html||'<p class="sb-none">Loading…</p>'}</div>`;
     if(o.kind==='youtube'&&o.youtube)return`<iframe src="https://www.youtube.com/embed/${esc(o.youtube)}?autoplay=1&mute=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
     if(o.kind==='note'||o.kind==='link')return`<div class="tvo-text">${o.who?`<b>${esc(o.who)}</b>`:''}<span>${esc(o.text||o.url||o.label||'')}</span></div>`;
@@ -88,26 +137,42 @@
     v.addEventListener('loadeddata',()=>requestAnimationFrame(tick),{once:true});v.src=o.url;try{const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch{}
     TV.mirror=m;}
   function fallbackFull(o){stopMirror();ovl.className='tv-overlay tvo-full';const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',fitMedia);setTimeout(fitMedia,300);}TV.fellBackFull=true;}
-  // Fit the whole board on the screen: shrink the type until nothing spills off the bottom.
-  function fit(){let size=g.innerWidth>=1200?22:16;root.style.fontSize=`${size}px`;let guard=0;while(root.scrollHeight>g.innerHeight+2&&size>8&&guard++<40){size-=.5;root.style.fontSize=`${size}px`;}}
-  function draw(f,slot=false){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';root.innerHTML=boardHtml(f);if(!slot)drawOverlay(f.overlay||null);fit();}
+  function fit(){layoutCache.clear();layout();}
+  function draw(f,slot=false){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';layout();if(!slot)drawOverlay(f.overlay||null);}
   // 19 Oct 2026: the shared slot -- whatever any coach has put on top, with their name on it.
   function slotOverlay(r){const o=r.overlay;if(!o)return null;return{...o,label:[o.label,r.overlay_by].filter(Boolean).join(' · ')};}
   TV.draw=draw;TV.fit=fit;
-  addEventListener('resize',()=>{if(TV.frame)fit();fitMedia();fitCard();});
+  let resizeT=0;addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{if(TV.frame)fit();fitMedia();fitCard();},150);});
 
   // ---------- keep it current ----------
-  let misses=0,timer=0;
+  let misses=0,timer=0,polling=false,again=false;
   function net(ok){misses=ok?0:misses+1;statusEl.hidden=misses<4;statusEl.textContent=misses>=4?'Reconnecting…':'';}
-  async function poll(){clearTimeout(timer);
-    try{const r=await rpc('msos_tv_frame',TV.slot?{p_secret:secret(),p_rev:TV.rev,p_orev:TV.orev}:{p_secret:secret(),p_rev:TV.rev});net(true);
+  // 19 Oct 2026 ("within a couple of seconds to 3-5 seconds at the most"): the TV listens on its own live channel; a
+  // coach phone sends a data-free "look now" after each change and the TV fetches its frame straight away. While that
+  // channel is up the regular check slows to every 5 s (less traffic on the pool wifi); without it, every 1.5 s as before.
+  const NUDGE_POLL_MS=g.MSOS_TV_NUDGE_POLL_MS||5000;
+  const live=TV.live={key:'',ws:null,up:false,ref:0,hb:0,retry:0,nudges:0};
+  function listen(key){if(!key||!/^[0-9a-f]{32}$/.test(key)||typeof WebSocket!=='function')return;if(live.key===key&&live.ws&&live.ws.readyState<=1)return;
+    live.key=key;try{live.ws?.close();}catch{}const base=String(CFG.supabaseUrl||'').replace(/\/$/,'').replace(/^http/,'ws');if(!base||!CFG.supabaseAnonKey)return;
+    let ws;try{ws=new WebSocket(`${base}/realtime/v1/websocket?apikey=${encodeURIComponent(CFG.supabaseAnonKey)}&vsn=1.0.0`);}catch{return;}live.ws=ws;
+    const topic=`realtime:msos-tv-${key}`,send=m=>{try{if(ws.readyState===1)ws.send(JSON.stringify(m));}catch{}};let joinRef='';
+    ws.onopen=()=>{joinRef=String(++live.ref);send({topic,event:'phx_join',ref:joinRef,join_ref:joinRef,payload:{config:{broadcast:{self:false,ack:false},presence:{key:''},private:false,postgres_changes:[]}}});
+      clearInterval(live.hb);live.hb=setInterval(()=>send({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++live.ref)}),25000);};
+    ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch{return;}
+      if(m.event==='phx_reply'&&m.topic===topic&&m.ref===joinRef){live.up=m.payload?.status==='ok';if(live.up)live.retry=0;return;}
+      if(m.event==='broadcast'&&m.topic===topic&&m.payload?.event==='nudge'){live.nudges++;poll();}};
+    ws.onclose=()=>{clearInterval(live.hb);if(live.ws!==ws)return;live.up=false;live.ws=null;const k=live.key;setTimeout(()=>{if(!live.ws)listen(k);},[1000,2000,5000,10000,30000][Math.min(live.retry++,4)]);};
+    ws.onerror=()=>{};}
+  async function poll(){clearTimeout(timer);if(polling){again=true;return;}polling=true;
+    try{const r=await rpc('msos_tv_frame',TV.slot?{p_secret:secret(),p_rev:TV.rev,p_orev:TV.orev}:{p_secret:secret(),p_rev:TV.rev});net(true);if(r?.nudge)listen(r.nudge);if(r&&'display' in r&&applyDisplay(r.display)&&TV.frame)fit();
       if(r?.status==='frame'&&r.slot){const boardChanged=Number(r.rev)!==TV.rev||!TV.frame;TV.slot=true;TV.orev=Number(r.orev)||0;TV.rev=Number(r.rev)||0;TV.state='live';if(boardChanged)draw(r.frame||{},true);drawOverlay(slotOverlay(r));}
       else if(r?.status==='frame'){TV.rev=Number(r.rev)||0;TV.state='live';draw(r.frame||{});}
       else if(r?.status==='same'){if(TV.state!=='live'&&!TV.frame){TV.state='paired';waiting(r.label);}}
       else if(r?.status==='pairing'){if(TV.state!=='pairing'||!root.querySelector('[data-tv-code]'))showCode(r.code);}
       else{TV.rev=0;TV.frame=null;await pair();}}
     catch{net(false);}
-    timer=setTimeout(poll,POLL_MS);}
+    polling=false;if(again){again=false;return poll();}
+    timer=setTimeout(poll,live.up?NUDGE_POLL_MS:POLL_MS);}
   // Keep the screen awake while the board is up.
   async function wake(){try{if(navigator.wakeLock&&document.visibilityState==='visible')await navigator.wakeLock.request('screen');}catch{}}
   document.addEventListener('visibilitychange',wake);

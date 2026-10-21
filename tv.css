@@ -1,35 +1,58 @@
-/* Pool TV (15 Oct 2026): a whiteboard you can read from the far end of the pool. */
+/* Pool TV (15 Oct 2026; rebuilt 19 Oct 2026 after the first pool TV night): a whiteboard you can read from the far end
+   of the pool on any size of screen. One block per screen; the type size is set by tv.js from the screen height (every
+   size below is in em of that). Two looks, chosen per TV from the coach's phone: light (black on white -- Andy, 15 Oct:
+   "white screen black writing ... easily seen from a few meters away") and dark (white on black). Colour is used only
+   for the block band (warm-up / pre / main / post / warm-down), never for the writing itself.
+   Written for the pool TV's older browser: no inset, aspect-ratio or flex gap. */
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:#06283d;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;cursor:none}
-.tv-root{min-height:100vh;padding:1.2em 1.6em;font-size:22px}
-.tv-pairing{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.tv-pairing>*{margin:.3em 0!important}
-.tv-pairing h1{font-size:3em;margin:0}.tv-pairing p{font-size:1.4em;margin:0;opacity:.9}
-.tv-eyebrow{letter-spacing:.15em;font-weight:800;font-size:1em!important;opacity:.7!important}
-.tv-code{font-size:7em;font-weight:900;letter-spacing:.12em;background:#fff;color:#06283d;border-radius:.2em;padding:.1em .5em;margin:.2em 0;font-variant-numeric:tabular-nums}
-.tv-small{font-size:1em!important;opacity:.6!important}
-.tv-top{display:flex;align-items:flex-end;border-bottom:3px solid rgba(255,255,255,.25);padding-bottom:.4em;margin-bottom:.6em}
-.tv-top div{flex:1;min-width:0;margin-right:1em}.tv-top nav{margin-right:1em}.tv-top small{font-weight:800;letter-spacing:.12em;opacity:.7;font-size:.8em}
-.tv-top h1{margin:0;font-size:2em;line-height:1.1}.tv-top>b{font-size:2em}
-.tv-top nav{display:flex}.tv-top nav span{margin-left:.3em;padding:.15em .5em;border-radius:.4em;background:rgba(255,255,255,.12);font-weight:800;font-size:.9em}.tv-top nav span.on{background:#ffd34d;color:#06283d}
-.tv-body.tv-whole{columns:2 22em;column-gap:1.2em}
-.tv-block{break-inside:avoid;background:rgba(255,255,255,.06);border-radius:.6em;padding:.5em .8em;margin-bottom:.8em}
-.tv-block.active{outline:3px solid #ffd34d}
-.tv-set .tv-block{background:none;padding:0;outline:none}
-.tv-block header{display:flex;align-items:baseline;margin-bottom:.3em}.tv-block header small{font-weight:900;color:#ffd34d;margin-right:.6em}.tv-block header h2{margin:0 .6em 0 0;flex:1;font-size:1.3em}.tv-block header b{font-size:1.2em}
-.tv-set .tv-block header h2{font-size:1.8em}.tv-set .tv-block header b{font-size:1.6em}
-.tv-row{padding:.35em 0;border-top:1px solid rgba(255,255,255,.12)}
-.tv-work b{font-size:1.25em}.tv-work small{display:block;opacity:.8;font-size:.9em;margin-top:.1em}
-.tv-set .tv-work b{font-size:1.7em}.tv-set .tv-work small{font-size:1.1em}
-.tv-rounds{border-left:4px solid #49b6ff;padding-left:.6em;margin:.3em 0}.tv-round-label{font-weight:900;color:#49b6ff;letter-spacing:.08em}
-.tv-cue{opacity:.85;font-style:italic;padding:.2em 0}
-.tv-targets,.tv-mod-people{display:flex;flex-wrap:wrap;margin-top:.35em}
-.tv-t{display:inline-flex;align-items:baseline;margin:0 .4em .3em 0;background:#0e3d5c;border-radius:.4em;padding:.15em .5em;font-size:1.05em}
-.tv-t i{font-style:normal;opacity:.85;margin-right:.4em}.tv-t b{color:#ffd34d;font-variant-numeric:tabular-nums}
-.tv-t.mod{background:#5a2d6e}
-.tv-mod{margin-top:.35em;padding:.3em .5em;border-radius:.4em;background:rgba(160,90,200,.18)}
-.tv-mod-work b{font-size:1.1em}.tv-mod-work small{display:block;opacity:.8}
-.tv-live{margin-top:.6em;background:rgba(255,255,255,.06);border-radius:.6em;padding:.4em .8em}.tv-live small{font-weight:800;letter-spacing:.12em;opacity:.7}.tv-live div{display:flex}.tv-live div span{flex:1;opacity:.8;margin:0 1em}
-.tv-status{position:fixed;left:1em;bottom:1em;background:#b3261e;color:#fff;padding:.3em .8em;border-radius:.4em;font-weight:800}
+:root{--bg:#fff;--fg:#000;--line:#000;--soft:#ececec;--chip:#fff;--modbg:#e6e6e6;--accent:#000}
+body.tv-dark{--bg:#000;--fg:#fff;--line:#fff;--soft:#1c1c1c;--chip:#000;--modbg:#262626;--accent:#ffd34d}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden;cursor:none}
+.tv-root{min-height:100vh;padding:.45em .7em;font-size:22px;line-height:1.15}
+/* pairing / waiting */
+.tv-pairing{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:22px}.tv-pairing>*{margin:.3em 0!important}
+.tv-pairing h1{font-size:3em;margin:0}.tv-pairing p{font-size:1.4em;margin:0}
+.tv-eyebrow{letter-spacing:.15em;font-weight:800;font-size:1em!important}
+.tv-code{font-size:7em;font-weight:900;letter-spacing:.12em;background:var(--fg);color:var(--bg);border-radius:.2em;padding:.1em .5em;margin:.2em 0;font-variant-numeric:tabular-nums}
+.tv-small{font-size:1em!important}
+/* top line: session, block chips, total */
+.tv-top{display:flex;align-items:center;border-bottom:.12em solid var(--line);padding-bottom:.15em;margin-bottom:.4vmin;font-size:2.4vmin}
+.tv-top-title{flex:1;min-width:0;margin-right:1em}.tv-top small{font-weight:800;letter-spacing:.12em;font-size:.75em;display:block}
+.tv-top h1{margin:0;font-size:1.5em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tv-top nav{display:flex;margin-right:1em}.tv-top nav span{margin-left:.3em;padding:.1em .45em;border-radius:.3em;border:.12em solid var(--line);font-weight:900}
+.tv-top nav span.on{background:var(--fg);color:var(--bg)}
+.tv-total{font-size:1.6em;font-weight:900}
+/* one block */
+.tv-block{margin:0}
+.tv-block-head{display:flex;align-items:center;padding:.12em .4em;border-radius:.2em;color:#fff;background:#444;margin-bottom:.15em}
+.tv-k-wu .tv-block-head{background:#1b7a3a}.tv-k-pre .tv-block-head{background:#1f5fae}.tv-k-main .tv-block-head{background:#b3261e}.tv-k-post .tv-block-head{background:#6b3fa0}.tv-k-wd .tv-block-head{background:#0f7c80}
+.tv-block-head small{font-weight:900;font-size:.8em;margin-right:.6em;letter-spacing:.06em;border:.1em solid #fff;padding:0 .3em;border-radius:.2em}
+.tv-block-head h2{margin:0 .6em 0 0;flex:1;font-size:1.1em}.tv-block-head b{font-size:1.1em}.tv-page{margin-right:.8em;font-weight:800;font-size:.8em}
+.tv-colheads{display:none}
+.tv-row{padding:.18em 0;border-top:.05em solid var(--line)}
+.tv-row:first-child{border-top:0}
+.tv-work b{font-size:1em;font-weight:900}.tv-work small{display:block;font-size:.62em;font-weight:600;margin-top:.05em}
+.tv-rounds{border-left:.18em solid var(--line);padding-left:.35em;margin:.15em 0}.tv-round-label{font-weight:900;font-size:.62em;letter-spacing:.06em}
+.tv-cue{font-style:italic;font-weight:600;font-size:.7em;padding:.1em 0}
+/* target times: name + time chips, the time the boldest thing on the line */
+.tv-targets,.tv-mod-people{display:flex;flex-wrap:wrap;margin-top:.1em}
+.tv-t{display:inline-flex;align-items:baseline;margin:0 .3em .15em 0;background:var(--chip);color:var(--fg);border:.06em solid var(--line);border-radius:.25em;padding:.02em .3em;font-size:.62em}
+.tv-t i{font-style:normal;font-weight:600;margin-right:.35em}.tv-t b{font-weight:900;font-size:1.12em;font-variant-numeric:tabular-nums;color:var(--accent)}
+body.tv-light .tv-t b{color:#000}
+/* modified swimmers: a grey band with a thick bar */
+.tv-mod{margin-top:.1em;padding:.1em .3em;border-left:.25em solid var(--line);background:var(--modbg);border-radius:.15em}
+.tv-mod-work b{font-size:.85em;font-weight:900}.tv-mod-work small{display:block;font-size:.55em;font-weight:600}
+.tv-mod .tv-t{font-size:.55em}
+/* landscape: modified swimmers in their own column on the right */
+@media (orientation:landscape){
+  .tv-cols .tv-colheads{display:flex;font-size:.45em;font-weight:900;letter-spacing:.12em;margin:.1em 0}.tv-cols .tv-colheads span{flex:1 1 0}.tv-cols .tv-colheads span+span{flex:0 0 44%;margin-left:2%}
+  .tv-row.has-mods{display:flex;align-items:flex-start}
+  .tv-row.has-mods .tv-main{flex:1 1 0;min-width:0}
+  .tv-row.has-mods .tv-mods{flex:0 0 44%;margin-left:2%}
+  .tv-row.has-mods .tv-mod:first-child{margin-top:0}
+}
+.tv-live{margin-top:.25em;border:.05em solid var(--line);border-radius:.2em;padding:.15em .4em;font-size:.6em}.tv-live small{font-weight:900;letter-spacing:.12em}.tv-live div{display:flex}.tv-live div span{flex:1;margin:0 1em}
+.tv-status{position:fixed;left:1em;bottom:1em;background:#b3261e;color:#fff;padding:.3em .8em;border-radius:.4em;font-weight:800;font-size:20px}
 /* overlay: same shapes as the in-app TV overlay */
 /* 15 Oct 2026, first real TV: its browser is older than the phone's (no inset / aspect-ratio / flex spacing).
    Without them the full-screen box never covered the screen and the corner video was cropped to its top-left corner.
@@ -48,52 +71,29 @@ html,body{margin:0;height:100%;background:#06283d;color:#fff;font-family:system-
 .tvo-card-sec{margin-top:.6em}.tvo-card-sec label{display:block;font-weight:900;letter-spacing:.1em;font-size:.75em;color:#ffd34d}
 .tvo-card-sec p{display:flex;margin:.15em 0}.tvo-card-sec p span{flex:1;opacity:.9;margin-right:1em}.tvo-card-sec p b{font-variant-numeric:tabular-nums}
 .tvo-full .tvo-card{font-size:clamp(20px,2.6vw,48px)}
-/* 15 Oct 2026, Andy at the pool: "some of the times and modified stuff are hard to read with the yellows and purples.
-   It might need to be white screen black writing ... easily seen from a few meters away".
-   High-contrast theme: white screen, black writing, no faded text, no coloured text. Times are the boldest thing on a
-   line. Modified swimmers sit in a light-grey band with a thick black bar so they stand apart without colour. */
-html,body{background:#fff;color:#000}
-.tv-root *{opacity:1!important}
-.tv-eyebrow,.tv-small,.tv-top small,.tv-live small{color:#000}
-.tv-code{background:#000;color:#fff}
-.tv-top{border-bottom:4px solid #000}
-.tv-top nav span{background:#fff;color:#000;border:2px solid #000}
-.tv-top nav span.on{background:#000;color:#fff}
-.tv-block{background:#fff;border:2px solid #000}
-.tv-block.active{outline:none;border:6px solid #000}
-.tv-set .tv-block{border:0}
-.tv-block header small{background:#000;color:#fff;padding:0 .3em;border-radius:.2em}
-.tv-row{border-top:2px solid #000}
-.tv-work b{font-weight:900}
-.tv-work small,.tv-mod-work small{color:#000;font-weight:600}
-.tv-rounds{border-left:6px solid #000}.tv-round-label{color:#000}
-.tv-cue{color:#000;font-weight:600}
-.tv-t{background:#fff;color:#000;border:2px solid #000}
-.tv-t i{color:#000;font-weight:600}
-.tv-t b{color:#000;font-weight:900;font-size:1.15em}
-.tv-t.mod{background:#fff;border:2px solid #000}
-.tv-mod{background:#e8e8e8;border-left:10px solid #000;border-radius:.2em}
-.tv-mod-work b{font-weight:900}
-.tv-live{background:#fff;border:2px solid #000}
-.tv-overlay{box-shadow:0 0 0 4px #000,0 10px 40px rgba(0,0,0,.35)}
-.tv-overlay.tvo-corner{border:4px solid #000}
-.tvo-text,.tvo-card{background:#fff;color:#000}
-.tvo-card-sec label{color:#000;border-bottom:2px solid #000}
-.tvo-card>small,.tvo-text b{opacity:1;color:#000}
+.tv-overlay{box-shadow:0 0 0 4px var(--line),0 10px 40px rgba(0,0,0,.35)}
+.tv-overlay.tvo-corner{border:4px solid var(--line)}
+.tvo-text,.tvo-card{background:var(--bg);color:var(--fg)}
+.tvo-card-sec label{color:var(--fg);border-bottom:2px solid var(--line)}
+.tvo-card>small,.tvo-text b{opacity:1;color:var(--fg)}
 .tvo-card-sec p b{font-weight:900}
 
 /* 16 Oct 2026: the swimmer screen. A side panel on the right with the Board narrowed to the left (nothing hidden
    under it), or full screen. Same white/black high-contrast look; tables with heavy rules so rows read from a distance. */
 .tv-has-side .tv-root{width:54vw}
-.tv-has-side .tv-body.tv-whole{columns:1}
-.tvo-swimmer .tvo-frame{background:#fff;align-items:stretch;justify-content:flex-start}
+.tvo-swimmer .tvo-frame{background:var(--bg);align-items:stretch;justify-content:flex-start}
 .tvo-card.sb{width:100%;height:100%;overflow:hidden;padding:.8em 1em;font-size:24px;line-height:1.2}
-.sb-head{display:flex;align-items:baseline;border-bottom:4px solid #000;padding-bottom:.2em;margin-bottom:.3em}
-.sb-head h3{margin:0;font-size:1.7em;flex:1;margin-right:.5em}.sb-head small{font-weight:900;letter-spacing:.08em;text-transform:uppercase;background:#000;color:#fff;padding:.1em .4em;border-radius:.2em}
+.sb-head{display:flex;align-items:baseline;border-bottom:4px solid var(--line);padding-bottom:.2em;margin-bottom:.3em}
+.sb-head h3{margin:0;font-size:1.7em;flex:1;margin-right:.5em}.sb-head small{font-weight:900;letter-spacing:.08em;text-transform:uppercase;background:var(--fg);color:var(--bg);padding:.1em .4em;border-radius:.2em}
 .sb-facts{display:flex;flex-wrap:wrap;margin:.2em 0 .3em}.sb-facts span{margin:0 1em .2em 0;font-weight:600}
-.tvo-card.sb h4{margin:.5em 0 .15em;font-size:.8em;letter-spacing:.1em;text-transform:uppercase;font-weight:900;border-bottom:2px solid #000}
+.tvo-card.sb h4{margin:.5em 0 .15em;font-size:.8em;letter-spacing:.1em;text-transform:uppercase;font-weight:900;border-bottom:2px solid var(--line)}
 .sb-table{width:100%;border-collapse:collapse}.sb-table th{text-align:left;font-size:.7em;letter-spacing:.06em;text-transform:uppercase;padding:.1em .3em .1em 0}
-.sb-table td{padding:.18em .3em .18em 0;border-bottom:1px solid #000;font-variant-numeric:tabular-nums;vertical-align:top}.sb-table td small{font-size:.65em}
+.sb-table td{padding:.18em .3em .18em 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:top}.sb-table td small{font-size:.65em}
 .sb-list{margin:.2em 0;padding-left:1.1em}.sb-list li{margin:.15em 0}.sb-list small{font-size:.75em}
 .sb-none,.sb-note{margin:.2em 0;font-weight:600}.sb-note{font-size:.75em}
 .tvo-full .tvo-card.sb{font-size:34px;padding:1em 2em}
+/* 19 Oct 2026: swimmer goal and training balance on the TV */
+.sb-goal{display:flex;flex-direction:column;border:.15em solid var(--line);border-radius:.3em;padding:.3em .5em;margin:.3em 0}.sb-goal small{font-weight:900;letter-spacing:.12em;font-size:.7em}.sb-goal>b{font-size:1.4em}.sb-goal span{font-size:1em}
+.sb-goal.reached{border-width:.3em}
+.sb-balance p{display:flex;align-items:center;margin:.08em 0}.sb-bal-row span{flex:0 0 42%}.sb-bal-row b{margin-left:auto;padding-left:.4em}
+.sb-bar{display:block;height:.6em;background:var(--fg);border-radius:.1em;min-width:2px}
