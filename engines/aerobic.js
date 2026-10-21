@@ -24,6 +24,13 @@
     if(!item?.zone&&!item?.repPattern?.length)return{status:'none'};
     const st=E?.stroke?.(strokeOverride||item?.stroke||'Freestyle')||'Freestyle',rest=authoredRest(item,10),course=session?.identity?.course||'';
     if(st==='Choice')return{status:'none',reason:'Choice aerobic work'};
+    // 20 Oct 2026: a rep pattern whose groups each name their own stroke ('4 IM — Regeneration / 2 Free — Development')
+    // is timed per group from THAT stroke's T400, not one stroke for the whole set. A coach stroke override still wins.
+    if(item?.repPattern?.some(p=>p?.stroke)&&!strokeOverride){
+      const rows=item.repPattern.map(p=>{const rs=E?.stroke?.(p.stroke||item?.stroke||'Freestyle')||'Freestyle',a=t400(ath,state,rs,course);if(!a)return{rep:p.rep,zone:p.zone,stroke:rs,...fallback(p.zone,rs),message:`No ${rs} T400 loaded · HR/SR guide`};const sec=E.seconds(a),r=target(sec,item.distance,p.zone,rest);return r?{rep:p.rep,zone:p.zone,stroke:rs,status:'ok',...r,source:`${rs} T400 ${clock(sec)}`}:{rep:p.rep,zone:p.zone,stroke:rs,status:'missing',message:'No valid T400 coefficient'}});
+      const timed=rows.some(r=>r.status==='ok');
+      return{status:timed?'pattern':'pattern_fallback',rows,source:[...new Set(rows.map(r=>r.source).filter(Boolean))].join(' · '),stroke:'Mixed'};
+    }
     const a=t400(ath,state,st,course);
     if(!a){
       if(item?.repPattern?.length)return{status:'pattern_fallback',rows:item.repPattern.map(p=>({rep:p.rep,zone:p.zone,...fallback(p.zone,st)})),source:'Rushton Cone',stroke:st,message:`No ${st} T400 loaded · HR/SR guide`};

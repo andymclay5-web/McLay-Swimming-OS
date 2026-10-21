@@ -29,6 +29,8 @@
     return{id:cap.id,type,text:text(cap.text_content).slice(0,600),media_id:cap.media_id||'',media_path:cap.media_path||'',who:names.join(' + '),context:text(cap.context_label||'')};}
   function set(next){M.state.settings=M.state.settings||{};M.state.settings.tvOverlay=next;M.store?.save?.(M.state);paintControl();return next;}
   T.showCapture=(captureId,mode='corner')=>{const cap=(M.state.captures||[]).find(c=>c.id===captureId);if(!cap)throw new Error('Capture not found');const c=captureSummary(cap);
+    // 19 Oct 2026: a clip that hasn't reached the cloud yet is sent first (it shows on the TV as soon as it lands)
+    if(!cap.media_path&&cap.media_id)try{M.cloud?.prioritiseMedia?.(captureId);}catch{}
     return set({id:uid(),mode:mode==='full'?'full':'corner',capture:c,label:[c.who,c.type==='note'?'note':c.type].filter(Boolean).join(' · '),at:new Date().toISOString()});};
   T.showLink=(url,mode='corner',label='')=>{const u=text(url);if(!/^https?:\/\//i.test(u))throw new Error('Paste a full link starting with https://');return set({id:uid(),mode:mode==='full'?'full':'corner',url:u,kind:linkKind(u),label:text(label)||(youtubeId(u)?'YouTube video':'Link'),at:new Date().toISOString()});};
   // Swimmer screen (16 Oct 2026). Andy: "when you bring up a swimmer, the first screen ... is like their profile ... then
@@ -102,9 +104,11 @@
   }
   T.openControls=openControls;
   // 19 Oct 2026: shared TV slot status ("On the TV: Jordan's · Kaleb waiting") wherever the coach controls the TV.
+  function sendingNote(){const o=T.current();const id=o?.capture?.id;if(!id)return'';const st=M.cloud?.mediaStatus?.(id);if(!st)return'';return st.shrinking?' · making the clip smaller to send':st.waiting?` · ${st.waiting.toLowerCase()}`:' · sending the clip';}
   function slotLine(){const sl=M.tvLink?.slot?.();if(!sl?.supported)return'';const mm=n=>`${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;
     if(sl.state==='queued')return`⏳ Waiting — ${sl.by||sl.showingBy||'another coach'} is on the TV. Yours goes up next${sl.position>1?` (#${sl.position})`:''}.`;
-    if(sl.state==='showing')return`📺 Yours is on the TV${Number.isFinite(sl.left)&&sl.left!==null?` · comes off in ${mm(sl.left)} unless you use it`:''}${sl.waiting?.length?` · ${sl.waiting.join(', ')} waiting`:''}`;
+    // 19 Oct 2026: held up to 15 min (even with the app closed); after 3 min untouched another coach's item can replace it
+    if(sl.state==='showing')return`📺 Yours is on the TV${sendingNote()}${Number.isFinite(sl.left)&&sl.left!==null?` · stays up ${mm(sl.left)}`:''}${Number.isFinite(sl.open)&&sl.open!==null?(sl.open>0?` · other coaches can replace it in ${mm(sl.open)}`:' · other coaches can replace it now'):''}${sl.waiting?.length?` · ${sl.waiting.join(', ')} waiting`:''}`;
     if(sl.showingBy)return`📺 ${sl.showingBy} is using the TV${sl.waiting?.length?` · ${sl.waiting.length} waiting`:''} — anything you send waits its turn.`;return'';}
   T.slotLine=slotLine;
   T.refreshScreens=()=>{const t=slotLine();document.querySelectorAll('[data-tv-slot-line]').forEach(el=>{el.textContent=t;el.hidden=!t;});};
@@ -113,12 +117,14 @@
   // "On my phone, I'll just be on the swimmer's screen and linking between the things." Each tab puts that page on the
   // TV straight away; Videos lists every capture ever tagged to the swimmer (tap one and it goes up); YouTube finds a
   // clip by description (AI search) or takes a pasted link, and the link is filled in for you -- one tap to show it.
-  const TABS=[['profile','Profile'],['training','Training'],['performance','Performance'],['pathway','Pathway'],['videos','Videos'],['youtube','YouTube']];
+  const TABS=[['profile','Profile'],['training','Training'],['performance','Performance'],['pathway','Pathway'],['goal','Goal'],['videos','Videos'],['youtube','YouTube']];
   let sw={id:'',tab:'profile',results:[],searching:false,msg:''};
   function openSwimmer(athleteId,tab,{noTv=false}={}){const a=(M.state.athletes||[]).find(x=>x.id===athleteId);if(!a)return;
     if(sw.id!==athleteId)sw={id:athleteId,tab:'profile',results:[],searching:false,msg:''};if(tab)sw.tab=tab;
     const cur=T.current();if(!noTv&&sw.tab!=='youtube'&&!(sw.tab==='videos'&&cur&&!cur.swimmer&&cur.from===athleteId)&&!(cur?.swimmer?.id===athleteId&&cur.swimmer.page===sw.tab)){try{T.showSwimmer(athleteId,cur?.mode||'corner',sw.tab);}catch{}}
-    paintSwimmer();}
+    paintSwimmer();
+    // other coaches' goals (at most every 30 s)
+    if(M.swimmerGoals&&Date.now()-(M.swimmerGoals.pulledAt||0)>30000)M.swimmerGoals.pull().then(n=>{if(n&&document.querySelector('[data-tv-swimmer-screen]'))paintSwimmer();}).catch(()=>{});}
   T.openSwimmer=openSwimmer;T.swimmerScreen=()=>({id:sw.id,tab:sw.tab});
   function paintSwimmer(){const host=document.querySelector('#modalHost');if(!host)return;const a=(M.state.athletes||[]).find(x=>x.id===sw.id);if(!a)return;const B=M.swimmerBrief,o=T.current();
     const onTv=o?(o.swimmer?`${B?.titles?.[o.swimmer.page]||'Profile'} · ${o.mode==='full'?'full screen':'side panel'}`:`${o.label||'clip'} · ${o.mode==='full'?'full screen':'corner'}`):'nothing';
@@ -128,6 +134,7 @@
         ${sw.msg?`<p class="muted" data-sw-msg>${esc(sw.msg)}</p>`:''}
         ${sw.results.map((v,i)=>`<div class="sb-yt-row">${v.thumbnail?`<img src="${esc(v.thumbnail)}" alt="">`:''}<span><b>${esc(v.title||v.url)}</b><small>${esc(v.channel||'')}</small></span><span class="tv-cap-acts"><button type="button" data-sw-yt="${i}" data-m="corner">Corner</button><button type="button" data-sw-yt="${i}" data-m="full">Full</button></span></div>`).join('')}</div>`;}
     else if(sw.tab==='videos'){const rows=B?.captureRows?.(a)||[];body=rows.length?rows.map(v=>`<div class="tv-cap-row"><span><b>${esc(v.type==='note'?'Note':v.type[0].toUpperCase()+v.type.slice(1))}</b> · ${esc(v.date)}<small>${esc(v.text||v.context||'')}</small></span><span class="tv-cap-acts"><button type="button" data-sw-cap="${esc(v.id)}" data-m="corner">Corner</button><button type="button" data-sw-cap="${esc(v.id)}" data-m="full">Full</button></span></div>`).join(''):'<p class="muted">No videos, photos or notes tagged to this swimmer yet.</p>';}
+    else if(sw.tab==='goal')body=`<div class="sb-preview">${B?B.html(B.page(a.id,'goal')):''}</div>${goalPicker(a)}`;
     else body=`<div class="sb-preview">${B?B.html(B.page(a.id,sw.tab)):'Swimmer pages not loaded'}</div>`;
     host.innerHTML=`<div class="modal-backdrop" data-tv-swimmer-screen><section class="modal sb-modal"><header><h2>📺 ${esc(a.full_name)}</h2><button data-sw-close>×</button></header>
       <nav class="sb-tabs">${TABS.map(([k,l])=>`<button type="button" data-sw-tab="${k}" class="${sw.tab===k?'on':''}">${l}</button>`).join('')}</nav>
@@ -142,6 +149,11 @@
     host.querySelector('[data-sw-off]')?.addEventListener('click',()=>{T.clear();M.toast?.('Taken off the TV');paintSwimmer();});
     host.querySelector('[data-sw-show]')?.addEventListener('click',()=>{T.showSwimmer(sw.id,'corner',sw.tab==='youtube'?'profile':sw.tab);paintSwimmer();});
     host.querySelector('[data-sw-back]')?.addEventListener('click',()=>{T.showSwimmer(sw.id,'corner',sw.tab==='youtube'||sw.tab==='videos'?'profile':sw.tab);paintSwimmer();});
+    host.querySelector('[data-goal-event]')?.addEventListener('change',e=>{sw.goalEvent=e.currentTarget.value;paintSwimmer();});
+    host.querySelectorAll('[data-goal-pick]').forEach(b=>b.onclick=()=>{const c=(sw.goalChoices||[])[Number(b.dataset.goalPick)];if(!c)return;try{M.swimmerGoals.set(a.id,c);M.toast?.(`Goal set: ${c.label}`);T.showSwimmer(a.id,T.current()?.mode||'corner','goal');}catch(e){M.toast?.(e.message);}paintSwimmer();});
+    host.querySelector('[data-goal-own]')?.addEventListener('click',()=>{const [d,st]=String(sw.goalEvent||'').split('|');const t=host.querySelector('[data-goal-time]')?.value,course=host.querySelector('[data-goal-course]')?.value||'SCM';const sec=M.util?.seconds?.(t)??Number(t);
+      try{M.swimmerGoals.set(a.id,{distance:d,stroke:st,course,label:text(host.querySelector('[data-goal-label]')?.value)||'Goal time',kind:'coach',seconds:sec});M.toast?.('Goal set');T.showSwimmer(a.id,T.current()?.mode||'corner','goal');}catch(e){M.toast?.(e.message);}paintSwimmer();});
+    host.querySelector('[data-goal-clear]')?.addEventListener('click',()=>{try{M.swimmerGoals.set(a.id,null);M.toast?.('Goal cleared');}catch(e){M.toast?.(e.message);}paintSwimmer();});
     host.querySelectorAll('[data-sw-cap]').forEach(b=>b.onclick=()=>{try{const r=T.showCapture(b.dataset.swCap,b.dataset.m);r.from=sw.id;M.store?.save?.(M.state);M.toast?.('On the TV');paintSwimmer();}catch(e){M.toast?.(e.message);}});
     host.querySelectorAll('[data-sw-yt]').forEach(b=>b.onclick=()=>{const v=sw.results[Number(b.dataset.swYt)];if(!v)return;try{const r=T.showLink(v.url,b.dataset.m,v.title||'YouTube video');r.from=sw.id;M.store?.save?.(M.state);M.toast?.('On the TV');paintSwimmer();}catch(e){M.toast?.(e.message);}});
     const q=host.querySelector('[data-sw-q]');if(q){q.oninput=()=>{sw.q=q.value;};q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();find();}};}
@@ -149,6 +161,16 @@
     host.querySelector('[data-sw-paste]')?.addEventListener('click',async()=>{let t='';try{t=await navigator.clipboard.readText();}catch{}t=text(t);const m=t.match(/https?:\/\/\S+/);
       if(!m){sw.msg='No link found to paste. In YouTube tap Share → Copy link, then come back and tap Paste a link.';paintSwimmer();return;}
       sw.results=[{url:m[0],title:youtubeId(m[0])?'YouTube video (pasted link)':'Pasted link',channel:''}];sw.msg='Link pasted — tap Corner or Full to show it.';paintSwimmer();});}
+  // 19 Oct 2026 (Andy / William's mum: "win a gold medal at New Zealand age groups"): pick the swimmer's goal from their
+  // own pathway ladder (qualifying, final, medal standards) or type a time. engines/swimmer-goals.js keeps it.
+  function goalPicker(a){const G=M.swimmerGoals,B=M.swimmerBrief;if(!G)return'';const evs=(B?.eventTable?.(a)||[]).map(e=>({key:`${e.distance}|${e.stroke}`,label:e.event}));
+    const cur=G.get(a.id)?.goal;if(!sw.goalEvent)sw.goalEvent=cur?`${cur.distance}|${cur.stroke}`:evs[0]?.key||'';
+    const [d,st]=String(sw.goalEvent).split('|');sw.goalChoices=d?G.choices(a.id,d,st):[];
+    const fmt=v=>M.util?.clock?M.util.clock(v):String(v);
+    return`<section class="sb-goal-pick"><h3>${cur?'Change the goal':'Choose a goal'}</h3>${evs.length?`<label class="id-free">Event<select data-goal-event>${evs.map(e=>`<option value="${esc(e.key)}" ${e.key===sw.goalEvent?'selected':''}>${esc(e.label)}</option>`).join('')}</select></label>`:'<p class="muted">No race results yet — type a goal time below.</p>'}
+      ${sw.goalChoices.length?`<div class="sb-goal-choices">${sw.goalChoices.map((c,i)=>`<button type="button" data-goal-pick="${i}" class="${c.achieved?'done':''}"><b>${esc(c.label)}</b><span>${esc(c.course==='LCM'?'LC':'SC')} · ${esc(fmt(c.seconds))}${c.achieved?' · reached':''}</span></button>`).join('')}</div>`:'<p class="muted">No pathway standards loaded for this event.</p>'}
+      <details><summary>Or type a goal</summary><div class="tv-pair-row"><input data-goal-label placeholder="e.g. Gold · NZ Age Groups"><input data-goal-time placeholder="2:58.40" inputmode="decimal"><select data-goal-course><option>SCM</option><option>LCM</option></select><button type="button" data-goal-own>Set</button></div></details>
+      ${cur?`<div class="hub-actions"><button type="button" class="danger" data-goal-clear>Clear goal</button></div>`:''}</section>`;}
   async function find(){const q=text(sw.q||document.querySelector('[data-sw-q]')?.value);if(!q){sw.msg='Say or type what you want to find first.';paintSwimmer();return;}
     sw.q=q;sw.searching=true;sw.msg='';sw.results=[];paintSwimmer();
     try{const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;const r=await f('/functions/v1/msos-video-search',{method:'POST',body:JSON.stringify({query:q})});

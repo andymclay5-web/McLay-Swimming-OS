@@ -498,7 +498,7 @@
     mixed:['reg-400','max-12','rp-25','ol-at-100','reset-scull','rp-50','max-100'],
     skill:['reg-400','dev-mix','dev-100']
   };
-  const libById=id=>LIB.find(x=>x.id===id)||mySets().find(x=>x.id===id);
+  const libById=id=>LIB.find(x=>x.id===id)||M.setLibrary?.byId?.(id)||mySets().find(x=>x.id===id);
   // "Does it remember new sets that are added?" (Andy, 13 Oct 2026) -- yes: every set in a session he writes and
   // saves is offered back under YOUR SETS, newest first, tagged by what the parser and dosage engine make of it.
   // Nothing extra to save; it follows his real sessions. Library sets are not repeated here.
@@ -508,7 +508,7 @@
     const seen=new Set(LIB.map(x=>lc(x.text))),out=[];const sessions=Object.values(M.state?.canonicalSessions||{}).filter(x=>x?.identity?.date&&(x.blocks||[]).length).sort((a,b)=>String(b.identity.date+b.identity.dayPart).localeCompare(String(a.identity.date+a.identity.dayPart))).slice(0,40);
     for(const ses of sessions)for(const blk of ses.blocks||[]){const sec=SECTION_OF(blk);if(!sec)continue;for(const it of blk.items||[]){if(it.kind!=='set'&&it.kind!=='group')continue;let t='';try{t=String(M.session?.itemText?.(it)||it.raw||'').trim();}catch{t=String(it.raw||'').trim();}if(!t||t.length>400)continue;const key=lc(t);if(seen.has(key))continue;seen.add(key);
       let fits=[];try{const d=D.session({id:`mine-probe-${ses.id}-${blk.id||''}-${it.id||out.length}`,identity:ses.identity,blocks:[{id:'b',type:blk.type,title:blk.title,items:[it]}]},M.state,{delivered:false});fits=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres).map(([k])=>k);}catch{}
-      const first=t.split('\n')[0];out.push({id:`mine-${out.length}-${first.replace(/[^a-z0-9]+/gi,'-').slice(0,24)}`,section:sec,label:first,text:t,fits,for:['all'],mine:true,from:`${ses.identity.date} ${ses.identity.dayPart||''}`.trim()});if(out.length>=60)break;}}
+      const first=t.split('\n')[0];const by=ses.lastEditedBy||{};out.push({id:`mine-${out.length}-${first.replace(/[^a-z0-9]+/gi,'-').slice(0,24)}`,section:sec,label:first,text:t,fits,for:['all'],mine:true,author:by.role&&by.role!=='owner'?(String(by.name||'').split(/[\s@]/)[0]||'Assistant'):'Andy',from:`${ses.identity.date} ${ses.identity.dayPart||''}`.trim()});if(out.length>=60)break;}}
     mineCache={rev,list:out};return out;}
   SM.mySets=mySets;
   function pick(section,kind){return LIB.find(x=>x.section===section&&(x.for||[]).includes(kind))||LIB.find(x=>x.section===section);}
@@ -622,12 +622,21 @@
     const keysOf=x=>{const a=firstKey(x);let b2=a;try{b2=b?firstKey(adjustForPhase(x,b)):a;}catch{}return[a,b2];};
     const notUsed=x=>stage==='WARM DOWN'||keysOf(x).every(k=>!here.has(k)&&!recent.has(k));
     const inPhase=x=>!x.strict||(x.phases||[]).includes(phase);
-    let pool=LIB.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x)&&fitsFocus(x,k));
-    if(!pool.length&&stage!=='MAIN SET')pool=LIB.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x));
-    const ranked=pool.map((x,i)=>({x,sc:scoreFor(x,k,phase,techWords),i})).sort((p,q)=>q.sc-p.sc||p.i-q.i).map(o=>o.x);
+    // 19 Oct 2026: options come from the set library (engines/set-library.js) -- Andy's sets, his sessions' sets, coach
+    // sets, Claude's variations -- kept sets plus at most one new one waiting for his review; a set flagged by the sense
+    // check (e.g. 200 #1 hands by side) or dropped by him is never offered.
+    const SLB=M.setLibrary,SRC=SLB?SLB.all().filter(x=>x.status==='approved'||x.status==='proposed'):LIB;
+    let pool=SRC.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x)&&fitsFocus(x,k));
+    if(!pool.length&&stage!=='MAIN SET')pool=SRC.filter(x=>x.section===stage&&notUsed(x)&&inPhase(x));
+    const ranked=pool.map((x,i)=>({x,sc:scoreFor(x,k,phase,techWords)-(x.status==='proposed'?0.75:0),i})).sort((p,q)=>q.sc-p.sc||p.i-q.i).map(o=>o.x);
     // A phase-specific set from another phase is kept for "more", never the top list.
-    const top=ranked.filter(x=>!phase||(x.phases||['any']).includes(phase)||(x.phases||['any']).includes('any')).slice(0,5);
-    let mine=[];if(stage==='MAIN SET'&&k.systems.length){try{const allowed=new Set([...k.systems,'Skill / Technical','Regeneration']);mine=mySets().filter(x=>x.section==='MAIN SET'&&(x.fits||[]).length&&(x.fits||[]).every(z=>allowed.has(z))&&(x.fits||[]).some(z=>z!=='Skill / Technical'&&z!=='Regeneration')&&notUsed(x)).slice(0,2).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}}
+    const inPh=ranked.filter(x=>!phase||(x.phases||['any']).includes(phase)||(x.phases||['any']).includes('any'));
+    // Andy: "poor and similar" -- six DIFFERENT options (no two from the same set or starting the same way, a mix of
+    // authors), turning over day to day.
+    // His own sets from earlier sessions that fit come first (up to two), then the rest of the variety.
+    let top=inPh.slice(0,5);if(SLB?.varied){const fromMine=stage==='MAIN SET'?inPh.filter(x=>x.origin==='session').filter((x,i,a)=>a.findIndex(y=>y.text.split('\n')[0].trim().toLowerCase()===x.text.split('\n')[0].trim().toLowerCase())===i).slice(0,2):[];
+      top=[...fromMine,...SLB.varied(inPh.filter(x=>!fromMine.includes(x)),{limit:6-fromMine.length,taken:fromMine,date:String(session?.identity?.date||''),score:x=>scoreFor(x,k,phase,techWords)-(x.status==='proposed'?0.75:0)})].map(x=>x.origin==='session'&&x.from?{...x,label:`${x.label} · yours (${x.from})`}:x);}
+    let mine=[];if(!SLB&&stage==='MAIN SET'&&k.systems.length){try{const allowed=new Set([...k.systems,'Skill / Technical','Regeneration']);mine=mySets().filter(x=>x.section==='MAIN SET'&&(x.fits||[]).length&&(x.fits||[]).every(z=>allowed.has(z))&&(x.fits||[]).some(z=>z!=='Skill / Technical'&&z!=='Regeneration')&&notUsed(x)).slice(0,2).map(x=>({...x,label:`${x.label} · yours (${x.from})`}));}catch{}}
     // On a combination day, the system the main set is still missing comes first.
     if(stage==='MAIN SET'&&k.combo&&chk?.combo?.missing?.length){const miss=chk.combo.missing.map(briefKind);top.sort((p,q)=>(entryKinds(q).some(f=>miss.includes(f))?1:0)-(entryKinds(p).some(f=>miss.includes(f))?1:0));}
     return{top:[...top,...mine],more:ranked.filter(x=>!top.includes(x)),phase,k};
@@ -648,9 +657,13 @@
     const head=`<div class="msos-check-title">FROM YOUR PROGRAMMING${focusLabel?` · ${esc(focusLabel)}`:''} · ${esc(STAGE_LABEL[stage].toUpperCase())} OPTIONS</div>`;
     const list=rows.length?rows.map(fitRow).join(''):`<p class="muted">Nothing in your programming for this part yet${stage==='MAIN SET'&&!noPlan?" matches today's focus":''} — write it in, or pick another part above.</p>`;
     const more=opts.more.length?`<details class="msos-more" data-msos-stage-more><summary>More ${esc(STAGE_LABEL[stage].toLowerCase())} options (${opts.more.length})</summary>${opts.more.map(x=>fitRow(noPlan?x:adjustForPhase(x,b))).join('')}</details>`:'';
-    return`<div class="msos-fits" data-msos-stage-panel="${esc(stage)}">${planNote}${chips}${phaseNote}${squadNote}${head}${list}${more}${moreHtml(k.kinds[0]||'mixed',k.named||null,k.combo,noPlan?null:b)}</div>`;
+    const libBtn=M.setLibrary?`<div class="hub-actions"><button type="button" data-sl-open data-sl-tab="${(M.access?.role?.()||'owner')==='owner'&&(M.setLibrary.counts().proposed||0)?'waiting':'approved'}">Set library · ${M.setLibrary.counts().total} sets${(M.setLibrary.counts().proposed||0)?` · ${M.setLibrary.counts().proposed} waiting`:''}</button></div>`:'';
+    return`<div class="msos-fits" data-msos-stage-panel="${esc(stage)}">${planNote}${chips}${phaseNote}${squadNote}${head}${list}${more}${libBtn}${moreHtml(k.kinds[0]||'mixed',k.named||null,k.combo,noPlan?null:b)}</div>`;
   }
-  function fitRow(x){return`<div class="msos-fit"><div><b>${esc(x.label)}</b>${x.use?`<small class="msos-use">${esc(x.use)}${x.ref?` · ${x.origin==='N'?'example in your style':'from your sessions'}`:''}</small>`:''}<small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div><button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
+  function fitRow(x){const SLB=M.setLibrary,a=x.author||(x.ref?(x.origin==='N'?'ChatGPT':'Andy'):'Andy'),wait=x.status==='proposed',own=(M.access?.role?.()||'owner')==='owner';
+    const who=SLB?`${M.setLibraryUI?.chip?.(a)||esc(a)}${wait?'<span class="sl-new">new · not reviewed</span>':''}`:'';
+    const rev=SLB&&wait&&own?`<span class="sl-quick"><button type="button" class="sl-yes" data-msos-review="${esc(x.id)}" data-v="approved" title="Keep">✓</button><button type="button" class="sl-no" data-msos-review="${esc(x.id)}" data-v="rejected" title="Drop">✗</button></span>`:'';
+    return`<div class="msos-fit"><div>${who}<b>${esc(x.label)}</b>${x.use?`<small class="msos-use">${esc(x.use)}${x.ref&&!SLB?` · ${x.origin==='N'?'example in your style':'from your sessions'}`:''}</small>`:''}<small>${esc(x.section)} · ${esc(x.text.replace(/\n/g,' / '))}</small></div>${rev}<button type="button" data-msos-insert="${esc(x.id)}">Add</button></div>`;}
   // Every component, by section, so the coach can lead: pick any piece of his programming, not only the
   // ones matched to today's focus. Matched pieces are listed first within each section.
   function moreHtml(kind,named,combo=null,b=null){
@@ -778,6 +791,8 @@
       box.addEventListener('click',e=>{
         // A stage chip: show that part's options now; it stays chosen until a set is added.
         const st=e.target.closest?.('[data-msos-stage]');if(st){writerStage=st.dataset.msosStage;paint();return;}
+        // 19 Oct 2026: the head coach keeps / drops a new set right where it is offered
+        const rv=e.target.closest?.('[data-msos-review]');if(rv){try{M.setLibrary.review(rv.dataset.msosReview,rv.dataset.v);M.toast?.(rv.dataset.v==='approved'?'Kept in your sets':'Dropped');}catch(err){M.toast?.(err.message);}paint();return;}
         const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}
         textarea.value=insertComponent(textarea.value,c.section,c.text);
         // Once a part is written the panel moves on to the next part (the coach can tap back).

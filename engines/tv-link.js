@@ -120,16 +120,18 @@
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261019a';
+  const TV_PAGE='20261019c';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
       const r=await rpc('msos_tv_publish',{p_screen:c.screenId,p_device:deviceId(),p_name:coachName(),p_frame:frame,p_take:take});
       if(r?.ok===false){setStatus({state:'taken',controller:r.controller||'another phone',error:''});return r;}
-      take=false;lastSig=sig;lastSent=Date.now();lastFrame=frame;setStatus({state:'live',controller:'',error:'',rev:r?.rev});return r;}
+      take=false;lastSig=sig;lastSent=Date.now();lastFrame=frame;nudge(c.screenId);setStatus({state:'live',controller:'',error:'',rev:r?.rev});return r;}
     catch(e){setStatus({state:'error',error:String(e?.message||e)});return null;}
     finally{busy=false;}}
   L.publish=publish;
+  // 19 Oct 2026: tell the TV to look now (engines/live-sync.js; no data in it) -- the TV fetches the new frame at once.
+  function nudge(id){try{M.liveSync?.nudgeTv?.(id)?.catch?.(()=>{});}catch{}}
   // Every 20s the driving phone checks it still has the TV (another coach may have taken over), so its TV button is honest.
   let lastCheck=0;
   L.check=async()=>{const c=control();if(!c?.screenId||!signedIn()||status.state==='taken')return status;lastCheck=Date.now();
@@ -141,8 +143,17 @@
   L.stopControl=()=>{setControl(null);lastSig='';setStatus({state:'idle',controller:'',error:''});};
 
   // ---------- pairing & list ----------
+  // 19 Oct 2026 (Andy: "add a bigger screen as the second screen ... not that clear on how that works"): a TV added while
+  // another is already connected shows the SAME as that one (it follows it); this phone keeps driving the first. Each TV
+  // keeps its own look (light/dark, text size). "Own Board" in the list makes it independent again.
   L.pair=async(code,label)=>{if(!signedIn())throw new Error('Sign in on this phone first.');if(!org())throw new Error('This phone is not joined to the club yet.');
-    const r=await rpc('msos_tv_pair',{p_org:org(),p_code:text(code),p_label:text(label)||'Pool TV'});await L.takeControl({id:r.id,label:r.label});return r;};
+    let before=[];try{before=await L.list();}catch{}
+    const r=await rpc('msos_tv_pair',{p_org:org(),p_code:text(code),p_label:text(label)||(before.length?`TV ${before.length+1}`:'Pool TV')});
+    const lead=control()?.screenId&&before.some(s=>s.id===control().screenId)?control().screenId:(before.find(s=>!s.follows)||before[0])?.id;
+    if(lead){try{await L.setScreen(r.id,{follows:lead});}catch{}r.follows=lead;return r;}
+    await L.takeControl({id:r.id,label:r.label});return r;};
+  // name / follow / look of one TV (supabase/20261019_tv_screens_display_hold.sql msos_tv_set); the TV picks it up at once
+  L.setScreen=async(id,patch)=>{const r=await rpc('msos_tv_set',{p_screen:id,p_patch:patch||{}});screensAt=0;nudge(r?.follows||id);nudge(id);return r;};
   L.list=async()=>{if(!signedIn()||!org())return[];const r=await rpc('msos_tv_list',{p_org:org()});return Array.isArray(r)?r:[];};
   L.revoke=async(id)=>{await rpc('msos_tv_revoke',{p_screen:id});if(control()?.screenId===id)L.stopControl();};
   L.tvUrl=()=>{try{return new URL('tv.html',location.href.split('#')[0].split('?')[0]).href;}catch{return'tv.html';}};
@@ -154,22 +165,32 @@
     if(!signedIn()){el.innerHTML=`<section class="tv-link-panel"><h3>Pool TV</h3><p class="muted">Sign in on this phone to connect a TV.</p></section>`;return;}
     el.innerHTML=`<section class="tv-link-panel"><h3>Pool TV</h3><p class="muted">Loading TVs…</p></section>`;
     let list=[];try{list=await L.list();}catch(e){el.innerHTML=`<section class="tv-link-panel"><h3>Pool TV</h3><p class="muted">Couldn't reach the TV service: ${esc(e.message)}</p>${pairForm}</section>`;bindPair(el,reopen);return;}
-    const mine=control()?.screenId,st=status;
-    const rows=list.map(s=>{const isMine=s.id===mine,other=!isMine&&s.controller_device&&s.controller_device!==deviceId()?s.controller_name:'';
-      return`<div class="tv-screen-row ${isMine?'mine':''}"><span><b>${esc(s.label||'Pool TV')}</b><small>${esc(ago(s.last_seen_at))}${isMine?(st.state==='taken'?` · ${esc(st.controller)} has it`:st.state==='error'?` · ${esc(st.error)}`:' · this phone drives it'):other?` · ${esc(other)} drives it`:''}</small></span><span class="tv-cap-acts">${isMine&&st.state!=='taken'?`<button type="button" data-tv-stop>Stop</button>`:`<button type="button" data-tv-take="${esc(s.id)}" data-tv-take-label="${esc(s.label||'')}">${other||st.state==='taken'?'Take over':'Drive from this phone'}</button>`}<button type="button" class="danger" data-tv-revoke="${esc(s.id)}">Disconnect</button></span></div>`;}).join('');
-    el.innerHTML=`<section class="tv-link-panel"><h3>Pool TV</h3>${rows||''}<p class="muted">The TV follows your Board: <b>WHOLE</b> shows the whole session (no target times); a <b>set</b> shows that set with every swimmer's target. Roll, edits and modifications show straight away.</p>${list.length?`<details><summary>Connect another TV</summary>${pairForm}</details>`:pairForm}</section>`;
+    const mine=control()?.screenId,st=status,byId=new Map(list.map(s=>[s.id,s]));
+    const rows=list.map(s=>{const isMine=s.id===mine,lead=s.follows&&byId.get(s.follows),other=!isMine&&!lead&&s.controller_device&&s.controller_device!==deviceId()?s.controller_name:'',d=s.display||{},dark=d.theme==='dark',size=Number(d.size)||0;
+      const drive=lead?'':isMine&&st.state!=='taken'?`<button type="button" data-tv-stop>Stop</button>`:`<button type="button" data-tv-take="${esc(s.id)}" data-tv-take-label="${esc(s.label||'')}">${other||st.state==='taken'?'Take over the TV':'Drive from this phone'}</button>`;
+      const shows=list.length>1?`<label class="tv-shows">Shows <select data-tv-follow="${esc(s.id)}"><option value="">its own Board</option>${list.filter(x=>x.id!==s.id&&!x.follows).map(x=>`<option value="${esc(x.id)}" ${s.follows===x.id?'selected':''}>same as ${esc(x.label||'Pool TV')}</option>`).join('')}</select></label>`:'';
+      return`<div class="tv-screen-row ${isMine?'mine':''}"><span><b>${esc(s.label||'Pool TV')}</b><small>${esc(ago(s.last_seen_at))}${lead?` · shows the same as ${esc(lead.label||'Pool TV')}`:isMine?(st.state==='taken'?` · ${esc(st.controller)} has it`:st.state==='error'?` · ${esc(st.error)}`:' · this phone drives it'):other?` · ${esc(other)} drives it`:''}</small></span><span class="tv-cap-acts">${drive}<button type="button" class="danger" data-tv-revoke="${esc(s.id)}">Disconnect</button></span>
+        <div class="tv-look"><button type="button" data-tv-theme="${esc(s.id)}" data-v="${dark?'light':'dark'}" title="Swap black and white">${dark?'◑ White on black':'◐ Black on white'}</button><span class="tv-size"><button type="button" data-tv-size="${esc(s.id)}" data-v="${size-1}" ${size<=-2?'disabled':''} aria-label="Smaller text">A−</button><small>Text ${size>0?'+'+size:size}</small><button type="button" data-tv-size="${esc(s.id)}" data-v="${size+1}" ${size>=3?'disabled':''} aria-label="Bigger text">A+</button></span>${shows}</div></div>`;}).join('');
+    const takenLine=st.state==='taken'&&mine?`<div class="check-card warn"><b>${esc(st.controller||'Another coach')}</b> is driving the TV. <button type="button" data-tv-take="${esc(mine)}" data-tv-take-label="">Take over the whole screen</button></div>`:'';
+    el.innerHTML=`<section class="tv-link-panel"><h3>Pool TV</h3>${takenLine}${rows||''}<p class="muted">The TV follows your Board: <b>WHOLE</b> turns through the blocks one at a time; a <b>set</b> shows that block with every swimmer's target, modified swimmers on the right. The writing is as big as each screen allows — use <b>A−/A+</b> if it's too big or small from the far end.</p>${list.length?`<details><summary>Add another TV (a second screen)</summary><p class="muted">On the second TV open the same address. It shows a code — type it here. It will show the same as ${esc((list.find(x=>!x.follows)||list[0]).label||'Pool TV')}; change that with <b>Shows</b> above.</p>${pairForm}</details>`:pairForm}</section>`;
     bindPair(el,reopen);
     el.querySelectorAll('[data-tv-take]').forEach(b=>b.onclick=async()=>{b.disabled=true;await L.takeControl({id:b.dataset.tvTake,label:b.dataset.tvTakeLabel});M.toast?.('This phone is driving the TV');reopen?.();});
     el.querySelector('[data-tv-stop]')?.addEventListener('click',()=>{L.stopControl();M.toast?.('This phone stopped driving the TV');reopen?.();});
+    const look=async(id,patch,btn)=>{if(btn)btn.disabled=true;try{await L.setScreen(id,patch);}catch(e){M.toast?.(e.message);}L.fillPanel(el,reopen);};
+    el.querySelectorAll('[data-tv-theme]').forEach(b=>b.onclick=()=>look(b.dataset.tvTheme,{theme:b.dataset.v},b));
+    el.querySelectorAll('[data-tv-size]').forEach(b=>b.onclick=()=>look(b.dataset.tvSize,{size:Number(b.dataset.v)},b));
+    el.querySelectorAll('[data-tv-follow]').forEach(x=>x.onchange=()=>look(x.dataset.tvFollow,{follows:x.value}));
     el.querySelectorAll('[data-tv-revoke]').forEach(b=>b.onclick=async()=>{if(!confirm('Disconnect this TV? It will show a new code until it is connected again.'))return;try{await L.revoke(b.dataset.tvRevoke);M.toast?.('TV disconnected');}catch(e){M.toast?.(e.message);}reopen?.();});};
   function bindPair(el,reopen){const btn=el.querySelector('[data-tv-pair]');if(!btn)return;btn.onclick=async()=>{const out=el.querySelector('[data-tv-pair-status]');btn.disabled=true;out.textContent='Connecting…';
-    try{await L.pair(el.querySelector('[data-tv-code]').value,el.querySelector('[data-tv-label]').value);out.textContent='Connected — the TV now shows your Board.';M.toast?.('TV connected');reopen?.();}catch(e){out.textContent=e.message;btn.disabled=false;}};}
+    try{btn._r=await L.pair(el.querySelector('[data-tv-code]').value,el.querySelector('[data-tv-label]').value);const r=btn._r;out.textContent=r?.follows?'Connected — it shows the same as your other TV.':'Connected — the TV now shows your Board.';M.toast?.('TV connected');reopen?.();}catch(e){out.textContent=e.message;btn.disabled=false;}};}
 
   // Andy, 15 Oct 2026: "If I need to use my phone the video or display I'm showing should close and the tv board should
   // stay where it was". Leaving MSOS (another app, lock screen) takes whatever is on top of the Board off the TV; the
   // Board itself stays exactly as it was. The phone may be suspended a moment later, so this send is a keepalive one
   // built from the last frame (no new target work) and it does not wait for anything.
-  function leaving(){if(slotSupported){leaveSlot();return;}const c=control();if(!c?.screenId||!lastFrame?.overlay||!signedIn()||status.state==='taken')return;
+  // 19 Oct 2026 (Andy: it must "stay up to 15 minutes" when he leaves the app; after 3 minutes untouched another coach's
+  // capture can go up): with the shared slot, leaving the app no longer takes anything down -- the TV holds it.
+  function leaving(){if(slotSupported)return;const c=control();if(!c?.screenId||!lastFrame?.overlay||!signedIn()||status.state==='taken')return;
     try{M.tvDisplay?.clear?.();}catch{}
     const frame={...lastFrame,overlay:null,at:new Date().toISOString()};lastFrame=frame;
     const raw=M.cloud?.rawFetch||M.cloud?.fetch;if(!raw)return;
@@ -198,20 +219,18 @@
   function setSlot(next,toast){slotState={...slotState,...next};if(toast)M.toast?.(toast);try{M.tvDisplay?.paintControl?.();M.tvDisplay?.refreshScreens?.();}catch{}}
   async function slotTick(){if(!slotSupported||slotBusy||!isCoach()||!signedIn())return;const id=chosenScreen();if(!id)return;const sig=mySig();
     slotBusy=true;try{
-      if(sig&&sig!==slotSig){const o=await overlayFrame(M.currentSession?.(),null);const r=await rpc('msos_tv_slot_put',{p_screen:id,p_name:coachName(),p_overlay:o});slotSig=sig;
-        if(r?.status==='queued')setSlot({state:'queued',position:r.position,by:r.showing_by||''},`${r.showing_by||'Another coach'} is showing something — yours goes up next${r.position>1?` (#${r.position} in line)`:''}.`);
+      if(sig&&sig!==slotSig){const o=await overlayFrame(M.currentSession?.(),null);const r=await rpc('msos_tv_slot_put',{p_screen:id,p_name:coachName(),p_overlay:o});slotSig=sig;nudge(id);
+        if(r?.status==='queued')setSlot({state:'queued',position:r.position,by:r.showing_by||''},`${r.showing_by||'Another coach'} is showing something — yours goes up ${Number(r.open_in)>0?`within ${Math.ceil(r.open_in/60)} min`:'next'}${r.position>1?` (#${r.position} in line)`:''}.`);
         else setSlot({state:'showing',by:''},r?.replaced?`On the TV (replaced ${r.replaced}'s)`:'');}
-      else if(!sig&&slotSig){slotSig='';await rpc('msos_tv_slot_clear',{p_screen:id});setSlot({state:'idle',position:0});}
+      else if(!sig&&slotSig){slotSig='';await rpc('msos_tv_slot_clear',{p_screen:id});nudge(id);setSlot({state:'idle',position:0});}
       if((slotState.state!=='idle'||Date.now()-slotPolledAt>15000)&&Date.now()-slotPolledAt>2500){slotPolledAt=Date.now();const st=await rpc('msos_tv_slot_state',{p_screen:id});
         const queue=(st?.queue||[]).map(q=>q.name).filter(Boolean),meQueued=(st?.queue||[]).some(q=>q.id===M.tvDisplay?.current?.()?.id);
-        setSlot({showingBy:st?.showing?(st.mine?'':st.by_name||'another coach'):'',waiting:queue,left:st?.touched_at?Math.max(0,180-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null});
-        if(slotState.state==='showing'&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'},st?.showing?`${st.by_name||'Another coach'} is on the TV now`:'Taken off the TV (3 minutes untouched)');}
+        setSlot({showingBy:st?.showing?(st.mine?'':st.by_name||'another coach'):'',waiting:queue,left:st?.touched_at?Math.max(0,(Number(st.hold_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null,open:st?.touched_at?Math.max(0,(Number(st.open_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null});
+        if(slotState.state==='showing'&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'},st?.showing?`${st.by_name||'Another coach'} is on the TV now`:'Taken off the TV (not used for 15 minutes)');}
         else if(slotState.state==='queued'&&st?.mine){setSlot({state:'showing',position:0},"You're on the TV now");}
         else if(slotState.state==='queued'&&!meQueued&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'});}}
     }catch(e){setSlot({error:String(e?.message||e)});}finally{slotBusy=false;}}
   L.slotTick=slotTick;
-  function leaveSlot(){const id=chosenScreen();if(!id||!signedIn()||slotState.state==='idle'&&!slotSig)return;try{M.tvDisplay?.clear?.();}catch{}slotSig='';setSlot({state:'idle'});
-    const raw=M.cloud?.rawFetch||M.cloud?.fetch;if(!raw)return;try{const p=raw('/rest/v1/rpc/msos_tv_slot_clear',{method:'POST',keepalive:true,body:JSON.stringify({p_screen:id})});Promise.resolve(p).catch(()=>{});}catch{}}
   L.screens=()=>screens;L.refreshScreens=refreshScreens;
   function boot(){if(control()?.screenId)setStatus({state:'connecting'});loop();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

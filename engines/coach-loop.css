@@ -97,3 +97,31 @@
 .ri-warn{grid-column:2/-1;color:#9a5b00!important}.ri-possible{border:1px solid #f0d9a8;background:#fffaf0;border-radius:10px;padding:8px 10px;margin:10px 0}
 .ri-poss{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0}.ri-poss span{display:flex;flex-direction:column}.ri-poss small{color:var(--muted,#647b88)}
 .ri-other{padding:3px 0}.ri-others,.ri-history{margin-top:10px}
+/* 19 Oct 2026: each TV's look (light/dark, text size) and what it shows (its own Board / same as another TV) */
+.tv-screen-row{flex-wrap:wrap}
+.tv-look{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.tv-size{display:inline-flex;align-items:center;gap:4px}.tv-size button{min-width:2.6em;font-weight:800}
+.tv-shows{display:inline-flex;align-items:center;gap:4px;font-size:.9em}
+/* 19 Oct 2026: swimmer goal, training balance, goal picker */
+.sb-goal{display:flex;flex-direction:column;border:3px solid #0d4566;border-radius:10px;padding:6px 10px;margin:6px 0}.sb-goal small{font-weight:900;letter-spacing:.12em}.sb-goal>b{font-size:1.2em}.sb-goal.reached{border-color:#1a9b4b}
+.sb-balance{display:flex;flex-direction:column;gap:2px}.sb-bal-group p,.sb-balance>p{display:flex;align-items:center;margin:2px 0}.sb-bal-row span{flex:0 0 42%}.sb-bal-row b{margin-left:auto;padding-left:6px}.sb-bal-row.none{opacity:.6}
+.sb-bar{display:block;height:.7em;background:#0d4566;border-radius:3px;min-width:2px}
+.sb-goal-pick{border-top:1px solid rgba(0,0,0,.1);margin-top:10px;padding-top:6px}.sb-goal-choices{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+.sb-goal-choices button{display:flex;justify-content:space-between;text-align:left;gap:8px}.sb-goal-choices button.done{opacity:.6}
+/* 19 Oct 2026: swimmers added on the Roll -- home club badge, visitor, the two kinds */
+.roll-club{display:inline-block;font-size:.72em;font-weight:800;border:1px solid #0d4566;border-radius:99px;padding:0 7px;margin-left:4px;vertical-align:middle}
+.roll-club.visitor{border-style:dashed}
+.roster-new{margin-top:10px;border-top:1px solid #e2ebef;padding-top:8px}.roster-kind{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.roster-kind button{display:flex;flex-direction:column;align-items:flex-start;text-align:left}.roster-kind small{font-weight:600;color:#647b88}
+/* 19 Oct 2026: set library -- who wrote each set, review */
+.sl-author{display:inline-block;font-size:11px;font-weight:900;letter-spacing:.04em;border-radius:99px;padding:1px 8px;margin-right:6px;background:#e4eef3;color:#0d4566;vertical-align:middle}
+.sl-a-andy{background:#0d4566;color:#fff}.sl-a-claude{background:#c96f3b;color:#fff}.sl-a-chatgpt{background:#5b6b73;color:#fff}.sl-a-jordan{background:#1a7a4c;color:#fff}.sl-a-kaleb{background:#6b3fa0;color:#fff}
+.sl-new{display:inline-block;font-size:11px;font-weight:800;border:1px dashed #c96f3b;color:#9b4f22;border-radius:99px;padding:0 6px;margin-right:6px}
+.sl-quick{display:inline-flex;gap:4px;margin-right:6px}.sl-quick button{min-width:2.2em}
+.sl-yes{border-color:#1a7a4c!important;color:#1a7a4c!important}.sl-no{border-color:#a33d42!important;color:#a33d42!important}
+.sl-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.sl-tabs button.on{background:#0d4566;color:#fff}
+.sl-filters{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.sl-filters input{flex:1;min-width:8em}
+.sl-row{border:1px solid #d5e4ea;border-radius:12px;padding:8px 10px;margin:8px 0}.sl-row header{display:flex;flex-wrap:wrap;align-items:center;gap:4px}.sl-row header small{flex-basis:100%;color:#647b88}
+.sl-row.sl-rejected{opacity:.6}.sl-row.sl-check{border-color:#b37616}
+.sl-text{margin:6px 0;max-height:none;font-size:14px}.sl-use{display:block;color:#647b88}.sl-issue{color:#9b6a12;font-weight:700;margin:4px 0}
+.sl-acts{display:flex;gap:6px;margin-top:6px}.sl-add{margin:8px 0}.sl-add textarea,.sl-row textarea{width:100%;font-family:ui-monospace,Menlo,monospace}

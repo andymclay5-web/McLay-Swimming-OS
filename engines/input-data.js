@@ -125,7 +125,7 @@
   function html(){const owner=(M.access?.role?.()||'owner')==='owner';return`<section class="page-card id-head"><div class="eyebrow">INPUT DATA</div><h1>Enter times and results</h1><p>Type them any way you like, take a photo of a sheet, or time them live on deck. You'll see what was understood before anything saves.</p><div class="hub-actions"><button type="button" data-id-go="times">⏱ Time a set live (Times)</button>${owner?'<button type="button" data-id-go="data">Files &amp; reference tables</button>':''}</div></section>
     ${owner?'<div data-results-inbox></div>':''}
     <div class="id-tier"><div class="eyebrow">AFFECTS TRAINING TARGETS</div>${cardHtml('t400')}${cardHtml('race')}</div>
-    <div class="id-tier id-tier2"><div class="eyebrow">RECORDED AND TRACKED</div>${cardHtml('test')}</div>`;}
+    <div class="id-tier id-tier2"><div class="eyebrow">RECORDED AND TRACKED</div>${cardHtml('test')}</div>${M.setLibraryUI?.card?.()||''}`;}
   function readDefaults(card){const d={};card.querySelectorAll('[data-id-f]').forEach(el=>{d[el.dataset.idF]=el.value;});if(d.distance)d.distance=Number(d.distance);return d;}
   function readRows(card,kind){const dr=drafts[kind];if(!dr?.rows)return;card.querySelectorAll('[data-id-row]').forEach(el=>{const r=dr.rows[Number(el.dataset.idRow)];if(!r)return;const v=s=>el.querySelector(`[data-id-r="${s}"]`);r.include=v('include').checked;r.athleteId=v('athleteId').value;const t=timeOf(v('time').value)??(U.seconds?U.seconds(v('time').value):null);r.seconds=t;if(v('distance'))r.distance=Number(v('distance').value)||null;r.stroke=v('stroke').value;r.date=v('date').value||r.date;r.course=v('course').value;});}
   function bind(host){

@@ -72,6 +72,19 @@
   // "4x200 IM" with no per-round breakdown) has no such risk, and reps CAN safely reduce there -- unaffected
   // by this. Distance-reduction keeping the same reps and the same authored interval automatically preserves
   // the group's total time (reps x interval is unchanged), which is exactly the other half of Andy's rule.
+  // 20 Oct 2026 (Andy, Tue AM: Charlotte's mod showed the full squad 24 x 50 -- 8 Free / 8 IM Order / 8 #1 -- "she can't do
+  // 24 x 50 in the time it takes the group"). A 50 can't be shortened, so the distinct-pattern branch used to keep the
+  // whole set. Now each authored part keeps its stroke/purpose but loses reps by the swimmer's ratio (at least one
+  // each): 8/8/8 at 0.6 -> 5/5/5. Returns false when that changes nothing.
+  function reducePatternGroups(out,item,ratio){
+    const groups=(item?.pattern||[]).map(x=>({...x,count:Math.max(0,Number(x?.count)||0)})),total=groups.reduce((n,x)=>n+x.count,0),baseReps=Math.max(1,Number(item?.reps)||1);
+    if(!(ratio<.98)||!groups.length||total!==baseReps)return false;
+    const next=groups.map(x=>x.count>0?Math.max(1,Math.round(x.count*ratio)):0),reps=next.reduce((n,x)=>n+x,0);if(reps>=baseReps)return false;
+    const keep=new Map();let from=0,to=0;groups.forEach((g,i)=>{for(let k=0;k<next[i];k++)keep.set(from+k+1,to+k+1);from+=g.count;to+=next[i];});
+    reshapeWithReps(out,item,reps);out.pattern=groups.map((g,i)=>({...g,count:next[i]})).filter(g=>g.count>0);
+    if(Array.isArray(item?.repPattern)&&item.repPattern.length)out.repPattern=item.repPattern.filter(x=>keep.has(Number(x?.rep))).map(x=>({...x,rep:keep.get(Number(x.rep))}));
+    return true;
+  }
   function hasDistinctRepPattern(item){const rows=(item?.pattern||[]).filter(x=>x?.text&&Number(x.count)>0);if(rows.length<2)return false;return new Set(rows.map(x=>text(x.text).toLowerCase())).size>1;}
   function sameTeamExposure(item){const d=Number(item?.distance)||0,r=Math.max(1,Number(item?.reps)||1),metres=d*r,kick=isKick(item);if(isAerobic(item)||d<=0||d>100||metres>300)return false;if(kick&&!(d<=25&&isQuality(item)))return false;return hasRaceIntent(item)||/\b(?:max|sprint|race|pace|quality|fast|underwater|dive|start|drill|scull|skill|build|turn|finish)\b/i.test(rawOf(item));}
 
@@ -199,7 +212,7 @@
         else if(baseReps>1&&hasDistinctRepPattern(item)){
           const labels=[...new Set(item.pattern.filter(x=>x?.text).map(x=>text(x.text)))],desired=nearestPracticalDistance(baseDist*p.ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});
           if(desired<baseDist){reshapeWithDistance(out,item,desired,session);if(individualStroke)out.stroke=individualStroke;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke; dropping a round would drop that stimulus entirely, so distance is reduced instead and every round is kept at the squad send-off');out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · ${baseDist}→${desired} so every round stays represented at the squad's time`;out.adaptationConfidence='low';}
-          else{out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · no safe smaller distance available, authored distance kept`;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke and could not be safely shortened further; authored distance/interval kept so every round stays represented');}
+          else if(reducePatternGroups(out,item,p.ratio)){if(individualStroke)out.stroke=individualStroke;out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · ${baseDist}m can't be shortened, so each part is cut to ${out.pattern.map(x=>x.count).join('/')} reps`;out.adaptationConfidence='low';if(Number(item.cycleSeconds)>0)alignReducedRepsToGroupWindow(out,item,baseReps,out.reps,{source:'Distinct per-round pattern',reason:'Each authored part kept; reps reduced per part because the distance cannot be shortened',confidence:'low'});else preserveAuthoredTiming(out,item,'Each authored part kept with fewer reps; authored rest unchanged');}else{out.adaptationReason=`Distinct per-round pattern (${labels.join('/')}) retained · no safe smaller distance available, authored distance kept`;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke and could not be safely shortened further; authored distance/interval kept so every round stays represented');}
         }
         else if((im||hasRaceIntent(item)||quality||individualStroke)&&evidence?.referenceSeconds&&Number(item.cycleSeconds)>0){const plan=performancePlan(item,ath,state,session,evidence);applyPerformancePlan(out,item,plan,im?'Modified IM':individualStroke?`Modified ${individualStroke}`:'Relative quality');if(individualStroke)out.stroke=individualStroke;}
         else if(im){const reps=safeReps(baseReps,baseDist,p.ratio,session,p.returnToStart);if(reps!==baseReps){reshapeWithReps(out,item,reps);alignIMTeamWindow(out,item,baseReps,reps);}else preserveAuthoredTiming(out,item,'Complete IM units retained; authored interval remains valid');out.adaptationReason='Complete IM units retained · load adjusted by reps while preserving the squad set window';out.adaptationConfidence='low';}

@@ -143,12 +143,13 @@
 
   // --- Realtime (preferred) with a transparent polling fallback (never a hard failure mode). ---
   let realtimeClient=null,realtimeChannel=null,realtimeStatus='idle',pollTimer=null;
-  K.realtimeStatus=()=>realtimeStatus;
+  // 19 Oct 2026: the app's one live connection (engines/live-sync.js) carries chat too; while it is up nothing is polled.
+  const shared=()=>M.liveSync;K.realtimeStatus=()=>shared()?.live?.()?'realtime':realtimeStatus;
 
   function startPolling(){
     if(pollTimer)return;
     pollTimer=setInterval(()=>{
-      const o=org();if(!o)return;
+      const o=org();if(!o)return;if(shared()?.live?.())return;
       K.history(GROUP_KEY).catch(()=>{});
       K.history(COACHES_KEY).catch(()=>{});
       for(const r of rosterCache)K.history(dmThreadKey(r.user_id)).catch(()=>{});
@@ -196,6 +197,7 @@
     await K.history(GROUP_KEY).catch(()=>{});
     await K.history(COACHES_KEY).catch(()=>{});
     for(const r of rosterCache)await K.history(dmThreadKey(r.user_id)).catch(()=>{});
+    if(shared()){realtimeStatus='polling-only';startPolling();return;}
     const scriptReady=await loadRealtimeScript().catch(()=>false);
     if(!scriptReady||!g.supabase?.createClient){realtimeStatus='polling-only';startPolling();return;}
     try{
