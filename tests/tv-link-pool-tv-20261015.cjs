@@ -79,9 +79,10 @@ await SHOT(tv,'tv-set');
     // 3. WHOLE -> every block, no targets
     await phone.evaluate(()=>{const M=window.MSOS4;M.state.settings.boardFocusMode=false;M.boardStateEngine?.saveUi?.();M.ui.renderBoard();});
     await tv.waitForSelector('.tv-board .tv-whole',{timeout:8000});
-    const whole=await tv.evaluate(()=>({blocks:[...document.querySelectorAll('.tv-block h2')].map(x=>x.textContent),targets:document.querySelectorAll('.tv-targets .tv-t').length,modTimes:document.querySelectorAll('.tv-mod .tv-t b').length,top:document.querySelector('.tv-top').textContent}));
+    // 19 Oct 2026 (Andy, first pool TV night: "one block per page"): WHOLE turns through the blocks one screen at a time
+    const whole=await tv.evaluate(()=>({blocks:[...new Set(window.MSOS_TV.pages().map(p=>p.block))],onScreen:document.querySelectorAll('.tv-block').length,targets:document.querySelectorAll('.tv-targets .tv-t').length,modTimes:document.querySelectorAll('.tv-mod .tv-t b').length,top:document.querySelector('.tv-top').textContent}));
 await SHOT(tv,'tv-whole');
-    assert.ok(whole.blocks.length>=3,`whole session shows every block: ${whole.blocks}`);
+    assert.ok(whole.blocks.length>=3,`whole session shows every block: ${whole.blocks}`);assert.equal(whole.onScreen,1,'one block on the screen at a time');
     assert.match(whole.top,/WHOLE SESSION/);
     assert.equal(whole.targets,0,'no target times on the whole session');
     assert.equal(whole.modTimes,0,'no target times for modified swimmers on the whole session');

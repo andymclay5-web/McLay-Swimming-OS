@@ -74,8 +74,12 @@ function run(){
 
 function runFailBefore(){
   const NEW_BLOCK=`        else if(baseReps>1&&hasDistinctRepPattern(item)){\n          const labels=[...new Set(item.pattern.filter(x=>x?.text).map(x=>text(x.text)))],desired=nearestPracticalDistance(baseDist*p.ratio,session,{returnToStart:p.returnToStart,minDistance:poolLength(session),maxDistance:baseDist});\n          if(desired<baseDist){reshapeWithDistance(out,item,desired,session);if(individualStroke)out.stroke=individualStroke;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke; dropping a round would drop that stimulus entirely, so distance is reduced instead and every round is kept at the squad send-off');out.adaptationReason=\`Distinct per-round pattern (\${labels.join('/')}) retained · \${baseDist}→\${desired} so every round stays represented at the squad's time\`;out.adaptationConfidence='low';}\n          else{out.adaptationReason=\`Distinct per-round pattern (\${labels.join('/')}) retained · no safe smaller distance available, authored distance kept\`;preserveAuthoredTiming(out,item,'Every round carries a distinct authored stroke and could not be safely shortened further; authored distance/interval kept so every round stays represented');}\n        }\n`;
-  assert.ok(realSrc.includes(NEW_BLOCK),'test setup error: could not locate the exact new hasDistinctRepPattern branch in engines/modification.js -- its wording changed in a way this test does not expect');
-  const buggySrc=realSrc.replace(NEW_BLOCK,'');
+  // 20 Oct 2026: a later branch (reducePatternGroups -- a distinct-part set whose distance can't be shortened, e.g.
+  // 24 x 50 as 8 Free / 8 IM / 8 #1) now sits inside this block. Strip it before matching so this test keeps pinning
+  // exactly the 17 Sept fix it was written for; removing the whole block still reproduces that original failure.
+  const realSrcPinned=realSrc.replace(/else if\(reducePatternGroups\(out,item,p\.ratio\)\)\{[\s\S]*?\}(?=else\{out\.adaptationReason=`Distinct per-round pattern)/,'');
+  assert.ok(realSrcPinned.includes(NEW_BLOCK),'test setup error: could not locate the exact new hasDistinctRepPattern branch in engines/modification.js -- its wording changed in a way this test does not expect');
+  const buggySrc=realSrcPinned.replace(NEW_BLOCK,'');
   assert.notEqual(buggySrc,realSrc,'test setup error: could not construct the reverted pre-fix source');
 
   const Modification=loadModification(buggySrc);
