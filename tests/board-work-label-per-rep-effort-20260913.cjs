@@ -78,8 +78,9 @@ checkLabels(global.MSOS4);
 const boardPath=path.join(__dirname,'..','engines','board.js');
 const realSrc=fs.readFileSync(boardPath,'utf8');
 
-const fixedLine="if(/\\bMAX\\b/i.test(raw)&&!/MAX/i.test(label)&&!isPerRepEffortList(raw))label+=' MAX';";
-const originalLine="if(/\\bMAX\\b/i.test(raw)&&!/MAX/i.test(label))label+=' MAX';";
+// 24 Oct 2026: the line also carries the later 'every Nth 25 max' guard; only the per-rep-effort check is reverted here.
+const fixedLine="if(/\\bMAX\\b/i.test(raw)&&!/MAX/i.test(label)&&!isPerRepEffortList(raw)&&!/\\bevery\\s+\\d+(?:st|nd|rd|th)\\b/i.test(raw))label+=' MAX';";
+const originalLine="if(/\\bMAX\\b/i.test(raw)&&!/MAX/i.test(label)&&!/\\bevery\\s+\\d+(?:st|nd|rd|th)\\b/i.test(raw))label+=' MAX';";
 assert.ok(realSrc.includes(fixedLine),'test setup error: could not locate the fixed MAX-suffix line in the real file -- its wording changed in a way this test does not expect');
 assert.ok(realSrc.includes(originalLine)===false||realSrc.indexOf(originalLine)!==realSrc.indexOf(fixedLine),'sanity check on line extraction failed');
 
