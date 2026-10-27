@@ -86,7 +86,7 @@
   TV.pages=()=>pages.map(p=>({block:p.block,no:p.no,of:p.of,px:p.px,units:p.list.length}));
   TV.turn=()=>{if(pages.length){page=(page+1)%pages.length;show();}};
   function overlayInner(o){if(o.kind==='swimmer')return`<div class="tvo-card sb">${o.html||'<p class="sb-none">Loading…</p>'}</div>`;
-    if(o.kind==='youtube'&&o.youtube)return`<iframe src="https://www.youtube.com/embed/${esc(o.youtube)}?autoplay=1&mute=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    if(o.kind==='youtube'&&o.youtube)return`<iframe src="https://www.youtube.com/embed/${esc(o.youtube)}?autoplay=1&mute=1&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
     if(o.kind==='note'||o.kind==='link')return`<div class="tvo-text">${o.who?`<b>${esc(o.who)}</b>`:''}<span>${esc(o.text||o.url||o.label||'')}</span></div>`;
     if(!o.url)return`<div class="tvo-text"><span>${o.waiting?`This ${esc(o.kind)} is still on its way from the phone…`:'Not available'}</span></div>`;
     if(o.kind==='video')return`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;
@@ -112,9 +112,10 @@
     ovl.className=`tv-overlay tvo-${o.mode==='full'?'full':'corner'} ${o.kind==='swimmer'?'tvo-swimmer':''}`;
     ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
     stopMirror();
-    if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);return;}
+    if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);watchMedia(o);return;}
     if(o.kind==='swimmer')setTimeout(fitCard,0);
-    const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}}
+    const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}
+    watchMedia(o);}
   // 15 Oct 2026, pool TV: full-screen clips play fine, but in the corner the TV's video player ignores the box size and
   // shows only a cut-off piece. So in the corner the clip plays hidden and each frame is painted into an ordinary
   // picture (canvas) the size of the box. If this TV can't hand its video frames over (the picture stays black), the
@@ -140,6 +141,25 @@
   function fit(){layoutCache.clear();layout();}
   function draw(f,slot=false){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';layout();if(!slot)drawOverlay(f.overlay||null);}
   // 19 Oct 2026: the shared slot -- whatever any coach has put on top, with their name on it.
+  // 27 Oct 2026 (Andy: "I still haven't actually had the video show on the TV board"): the TV now says whether a video
+  // actually started -- back to the coach's phone on the TV's live channel, and on the TV itself when it can't play.
+  // YouTube's player reports through postMessage once it is asked to (enablejsapi); a clip reports through its own events.
+  const YT_ERR={2:'that link isn\'t a playable YouTube video',5:'this TV\'s browser can\'t play it',100:'the video was removed or is private',101:'the owner doesn\'t allow it to play inside other apps',150:'the owner doesn\'t allow it to play inside other apps',152:'the owner doesn\'t allow it to play inside other apps',153:'YouTube didn\'t accept the TV page'};
+  let watch=null;
+  function report(state,detail,o){TV.mediaStatus={state,detail,id:o?.id||'',at:Date.now()};
+    try{live.send?.({topic:live.topic,event:'broadcast',ref:String(++live.ref),payload:{type:'broadcast',event:'tv-status',payload:{id:o?.id||'',kind:o?.kind||'',state,detail}}});}catch{}}
+  TV.report=report;
+  function watchMedia(o){if(watch)clearTimeout(watch.t);watch=null;if(!o||!['youtube','video'].includes(o.kind)||!o.url&&!o.youtube)return;const w=watch={id:o.id};let done=false;
+    const fin=(st,d='')=>{if(done||watch!==w)return;done=true;clearTimeout(w.t);report(st,d,o);
+      if(st!=='playing'){const fr=ovl.querySelector('.tvo-frame');if(fr&&!fr.querySelector('.tvo-fail'))fr.insertAdjacentHTML('beforeend',`<div class="tvo-fail">${st==='failed'?'Can\'t play this video here':'Video not playing yet'} — ${esc(d)}</div>`);}};
+    if(o.kind==='youtube'){const fr=ovl.querySelector('iframe');if(!fr)return;const hello=()=>{try{fr.contentWindow.postMessage(JSON.stringify({event:'listening',id:1,channel:'widget'}),'*');}catch{}};
+      fr.addEventListener('load',()=>{hello();setTimeout(hello,1500);setTimeout(hello,4000);});
+      w.onmsg=e=>{if(e.source!==fr.contentWindow)return;let m;try{m=typeof e.data==='string'?JSON.parse(e.data):e.data;}catch{return;}
+        if(m?.event==='onError')fin('failed',YT_ERR[m.info]||`YouTube error ${m.info}`);
+        else if((m?.event==='infoDelivery'&&m.info&&m.info.playerState===1)||(m?.event==='onStateChange'&&m.info===1))fin('playing');};}
+    else{const v=ovl.querySelector('video')||document.querySelector('video[data-tv-mirror-src]');if(v){v.addEventListener('playing',()=>fin('playing'),{once:true});v.addEventListener('error',()=>fin('failed','the clip couldn\'t load'),{once:true});if(!v.paused&&v.currentTime>0)fin('playing');}}
+    w.t=setTimeout(()=>fin('stuck','it hasn\'t started after 25 seconds (slow connection, or the TV needs a tap to allow video)'),25000);}
+  addEventListener('message',e=>{try{watch?.onmsg?.(e);}catch{}});
   function slotOverlay(r){const o=r.overlay;if(!o)return null;return{...o,label:[o.label,r.overlay_by].filter(Boolean).join(' · ')};}
   TV.draw=draw;TV.fit=fit;
   let resizeT=0;addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{if(TV.frame)fit();fitMedia();fitCard();},150);});
@@ -155,7 +175,7 @@
   function listen(key){if(!key||!/^[0-9a-f]{32}$/.test(key)||typeof WebSocket!=='function')return;if(live.key===key&&live.ws&&live.ws.readyState<=1)return;
     live.key=key;try{live.ws?.close();}catch{}const base=String(CFG.supabaseUrl||'').replace(/\/$/,'').replace(/^http/,'ws');if(!base||!CFG.supabaseAnonKey)return;
     let ws;try{ws=new WebSocket(`${base}/realtime/v1/websocket?apikey=${encodeURIComponent(CFG.supabaseAnonKey)}&vsn=1.0.0`);}catch{return;}live.ws=ws;
-    const topic=`realtime:msos-tv-${key}`,send=m=>{try{if(ws.readyState===1)ws.send(JSON.stringify(m));}catch{}};let joinRef='';
+    const topic=`realtime:msos-tv-${key}`,send=m=>{try{if(ws.readyState===1)ws.send(JSON.stringify(m));}catch{}};let joinRef='';live.topic=topic;live.send=send;
     ws.onopen=()=>{joinRef=String(++live.ref);send({topic,event:'phx_join',ref:joinRef,join_ref:joinRef,payload:{config:{broadcast:{self:false,ack:false},presence:{key:''},private:false,postgres_changes:[]}}});
       clearInterval(live.hb);live.hb=setInterval(()=>send({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++live.ref)}),25000);};
     ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch{return;}

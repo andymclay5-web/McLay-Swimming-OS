@@ -97,3 +97,5 @@ body.tv-light .tv-t b{color:#000}
 .sb-goal.reached{border-width:.3em}
 .sb-balance p{display:flex;align-items:center;margin:.08em 0}.sb-bal-row span{flex:0 0 42%}.sb-bal-row b{margin-left:auto;padding-left:.4em}
 .sb-bar{display:block;height:.6em;background:var(--fg);border-radius:.1em;min-width:2px}
+/* 27 Oct 2026: a video that can't play says so on the TV */
+.tvo-frame{position:relative}.tvo-fail{position:absolute;left:0;right:0;bottom:0;padding:.6em .8em;background:rgba(160,30,30,.92);color:#fff;font-size:clamp(14px,1.6vw,28px);font-weight:700;line-height:1.3}
