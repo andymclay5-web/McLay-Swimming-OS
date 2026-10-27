@@ -15,6 +15,10 @@
 //  5. The Board shows one collapsed brief line, not a dashboard.
 //  6. With a season plan covering the date, the brief comes from that season's week/day row.
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 const ON='WARM UP\n400 free\n4 x 100 IM\nMAIN SET\n3 x (4 x 50 #1 @100p @1:30\n200 easy)\nWARM DOWN\n200 easy';
@@ -45,7 +49,7 @@ const OFF='WARM UP\n400 free\nMAIN SET\n6 x 200 free steady 20s rest\nWARM DOWN\
     // 4: Add session modal -- live update.
     // Fixed weekday (Tue 13 Oct 2026): today's slot can be one whose brief has no single-system check
     // (e.g. Saturday's Rainbow Set), which would make this live-update assertion depend on the day it runs.
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
     await page.fill('#coreRaw',OFF);await page.waitForTimeout(600);
     const t1=await page.evaluate(()=>document.querySelector('#modalHost [data-msos-brief]').innerText);
     await page.fill('#coreRaw','');await page.waitForTimeout(600);
@@ -59,7 +63,7 @@ const OFF='WARM UP\n400 free\nMAIN SET\n6 x 200 free steady 20s rest\nWARM DOWN\
     await page.waitForSelector('.msos-brief-board summary',{timeout:5000});
     const board=await page.evaluate(()=>({line:document.querySelector('.msos-brief-board summary').innerText,open:document.querySelector('.msos-brief-board').open}));
     assert.match(board.line,/Anaerobic Power[\s\S]*on brief/,`Board line: ${board.line}`);assert.equal(board.open,false,'the Board brief stays collapsed');
-    await page.evaluate(()=>window.MSOS4.actions.openSessionEdit());await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
+    await page.evaluate(()=>window.MSOS4.actions.openSessionEdit());await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#modalHost [data-msos-brief]',{timeout:5000});
     assert.match(await page.evaluate(()=>document.querySelector('#modalHost [data-msos-brief]').innerText),/Main set is Anaerobic Power \(Race pace\) — on brief/);
     await page.fill('#sessionEditText',OFF);await page.waitForTimeout(600);
     assert.match(await page.evaluate(()=>document.querySelector('#modalHost [data-msos-brief]').innerText),/brief asks for Anaerobic Power/,'editing the text live re-checks against the brief');

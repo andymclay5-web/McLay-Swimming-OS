@@ -26,13 +26,17 @@ const ORG='9d40beff-e632-414d-9daa-7ee78104ad2a';
     const all=SL.all(),by={};for(const x of all)by[x.author]=(by[x.author]||0)+1;
     // 2. recheck every Claude variation with the parser + dosage
     const sys=(sec,t)=>{const q=M.parser.parse(`${sec}\n${t}`,{date:'2026-10-20',dayPart:'PM',squads:['National'],id:'chk'});const d=D.session({id:`chk-${Math.random()}`,identity:q.identity,blocks:q.blocks},M.state,{delivered:false});return Object.entries(d.systems).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres).map(([k])=>k)[0]||'';};
-    const vars=all.filter(x=>x.origin==='variation');const libById=new Map(SM.LIB.map(x=>[x.id,x]));const wrong=[];
-    for(const v of vars){const base=libById.get(v.base);if(!base){wrong.push(`${v.id}: no base`);continue;}if(sys(v.section,v.text)!==sys(base.section,base.text))wrong.push(`${v.id}: system changed`);
-      const idx=[...v.text.matchAll(/^\s*#\s*(\d+)(?:\s*[-–—]\s*(\d+))?/gm)].map(m=>Number(m[2]||m[1]));const reps=Number((v.text.match(/^\s*(\d+)\s*x\s*\d/m)||[])[1]||0);if(idx.length&&reps&&Math.max(...idx)!==reps&&/^\s*\d+\s*x/.test(v.text.split('\n')[0])&&/^\s*#/m.test(v.text)&&base.text.split('\n')[0]!==v.text.split('\n')[0])wrong.push(`${v.id}: #-pattern ${Math.max(...idx)} vs ${reps} reps`);}
+    // 27 Oct 2026: Claude's entries are now whole, different sets (not one of Andy's with a number changed). Each must
+    // parse to real metres, its main system must be one it is tagged with (main sets), and no two sets in the library
+    // may be the same shape -- same words, only the numbers different (Andy: "no need to have ... three instead of four").
+    const vars=all.filter(x=>x.origin==='variation');const wrong=[];const seen=new Map();
+    for(const x of all.filter(z=>z.origin!=='session'&&z.origin!=='coach')){const k=SL.shape(x.text);if(seen.has(k)&&(x.origin==='variation'||seen.get(k).origin==='variation'))wrong.push(`${x.id}: same shape as ${seen.get(k).id}`);if(!seen.has(k))seen.set(k,x);}
+    for(const v of vars){const q=M.parser.parse(`${v.section}\n${v.text}`,{id:'m'});if(!(M.session.total(q)>0))wrong.push(`${v.id}: no metres`);if(v.section==='MAIN SET'){const s0=sys(v.section,v.text);if(!(v.fits||[]).includes(s0))wrong.push(`${v.id}: main system ${s0} not in ${v.fits}`);}
+      const idx=[...v.text.matchAll(/^\s*#\s*(\d+)(?:\s*[-–—]\s*(\d+))?/gm)].map(m=>Number(m[2]||m[1]));const reps=Number((v.text.match(/^\s*(\d+)\s*x\s*\d/m)||[])[1]||0);if(idx.length&&reps&&(v.text.match(/^\s*\d+\s*x\s*\d/gm)||[]).length===1&&/^\s*\d+\s*x/.test(v.text.split('\n')[0])&&Math.max(...idx)!==reps)wrong.push(`${v.id}: #-pattern ${Math.max(...idx)} vs ${reps} reps`);}
     const p01=all.find(x=>x.code==='P01');
     return{total:all.length,by,vars:vars.length,wrong,p01:{status:p01.status,issues:p01.issues},mine:all.filter(x=>x.origin==='session').length,authors:[...new Set(all.map(x=>x.author))]};},ORG);
-  assert.ok(r.total>=230,`hundreds of sets (${r.total})`);assert.ok(r.vars>=120,`Claude variations: ${r.vars}`);
-  assert.ok(r.by.Andy>=50&&r.by.ChatGPT>=10&&r.by.Claude>=120,`authors: ${JSON.stringify(r.by)}`);assert.ok(r.mine>=2,"Andy's own session sets are in the library");
+  assert.ok(r.total>=140,`a full library (${r.total})`);assert.ok(r.vars>=50,`Claude's different sets: ${r.vars}`);
+  assert.ok(r.by.Andy>=50&&r.by.ChatGPT>=10&&r.by.Claude>=50,`authors: ${JSON.stringify(r.by)}`);assert.ok(r.mine>=2,"Andy's own session sets are in the library");
   assert.deepEqual(r.wrong,[],r.wrong.join('\n'));
   assert.equal(r.p01.status,'check');assert.match(r.p01.issues.join(' '),/200 hands-by-side on #1 stroke/);
   // 4. suggestions in the writer

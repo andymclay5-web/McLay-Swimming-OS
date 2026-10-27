@@ -10,6 +10,10 @@
 //  3. "When I tried to load tv board it just threw me back to here [Connection]" -> the Hub's only TV button
 //     was "Coach & TV sign-in", which opens Connection. The Hub now has a real TV Board button.
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
@@ -24,7 +28,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForTimeout(500);
 
     // 1a. No plan yet: the coach can still lead -- every component is offered, and a chosen focus drives suggestions.
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     await page.waitForSelector('[data-msos-focus-row]');
     assert.ok(await page.$('#modalHost [data-msos-more]'),'with no plan, all components are still listed to add');
     await page.evaluate(()=>document.querySelector('#modalHost').innerHTML='');
@@ -35,7 +39,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       for(const[type,rows]of[['season_plan',[g.seasonRow]],['weekly_plan',g.weeklyRows]]){await D.commit(D.preview(type,{rows},{version:'t',effectiveFrom:'2026-10-12',source:'test'}));}});
 
     // 1b. Choose a different focus than the plan and lead with it.
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.waitForTimeout(400);
     const planLabel=await page.textContent('[data-msos-focus=""]');
@@ -55,7 +59,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.match(await page.inputValue('#coreRaw'),/2 x 200 IM Clearance 20sR HR Gauge/);
     assert.equal(await page.evaluate(()=>document.querySelector('#modalHost [data-msos-more]')?.open),true,'the list stays open after Add');
     // Draft follows the chosen focus.
-    await page.tap('[data-msos-start="draft"]');await page.waitForTimeout(600);
+    await openBuild(page);await page.tap('[data-msos-start="draft"]');await page.waitForTimeout(600);
     const draft=await page.inputValue('#coreRaw');
     assert.match(draft,/MAIN SET[\s\S]*\bAT\b/,`threshold draft: ${draft}`);
     assert.doesNotMatch(draft,/@100 Pace/,'no race-pace sets in a threshold draft');
@@ -65,7 +69,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.deepEqual(saved,{focus:'Threshold',brief:'Threshold',plan:'Threshold'},'the saved session keeps the coach\'s focus');
 
     // Edit workout: focus can be changed back to the plan.
-    await page.evaluate(()=>window.MSOS4.actions.openSessionEdit());await page.waitForSelector('#sessionEditText');
+    await page.evaluate(()=>window.MSOS4.actions.openSessionEdit());await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#sessionEditText');
     assert.ok(await page.$('#modalHost [data-msos-focus="Threshold"].on'),'edit opens with the saved focus');
     await page.tap('#modalHost [data-msos-focus=""]');await page.waitForTimeout(300);
     await page.tap('[data-save-session-edit]');await page.waitForTimeout(500);
@@ -77,7 +81,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>{const M=window.MSOS4;window.__asks=[];M.assistant.available=()=>true;
       const fake=async(path,opts)=>{const body=JSON.parse(opts.body);window.__asks.push({path,body});if(/fail/.test(body.question))throw new Error('Network down');return{answer:'Put the race-pace work after a build.',session_text:'MAIN SET\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace',model:'stub'};};
       if(M.cloudSessionEngine)M.cloudSessionEngine.fetch=fake;M.cloud.fetch=fake;});
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     // 13 Oct: the writer skips slots already written (PM National was saved above), so choose it explicitly.
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.waitForTimeout(300);
@@ -92,7 +96,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.match(req.body.context,/Plan brief \(season plan "Summer 2026\/27"\)/,'the brief goes with the question');
     assert.match(req.body.context,/App session check:/,'the app\'s own check goes with the question');
     assert.match(req.body.context,/The coach's own recent sessions for these squads[\s\S]*2026-10-06 PM · 3,?400m/,'his recent real sessions go with the question');
-    assert.match(req.body.context,/Slot length: \d+ min[\s\S]*fill the slot/,'the slot length and sizing go with the question');
+    assert.match(req.body.context,/Slot length: \d+ min[\s\S]*write a full session of about[\s\S]*never a short sample/,'the slot length and sizing (27 Oct: sized like his own sessions, not the slot clock) go with the question');
     assert.match(await page.textContent('.msos-ask-wrap .ask-ai'),/Put the race-pace work after a build/);
     assert.match(await page.inputValue('#coreRaw'),/8 x 200 free steady/,'nothing changes until the coach taps');
     await page.tap('.msos-ask-wrap [data-ask-use][data-mode="append"]');await page.waitForTimeout(300);

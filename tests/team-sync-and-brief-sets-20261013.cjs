@@ -9,6 +9,10 @@
 //     specific anaerobic power ... slightly extended in the recovery because it's an aerobic training phase" and
 //     "did the same set I did last night".
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{
@@ -29,14 +33,14 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       put('last-night','2026-10-12','WARM UP\n400 free\nMAIN SET\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace\n10 x 100 10sR\n#1-3 Dev\n#4-6 OL\n#7-10 AT\nWARM DOWN\n200 easy');
       put('older','2026-10-01','WARM UP\n400 free\nMAIN SET\n8 x 25 @100 Pace @1:00\nWARM DOWN\n200 easy');
       M.state.settings.storageRevision=(Number(M.state.settings.storageRevision)||0)+1;});
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.fill('#coreRaw','WARM UP\n400 free\nMAIN SET\n4 x 50 @2:30\n#1 Build\n#2-4 @100 Pace');await page.waitForTimeout(800);
     // 15 Oct 2026: suggestions come stage by stage -- with a warm-up and an on-brief main set written, the next part
     // is the pre-set; the coach taps "Main set" to see more main-set options.
     assert.equal(await page.getAttribute('[data-msos-stage-panel]','data-msos-stage-panel'),'PRE SET','next part to write is the pre-set');
     await page.click('#modalHost [data-msos-stage="MAIN SET"]');await page.waitForTimeout(300);
-    const sug=await page.evaluate(()=>{const box=document.querySelector('#modalHost [data-msos-brief] .msos-fits');const top=[...box.querySelectorAll(':scope > .msos-fit')].map(r=>r.textContent.replace(/\s+/g,' ').trim());return{head:box.querySelector('.msos-check-title')?.textContent||'',top};});
+    const sug=await page.evaluate(()=>{const box=document.querySelector('#modalHost [data-msos-ideas] .msos-fits');const top=[...box.querySelectorAll(':scope > .msos-fit')].map(r=>r.textContent.replace(/\s+/g,' ').trim());return{head:box.querySelector('.msos-check-title')?.textContent||'',top};});
     assert.match(sug.head,/Anaerobic Power/,`tonight's brief is Anaerobic Power: ${sug.head}`);
     const mainTop=sug.top.filter(t=>/MAIN SET/.test(t));
     assert.ok(mainTop.length>=2,`main-set suggestions offered: ${sug.top.join(' | ')}`);
@@ -46,9 +50,9 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.ok(sug.top.some(t=>/8 x 25 @100 Pace/.test(t)&&/yours/.test(t)),'his own older race-pace set is offered');
     assert.ok(sug.top.some(t=>/\+recovery \(aerobic phase\)/.test(t)),'base phase: race-pace sets carry extra recovery');
     // Adding one inserts the extended send-offs.
-    const rpBtn=await page.evaluate(()=>[...document.querySelectorAll('#modalHost [data-msos-brief] .msos-fits > .msos-fit')].find(r=>/200 pace rounds/.test(r.textContent))?.querySelector('[data-msos-insert]')?.dataset.msosInsert);
+    const rpBtn=await page.evaluate(()=>[...document.querySelectorAll('#modalHost [data-msos-ideas] .msos-fits > .msos-fit')].find(r=>/200 pace rounds/.test(r.textContent))?.querySelector('[data-msos-insert]')?.dataset.msosInsert);
     assert.equal(rpBtn,'rp-200');
-    await page.click(`#modalHost [data-msos-brief] .msos-fits > .msos-fit [data-msos-insert="rp-200"]`);await page.waitForTimeout(400);
+    await page.click(`#modalHost [data-msos-ideas] .msos-fits > .msos-fit [data-msos-insert="rp-200"]`);await page.waitForTimeout(400);
     assert.match(await page.inputValue('#coreRaw'),/200 Easy @4:15/,'inserted with +15s (4:00 -> 4:15)');
     // "All components": other systems are kept apart under their own heading.
     const more=await page.evaluate(()=>{const d=document.querySelector('#modalHost [data-msos-more]');d.open=true;return d.innerHTML;});
@@ -82,6 +86,9 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     // ---------- 1. Sync runs itself ----------
     const sync=await page.evaluate(async()=>{const M=window.MSOS4,C=M.cloud;const out={};
+      // 27 Oct 2026: the While-you-were-away fetch and the cloud status dot's quick send are other background cloud
+      // callers; held still here so this checks only the sign-in renewal and the cloud owner's own sending.
+      if(M.awayInbox)M.awayInbox.refresh=async()=>false;if(M.syncStatus)M.syncStatus.send=()=>{};
       // (a) an expired sign-in is renewed and the call retried
       let refreshed=[];M.cloudSessionEngine.ensureFresh=async(o={})=>{refreshed.push(!!o.force);return{}};
       let n=0;const realFetch=window.fetch;window.fetch=async()=>{n++;if(n===1)return new Response(JSON.stringify({message:'JWT expired'}),{status:401});return new Response('[]',{status:200});};

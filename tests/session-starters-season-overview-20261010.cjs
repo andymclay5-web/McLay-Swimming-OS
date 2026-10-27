@@ -11,6 +11,10 @@
 //  3. Opening the planner with a season in place SHOWS the season (blocks, every week) instead of the
 //     wizard; "Plan a new season" still opens the four steps.
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
@@ -24,17 +28,17 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.waitForTimeout(500);
     // A previous Tuesday PM National session (6 Oct) to copy from.
     await page.evaluate(()=>{const M=window.MSOS4;const t='WARM UP\n400 free\nMAIN SET\n3 x (4 x 50 #1 @100p @1:30\n200 easy)\nWARM DOWN\n200 easy';const s=M.parser.parse(t,{date:'2026-10-06',dayPart:'PM',squads:['National'],course:'SCM'});s.id='prev-tue-pm';s.identity={...s.identity,date:'2026-10-06',dayPart:'PM',squads:['National']};M.store.putSession(M.state,s);});
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));
-    await page.waitForSelector('[data-msos-starters]');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);
+    await openBuild(page);await page.waitForSelector('[data-msos-starters]');
     // Pick the Tue PM National slot.
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.waitForTimeout(300);
     const btns=await page.evaluate(()=>[...document.querySelectorAll('[data-msos-start]')].map(b=>b.textContent));
     assert.deepEqual(btns,['Draft from brief','Session template','Last Tuesday PM (2026-10-06)'],`starters: ${btns}`);
-    await page.tap('[data-msos-start="template"]');await page.waitForTimeout(500);
+    await openBuild(page);await page.tap('[data-msos-start="template"]');await page.waitForTimeout(500);
     assert.match(await page.inputValue('#coreRaw'),/^WARM UP[\s\S]*PRE SET[\s\S]*MAIN SET[\s\S]*POST SET[\s\S]*WARM DOWN/);
     page.once('dialog',d=>d.accept());
-    await page.tap('[data-msos-start="last"]');await page.waitForTimeout(700);
+    await openBuild(page);await page.tap('[data-msos-start="last"]');await page.waitForTimeout(700);
     const v=await page.inputValue('#coreRaw');
     assert.match(v,/4 x 50 #1 @100p @1:30/,'Last session must fill the box with that session');
     assert.doesNotMatch(v,/TOTAL/);

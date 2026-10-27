@@ -14,6 +14,10 @@
 //  5. rest phrases ("Easy Finish", "Full Recovery Between Reps") no longer make a MAX set count as easy swimming;
 //  6. "Anaerobic Power" / "Anaerobic Capacity" weeks are no longer mistaken for the aerobic base phase.
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{
@@ -36,7 +40,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     // ---------- 1. Jordan writes Tuesday PM (Anaerobic Power, Base Skills phase) from the suggestions ----------
     await page.evaluate(()=>{window.MSOS4.access.setRole('assistant',{assistantId:'jordan'});window.MSOS4.state.settings.assistantSquads=['National'];});
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.waitForTimeout(700);
     const panel=()=>page.evaluate(()=>{const p=document.querySelector('#modalHost [data-msos-stage-panel]');return p?{stage:p.dataset.msosStagePanel,head:p.querySelector('.msos-check-title')?.textContent||'',notes:[...p.querySelectorAll('.msos-stage-note')].map(x=>x.textContent).join(' / '),rows:[...p.querySelectorAll(':scope > .msos-fit')].map(r=>({id:r.querySelector('[data-msos-insert]').dataset.msosInsert,text:r.textContent.replace(/\s+/g,' ').trim()})),done:[...p.querySelectorAll('[data-msos-stage].done')].map(b=>b.dataset.msosStage)}:null;});
@@ -91,7 +95,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     // ---------- 3. A younger squad is told these are National sets ----------
     await page.evaluate(()=>{window.MSOS4.access.setRole('owner');});
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     const hasInter=await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/Intermediate/.test(x.textContent)&&!/National/.test(x.textContent));if(!o)return false;sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));return true;});
     if(hasInter){await page.waitForTimeout(700);assert.match((await panel()).notes,/written for the National squad/);}
     else{const html=await page.evaluate(()=>{const M=window.MSOS4,SM=M.sessionMethodology;const s={id:'i',identity:{date:'2026-10-13',dayPart:'PM',squads:['Intermediate']},blocks:[],metadata:{coachFocus:'Development'}};return SM.briefHtml(s);});assert.match(html,/written for the National squad — scale or simplify them for Intermediate/);}

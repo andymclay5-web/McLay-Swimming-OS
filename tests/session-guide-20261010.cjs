@@ -14,6 +14,10 @@
 //  D. Suggestions list his components for the brief and "Add" inserts under the right heading.
 //  E. Progression checks: race pace before any build; two fast sections back to back.
 const assert=require('node:assert/strict');
+// 27 Oct 2026 writer layout (Andy: no scrolling past the planning bit): the brief and the part-by-part set ideas are
+// closed sections a coach taps open, and the start buttons sit under "Build it for me". These open them first.
+const openParts=page=>page.evaluate(()=>document.querySelectorAll('#modalHost [data-msos-brief-wrap],#modalHost [data-msos-ideas]').forEach(d=>{d.open=true;}));
+const openBuild=page=>page.evaluate(()=>{if(!document.querySelector('#modalHost [data-msos-build-go]'))document.querySelector('#modalHost [data-msos-tool="build"]')?.click();});
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
@@ -45,7 +49,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.ok(c.allFromLib,'every section of the draft comes from his component library');
     assert.doesNotMatch(c.d.text,/100 Scull\n\nWARM DOWN|100 Scull\n\nPOST/,'a reset never ends the main set');
     // D
-    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#coreSlot');
+    await page.evaluate(()=>window.MSOS4.actions.openNewSession({date:'2026-10-13'}));await page.waitForSelector('#modalHost [data-msos-brief-wrap]',{state:'attached'});await openParts(page);await page.waitForSelector('#coreSlot');
     await page.evaluate(()=>{const sel=document.querySelector('#coreSlot');const o=[...sel.options].find(x=>/PM .*National/.test(x.textContent));sel.value=o.value;sel.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.fill('#coreRaw','WARM UP\n400 free\nMAIN SET\n8 x 200 free steady @3:00\nWARM DOWN\n200 easy');await page.waitForTimeout(800);
     // 15 Oct 2026: suggestions come stage by stage. The main set is off brief (steady 200s on an Anaerobic Power
@@ -57,7 +61,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     await page.evaluate(()=>{const d=document.querySelector('[data-msos-stage-more]');if(d)d.open=true;});
     await page.tap('[data-msos-stage-more] [data-msos-insert="rp-25"]');await page.waitForTimeout(500);
     assert.match(await page.inputValue('#coreRaw'),/MAIN SET\n8 x 200 free steady @3:00\n6 x 25 @1:00\n#1 Build\n#2-6 @100 Pace\nWARM DOWN/,'Add inserts at the end of the main set');
-    page.once('dialog',d=>d.accept());await page.tap('[data-msos-start="draft"]');await page.waitForTimeout(600);
+    page.once('dialog',d=>d.accept());await openBuild(page);await page.tap('[data-msos-start="draft"]');await page.waitForTimeout(600);
     assert.match(await page.inputValue('#coreRaw'),/^WARM UP[\s\S]*PRE SET[\s\S]*MAIN SET[\s\S]*@100 Pace[\s\S]*WARM DOWN/);
     await page.evaluate(()=>{document.querySelector('#modalHost').innerHTML='';});
     // E
