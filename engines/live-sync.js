@@ -37,6 +37,8 @@
   function joinTv(t){const r=nextRef();let done;const ready=new Promise(res=>{done=res;setTimeout(()=>res(false),2000);});tvTopics.set(t,{joined:false,ref:r,ready,done});send({topic:t,event:'phx_join',ref:r,join_ref:r,payload:{config:{broadcast:{self:false,ack:false},presence:{key:''},private:false,postgres_changes:[]},access_token:lastToken}});}
   function onMessage(ev){let m;try{m=JSON.parse(ev.data);}catch{return;}
     if(m.event==='phx_reply'&&m.topic===topic&&m.ref===joinRef){if(m.payload?.status==='ok'){state='live';retry=0;emit('_status',{state});}else{state='error';emit('_status',{state,error:m.payload?.response?.reason||'join refused'});}return;}
+    // 27 Oct 2026: a pool TV says whether the video it was sent actually started (tv.js report); engines/tv-display.js shows it.
+    if(m.event==='broadcast'&&tvTopics.has(m.topic)&&m.payload?.event==='tv-status'){emit('_tv',m.payload.payload||{});return;}
     if(m.event==='phx_reply'&&tvTopics.has(m.topic)){const t=tvTopics.get(m.topic);if(m.ref===t.ref){t.joined=m.payload?.status==='ok';t.done?.(t.joined);}return;}
     if(m.event==='postgres_changes'&&m.topic===topic){const d=m.payload?.data||{};if(!d.table)return;lastEventAt=now();emit(d.table,{type:d.type,record:d.record||null,old:d.old_record||null});return;}
     if(m.event==='system'&&m.payload?.status==='error'){emit('_status',{state:'error',error:m.payload?.message||''});}

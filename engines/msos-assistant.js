@@ -48,7 +48,12 @@
     const planned=s=>{try{return Math.round((M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0)/60)||null;}catch{return null}};
     try{const recent=A.recentSessions(session,4);if(recent.length){const totals=recent.map(r=>r.total).filter(Boolean),avg=totals.length?Math.round(totals.reduce((a,b)=>a+b,0)/totals.length/50)*50:0;
       lines.push(`The coach's own recent sessions for these squads (his real volume and style${avg?`; typical ${avg}m`:''}):\n${recent.map(r=>`--- ${r.label} · ${r.total}m${r.min?` · about ${r.min} min planned`:''}\n${r.text.slice(0,1400)}`).join('\n')}`);}}catch{}
-    if(slot){const p=planned(session);lines.push(`Slot length: ${slot} min${p?`; this draft is planned at about ${p} min by the app (includes ~7 min coaching downtime)`:''}. When asked to write or extend a whole session, fill the slot: aim for about ${Math.max(slot-8,30)} to ${slot} min by the app's timing, with volume like his recent sessions above — not a short sample.`);}
+    // 27 Oct 2026 (Andy: AI sessions "just way too short every time"): the old line told the model to fit the app's
+    // planned time to the slot clock, but that estimate runs ~20% long against his real sessions (his 4,400m in a
+    // 90-min slot plans at ~112 min), so it cut volume to ~2,700m. The target now comes from his own recent sessions in
+    // this slot (session-methodology.js slotTarget) -- their typical metres and their planned minutes.
+    if(slot){const p=planned(session);let tg=null;try{tg=M.sessionMethodology?.slotTarget?.(id,M.state)||null;}catch{}
+      lines.push(`Slot length: ${slot} min${p?`; this draft is planned at about ${p} min by the app`:''}.${tg?.metres?` His recent ${String(id.dayPart||'').toUpperCase()} sessions for these squads are typically about ${tg.metres.toLocaleString()}m and the app plans them at about ${tg.minutes} min (the app's estimate runs longer than his real sessions, so do not cut a session down just because the estimate passes ${slot} min).`:''} When asked to write or extend a whole session, write a full session of about ${tg?.metres?`${Math.round(tg.metres*0.95/50)*50}–${tg.metres.toLocaleString()}m`:`${slot} min`} in his style, with every section (warm up, pre set, main set, post set, warm down) — never a short sample.`);}
     try{const season=M.dataAdminUI?.activeSeason?.();if(season){const meet=(season.meets||[])[0]||{};lines.push(`Season: ${[season.name,season.start_date&&`starts ${season.start_date}`,meet.name&&`target meet ${meet.name}${meet.date?` on ${meet.date}`:''}`,season.overarching_goal&&`phases ${season.overarching_goal}`].filter(Boolean).join(' · ')}`);}}catch{}
     return lines.join('\n\n');
   };

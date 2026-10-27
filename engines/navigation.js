@@ -50,17 +50,9 @@
   const primeNewSessionSlot=(date,slot)=>{
     // Pass the tapped date: the writer used to list only TODAY's slots, so tapping a future AM/PM pill
     // matched today's same-time slot and created the session on the wrong date.
-    M.actions?.openNewSession?.({date});
-    let tries=0;
-    const apply=()=>{
-      const sel=document.querySelector('#coreSlot');
-      if(!sel){if(tries++<40)setTimeout(apply,50);return}
-      const part=String(slot.day_part||'').toUpperCase(),time=String(slot.start_time||''),squads=squadsOf(slot.squads).map(x=>x.toUpperCase());
-      const opt=[...sel.options].find(o=>{const t=String(o.textContent||'').toUpperCase();return (!part||t.includes(part))&&(!time||t.includes(time))&&squads.every(s=>t.includes(s))})||[...sel.options].find(o=>String(o.textContent||'').toUpperCase().includes(part));
-      if(opt){sel.value=opt.value;sel.dispatchEvent(new Event('change',{bubbles:true}))}
-      else M.toast?.(`Published ${date} ${part} slot is available — choose it in Add session`);
-    };
-    apply();
+    // 27 Oct 2026: pass the slot itself and let the writer select it -- the old option-text match found 'PM' inside
+    // 'DeveloPMent' and opened the AM Development slot instead of tonight's.
+    M.actions?.openNewSession?.({date,target:{dayPart:slot.day_part,start:slot.start_time,squads:squadsOf(slot.squads)}});
   };
   // 25 Sept 2026 (Andy, live): "Needs to be clearer on the session picker with past sessions. I should only
   // see past sessions I've actually ran and finished, and remove all the empty sessions... It's confusing as

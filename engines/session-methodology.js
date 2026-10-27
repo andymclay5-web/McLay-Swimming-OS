@@ -23,7 +23,7 @@
   const M=g.MSOS4,E=g.MSOSEngines;
   if(!M?.state||!M?.util||!E?.Modification||!M?.dosageEngine||!M?.boardEngine||!M?.ui)return;
   const U=M.util,D=M.dosageEngine,B=M.boardEngine,UI=M.ui;
-  const SM=M.sessionMethodology={build:'v4-session-methodology-20261006-brief'};
+  const SM=M.sessionMethodology={build:'v4-session-methodology-20261027-writer'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>U.escape?U.escape(String(v??'')):text(v);
   const now=()=>new Date().toISOString();
@@ -513,12 +513,24 @@
   SM.mySets=mySets;
   function pick(section,kind){return LIB.find(x=>x.section===section&&(x.for||[]).includes(kind))||LIB.find(x=>x.section===section);}
   function composeText(parts){const order=['WARM UP','PRE SET','MAIN SET','POST SET','WARM DOWN'];return order.filter(h=>parts[h]?.length).map(h=>`${h}\n${parts[h].join('\n')}`).join('\n\n');}
+  // 27 Oct 2026 (Andy: "the generate session from brief ... it's just way too short every time. It needs to be a little
+  // bit more realistic of the time frame of my sessions"). The app's planned-time estimate runs long against his real
+  // sessions (his 4,400m Wed PM in a 90-min slot plans at ~112 min; his 5,450m Sat AM in 120 at ~126), so filling a
+  // draft to the slot clock gave ~2,700m. The target is now what his own recent sessions in that slot look like: their
+  // typical metres and their planned minutes (same day part, overlapping squads, the last 8 with 2,000m+). With no
+  // history yet, the slot length x 1.2.
+  function slotTarget(identity,state=M.state){const slot=slotMinutes(identity)||90,dp=String(identity?.dayPart||'').toUpperCase(),squads=new Set((identity?.squads||[]).map(x=>String(x).toLowerCase())),date=String(identity?.date||'9999');
+    const planned=s=>{try{return(M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0)/60;}catch{return 0}};const med=a=>{const b=a.filter(x=>x>0).sort((x,y)=>x-y);return b.length?b[Math.floor((b.length-1)/2)]:0;};
+    const recent=Object.values(state?.canonicalSessions||{}).filter(s=>s?.identity?.date&&s.identity.date<=date&&String(s.identity.dayPart||'').toUpperCase()===dp&&(!squads.size||(s.identity.squads||[]).some(q=>squads.has(String(q).toLowerCase())))).map(s=>({s,total:(()=>{try{return M.session.total(s)}catch{return 0}})()})).filter(x=>x.total>=2000).sort((a,b)=>String(b.s.identity.date).localeCompare(String(a.s.identity.date))).slice(0,8);
+    if(recent.length>=2){const mins=med(recent.map(x=>planned(x.s))),metres=Math.round(med(recent.map(x=>x.total))/50)*50;return{minutes:Math.round(Math.min(slot*1.45,Math.max(slot,mins||slot*1.2))),metres,slot,basis:`your last ${recent.length} ${dp} sessions`,count:recent.length};}
+    return{minutes:Math.round(slot*1.2),metres:0,slot,basis:'slot length',count:0};}
+  SM.slotTarget=slotTarget;
   function draftFromBrief(identity,state=M.state,{focus=null}={}){
     const probe={id:'draft-probe',identity,blocks:[],metadata:focus?{coachFocus:focus}:{}},b=brief(probe,state),combo=b&&b.source!=='none'&&!b.coachFocus?comboSystems(b.system):null,named=b&&b.source!=='none'?(combo?combo[0]:(namedSystem(b.system)||namedSystem(b.weekFocus))):null,kind=combo?comboKind(combo):briefKind(named);
     const parts={'WARM UP':[pick('WARM UP',kind).text],'PRE SET':[pick('PRE SET',kind).text],'MAIN SET':[],'POST SET':[],'WARM DOWN':[libById('wd').text]};
-    const limit=(slotMinutes(identity)||90)*60;const dur=()=>{try{const s=M.parser.parse(composeText(parts),{...identity,id:'draft-probe'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return 0;}};
+    const target=slotTarget(identity,state),limit=target.minutes*60;const metres=()=>{try{return M.session.total(M.parser.parse(composeText(parts),{...identity,id:'draft-probe'}));}catch{return 0;}};const dur=()=>{try{const s=M.parser.parse(composeText(parts),{...identity,id:'draft-probe'});return M.contextEngineAV?.plannedTimeline?.(s)?.durationSeconds||0;}catch{return 0;}};
     // A component that would overrun the slot is skipped and the next (usually shorter) one is tried.
-    for(const id of MAIN_SEQ[kind]||MAIN_SEQ.mixed){const c=libById(id);if(!c)continue;parts['MAIN SET'].push(c.text);if(parts['MAIN SET'].length>1&&dur()>limit-5*60)parts['MAIN SET'].pop();}
+    for(const id of MAIN_SEQ[kind]||MAIN_SEQ.mixed){if(target.metres&&metres()>=target.metres-150)break;const c=libById(id);if(!c)continue;parts['MAIN SET'].push(c.text);if(parts['MAIN SET'].length>1&&dur()>limit-5*60)parts['MAIN SET'].pop();}
     // The session's main purpose must be in the main set. If the first pass ran out of time before any set of
     // the chosen system went in, try each one at the end; if none fits, shorten the warm-up and pre-set to
     // the quickest of his options and try again (METHODOLOGY 1: "there should normally be a clear primary
@@ -536,12 +548,37 @@
       while(parts['MAIN SET'].length&&!tryPrimary())parts['MAIN SET'].pop();
       if(!hasPrimary())Object.assign(parts,before);
     }
+    // 27 Oct 2026: the main set is the session -- on an aerobic or threshold night it carries well over a third of his
+    // volume (19 Oct PM: 1,800m of threshold in 5,200m). If the warm-up and pre-set used the time first, swap them for
+    // his quickest options and give the main set the room; the fill step below puts warm-up volume back if time allows.
+    const mainMetres=()=>{try{return M.session.total(M.parser.parse(`MAIN SET\n${parts['MAIN SET'].join('\n')}`,{...identity,id:'mm'}));}catch{return 0;}};
+    if(target.metres&&['aerobic','threshold'].includes(kind)&&mainMetres()<target.metres*0.4){
+      const quick=sec=>{let best=null,bt=Infinity;for(const c of LIB.filter(x=>x.section===sec&&!x.ref)){let t=Infinity;try{t=M.contextEngineAV?.plannedTimeline?.(M.parser.parse(`${sec}\n${c.text}`,{...identity,id:'q'}))?.durationSeconds||0;}catch{}if(t<bt){bt=t;best=c;}}return best;};
+      const wu=quick('WARM UP'),pre=quick('PRE SET');if(wu)parts['WARM UP']=[wu.text];if(pre)parts['PRE SET']=[pre.text];
+      for(const id of MAIN_SEQ[kind]||[]){const c=libById(id);if(!c||parts['MAIN SET'].includes(c.text))continue;if(mainMetres()>=target.metres*0.5)break;parts['MAIN SET'].push(c.text);if(dur()>limit-5*60)parts['MAIN SET'].pop();}
+    }
+    // 27 Oct 2026: a combination day ("Aerobic + Anaerobic Capacity") with room for more volume must not let one system
+    // crowd the other out of the main set (the brief check wants each at 10%+): drop the last extra piece of the system
+    // that has too much until each needed system holds at least 15% of the main-set metres.
+    if(combo&&needs.length>1){const pieceM=t=>{try{return M.session.total(M.parser.parse(`MAIN SET\n${t}`,{...identity,id:'pm'}));}catch{return 0;}};const sysOf=t=>(LIB.find(c=>c.text===t)?.fits||[]);
+      for(let guard=0;guard<8;guard++){const rows=parts['MAIN SET'].map(t=>({t,m:pieceM(t),f:sysOf(t)})),tot=rows.reduce((a,r)=>a+r.m,0)||1,share=k=>rows.filter(r=>r.f.includes(k)).reduce((a,r)=>a+r.m,0)/tot;const low=needs.find(k=>share(k)<0.15);if(!low)break;
+        const big=needs.filter(k=>k!==low).sort((a,b)=>share(b)-share(a))[0];const idx=[...rows.keys()].reverse().find(i=>rows[i].f.includes(big)&&!rows[i].f.includes(low)&&rows.filter(r=>r.f.includes(big)).length>1);if(idx==null)break;parts['MAIN SET'].splice(idx,1);}}
     // A reset only belongs between demanding sections -- never as the last thing in the main set.
     while(parts['MAIN SET'].length&&parts['MAIN SET'][parts['MAIN SET'].length-1]===libById('reset-scull').text)parts['MAIN SET'].pop();
     const post=pick('POST SET',kind);parts['POST SET'].push(post.text);if(dur()>limit)parts['POST SET']=[];
+    // 27 Oct 2026: still short of his usual volume (a race or speed main set is mostly send-off time) -> fill where he
+    // does on those nights -- a fuller warm-up, a support/post set, a kick or pull piece -- never extra zones in the main
+    // set (13 Oct rule). Each step is kept only if it still fits the time and doesn't overshoot his usual metres.
+    if(target.metres&&metres()<target.metres-300){
+      const fitsKind=x=>(x.for||[]).includes(kind)||(x.for||[]).includes('all');
+      const sized=sec=>LIB.filter(x=>x.section===sec&&!x.ref&&fitsKind(x)).map(x=>{let m=0;try{m=M.session.total(M.parser.parse(`${sec}\n${x.text}`,{...identity,id:'q'}));}catch{}return{x,m};}).sort((a,b)=>b.m-a.m);
+      const tryStep=(sec,mode,text)=>{const before=[...parts[sec]],m0=metres();if(mode==='replace')parts[sec]=[text];else if(!parts[sec].includes(text))parts[sec].push(text);else return false;if(dur()>limit||metres()>target.metres+400||metres()<=m0){parts[sec]=before;return false;}return true;};
+      for(const {x} of sized('WARM UP')){if(metres()>=target.metres-300)break;if(tryStep('WARM UP','replace',x.text))break;}
+      for(const sec of ['POST SET','PRE SET','POST SET']){if(metres()>=target.metres-300)break;for(const {x} of sized(sec)){if(tryStep(sec,'add',x.text))break;}}
+    }
     // Base/aerobic phase: the anaerobic pieces keep their purpose with a little more recovery.
     parts['MAIN SET']=parts['MAIN SET'].map(t=>{const c=LIB.find(x=>x.text===t);return c?adjustForPhase(c,b).text:t;});
-    return{text:composeText(parts),kind,named,minutes:Math.round(dur()/60),limit:Math.round(limit/60)};
+    return{text:composeText(parts),kind,named,minutes:Math.round(dur()/60),limit:Math.round(limit/60),metres:metres(),target};
   }
   SM.draftFromBrief=draftFromBrief;
   // Insert a component under its heading (after that section's last line), adding the heading if missing.
@@ -680,7 +717,10 @@
   function startersHtml(identity,focus=null){const last=lastSameSlot(identity);const day=weekdayOf(identity?.date||'');const label=day?`${day[0].toUpperCase()}${day.slice(1)} ${identity?.dayPart||''}`.trim():'';
     const plan=planBrief({id:'focus-probe',identity,blocks:[]});const planNamed=plan&&plan.source!=='none'?(namedSystem(plan.system)||namedSystem(plan.weekFocus)):null;
     const focusRow=`<div class="msos-focus" data-msos-focus-row><span>Focus:</span><button type="button" data-msos-focus=""${!focus?' class="on"':''}>${planNamed?`Plan · ${esc(COACH_TERM[planNamed]||planNamed)}`:'Plan'}</button>${FOCUS_OPTIONS.map(([k,l])=>`<button type="button" data-msos-focus="${esc(k)}"${focus===k?' class="on"':''}>${esc(l)}</button>`).join('')}</div>`;
-    return`${focusRow}<div class="msos-starters" data-msos-starters><span>Start from:</span><button type="button" class="msos-start-main" data-msos-start="draft">Draft from brief</button><button type="button" data-msos-start="template">Session template</button>${last?`<button type="button" data-msos-start="last" data-msos-last="${esc(last.id)}">Last ${esc(label)} (${esc(last.identity.date)})</button>`:''}</div>`;}
+    return`${focusRow}${startButtonsHtml(identity,last,label)}`;}
+  function focusRowHtml(identity,focus=null){const tmp=startersHtml(identity,focus);const i=tmp.indexOf('<div class="msos-starters"');return i>0?tmp.slice(0,i):tmp;}
+  function startButtonsHtml(identity,last=lastSameSlot(identity),label=''){if(!label){const day=weekdayOf(identity?.date||'');label=day?`${day[0].toUpperCase()}${day.slice(1)} ${identity?.dayPart||''}`.trim():'';}
+    return`<div class="msos-starters" data-msos-starters><span>Start from:</span><button type="button" class="msos-start-main" data-msos-start="draft">Draft from brief</button><button type="button" data-msos-start="template">Session template</button>${last?`<button type="button" data-msos-start="last" data-msos-last="${esc(last.id)}">Last ${esc(label)} (${esc(last.identity.date)})</button>`:''}</div>`;}
   SM.lastSameSlot=lastSameSlot;
   // ---------------------------------------------------------------------------
   // Session check (10 Oct 2026, Andy: "Can we give more suggestions and assessment around session
@@ -714,7 +754,7 @@
     let dose=null;try{dose=D.session(session,state,{delivered:false});}catch{}
     const total=Math.round(dose?.rawMetres||M.session?.total?.(session)||0);
     // time
-    try{const tl=M.contextEngineAV?.plannedTimeline?.(session),mins=slotMinutes(id);if(tl?.durationSeconds){const over=tl.durationSeconds/60-mins;rows.push(mins?{ok:over<=0,kind:'time',text:over<=0?`About ${clockMin(tl.durationSeconds)} of a ${clockMin(mins*60)} session — fits`:`About ${clockMin(tl.durationSeconds)} — about ${Math.round(over)} min over the ${clockMin(mins*60)} slot`}:{ok:true,kind:'time',text:`About ${clockMin(tl.durationSeconds)} including transitions`});}}catch{}
+    try{const tl=M.contextEngineAV?.plannedTimeline?.(session),mins=slotMinutes(id);if(tl?.durationSeconds){const over=Math.round(tl.durationSeconds/60-mins);rows.push(mins?{ok:over<=0,kind:'time',text:over<=0?`About ${clockMin(tl.durationSeconds)} of a ${clockMin(mins*60)} session — fits`:`About ${clockMin(tl.durationSeconds)} — about ${Math.round(over)} min over the ${clockMin(mins*60)} slot`}:{ok:true,kind:'time',text:`About ${clockMin(tl.durationSeconds)} including transitions`});}}catch{}
     // structure
     const titles=blocks.map(x=>lc(`${x.type||''} ${x.title||''}`));
     const hasWU=titles.some(t=>/warm.?up|warm_up/.test(t)),hasWD=titles.some(t=>/warm.?down|warm_down|swim.?down/.test(t));
@@ -750,10 +790,10 @@
   SM.assess=assess;
   function checkRowsHtml(session,state,b,chk){let rows=[];try{rows=assess(session,state,b,chk);}catch{}if(!rows.length)return'';
     return`<div class="msos-check" data-msos-check><div class="msos-check-title">SESSION CHECK</div>${rows.map(r=>`<div class="msos-check-row ${r.ok===true?'ok':r.ok===false?'warn':'idea'}" data-check="${esc(r.kind)}"><span aria-hidden="true">${r.ok===true?'✓':r.ok===false?'⚠':'→'}</span><span>${esc(r.text)}</span></div>`).join('')}</div>`;}
-  function briefHtml(session,state=M.state,{compact=false}={}){
+  function briefHtml(session,state=M.state,{compact=false,noIdeas=false}={}){
     const b=brief(session,state),owner=(M.access?.role?.()||'owner')==='owner';
     if(!b||b.source==='none'){
-      return`<section class="msos-brief msos-brief-none" data-msos-brief><div class="eyebrow">TODAY'S BRIEF</div><p>No plan covers this session yet${b?.staleWeek?' (last season has finished)':''}. Pick a focus above to get suggestions, or just write or paste the session.${seasonNote()}</p>${owner?seasonButton():''}${compact?'':checkRowsHtml(session,state,b,null)}${compact?'':suggestionsHtml(session,state,b,null)}</section>`;
+      return`<section class="msos-brief msos-brief-none" data-msos-brief><div class="eyebrow">TODAY'S BRIEF</div><p>No plan covers this session yet${b?.staleWeek?' (last season has finished)':''}. Pick a focus above to get suggestions, or just write or paste the session.${seasonNote()}</p>${owner?seasonButton():''}${compact?'':checkRowsHtml(session,state,b,null)}${compact||noIdeas?'':suggestionsHtml(session,state,b,null)}</section>`;
     }
     const chk=planTargetCheck(session,state,b);
     const head=[b.slot,b.source==='standard'?b.squad:''].filter(Boolean).join(' · ');
@@ -782,25 +822,111 @@
       <h3>${esc(b.source==='coach'?sysLabel(b.coachFocus):(b.sessionFocus||b.system||'Session focus'))}</h3>
       ${b.technical?`<p><b>Technical:</b> ${esc(b.technical)}</p>`:''}
       ${!compact&&(b.phase||b.weekFocus)?`<p class="muted"><b>This week:</b> ${esc(b.weekFocus||b.phase)}${b.mental?` · ${esc(b.mental)}`:''}</p>`:''}
-      ${chosen}${verdict}${compact?'':checkRowsHtml(session,state,b,chk)}${compact?'':suggestionsHtml(session,state,b,chk)}${src}</section>`;
+      ${chosen}${verdict}${compact?'':checkRowsHtml(session,state,b,chk)}${compact||noIdeas?'':suggestionsHtml(session,state,b,chk)}${src}</section>`;
   }
   SM.briefHtml=briefHtml;
-  function liveBrief(host,anchor,getSession,textarea=null){
-    let box=host.querySelector('[data-msos-brief-host]');
-    if(!box){box=document.createElement('div');box.dataset.msosBriefHost='1';anchor.insertAdjacentElement('beforebegin',box);
-      box.addEventListener('click',e=>{
-        // A stage chip: show that part's options now; it stays chosen until a set is added.
-        const st=e.target.closest?.('[data-msos-stage]');if(st){writerStage=st.dataset.msosStage;paint();return;}
-        // 19 Oct 2026: the head coach keeps / drops a new set right where it is offered
-        const rv=e.target.closest?.('[data-msos-review]');if(rv){try{M.setLibrary.review(rv.dataset.msosReview,rv.dataset.v);M.toast?.(rv.dataset.v==='approved'?'Kept in your sets':'Dropped');}catch(err){M.toast?.(err.message);}paint();return;}
-        const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}
-        textarea.value=insertComponent(textarea.value,c.section,c.text);
-        // Once a part is written the panel moves on to the next part (the coach can tap back).
-        writerStage=undefined;
-        textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);});}
-    let t=null;const paint=()=>{const more=box.querySelector('[data-msos-more]')?.open,y=box.querySelector('[data-msos-more]')?.scrollTop;try{const s=getSession();box.innerHTML=s?briefHtml(s):'';}catch(e){box.innerHTML='';}if(more){const d=box.querySelector('[data-msos-more]');if(d){d.open=true;if(y)d.scrollTop=y;}}};
-    const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();return schedule;
+  // ---------------------------------------------------------------------------
+  // Writer layout (27 Oct 2026). Andy: "separating that session planning bit, so you don't have to scroll down all
+  // the sessions ... there should be like a button for generate the session" and, of the AI check, "it's got to be
+  // easy to find. I don't want to have to search for it." Above the box: one line saying what today is (tap it for
+  // the full brief and the focus choice); right above the box: Build it for me / Check my set / Tidy up. The
+  // part-by-part set ideas sit closed under the box. Same brief, checks and set lists as before -- only where they sit.
+  // ---------------------------------------------------------------------------
+  function briefLine(session,state=M.state){let b=null;try{b=brief(session,state);}catch{}const id=session?.identity||{};
+    const day=weekdayOf(id.date||''),when=[day?day[0].toUpperCase()+day.slice(1,3):'',id.dayPart].filter(Boolean).join(' ');
+    const focus=b&&b.source!=='none'?(b.source==='coach'?sysLabel(b.coachFocus):(b.sessionFocus||b.system||'Session focus')):'No plan for this session';
+    let usual='';try{const t=slotTarget(id,state);if(t.count>=2&&t.metres)usual=`usually about ${t.metres.toLocaleString()}m`;}catch{}
+    return [when,focus,usual].filter(Boolean).join(' · ');}
+  SM.briefLine=briefLine;
+  function ideasHtml(session,state=M.state){let b=null,chk=null;try{b=brief(session,state);}catch{}const noPlan=!b||b.source==='none';try{if(!noPlan)chk=planTargetCheck(session,state,b);}catch{}
+    try{return suggestionsHtml(session,state,noPlan?b:b,noPlan?null:chk);}catch{return'';}}
+  function detailsKeys(root){return [...(root?.querySelectorAll?.('details')||[])].filter(d=>d.open).map(d=>Object.keys(d.dataset).join(','));}
+  function reopen(root,keys){for(const d of root?.querySelectorAll?.('details')||[])if(keys.includes(Object.keys(d.dataset).join(',')))d.open=true;}
+  function liveBrief(host,anchor,getSession,textarea=null,{focusRow=null}={}){
+    let wrap=host.querySelector('[data-msos-brief-wrap]');
+    if(!wrap){wrap=document.createElement('details');wrap.className='msos-brief-wrap';wrap.dataset.msosBriefWrap='1';
+      wrap.innerHTML='<summary><span class="eyebrow">TODAY</span> <span data-msos-brief-line></span> <span class="msos-brief-more">▾ brief</span></summary><div data-msos-focus-host></div><div data-msos-brief-host></div>';
+      anchor.insertAdjacentElement('beforebegin',wrap);}
+    const line=wrap.querySelector('[data-msos-brief-line]'),box=wrap.querySelector('[data-msos-brief-host]'),focusHost=wrap.querySelector('[data-msos-focus-host]');
+    let ideas=host.querySelector('[data-msos-ideas]');
+    if(!ideas&&textarea){ideas=document.createElement('details');ideas.className='msos-ideas';ideas.dataset.msosIdeas='1';ideas.innerHTML='<summary>Ideas for one part of the session (warm up, pre set, main set…)</summary><div data-msos-ideas-host></div>';(textarea.closest('label')||textarea).insertAdjacentElement('afterend',ideas);}
+    const ideasHost=ideas?.querySelector('[data-msos-ideas-host]');
+    const click=e=>{
+      // A stage chip: show that part's options now; it stays chosen until a set is added.
+      const st=e.target.closest?.('[data-msos-stage]');if(st){writerStage=st.dataset.msosStage;paint();return;}
+      // 19 Oct 2026: the head coach keeps / drops a new set right where it is offered
+      const rv=e.target.closest?.('[data-msos-review]');if(rv){try{M.setLibrary.review(rv.dataset.msosReview,rv.dataset.v);M.toast?.(rv.dataset.v==='approved'?'Kept in your sets':'Dropped');}catch(err){M.toast?.(err.message);}paint();return;}
+      const btn=e.target.closest?.('[data-msos-insert]');if(!btn||!textarea)return;let c=libById(btn.dataset.msosInsert);if(!c)return;try{c=adjustForPhase(c,brief(getSession()));}catch{}
+      textarea.value=insertComponent(textarea.value,c.section,c.text);
+      // Once a part is written the panel moves on to the next part (the coach can tap back).
+      writerStage=undefined;
+      textarea.dispatchEvent(new Event('input',{bubbles:true}));M.toast?.(`Added to ${c.section.toLowerCase()}: ${c.label}`);};
+    if(!wrap.dataset.bound){wrap.dataset.bound='1';wrap.addEventListener('click',click);ideas?.addEventListener('click',click);}
+    if(focusRow){focusHost.innerHTML='';focusRow(focusHost);}
+    let t=null;const paint=()=>{const kb=detailsKeys(box),ki=detailsKeys(ideasHost);try{const s=getSession();line.textContent=s?briefLine(s):'';box.innerHTML=s?briefHtml(s,M.state,{noIdeas:true}):'';if(ideasHost)ideasHost.innerHTML=s?ideasHtml(s):'';}catch(e){box.innerHTML='';}reopen(box,kb);reopen(ideasHost,ki);};
+    const schedule=()=>{clearTimeout(t);t=setTimeout(paint,300);};paint();schedule.paint=paint;return schedule;
   }
+  // ---------- Build it for me / Check my set / Tidy up ----------
+  const TIDY_Q='The "Draft session text" in the context is a session I dictated (or typed in a hurry). Rewrite it into my normal session format and return it as session_text: section headings WARM UP, PRE SET, MAIN SET, POST SET, WARM DOWN on their own lines (only the ones I used), one set per line in my shorthand -- e.g. "4 x 50 Kick Build @1:00", "8 x 100 Dev 10sR", "3 Rounds:" then its lines, "#1-2 Drill". Keep exactly what I said: do not add, drop or change any set, distance, rep count, send-off, rest or instruction, and ignore any volume or slot-length guidance for this -- no extra sets. Leave out talk that is not part of the session ("now we\'re going to", "and then", "okay"). Numbers said as words become digits ("four fifties" = 4 x 50; "on the minute" = @1:00). If something is unclear, write your best reading and put " ?" at the end of that line. In answer, say in one short line which lines you marked with ?, or "Nothing unclear."';
+  const REVIEW_Q='Check this session for me against the brief, my methodology and my recent sessions. Give 3 to 5 short, specific points: what works, and what to change -- name the exact set and what to change it to. Do not rewrite the whole session.';
+  const BUILD_Q=ask=>`Write this session for me, in full: ${ask}`;
+  const toolStatus=(panel,html)=>{panel.hidden=false;panel.innerHTML=html;};
+  function checkHtml(session,state=M.state){let b=null,chk=null;try{b=brief(session,state);if(b&&b.source!=='none')chk=planTargetCheck(session,state,b);}catch{}
+    let head='';if(chk?.checked){if(chk.combo){const names=chk.combo.systems.map(sysLabel);head=chk.matches?`<div class="msos-brief-check ok">✓ Has both ${esc(names.join(' and '))} — on brief</div>`:`<div class="msos-brief-check off">⚠ No ${esc(chk.combo.missing.map(sysLabel).join(' or '))} yet — the brief asks for ${esc(b.system||'')}</div>`;}
+      else head=chk.matches?`<div class="msos-brief-check ok">✓ ${chk.basis==='main set'?'Main set':'Session'} is ${esc(sysLabel(chk.dominantSystem))} — on brief</div>`:`<div class="msos-brief-check off">⚠ ${chk.basis==='main set'?'Main set':'Session'} is mostly ${esc(sysLabel(chk.dominantSystem))} — ${b.coachFocus?'you chose':'brief asks for'} ${esc(sysLabel(chk.plannedSystem))}</div>`;}
+    return head+checkRowsHtml(session,state,b,chk);}
+  function mountTools(host,raw,before,getSession,{isNew=false,ident=null}={}){
+    let row=host.querySelector('[data-msos-tools]');
+    if(!row){row=document.createElement('div');row.className='msos-tools';row.dataset.msosTools='1';
+      row.innerHTML=`<div class="msos-tool-row">${isNew?'<button type="button" class="msos-tool-main" data-msos-tool="build">✦ Build it for me</button>':''}<button type="button" data-msos-tool="check">✓ Check my set</button><button type="button" data-msos-tool="tidy">Tidy up</button></div><div class="msos-tool-panel" data-msos-tool-panel hidden></div>`;
+      before.insertAdjacentElement('beforebegin',row);}
+    const panel=row.querySelector('[data-msos-tool-panel]');let open='';
+    const put=(t,{source='',confirmReplace=true}={})=>{if(confirmReplace&&text(raw.value)&&!window.confirm('Replace what is already in the box?'))return false;raw.value=t;raw.dispatchEvent(new Event('input',{bubbles:true}));return true;};
+    const close=()=>{open='';panel.hidden=true;panel.innerHTML='';row.querySelectorAll('[data-msos-tool]').forEach(b=>b.classList.remove('on'));};
+    function showBuild(){const id=ident?.()||getSession()?.identity||{};
+      toolStatus(panel,`<label class="msos-build-ask">What do you want? <span class="muted">Leave it empty to build from the plan.</span><textarea data-msos-build-ask rows="2" placeholder="e.g. 200-pace 50s main set, IM pre-set, finish with kick"></textarea></label>
+        <div class="msos-tool-row"><button type="button" class="msos-tool-main" data-msos-build-go>Build it</button><button type="button" data-msos-tool-close>Close</button></div>
+        ${startButtonsHtml(id)}<p class="muted" data-msos-build-status></p>`);
+      const st=panel.querySelector('[data-msos-build-status]');
+      panel.querySelector('[data-msos-tool-close]').onclick=close;
+      panel.querySelectorAll('[data-msos-start]').forEach(b=>b.addEventListener('click',()=>{let t=TEMPLATE_TEXT;if(b.dataset.msosStart==='last'){const src=M.state.canonicalSessions?.[b.dataset.msosLast];t=sessionText(src);if(!t)return;}else if(b.dataset.msosStart==='draft'){const d=draftFromBrief(ident?.()||getSession().identity,M.state,{focus:writerFocus||null});t=d.text;M.toast?.(`Draft built from your programming · ${Number(d.metres||0).toLocaleString()}m, sized like ${d.target?.basis||'the slot'} — edit it to suit`);}
+        if(put(t)){close();raw.focus?.();}}));
+      panel.querySelector('[data-msos-build-go]').onclick=async()=>{const ask=text(panel.querySelector('[data-msos-build-ask]')?.value);
+        if(!ask){panel.querySelector('[data-msos-start="draft"]')?.click();return;}
+        if(!M.assistant?.available?.()){st.textContent='Building from a description needs sign-in and signal. Leave the box empty to build from the plan instead (works offline).';return;}
+        st.textContent='Building your session… (about 20–40 seconds)';
+        try{const r=await M.assistant.ask(BUILD_Q(ask),{context:M.assistant.context({session:getSession()})});const t=String(r.session_text||'').trim();if(!t){st.textContent=r.answer||'No session came back — try again or build from the plan.';return;}
+          if(put(t)){close();M.toast?.(`Session built · ${(()=>{try{return M.session.total(getSession()).toLocaleString()+'m'}catch{return''}})()} — check it, then save as normal`);}}
+        catch(e){st.textContent=`${e.message||e} — or leave the box empty to build from the plan.`;}};}
+    async function showCheck(){const s=getSession();if(!s?.blocks?.some?.(b=>(b.items||[]).length)){toolStatus(panel,'<p class="muted">Write or build a session first, then check it.</p><div class="msos-tool-row"><button type="button" data-msos-tool-close>Close</button></div>');panel.querySelector('[data-msos-tool-close]').onclick=close;return;}
+      const ai=M.assistant?.available?.();
+      toolStatus(panel,`<div class="msos-check-local">${checkHtml(s)}</div><div class="msos-review" data-msos-review-ai>${ai?'<div class="msos-check-title">MSOS REVIEW</div><p class="muted">Reading your session…</p>':'<p class="muted">Sign in (with signal) for the AI review as well.</p>'}</div><div class="msos-tool-row"><button type="button" data-msos-tool-close>Close</button></div>`);
+      panel.querySelector('[data-msos-tool-close]').onclick=close;if(!ai)return;
+      const box=panel.querySelector('[data-msos-review-ai]'),asked=raw.value;
+      try{const r=await M.assistant.ask(REVIEW_Q,{context:M.assistant.context({session:s})});if(open!=='check'||!box.isConnected)return;
+        box.innerHTML=`<div class="msos-check-title">MSOS REVIEW</div><div class="ask-text">${esc(r.answer||'').replace(/\n/g,'<br>')}</div>${r.session_text?`<div class="msos-tool-row"><button type="button" data-msos-review-use>Use the changed version</button></div><pre class="ask-session">${esc(r.session_text)}</pre>`:''}`;
+        box.querySelector('[data-msos-review-use]')?.addEventListener('click',()=>{if(raw.value!==asked&&!window.confirm('The box has changed since the review. Replace it anyway?'))return;if(put(r.session_text,{confirmReplace:false}))close();});}
+      catch(e){if(box.isConnected)box.innerHTML=`<div class="msos-check-title">MSOS REVIEW</div><p class="muted">${esc(e.message||String(e))}</p>`;}}
+    async function tidy({auto=false}={}){const original=raw.value;
+      if(!text(original)){if(!auto)M.toast?.('Nothing in the box to tidy yet');return false;}
+      open='tidy';row.querySelectorAll('[data-msos-tool]').forEach(b=>b.classList.toggle('on',b.dataset.msosTool==='tidy'));
+      if(!M.assistant?.available?.()){toolStatus(panel,`<p class="muted">Tidy up needs sign-in and signal — your words are kept in the box as they are. Tap Tidy up again when you have signal.</p><div class="msos-tool-row"><button type="button" data-msos-tool-close>Close</button></div>`);panel.querySelector('[data-msos-tool-close]').onclick=close;return false;}
+      toolStatus(panel,'<p class="muted">Turning what you said into your session format…</p>');
+      try{const r=await M.assistant.ask(TIDY_Q,{context:M.assistant.context({session:getSession()})});const out=String(r.session_text||'').trim();if(!out)throw new Error(r.answer||'No session came back');
+        if(raw.value!==original){toolStatus(panel,`<p class="muted">You changed the box while it was tidying, so it was left as you have it.</p><div class="msos-tool-row"><button type="button" data-msos-tidy-use>Use the tidied version</button><button type="button" data-msos-tool-close>Close</button></div><pre class="ask-session">${esc(out)}</pre>`);
+          panel.querySelector('[data-msos-tidy-use]').onclick=()=>{put(out,{confirmReplace:false});close();};panel.querySelector('[data-msos-tool-close]').onclick=close;return false;}
+        put(out,{confirmReplace:false});
+        toolStatus(panel,`<p class="msos-tidy-done">✓ Put into your session format${r.answer&&!/^nothing unclear/i.test(r.answer)?` · ${esc(r.answer)}`:''}</p><details class="msos-said" data-msos-said><summary>What you said</summary><pre>${esc(original)}</pre></details><div class="msos-tool-row"><button type="button" data-msos-tidy-undo>Put my words back</button><button type="button" data-msos-tool-close>Close</button></div>`);
+        panel.querySelector('[data-msos-tidy-undo]').onclick=()=>{put(original,{confirmReplace:false});close();};panel.querySelector('[data-msos-tool-close]').onclick=close;return true;}
+      catch(e){toolStatus(panel,`<p class="muted">${esc(e.message||String(e))} — your words are kept in the box.</p><div class="msos-tool-row"><button type="button" data-msos-tool-close>Close</button></div>`);panel.querySelector('[data-msos-tool-close]').onclick=close;return false;}}
+    row.querySelectorAll('[data-msos-tool]').forEach(b=>b.onclick=()=>{const k=b.dataset.msosTool;if(open===k&&k!=='tidy'){close();return;}open=k;row.querySelectorAll('[data-msos-tool]').forEach(x=>x.classList.toggle('on',x===b));
+      if(k==='build')showBuild();else if(k==='check')showCheck();else tidy();});
+    row._tidy=tidy;row._refresh=()=>{if(open==='build')showBuild();};return row;
+  }
+  // Voice dictation (27 Oct 2026, Andy: "if I'm voice dictating the session, it needs to actually extrapolate the
+  // session and translate my words into a normal session format"): v4-poolside-core.js calls this after the
+  // transcript lands in the box. Straight in, his own words kept under "What you said".
+  SM.tidyDictation=async(raw)=>{const row=raw?.closest?.('.modal, .modal-backdrop, #modalHost')?.querySelector?.('[data-msos-tools]')||document.querySelector('#modalHost [data-msos-tools]');return row?._tidy?row._tidy({auto:true}):false;};
   function nzToday(){return new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'});}
   function slotIdentity(slotId,date){try{const d=date||nzToday(),slot=(M.calendar?.slots?.(d)||[]).find(x=>x.id===slotId);return slot?M.calendar.identityFromSlot(slot):null;}catch{return null;}}
   function parseDraft(rawText,identity,focus=null){const meta=focus?{coachFocus:focus}:{};if(!text(rawText))return{id:'brief-draft',identity,blocks:[],metadata:meta};try{const s=M.parser.parse(rawText,{...identity,id:'brief-draft'});s.identity={...s.identity,...identity};s.id='brief-draft';s.metadata={...(s.metadata||{}),...meta};return s;}catch{return{id:'brief-draft',identity,blocks:[],metadata:meta};}}
@@ -815,15 +941,13 @@
     const forDate=/^\d{4}-\d{2}-\d{2}$/.test(String(opts?.date||''))?opts.date:nzToday();const fallbackId=()=>({date:forDate,dayPart:new Date().getHours()>=12?'PM':'AM',squads:['National','Development']});
     const ident=()=>slotIdentity(slot.value,forDate)||fallbackId();
     const getSession=()=>parseDraft(raw.value,ident(),writerFocus||null);
-    const schedule=liveBrief(host,anchor,getSession,raw);
-    raw.addEventListener('input',schedule);slot.addEventListener('change',schedule);
-    // Session starters sit right above the writing box; rebuilt when the slot or the focus changes.
-    let starters=host.querySelector('[data-msos-starters-host]');if(!starters){starters=document.createElement('div');starters.dataset.msosStartersHost='1';anchor.insertAdjacentElement('beforebegin',starters);}
-    const paintStarters=()=>{const id=ident();starters.innerHTML=startersHtml(id,writerFocus||null);
-      starters.querySelectorAll('[data-msos-focus]').forEach(b=>b.addEventListener('click',()=>{writerFocus=b.dataset.msosFocus||null;paintStarters();schedule();}));
-      starters.querySelectorAll('[data-msos-start]').forEach(b=>b.addEventListener('click',()=>{let t=TEMPLATE_TEXT;if(b.dataset.msosStart==='last'){const src=M.state.canonicalSessions?.[b.dataset.msosLast];t=sessionText(src);if(!t)return;}else if(b.dataset.msosStart==='draft'){const d=draftFromBrief(ident(),M.state,{focus:writerFocus||null});t=d.text;M.toast?.(`Draft built from your programming · about ${d.minutes} of ${d.limit} min — edit it to suit`);}
-        if(text(raw.value)&&!window.confirm('Replace what is already in the box?'))return;raw.value=t;raw.dispatchEvent(new Event('input',{bubbles:true}));raw.focus?.();}));};
-    paintStarters();slot.addEventListener('change',paintStarters);
+    let schedule=()=>{};
+    const focusRow=el=>{el.innerHTML=focusRowHtml(ident(),writerFocus||null);el.querySelectorAll('[data-msos-focus]').forEach(b=>b.addEventListener('click',()=>{writerFocus=b.dataset.msosFocus||null;focusRow(el);schedule();}));};
+    schedule=liveBrief(host,anchor,getSession,raw,{focusRow});
+    raw.addEventListener('input',schedule);slot.addEventListener('change',()=>{const el=host.querySelector('[data-msos-focus-host]');if(el)focusRow(el);schedule();host.querySelector('[data-msos-tools]')?._refresh?.();});
+    // Build / Check / Tidy sit right above the writing box (below Type / Speak / Photo), outside the Type panel so
+    // they stay in reach while Speak or Photo is showing.
+    mountTools(host,raw,host.querySelector('#coreText')||raw.closest('label')||raw,getSession,{isNew:true,ident});
     // Voice/photo transcription fills the box programmatically (no input event): repaint on any change.
     new MutationObserver(schedule).observe(host.querySelector('#corePreview')||raw,{childList:true,characterData:true,subtree:true});
     M.assistant?.mountWriter?.(raw,{getSession});
@@ -833,12 +957,12 @@
     writerFocus=undefined;writerStage=undefined;
     const anchor=raw.closest('label')||raw;
     const getSession=()=>parseDraft(raw.value,{...cur.identity},writerFocus===undefined?(cur.metadata?.coachFocus||null):writerFocus);
-    const schedule=liveBrief(host,anchor,getSession,raw);
+    let schedule=()=>{};
+    const focusRow=el=>{const f=writerFocus===undefined?(cur.metadata?.coachFocus||null):writerFocus;el.innerHTML=focusRowHtml(cur.identity,f);
+      el.querySelectorAll('[data-msos-focus]').forEach(b=>b.addEventListener('click',()=>{writerFocus=b.dataset.msosFocus||null;focusRow(el);schedule();raw.dispatchEvent(new Event('input',{bubbles:true}));}));};
+    schedule=liveBrief(host,anchor,getSession,raw,{focusRow});
     raw.addEventListener('input',schedule);
-    let row=host.querySelector('[data-msos-starters-host]');if(!row){row=document.createElement('div');row.dataset.msosStartersHost='1';anchor.insertAdjacentElement('beforebegin',row);}
-    const paintFocus=()=>{const f=writerFocus===undefined?(cur.metadata?.coachFocus||null):writerFocus;const tmp=document.createElement('div');tmp.innerHTML=startersHtml(cur.identity,f);row.innerHTML='';const fr=tmp.querySelector('[data-msos-focus-row]');if(fr)row.appendChild(fr);
-      row.querySelectorAll('[data-msos-focus]').forEach(b=>b.addEventListener('click',()=>{writerFocus=b.dataset.msosFocus||null;paintFocus();schedule();raw.dispatchEvent(new Event('input',{bubbles:true}));}));};
-    paintFocus();
+    mountTools(host,raw,anchor,getSession,{isNew:false});
     M.assistant?.mountWriter?.(raw,{getSession});
   }
   SM.installNewSessionBrief=installNewSessionBrief;SM.installEditBrief=installEditBrief;

@@ -68,11 +68,16 @@
   // The ranked list from the suggestions is thinned so no two options share a starting line or a base set, at most two
   // come from one author, at most one is waiting for review, and the order turns over day to day.
   function dayHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
-  SL.varied=(ranked,{limit=6,date='',score=null,taken=[]}={})=>{const out=[],firsts=new Set(),bases=new Set(),authors={};let waiting=0;for(const x of taken){firsts.add(text(x.text.split('\n')[0]).toLowerCase());bases.add(x.base||x.id);authors[x.author||'Andy']=(authors[x.author||'Andy']||0)+1;}
+  /* 27 Oct 2026 (Andy: "no need to have a different session that's three instead of four ... we want complete variations
+     and different sessions"): two sets that differ only in their numbers (3 rounds vs 4, 6 x 100 vs 12 x 50, 10s vs 20s
+     rest) are the same set -- only one of them is offered. */
+  const shape=t=>text(t).toLowerCase().replace(/\b\d+\s*rounds?\b/g,'# rounds').replace(/\b\d+\s*x\s*(?=\d)/g,'# x ').replace(/#\s*\d+(?:\s*[-–—]\s*\d+)?/g,'#n').replace(/\b\d+\s*s(?:ec(?:onds?)?)?\s*r(?:est)?\b/g,'#sr').replace(/@\s*\d+[:.]\d+/g,'@#').replace(/\bdesc(?:end)?\s+(?:stroke\s+count\s+|sc\s+)?\d+\s*[-–—]\s*\d+/g,'desc #').replace(/\s+/g,' ').trim();
+  SL.shape=shape;
+  SL.varied=(ranked,{limit=6,date='',score=null,taken=[]}={})=>{const out=[],firsts=new Set(),bases=new Set(),shapes=new Set(),authors={};let waiting=0;for(const x of taken){firsts.add(text(x.text.split('\n')[0]).toLowerCase());bases.add(x.base||x.id);shapes.add(shape(x.text));authors[x.author||'Andy']=(authors[x.author||'Andy']||0)+1;}
     const list=ranked.map((x,i)=>({x,i,s:(score?score(x):0)-i*0.01+((dayHash(`${date}|${x.id}`)%1000)/1000)*1.6})).sort((a,b)=>b.s-a.s).map(o=>o.x);
-    for(const x of list){if(out.length>=limit)break;const first=text(x.text.split('\n')[0]).toLowerCase(),base=x.base||x.id;if(firsts.has(first)||bases.has(base))continue;
+    for(const x of list){if(out.length>=limit)break;const first=text(x.text.split('\n')[0]).toLowerCase(),base=x.base||x.id;if(firsts.has(first)||bases.has(base)||shapes.has(shape(x.text)))continue;
       const a=x.author||'Andy';if((authors[a]||0)>=(a==='Andy'?4:2))continue;const w=x.status!=='approved';if(w&&waiting>=1)continue;
-      out.push(x);firsts.add(first);bases.add(base);authors[a]=(authors[a]||0)+1;if(w)waiting++;}
+      out.push(x);firsts.add(first);bases.add(base);shapes.add(shape(x.text));authors[a]=(authors[a]||0)+1;if(w)waiting++;}
     return out;};
   // the team's decisions are fetched when the library is used (at most every 5 minutes), never in the background
   SL.freshen=()=>{const s=store();if(Date.now()-(s.pulledAt||0)<300000||SL._pulling)return;SL._pulling=true;SL.pull().catch(()=>0).finally(()=>{SL._pulling=false;});};
