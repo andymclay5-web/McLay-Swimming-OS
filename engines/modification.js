@@ -242,7 +242,7 @@
     applyCharlotteKickBase(out,ath,manualShape);adaptiveLabel(out,item,ath);applyOverride(out,ov);syncRepeatBreakdown(out,item);return out;
   }
 
-  function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw)===text(b?.raw)&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
+  function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw).replace(/@\s+/g,'@')===text(b?.raw).replace(/@\s+/g,'@')&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
 
   // 19 Oct 2026 (Andy, Mon AM: Charlotte got the full "5 Rounds: 100 Kick Build / 2 x 25 Kick" -- 750m, the same as the
   // squad -- in a session where she does just over half). A single 100 or 2 x 25 can't sensibly be shortened, so the

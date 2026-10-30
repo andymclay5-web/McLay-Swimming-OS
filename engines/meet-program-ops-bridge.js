@@ -70,41 +70,10 @@
     }
   }
 
-  function enhanceIntel(p){
-    for(const intel of p.querySelectorAll('.ba-intel')){
-      const capture=intel.querySelector('[data-ba-capture]');
-      if(!capture)continue;
-      const key=capture.dataset.baCapture||'';
-      const actions=capture.closest('.ba-actions');
-      const talk=actions?.querySelector('[data-ba-talk]')||intel.querySelector('[data-ba-talk]');
-      if(talk)talk.textContent=document.querySelector('[data-ba-talkbar]')?'Stop commentary':'Voice commentary';
-      capture.textContent='Capture';
-
-      if(!intel.querySelector('[data-mpo-quick-note]')){
-        const label=document.createElement('label');
-        label.className='mpo-quick-note';
-        const title=document.createElement('span'),area=document.createElement('textarea');
-        title.textContent='Quick note';
-        area.dataset.mpoQuickNote=key;
-        area.rows=2;
-        area.placeholder='Type a note while you watch…';
-        const r=raceForKey(key),rec=r?M.meetOpsEngine?.recordFor?.(r,false):null;
-        area.value=rec?.notes||'';
-        label.append(title,area);
-        actions?.before(label);
-      }
-
-      const backup=actions?.querySelector('[data-ba-backup]');
-      if(backup&&!backup.closest('[data-mpo-backup]')){
-        const d=document.createElement('details'),summary=document.createElement('summary');
-        d.className='mpo-backup';d.dataset.mpoBackup='1';
-        summary.textContent='Backup stopwatch';
-        backup.before(d);d.append(summary,backup);
-        const r=raceForKey(backup.dataset.baBackup||''),rec=r?M.meetOpsEngine?.recordFor?.(r,false):null;
-        backup.textContent=rec?.timer_running?'Finish stopwatch':'Start stopwatch';
-      }
-    }
-  }
+  // 30 Oct 2026: the race card itself (engines/meet-program-ba.js) now owns what the coach saw -- note, stroke rate,
+  // splits -- and has no stopwatch (Andy: "Timing and typing times aren't options ... we're running off a scoreboard").
+  // This layer no longer adds its own Quick note / Backup stopwatch / button labels on top of it.
+  function enhanceIntel(p){}
 
   function enhance(){
     queued=false;

@@ -1,6 +1,6 @@
 'use strict';
 (function(root,factory){const api=factory(root.MSOSEngines||{},root);if(typeof module==='object'&&module.exports)module.exports=api;else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Coordinator=api;}})(typeof globalThis!=='undefined'?globalThis:this,function(E,root){
-  const VERSION='2.8.0-prescription-truth',text=v=>String(v??'').replace(/\s+/g,' ').trim();
+  const VERSION='2.9.0-makeable-send-off',text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const cache=new Map();
   const clock=s=>{const n=Math.round(Number(s)||0),m=Math.floor(n/60);return `${m}:${String(n%60).padStart(2,'0')}`};
   function normalizeIntent(item){try{return E.RaceTargetIntent?.resolve?.(item)||item}catch{return item}}
@@ -50,7 +50,24 @@
   // targets for all of them there froze Andy's phone (Hub stall trace, 5 Oct: "Stuck at: Dosage /
   // stimulus card"). See tests/dosage-volume-without-targets-20261005.cjs.
   function prescribedItem(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item;return adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session);}
-  function prescription(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item,modified=adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session),rawTarget=compute(session,modified,ath,state,overrideStroke(modified,ath,state,session)),planned=applyPolicy(modified,rawTarget,ath,state),target=enforceExecutable(planned.target,planned.item);return{item:planned.item,target,athlete:ath,sessionId:session?.id,prescriptionTiming:planned.plan,evidence:{source:target?.source||'',status:target?.status||'none',conflict:target?.conflict||''}}}
+  // 29 Oct 2026 (Andy, Thu AM Board: "Charlotte's still not making sense"): with no target on a set (100 Minimum Stroke
+  // Count @1:45, 50 Build @1:00), nothing checked whether a modified swimmer could make the squad's send-off at all --
+  // her T400 (8:46) puts a steady 100 at about 2:10. When a modified swimmer's own T400 says the send-off leaves her less
+  // than 10 s (50s) / 15 s (100s+) rest at Development pace, the send-off goes out to that, rounded up to 5 s. Real T400
+  // evidence only (CLAUDE.md 2.33/2.42) -- never a pace from the load ratio, never a named stroke from her Freestyle,
+  // never a longer coach send-off made shorter, and kick and short MAX work keep their own owners.
+  function makeableCycle(session,item,ath,state){
+    const cyc=Number(item?.cycleSeconds)||0,d=Number(item?.distance)||0;if(!(cyc>0&&d>=50&&d<=400))return null;
+    if(E.TrainingPolicy?.isKick?.(item)||E.TrainingPolicy?.isRacePace?.(item))return null;
+    const ratio=Number(E.Modification?.profile?.(ath,state)?.ratio)||1;if(ratio>=.98)return null;
+    let st=E.Evidence?.stroke?.(item?.stroke||'')||'';if(!st||st==='Choice')st='Freestyle';
+    const row=E.Aerobic?.t400?.(ath,state,st,session?.identity?.course||'');const anchor=row?Number(E.Evidence?.seconds?.(row)):0;if(!(anchor>0))return null;
+    const est=E.Aerobic?.target?.(anchor,d,'Development',10)?.seconds;if(!(est>0))return null;
+    const need=Math.ceil((est+(d<=50?10:15))/5)*5;return need>cyc?{cycleSeconds:need,estimateSeconds:Math.round(est),stroke:st}:null;}
+  function makeable(session,planned,ath,state){if(planned.plan||planned.target?.status==='ok')return planned;const m=makeableCycle(session,planned.item,ath,state);if(!m)return planned;
+    const item=syncDerivedTiming(planned.item,m.cycleSeconds);item.adaptationReason=[planned.item?.adaptationReason,`Send-off ${clock(m.cycleSeconds)} so the work is makeable (${m.stroke} T400: about ${clock(m.estimateSeconds)} per rep)`].filter(Boolean).join(' · ');
+    return{...planned,item,plan:{cycleSeconds:m.cycleSeconds,owner:'makeable',source:'T400',estimateSeconds:m.estimateSeconds}};}
+  function prescription(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item,modified=adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session),rawTarget=compute(session,modified,ath,state,overrideStroke(modified,ath,state,session)),planned=makeable(session,applyPolicy(modified,rawTarget,ath,state),ath,state),target=enforceExecutable(planned.target,planned.item);return{item:planned.item,target,athlete:ath,sessionId:session?.id,prescriptionTiming:planned.plan,evidence:{source:target?.source||'',status:target?.status||'none',conflict:target?.conflict||''}}}
   function clearCache(){cache.clear()}
-  return{VERSION,targetForItem,peekTarget,prescription,prescribedItem,normalizeIntent,overrideStroke,explicitStroke,needsContext,contextualStroke,resolvePrescriptionContext,suppress,targetConflict,enforceExecutable,applyPolicy,policyPlan,syncDerivedTiming,rewriteCycleText,clearCache};
+  return{VERSION,targetForItem,peekTarget,prescription,makeableCycle,prescribedItem,normalizeIntent,overrideStroke,explicitStroke,needsContext,contextualStroke,resolvePrescriptionContext,suppress,targetConflict,enforceExecutable,applyPolicy,policyPlan,syncDerivedTiming,rewriteCycleText,clearCache};
 });
