@@ -38,7 +38,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
   await p.evaluate(s=>{const A=window.MSOS4.assistant;A.available=()=>true;A.ask=async q=>{window.__q=q;return{answer:'Nothing unclear.',session_text:'WARM UP\n400 Choice\n\nMAIN SET\n4 x 50 Kick Build @1:00'};};document.querySelector('#coreRaw').value=s;},said);
   await p.click('[data-msos-tool="tidy"]');await p.waitForSelector('[data-msos-tidy-undo]');
   assert.equal(await p.inputValue('#coreRaw'),'WARM UP\n400 Choice\n\nMAIN SET\n4 x 50 Kick Build @1:00');
-  assert.match(await p.evaluate(()=>window.__q),/Keep exactly what I said/);
+  assert.match(await p.evaluate(()=>window.__q),/Keep every set exactly[\s\S]*Paraphrase everything else/);
   assert.equal(await p.textContent('[data-msos-said] pre'),said,'what he said is kept');
   await p.click('[data-msos-tidy-undo]');assert.equal(await p.inputValue('#coreRaw'),said);
   // 2. voice: the transcript goes through the same tidy, straight in
