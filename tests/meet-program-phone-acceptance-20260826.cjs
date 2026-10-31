@@ -120,8 +120,9 @@ const hasTextRegex=value=>new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
   const aqua=page.locator('.ba-row.aqua').first();
   assert.equal(await aqua.count(),1);
   await aqua.click();
-  await page.waitForSelector('.ba-intel',{timeout:3000});
-  const intel=await page.locator('.ba-intel').innerText();
+  // 31 Oct 2026: our swimmers' details open as one box for the heat (Andy: "show all Aquagym swimmers in this heat in one box")
+  await page.waitForSelector('.ba-heatbox',{timeout:3000});
+  const intel=await page.locator('.ba-heatbox').innerText();
   assert.match(intel,/Aqua Two/);assert.match(intel,/39\.22|39\.2/);
 
   // Add Sessions 2-6 through the actual Add session UI. Each must remain independent.
