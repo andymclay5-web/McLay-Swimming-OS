@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261019c';
+  const TV_VERSION='20261107a';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -95,6 +95,11 @@
     return`<div class="tvo-text"><span>${esc(o.label||'')}</span></div>`;}
   // 15 Oct 2026, pool TV: its browser drew the clip at the clip's own size and cut it off (about a quarter showing),
   // whatever the CSS said. So the picture is sized here in plain pixels to fit inside the box, centred.
+  // 7 Nov 2026 (Andy, photo of the pool TV: "Youtube video needs to fill the whole box" -- it sat small at the top): the
+  // TV's browser ignores 100% on the YouTube frame as it did on clips, so the frame is given the box size in pixels.
+  function fitFrame(){const f=ovl.querySelector('.tvo-frame iframe');if(!f)return;const box=ovl.getBoundingClientRect();if(!box.width||!box.height)return;const w=Math.floor(box.width),h=Math.floor(box.height);
+    f.style.position='absolute';f.style.left='0px';f.style.top='0px';f.style.maxWidth='none';f.style.maxHeight='none';f.style.width=`${w}px`;f.style.height=`${h}px`;f.setAttribute('width',w);f.setAttribute('height',h);}
+  TV.fitFrame=fitFrame;
   function fitMedia(){const el=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(!el)return;const box=ovl.getBoundingClientRect();
     const w0=el.videoWidth||el.naturalWidth,h0=el.videoHeight||el.naturalHeight;if(!w0||!h0||!box.width||!box.height)return;
     const k=Math.min(box.width/w0,box.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
@@ -114,6 +119,7 @@
     stopMirror();
     if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);watchMedia(o);return;}
     if(o.kind==='swimmer')setTimeout(fitCard,0);
+    if(o.kind==='youtube'){fitFrame();setTimeout(fitFrame,300);setTimeout(fitFrame,1500);}
     const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}
     watchMedia(o);}
   // 15 Oct 2026, pool TV: full-screen clips play fine, but in the corner the TV's video player ignores the box size and
@@ -162,7 +168,7 @@
   addEventListener('message',e=>{try{watch?.onmsg?.(e);}catch{}});
   function slotOverlay(r){const o=r.overlay;if(!o)return null;return{...o,label:[o.label,r.overlay_by].filter(Boolean).join(' · ')};}
   TV.draw=draw;TV.fit=fit;
-  let resizeT=0;addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{if(TV.frame)fit();fitMedia();fitCard();},150);});
+  let resizeT=0;addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{if(TV.frame)fit();fitMedia();fitFrame();fitCard();},150);});
 
   // ---------- keep it current ----------
   let misses=0,timer=0,polling=false,again=false;
