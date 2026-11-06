@@ -288,7 +288,13 @@
  // DISTINCT_QUALITY regex already treats parachute/resisted/cords/tether/power rack as real equipment keywords
  // for a different purpose (per-rep quality splitting) -- this list was simply missing them for labelling.
  function equipment(text){return ['Fins','Paddles','Pull','Bands','Snorkel','Parachute','Cords','Tether'].filter(x=>new RegExp(`\\b${x}\\b`,'i').test(text))}
- function explicitRepeat(line){let m=U.text(line).match(/^(\d{1,2})\s*x\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);if(!m)return null;return {reps:Number(m[1]),distance:Number(m[2]),tail:m[3]||''}}
+ // 3 Nov 2026 (Andy, Tue PM warm-up "20 mins / 100free / 15 burpees / 100 IM / 5 push ups" showed 115m): a number
+ // followed by a dryland exercise is a count of exercises, not metres ("15 burpees" was counted as 15m), and a
+ // distance written straight onto its stroke ("100free") is still a swim (it was dropped as a note).
+ const DRYLAND=/^\s*(?:x\s*)?(?:burpees?|push[- ]?ups?|press[- ]?ups?|sit[- ]?ups?|squats?|jump(?:ing)?\s*jacks?|star\s*jumps?|lunges?|planks?|crunch(?:es)?|mountain\s*climbers?|tuck\s*jumps?|pull[- ]?ups?|dips?|v[- ]?sits?|reps?\b|secs?\b|seconds?\b)/i;
+ const STUCK_STROKE=/^(\d{2,4}(?:\.5)?)(free(?:style)?|back(?:stroke)?|breast(?:stroke)?|fly|butterfly|im|kick|pull|drill|choice|swim|easy|scull)\b/i;
+ P.unstick=line=>String(line??'').replace(STUCK_STROKE,(m,d,w)=>`${d} ${w}`);
+ function explicitRepeat(line){const t=U.text(line).replace(/^(\d{1,2}\s*x\s*)(\d{2,4}(?:\.5)?)(?=(?:free|back|breast|fly|im|kick|pull|drill|choice|swim|easy|scull))/i,'$1$2 ');let m=t.match(/^(\d{1,2})\s*x\s*(\d{1,4}(?:\.5)?)\b\s*(.*)$/i);if(!m||DRYLAND.test(m[3]||''))return null;return {reps:Number(m[1]),distance:Number(m[2]),tail:m[3]||''}}
  // Real coaching failure this fixes (Andy's real 18 Sept session): "75% of #1 Event" and "45 min Individual
  // Race Warm-Up" were both read as plain distances (75m, 45m) purely because a number led the line -- a
  // percentage-of-effort instruction and a time duration are neither one a metres figure. Treating "75%" as a
@@ -300,11 +306,11 @@
  // the existing race-pace engine (engines/race-pace.js) already understands "dive"/"push" as start-type
  // keywords once the item's raw text carries them, so this is purely about the number reaching a real 'set'
  // item at all.
- function singleDistance(line){const m=U.text(line).match(/^(?:(?:dive|push)(?:\s*start)?\s+)?(\d{2,4}(?:\.5)?)\b(?!\s*%)(?!\s*min(?:ute)?s?\b)\s*(.*)$/i);return m?{distance:Number(m[1]),tail:m[2]||''}:null}
+ function singleDistance(line){const m=P.unstick(U.text(line)).match(/^(?:(?:dive|push)(?:\s*start)?\s+)?(\d{2,4}(?:\.5)?)\b(?!\s*%)(?!\s*min(?:ute)?s?\b)\s*(.*)$/i);return m&&!DRYLAND.test(m[2]||'')?{distance:Number(m[1]),tail:m[2]||''}:null}
  function inlineComposition(line,parentDistance){const hits=[...String(line).matchAll(/(?:^|[\/·,+])\s*(\d{1,4}(?:\.5)?)\s*([^\/·,+]*)/g)].map(m=>({distance:Number(m[1]),text:U.text(m[2])})).filter(x=>x.distance>0&&x.distance<parentDistance);if(hits.length>=2&&Math.abs(hits.reduce((n,x)=>n+x.distance,0)-parentDistance)<.001)return hits;return null}
  function patternCue(line){const t=U.text(line);{const at=t.match(/^#?(\d{1,2})\s*[-:.]?\s*AT\b/);if(at)return {kind:'zone',count:Number(at[1]),zone:'Threshold',text:t};}let m=t.match(/^#?(\d{1,2})\s*[-:.]?\s*(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\b/i);if(m)return {kind:'zone',count:Number(m[1]),zone:zoneName(m[2]),text:t};/* 20 Oct 2026 (Andy, Tue AM National: '8 x 200' with '4 IM — Regeneration / 2 Free — Development / 2 Free — Overload' showed no main-set times): a rep group naming BOTH a stroke and an energy zone used to fall through to a plain text pattern, so the target engine saw no zone and returned nothing. Recognise it as a stroke+zone group; the authored line stays the displayed pattern. */{const sz=t.match(/^#?(\d{1,2})\s+(Freestyle|Free|Fr|Backstroke|Back|Bk|Breaststroke|Breast|Br|Butterfly|Fly|IM)\s*(?:[—–:-]\s*)?(Regeneration|Regen|Reg|Development|Dev|Overload|OL|Threshold|Thr|Clearance|CL)\.?\s*$/i);if(sz)return {kind:'stroke_zone',count:Number(sz[1]),stroke:stroke(sz[2])||(/^fr$/i.test(sz[2])?'Freestyle':/^bk$/i.test(sz[2])?'Backstroke':''),zone:zoneName(sz[3]),text:U.text(t.replace(/^#?\d{1,2}\s+/,''))};}m=t.match(/^#?(\d{1,2})\s+(?!x\b)(.+)$/i);if(m&&!/^(?:\d+:\d+)/.test(t)&&!/^@/.test(U.text(m[2]))&&!/^min(?:ute)?s?\b/i.test(U.text(m[2]))&&!singleDistance(t)?.tail.match(/^(?:m|metres?)/i))return {kind:'pattern',count:Number(m[1]),text:U.text(m[2])};return null}
  function repInstructions(raw,reps){if(!/\bodd\b/i.test(raw)||!/\beven\b/i.test(raw))return[];const odd=raw.match(/\bOdd\b\s*([^/]*)/i)?.[1]||'',even=raw.match(/\bEven\b\s*(.*)$/i)?.[1]||'';const oddRace=P.raceIntent(odd),evenRace=P.raceIntent(even);return Array.from({length:reps},(_,i)=>({rep:i+1,label:(i+1)%2?U.text(odd):U.text(even),raceIntent:(i+1)%2?oddRace:evenRace,drill:/drill/i.test((i+1)%2?odd:even)}))}
- function makeSet(sessionId,blockType,order,line,reps,distance,tail){const raw=U.text(line),z=zoneName(raw),ri=P.raceIntent(raw),n=Math.max(1,reps||1);return {id:U.stableId('item',sessionId,blockType,order,raw),kind:'set',order,reps:n,distance:Number(distance)||0,stroke:stroke(raw),zone:z,restSeconds:restSeconds(raw),cycleSeconds:cycleSeconds(raw),equipment:equipment(raw),raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:repInstructions(raw,n),raceIntent:ri,targetSeconds:null,unclassifiedTerms:[]}}
+ function makeSet(sessionId,blockType,order,line,reps,distance,tail){const raw=U.text(line),z=zoneName(raw),ri=P.raceIntent(raw),n=Math.max(1,reps||1);return {id:U.stableId('item',sessionId,blockType,order,raw),kind:'set',order,reps:n,distance:Number(distance)||0,stroke:stroke(raw.replace(/(\d)(?=(?:free|back|breast|fly|im)\b)/gi,'$1 ')),zone:z,restSeconds:restSeconds(raw),cycleSeconds:cycleSeconds(raw),equipment:equipment(raw),raw,text:raw,composition:[],pattern:[],repPattern:[],cues:[],repInstructions:repInstructions(raw,n),raceIntent:ri,targetSeconds:null,unclassifiedTerms:[]}}
  P.raceIntent=text=>{const t=U.text(text);let m=t.match(/\b(50|100|200|400|800|1500)\s*(IM|Free(?:style)?|Back(?:stroke)?|Breast(?:stroke)?|Fly|Butterfly)?\s*(?:race\s*)?pace\b/i);if(!m)m=t.match(/\b(?:race\s*pace|at)\s*(50|100|200|400|800|1500)\b/i);if(!m)return null;return {distance:Number(m[1]),eventStroke:m[2]?stroke(m[2]):null,workingStroke:stroke(t)||null}}
  function attachPostCues(items){
    for(let i=0;i<items.length;i++){
@@ -363,6 +369,7 @@
      }}
      let gm=line.match(/^(\d{1,2})\s+Rounds?\s*:?(.*)$/i);if(gm){const group={id:U.stableId('group',sessionId,type,li,line),kind:'group',rounds:Number(gm[1]),text:line,items:[],order:++order};items.push(group);currentGroup=group;groupIndent=indent;groupIndented=false;current=null;continue}
      const rep=explicitRepeat(line);if(rep){const set=makeSet(sessionId,type,++order,line,rep.reps,rep.distance,rep.tail);push(set);continue}
+     {const lead=line.replace(/^\d{1,3}\s*(?:x\s*\d{1,3}\s*)?/i,'');if(lead!==line&&DRYLAND.test(lead)){push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',role:'dryland',order,text:line,raw:line});current=null;continue}}
      const rs=restSeconds(line);if(rs&&/^(?:\d+\s*SR|\d+\s*(?:s|sec|seconds?)\s*(?:R|rest))$/i.test(line)){if(current)current.restSeconds=rs;else push({id:U.stableId('cue',sessionId,type,++order,line),kind:'cue',order,text:line,raw:line});continue}
      const single=singleDistance(line);
      if(single){
@@ -402,6 +409,14 @@
    const titleFor=line=>U.text(line).replace(/^\d+[.)]\s*/,'').replace(/:$/,'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
    for(const rawLine of lines){const line=U.text(rawLine);const tm=line.match(/^TOTAL\s*[:=]?\s*([\d,]+)\s*m?$/i);if(tm){explicitTotal=Number(tm[1].replace(/,/g,''));continue}const h=heading(line);if(h){flush();currentType=h;currentTitle=h==='other'?titleFor(line):'';continue}if(!currentType){if(line)sessionNotes.push(line);continue}current.push(rawLine)}flush();
    session.blocks=chunks.map((c,i)=>({id:U.stableId('block',session.id,c.type,i),type:c.type,title:c.title||U.blockTitle(c.type),order:i+1,items:parseBlock(session.id,c.type,c.lines)}));
+   // 3 Nov 2026 (Andy, Tue PM warm-up "20 mins / 100free / 15 burpees / 100 IM / 5 push ups"): a line that is just a
+   // time ("20 mins") heading a block's sets makes them a timed circuit -- everyone works for the time, so the swims
+   // below it carry timeBoxMinutes and modification leaves them as the squad's.
+   for(const b of session.blocks){let box=0;for(const it of b.items||[]){if(it.kind==='cue'){const m=U.text(it.raw||it.text).match(/^(\d{1,3})\s*(?:mins?|minutes?)\b\s*(?:circuit|continuous|of)?\s*:?$/i);if(m)box=Number(m[1]);continue}if(box&&it.kind==='set')it.timeBoxMinutes=box;}}
+   // Andy, Thu 5 Nov 2026 AM (voice-written session): "3 Rounds:\n  3 x 200 ...", "16 Rounds:\n  16 x 50 ...",
+   // "12 Rounds:\n  12 x 200 ..." -- the Rounds line just restates the set's own reps, so 3x200 is 600m, not 1,800m.
+   // A Rounds group holding exactly one set whose reps equal the round count is that set once.
+   for(const b of session.blocks){for(const it of b.items||[]){if(it.kind!=='group'||!(Number(it.rounds)>1))continue;const sets=(it.items||[]).filter(x=>x.kind==='set'),others=(it.items||[]).filter(x=>x.kind!=='set'&&x.kind!=='cue');if(sets.length===1&&!others.length&&Number(sets[0].reps)===Number(it.rounds)&&/^\s*\d{1,3}\s*[x×]/i.test(U.text(sets[0].raw||sets[0].text))){it.roundsRestated=it.rounds;it.rounds=1;}}}
    session.metadata.sessionNotes=sessionNotes;session.metadata.explicitTotal=explicitTotal;session.currentSource={text:String(source||'').trim(),hash:U.hash(String(source||'').trim()),updatedAt:U.now()};
    const total=S.total(session);session.metadata.parsedTotal=total;session.metadata.totalMatches=explicitTotal==null?true:Math.abs(total-explicitTotal)<=1;
    return session;
