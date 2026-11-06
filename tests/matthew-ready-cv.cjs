@@ -18,7 +18,7 @@ assert.match(portal,/Edit your version/);
 assert.match(portal,/Finish session with Andy/);
 assert.match(portal,/RPE/);
 for(const cls of ['sp-tabs','sp-session','sp-session-title','sp-chip-row','sp-session-block','sp-session-item','sp-item-actions','sp-finish','sp-modal','sp-modal-card'])assert.match(portalCss,new RegExp('\\.'+cls+'(?:\\{|[,>.:#\\s])'),`swimmer portal CSS must style ${cls}`);
-assert.match(portalHtml,/swimmer-portal\.css\?v=20260824cw/,'portal must load the current session stylesheet instead of a stale cached version');
+assert.match(portalHtml,/swimmer-portal\.css\?v=(20260824cw|20261103-session-detail|20261106-fri)/,'portal must load the current session stylesheet instead of a stale cached version');
 assert.match(invite,/current individual session/i);
 assert.match(invite,/verifySessionInteractionLayer/);
 assert.match(invite,/i\.id\|\|i\.canonicalItemId/);
