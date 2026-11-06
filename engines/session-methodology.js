@@ -40,9 +40,9 @@
     for(const row of rows){
       const item=B.findItem?.(session,row.itemId);if(!item||item.kind!=='set')continue;
       const athlete=(state?.athletes||[]).find(a=>a.id===row.athleteId);if(!athlete)continue;
-      const squadSystem=D.systemFrom('',item);
+      const squadSystem=D.systemFrom('',item,{session,state});
       let adapted;try{adapted=E.Modification.adaptItem(item,athlete,state,session);}catch{continue;}
-      const athSystem=D.systemFrom('',adapted);
+      const athSystem=D.systemFrom('',adapted,{session,state,athlete});
       if(athSystem!==squadSystem)flagged.push({athleteId:athlete.id,athleteName:athlete.full_name||'Swimmer',itemId:item.id,squadSystem,athSystem,reason:text(adapted.adaptationReason||'')});
     }
     return flagged;
@@ -195,7 +195,10 @@
     const top=(mainRanked||ranked)[0],dominantSystem=top[0];
     // A tie for the most work counts as the planned system being on top.
     const pctOf=(rows,k)=>Number((rows||[]).find(([x])=>x===k)?.[1]?.pctMetres||0);const basisRows=mainRanked||ranked;
-    let matches=dominantSystem===named||isKnownCrossover(named,dominantSystem)||(pctOf(basisRows,named)>0&&pctOf(basisRows,named)>=Number(top[1].pctMetres||0)-0.5);
+    // 3 Nov 2026 (Andy, Tue PM: brief "Anaerobic Power · Race-specific speed", main set 8x50 Fins MAX, Board said
+    // "off brief"): when the brief itself names speed, a max-speed main set is what it asked for.
+    const speedNamed=dominantSystem==='Speed / Max'&&named==='Race pace'&&/\bspeed\b/i.test([b.sessionFocus,b.system,b.weekFocus].join(' '));
+    let matches=dominantSystem===named||speedNamed||isKnownCrossover(named,dominantSystem)||(pctOf(basisRows,named)>0&&pctOf(basisRows,named)>=Number(top[1].pctMetres||0)-0.5);
     // 15 Oct 2026 (Andy: "in an aerobic capacity phase ... there might be slightly more of an aerobic feel to some of
     // those higher intensity sets"): in the Base Skills / aerobic phase, a harder day whose main set is mostly
     // aerobic but still has real work of the planned system (at least 15% of the main set) is the aerobic-phase

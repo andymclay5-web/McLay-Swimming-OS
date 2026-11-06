@@ -59,12 +59,17 @@
   function makeableCycle(session,item,ath,state){
     const cyc=Number(item?.cycleSeconds)||0,d=Number(item?.distance)||0;if(!(cyc>0&&d>=50&&d<=400))return null;
     if(E.TrainingPolicy?.isKick?.(item)||E.TrainingPolicy?.isRacePace?.(item))return null;
+    // 6 Nov 2026 (Andy, Fri AM: 3 Rounds of 4 x 50 @1:15 -- 1 Build / 2 Middle 20m MAX / 3 First 15m MAX / 4 Easy -- became
+    // @1:20 for Charlotte, "makes no sense"). Reps with MAX efforts keep the squad send-off (same rule as 3 Nov's max 50s):
+    // the send-off is the recovery for the max reps, and the makeable send-off is for steady work.
+    if([item?.raw,item?.text,...(item?.pattern||[]).map(x=>x?.text)].some(t=>/\b(?:max|sprint|all[\s-]?out)\b/i.test(String(t||''))))return null;
     const ratio=Number(E.Modification?.profile?.(ath,state)?.ratio)||1;if(ratio>=.98)return null;
     let st=E.Evidence?.stroke?.(item?.stroke||'')||'';if(!st||st==='Choice')st='Freestyle';
     const row=E.Aerobic?.t400?.(ath,state,st,session?.identity?.course||'');const anchor=row?Number(E.Evidence?.seconds?.(row)):0;if(!(anchor>0))return null;
     const est=E.Aerobic?.target?.(anchor,d,'Development',10)?.seconds;if(!(est>0))return null;
     const need=Math.ceil((est+(d<=50?10:15))/5)*5;return need>cyc?{cycleSeconds:need,estimateSeconds:Math.round(est),stroke:st}:null;}
-  function makeable(session,planned,ath,state){if(planned.plan||planned.target?.status==='ok')return planned;const m=makeableCycle(session,planned.item,ath,state);if(!m)return planned;
+  function makeable(session,planned,ath,state){if(planned.plan||planned.target?.status==='ok')return planned;
+const m=makeableCycle(session,planned.item,ath,state);if(!m)return planned;
     const item=syncDerivedTiming(planned.item,m.cycleSeconds);item.adaptationReason=[planned.item?.adaptationReason,`Send-off ${clock(m.cycleSeconds)} so the work is makeable (${m.stroke} T400: about ${clock(m.estimateSeconds)} per rep)`].filter(Boolean).join(' · ');
     return{...planned,item,plan:{cycleSeconds:m.cycleSeconds,owner:'makeable',source:'T400',estimateSeconds:m.estimateSeconds}};}
   function prescription(session,item,ath,state){const intent=normalizeIntent(item),contextual=resolvePrescriptionContext(session,intent,ath,state),adapt=root.MSOS4?.adapt?.item,modified=adapt?adapt(contextual,ath,state,session):E.Modification.adaptItem(contextual,ath,state,session),rawTarget=compute(session,modified,ath,state,overrideStroke(modified,ath,state,session)),planned=makeable(session,applyPolicy(modified,rawTarget,ath,state),ath,state),target=enforceExecutable(planned.target,planned.item);return{item:planned.item,target,athlete:ath,sessionId:session?.id,prescriptionTiming:planned.plan,evidence:{source:target?.source||'',status:target?.status||'none',conflict:target?.conflict||''}}}

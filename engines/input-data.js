@@ -16,7 +16,7 @@
 // cloud sync. Also exposes parse + PB check for poolside notes (engines/capture-ui.js).
 (function(g){
   const M=g.MSOS4;if(!M?.state)return;
-  const ID=M.inputData={build:'v4-input-data-20261012'};
+  const ID=M.inputData={build:'v4-input-data-20261106-meet-text'};
   const U=M.util||{},E=g.MSOSEngines||{};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),lc=v=>text(v).toLowerCase();
@@ -68,7 +68,30 @@
     if(kind==='t400')distance=400;
     const m=matchName(name);
     return{raw:entry,name,seconds,stroke:stroke||defaults.stroke||(kind==='t400'?'Freestyle':''),distance:distance||defaults.distance||null,date:date||defaults.date||nzToday(),course:course||defaults.course||'SCM',candidates:m.candidates.map(a=>a.id),match:m.kind,athleteId:m.candidates.length===1?m.candidates[0].id:''};}
-  function parse(raw,opts={}){return entries(raw).map(e=>parseEntry(e,opts)).filter(r=>r.seconds!=null||r.name);}
+  // 6 Nov 2026 (Andy pasted the 2026 Aquagym Challenge results, Hy-Tek Meet Manager text, into Race results: 1,612
+  // lines, every one "No swimmer called ...", Save 0). Meet Manager results text is read as results: each "Event N ...
+  // 100 LC Meter Backstroke" header sets distance, stroke and course for the rows under it; a row is
+  // "place name [class] age team time". Only swims by swimmers in MSOS are kept (full name; a middle initial and a para
+  // class are ignored). Relays, DQ / NS / scratch and exhibition (X) swims are left out. Swimmers from your own club
+  // (the team code your matched swimmers swim for) who aren't in MSOS are listed by name, not guessed.
+  function isMeetResults(raw){const t=String(raw||'');return/^\(?Event\s+\d+\s+(?:Boys|Girls|Men|Women|Mixed)\b[^\n]*\b(?:LC|SC)\s+Met(?:er|re)s?\b/im.test(t)&&/Name\s+Age\s+Team|HY-TEK/i.test(t);}
+  function meetResults(raw,{defaults={}}={}){const rows=[],ours=new Map(),other={matched:0,skipped:0};let ev=null,start='',meet='';
+    const clean=n=>n.split(/\s+/).filter(w=>!/^(?:S|SB|SM)\d{1,2}(?:\/(?:S|SB|SM)\d{1,2})*$/i.test(w)&&!/^[A-Z]$/.test(w)).join(' ');
+    for(let line of String(raw||'').split(/\r?\n/)){line=line.replace(/\s*\S*\s*HY-TEK'?s MEET MANAGER.*$/i,'').trim();if(!line)continue;
+      const mh=line.match(/^(.+?)\s+-\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+\d{1,2}\/\d{1,2}\/\d{4}$/);if(mh){meet=meet||mh[1].trim();start=start||dateOf(mh[2],0);continue;}
+      const eh=line.match(/^\(?Event\s+\d+\s+(.*?)\s(\d{2,4})\s+(LC|SC)\s+Met(?:er|re)s?\s+(\w+)(.*?)\)?$/i);
+      if(eh){const stroke=strokeOf(eh[4]);ev=/relay/i.test(eh[5])||!stroke?{skip:true}:{distance:Number(eh[2]),course:eh[3].toUpperCase()==='LC'?'LCM':'SCM',stroke};continue;}
+      if(!ev||ev.skip)continue;
+      const r=line.match(/^(\*?\d+|-{2,})\s+(.+?)\s+(\d{1,2})\s+([A-Z]{2,6})\s+(\S+)/);if(!r)continue;
+      const seconds=timeOf(r[5]);if(seconds==null){other.skipped++;continue;}
+      const name=clean(r[2]),m=matchName(name),full=m.kind==='full'||m.kind==='deck'?m.candidates:[];
+      if(full.length!==1){if(!ours.has(r[4]))ours.set(r[4],new Set());ours.get(r[4]).add(name);continue;}
+      rows.push({raw:line,name,seconds,stroke:ev.stroke,distance:ev.distance,date:start||defaults.date||nzToday(),course:ev.course,candidates:[full[0].id],match:'full',athleteId:full[0].id,team:r[4]});}
+    const counts=new Map();for(const x of rows)counts.set(x.team,(counts.get(x.team)||0)+1);const club=[...counts].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    const missing=club?[...(ours.get(club)||[])].filter(n=>!rows.some(x=>x.name===n)).sort():[];
+    return{rows,meet,club,missing,start};}
+  ID.isMeetResults=isMeetResults;ID.meetResults=meetResults;
+  function parse(raw,opts={}){if((opts.kind||'race')==='race'&&isMeetResults(raw))return meetResults(raw,opts).rows;return entries(raw).map(e=>parseEntry(e,opts)).filter(r=>r.seconds!=null||r.name);}
   ID.timeOf=timeOf;ID.parse=parse;ID.parseEntry=parseEntry;ID.matchName=matchName;
 
   // ---------- PB check (real results only; a conversion never counts as a PB, CLAUDE.md 2.31) ----------
@@ -119,7 +142,7 @@
     return`<div class="id-defaults">${out.join('')}</div><p class="muted id-hint">Used for any line that doesn't say otherwise.</p>`;}
   function athleteOptions(sel,cands){const list=athletes().slice().sort((a,b)=>String(a.full_name).localeCompare(String(b.full_name)));const top=cands.length>1?cands:[];return`<option value="">${top.length?`Choose — ${top.length} match`:'Choose swimmer'}</option>${top.length?`<optgroup label="Matches">${top.map(id=>{const a=athlete(id);return`<option value="${esc(id)}">${esc(a?.full_name||id)}${a?.squad?` · ${esc(a.squad)}`:''}</option>`;}).join('')}</optgroup><optgroup label="Everyone">`:''}${list.map(a=>`<option value="${esc(a.id)}"${a.id===sel?' selected':''}>${esc(a.full_name)}${a.squad?` · ${esc(a.squad)}`:''}</option>`).join('')}${top.length?'</optgroup>':''}`;}
   function reviewHtml(kind){const dr=drafts[kind];if(!dr?.rows?.length)return'';
-    return`<div class="id-review"><div class="msos-check-title">CHECK BEFORE SAVING · ${dr.rows.length} line${dr.rows.length===1?'':'s'}</div>${dr.rows.map((r,i)=>{const pb=r.athleteId&&r.seconds!=null&&kind!=='test'?pbCheck(r,kind):{status:'unknown'};const warn=!r.athleteId?(r.candidates.length>1?`${r.candidates.length} swimmers match "${esc(r.name)}" — choose one`:`No swimmer called "${esc(r.name||'?')}"`):r.seconds==null?'No time found':kind==='race'&&!(r.distance&&r.stroke)?'Needs distance and stroke':'';
+    return`<div class="id-review"><div class="msos-check-title">CHECK BEFORE SAVING · ${dr.rows.length} line${dr.rows.length===1?'':'s'}</div>${dr.note?`<p class="muted" data-id-note>${esc(dr.note)}</p>`:''}${dr.rows.map((r,i)=>{const pb=r.athleteId&&r.seconds!=null&&kind!=='test'?pbCheck(r,kind):{status:'unknown'};const warn=!r.athleteId?(r.candidates.length>1?`${r.candidates.length} swimmers match "${esc(r.name)}" — choose one`:`No swimmer called "${esc(r.name||'?')}"`):r.seconds==null?'No time found':kind==='race'&&!(r.distance&&r.stroke)?'Needs distance and stroke':'';
       return`<div class="id-row${warn?' id-row-warn':''}" data-id-row="${i}"><label class="id-inc"><input type="checkbox" data-id-r="include"${r.include!==false&&!warn?' checked':''}></label><div class="id-row-main"><select data-id-r="athleteId">${athleteOptions(r.athleteId,r.candidates)}</select><div class="id-row-fields"><input data-id-r="time" value="${r.seconds!=null?esc(clock(r.seconds)):''}" placeholder="time" inputmode="decimal">${kind!=='t400'?`<select data-id-r="distance"><option value="">dist</option>${[...DISTANCES].map(x=>`<option${Number(r.distance)===x?' selected':''}>${x}</option>`).join('')}</select>`:''}<select data-id-r="stroke">${kind!=='t400'?'<option value="">stroke</option>':''}${['Freestyle','Backstroke','Breaststroke','Butterfly','IM'].map(s=>`<option${s===r.stroke?' selected':''}>${s}</option>`).join('')}</select><input type="date" data-id-r="date" value="${esc(r.date)}"><select data-id-r="course"><option${r.course==='SCM'?' selected':''}>SCM</option><option${r.course==='LCM'?' selected':''}>LCM</option></select></div><small class="id-row-note">${warn?`<b class="warn-text">${warn}</b>`:pbLabel(pb)}${r.match==='first'||r.match==='deck'?` <span class="muted">· matched "${esc(r.name)}"</span>`:''} <span class="muted">· from "${esc(r.raw)}"</span></small></div></div>`;}).join('')}<div class="hub-actions"><button type="button" class="primary" data-id-save="${kind}">Save ${dr.rows.filter(r=>r.include!==false&&r.athleteId&&r.seconds!=null).length} result${dr.rows.filter(r=>r.include!==false&&r.athleteId&&r.seconds!=null).length===1?'':'s'}</button><button type="button" data-id-clear="${kind}">Clear</button></div></div>`;}
   function cardHtml(kind){const k=KINDS[kind],dr=drafts[kind]||{};return`<section class="page-card id-card id-${kind}" data-id-card="${kind}"><h2>${esc(k.title)}</h2><p class="muted">${esc(k.blurb)}</p>${defaultsHtml(kind)}<label class="id-free">Type or paste — any layout<textarea data-id-text rows="4" placeholder="${esc(k.example)}">${esc(dr.text||'')}</textarea></label><div class="hub-actions"><button type="button" class="primary" data-id-read="${kind}">Read it</button><label class="buttonlike id-photo">📷 Photo of times<input type="file" accept="image/*" capture="environment" data-id-photo="${kind}" hidden></label></div><div data-id-status class="muted"></div><div data-id-review>${reviewHtml(kind)}</div>${dr.done?`<p class="good-text"><b>${esc(dr.done)}</b></p>`:''}</section>`;}
   function html(){const owner=(M.access?.role?.()||'owner')==='owner';return`<section class="page-card id-head"><div class="eyebrow">INPUT DATA</div><h1>Enter times and results</h1><p>Type them any way you like, take a photo of a sheet, or time them live on deck. You'll see what was understood before anything saves.</p><div class="hub-actions"><button type="button" data-id-go="times">⏱ Time a set live (Times)</button>${owner?'<button type="button" data-id-go="data">Files &amp; reference tables</button>':''}</div></section>
@@ -132,7 +155,7 @@
     host.querySelectorAll('[data-id-go]').forEach(b=>b.onclick=()=>M.nav?.show?.(b.dataset.idGo,{restoreScroll:false}));
     host.querySelectorAll('[data-id-card]').forEach(bindCard);}
   function bindCard(card){{const kind=card.dataset.idCard;const status=card.querySelector('[data-id-status]');
-      const read=raw=>{const defaults=readDefaults(card);drafts[kind]={text:raw,defaults,rows:parse(raw,{kind,defaults}),done:''};paint(kind);};
+      const read=raw=>{const defaults=readDefaults(card);let note='';if(kind==='race'&&isMeetResults(raw)){const mr=meetResults(raw,{defaults});const n=new Set(mr.rows.map(r=>r.athleteId)).size;note=`Read as meet results${mr.meet?` · ${mr.meet}`:''}: ${mr.rows.length} swim${mr.rows.length===1?'':'s'} by ${n} of your swimmers${mr.start?`, dated ${mr.start.split('-').reverse().join('/')} (first day of the meet — change any that were on the second day)`:''}. Other clubs, relays, DQs and exhibition swims left out.${mr.missing.length?` ${mr.club} swimmers not in MSOS: ${mr.missing.join(', ')}.`:''}`;if(mr.meet&&!text(defaults.meet)){defaults.meet=mr.meet;const mi=card.querySelector('[data-id-f="meet"]');if(mi)mi.value=mr.meet;}}drafts[kind]={text:raw,defaults,rows:parse(raw,{kind,defaults}),done:'',note};paint(kind);};
       card.querySelector('[data-id-read]').onclick=()=>{const raw=card.querySelector('[data-id-text]').value;if(!raw.trim()){status.textContent='Type or paste some times first.';return;}read(raw);};
       card.querySelector('[data-id-photo]').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;status.textContent='Reading the photo…';try{const tr=await M.intake.transcribe(f,'photo');const raw=text(tr?.rawText)?String(tr.rawText):'';if(!raw)throw new Error('No writing found in the photo');card.querySelector('[data-id-text]').value=raw;status.textContent='Read from the photo — check the lines below.';read(raw);}catch(err){status.textContent=`${err.message||err}. You can type them instead.`;}};
       card.querySelector('[data-id-clear]')?.addEventListener('click',()=>{drafts[kind]={};paint(kind);});

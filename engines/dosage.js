@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4;if(!M?.session||!M?.util)return;
   const U=M.util,S=M.session,E=g.MSOSEngines||{};
-  const D=M.dosageEngine={build:'v4-dosage-20261019-rushton'};
+  const D=M.dosageEngine={build:'v4-dosage-20261105-work-rest'};
   const WEIGHTS=Object.freeze({
     'Regeneration':0.25,
     'Development':0.45,
@@ -67,7 +67,57 @@
   // single classification for the whole item is inherently wrong for it -- proper handling needs per-rep
   // zone data (dosage.js's addSet/repSystem already supports this via item.repPattern, if the parser
   // populates it for descending sets) rather than a single system-wide label.
-  function systemFrom(value,item={}){
+  // 5 Nov 2026 (Andy, after "12 x 200 Free on 3:45 -- descend 1 to 3; descending to max effort" read as a MAX set and
+  // flagged off brief: "we need to have work to rest incorporated ... so that we can actually start to have a better
+  // measure of what the energy systems are working"). Agreed rules, in order:
+  //   1. no effort word -> easy (Development), unchanged from 21 Sept;
+  //   2. a zone the coach writes (Threshold / CL / HR 165 / @200p / speed) always wins, unchanged;
+  //   3. an effort word without a zone (max, sprint, fast, hard, strong, all out, best average, descend) takes its
+  //      zone from the hard rep's distance and its rest -- send-off minus a likely swim time from the swimmers' own
+  //      Freestyle T400 pace (rest "long" when at least half the swim time):
+  //        400+ Threshold | 200 short Threshold, long Clearance | 51-199 Clearance | 50 or less short Clearance, long Speed / Max
+  //      With no T400 to estimate from, rest is unknown: 50s or less stay Speed / Max (as before), longer reps take the
+  //      short-rest (lower) zone;
+  //   4. a descending set gets a zone per rep: the fast rep the table's zone, the first rep Development, reps between
+  //      stepped evenly along Development -> Overload -> Threshold -> Clearance -> Speed / Max.
+  // Zones from rule 3/4 are estimates; zoneDetail() says so for the Board and reports. Provisional coaching model
+  // (CLAUDE.md 2.71), Andy agreed the table 5 Nov 2026.
+  const LADDER=['Development','Overload','Threshold','Clearance','Speed / Max'];
+  const EFFORT=/\b(?:max(?:imal|imum)?|sprint|fast|hard|strong|all[\s-]?out|best\s+average|desc(?:end(?:ing)?)?)\b/i;
+  const paceMemo={key:null,map:new Map()};
+  function t400Per100(ath,state,course){
+    try{const Ev=E.Evidence;const r=(Ev?.t400Rows?.(ath,state,'Freestyle',course)||[])[0]||(course?(Ev?.t400Rows?.(ath,state,'Freestyle','')||[])[0]:null);const sec=r?Number(Ev.seconds(r)):NaN;return sec>0?sec/4:null;}catch{return null}
+  }
+  function per100(ctx){
+    const state=ctx.state||M.state,course=txt(ctx.session?.identity?.course||'').toUpperCase();
+    if(ctx.athlete){const own=t400Per100(ctx.athlete,state,course);if(own)return own;}
+    const squads=(ctx.session?.identity?.squads||[]).map(x=>txt(x).toLowerCase()),key=`${state?.settings?.storageRevision}|${course}|${squads.join(',')}`;
+    if(paceMemo.state!==state||paceMemo.key!==key){paceMemo.state=state;paceMemo.key=key;paceMemo.value=undefined;}
+    if(paceMemo.value!==undefined)return paceMemo.value;
+    const pool=(state?.athletes||[]).filter(a=>a&&a.active!==false&&(!squads.length||squads.includes(txt(a.squad).toLowerCase())));
+    const xs=pool.map(a=>t400Per100(a,state,course)).filter(Boolean).sort((a,b)=>a-b);
+    paceMemo.value=xs.length?xs[Math.floor(xs.length/2)]:null;return paceMemo.value;
+  }
+  function restRatio(item,ctx){
+    const dist=Number(item?.distance)||0,p=per100(ctx);if(!(dist>0)||!p)return null;
+    const swim=dist/100*p,cyc=Number(item?.cycleSeconds),rst=Number(item?.restSeconds);
+    // Voice write-ups sometimes repeat the send-off as rest ("on 3:45 ... 225sR"): the same number is the send-off.
+    let rest=null;if(cyc>0)rest=cyc-swim;else if(rst>0)rest=rst;
+    if(rest==null)return null;return{ratio:Math.max(0,rest)/swim,swim,rest:Math.max(0,rest)};
+  }
+  function hardZone(item,ctx){
+    const dist=Number(item?.distance)||0,rr=restRatio(item,ctx),long=rr?rr.ratio>=0.5:null;
+    if(dist>=400)return'Threshold';
+    if(dist>=200)return long?'Clearance':'Threshold';
+    if(dist>50)return'Clearance';
+    return long===false?'Clearance':'Speed / Max';
+  }
+  function descentOf(item){const d=item?.descent;const to=Number(d?.to);return to>=2&&to<=12?{from:Number(d.from)||1,to}:null;}
+  function descentRep(item,rep,ctx){
+    const d=descentOf(item);if(!d)return null;const pos=((Math.max(1,rep)-1)%d.to)+1,top=Math.max(0,LADDER.indexOf(hardZone(item,ctx)));
+    return LADDER[Math.round(top*(pos-1)/(d.to-1))];
+  }
+  function systemFrom(value,item={},ctx={}){
     const v=txt(value),base=item.raw||item.text||'';
     // 18 Sept 2026 (Andy, real session, "I don't see this as 72% unclassified do you?"): a genuine chunk of
     // that 72% was a coach line like "4 x 25 Small Parachute" with its own real intensity word -- "15m MAX" --
@@ -97,7 +147,14 @@
     // the race-target-intent engine (the one owner of that shorthand) instead of a second regex.
     let shorthand=null;try{shorthand=E.RaceTargetIntent?.shorthandPace?.(item);}catch{}
     if(item?.raceIntent||shorthand||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
-    if(either(/\b(?:sprint|max(?:imal)?|speed|alactic|neural)\b/i))return'Speed / Max';
+    if(either(/\b(?:speed|alactic|neural)\b/i))return'Speed / Max';
+    // A part-rep max ("15m MAX", "4 x 25 Fins 15m Underwater MAX") is alactic work whatever the rest (partialMax splits it).
+    const effortText=raw.replace(restWords,' ');
+    if(/(?<!#\s*)\b\d{1,3}\s*m?\s+(?:underwater\s+)?max\b/i.test(effortText))return'Speed / Max';
+    if((EFFORT.test(effortText)||descentOf(item))&&!hrZone(raw)/* a written HR figure wins (checked below) */){const hard=/\b(?:max(?:imal|imum)?|sprint|all[\s-]?out)\b/i.test(effortText);
+      const skill=/\b(?:drill|scull|skill|techni|start|turn|finish|underwater|breakout)\b/i.test(effortText);
+      // Max on skill work (starts, turns, finishes, drill lines) is speed work as before -- work:rest only reads swims.
+      if(hard&&skill)return'Speed / Max';if(!skill){if(Number(item?.distance)>0)return hardZone(item,ctx);if(hard)return'Speed / Max';}}
     if(either(/\b(?:drill|scull|skill|techni|underwater|breakout|streamline)\b/i))return'Skill / Technical';
     // 23 Sept 2026: an authored heart-rate figure/range is as strong an explicit signal as any keyword above
     // it, and is checked here on the same footing -- after every keyword (a coach's own word for the zone
@@ -183,16 +240,27 @@
     out.rawMetres=Math.round(out.rawMetres*100)/100;out.stimulusUnits=Math.round(out.stimulusUnits*100)/100;return out;
   }
   function merge(rows=[]){const out=blank();for(const r of rows){if(!r)continue;out.rawMetres+=Number(r.rawMetres)||0;out.stimulusUnits+=Number(r.stimulusUnits)||0;out.unclassifiedMetres+=Number(r.unclassifiedMetres)||0;for(const k of SYSTEMS){out.systems[k].metres+=Number(r.systems?.[k]?.metres)||0;out.systems[k].units+=Number(r.systems?.[k]?.units)||0;}for(const k of STROKES){out.strokes[k].metres+=Number(r.strokes?.[k]?.metres)||0;out.strokes[k].units+=Number(r.strokes?.[k]?.units)||0;}}return finish(out);}
-  function repSystem(item,rep){
+  function repSystem(item,rep,ctx={}){
     const p=(item?.repPattern||[]).find(x=>Number(x?.rep)===rep)||(item?.repPattern||[])[rep-1];
     // Classify the rep's own zone line only -- passing the whole item let its other cue lines ("#1-3 Dev")
     // win, so a "#4-6 OL" rep dosed as Development (10 Oct 2026, from Andy's methodology examples).
     if(p?.zone)return systemFrom(p.zone,{raw:p.text||p.zone});
     const ri=(item?.repInstructions||[]).find(x=>Number(x?.rep)===rep)||(item?.repInstructions||[])[rep-1];
     if(ri?.raceIntent)return'Race pace';if(ri?.drill||/\bdrill\b/i.test(txt(ri?.label)))return'Skill / Technical';
-    if(item?.zone)return systemFrom(item.zone,item);
-    return systemFrom('',item);
+    if(item?.zone)return systemFrom(item.zone,item,ctx);
+    // Descending set with no zone written: zone per rep (rule 4 above). A written zone on the set wins.
+    const whole=systemFrom('',item,ctx);if(descentOf(item)&&(LADDER.includes(whole))){const z=descentRep(item,rep,ctx);if(z)return z;}
+    return whole;
   }
+  // For the Board and reports: what zone(s) a set works, and whether the app worked them out (est.) or the coach wrote them.
+  function zoneDetail(item,ctx={}){
+    if(!item||item.kind!=='set')return null;const reps=Math.max(1,Math.min(MAX_PER_REP,Number(item.reps)||1)),d=descentOf(item);
+    const written=!!(item.zone||(item.repPattern||[]).some(p=>p?.zone)||explicitOnly(item));
+    const perRep=Array.from({length:d?Math.min(d.to,reps):1},(_,i)=>repSystem(item,i+1,ctx));
+    const rr=restRatio(item,ctx);
+    return{zones:perRep,descending:!!d&&!written,estimated:!written&&perRep.some(z=>z!=='Development'),restSeconds:rr?Math.round(rr.rest):null,swimSeconds:rr?Math.round(rr.swim):null};
+  }
+  function explicitOnly(item){const raw=txt([item?.raw,item?.text,...(item?.cues||[])].filter(Boolean).join(' '));return /\b(?:regeneration|regen|development|overload|threshold|clearance|\bCL\b|\bOL\b|\bthr\b|race\s*pace|speed|alactic)\b/i.test(raw)||/\bAT\b/.test(raw)||!!hrZone(raw)||!!item?.raceIntent;}
   function actualItem(session,item,athlete,state){
     if(!athlete)return item;
     // Volume only: use the Coordinator's target-free prescribedItem() when available. Full prescription()
@@ -208,9 +276,9 @@
     const actual=actualItem(session,item,athlete,state),rawReps=Number(actual?.reps),reps=Math.max(1,Number.isFinite(rawReps)?rawReps:1),dist=Math.max(0,Number(actual?.distance)||0),stroke=strokeFrom(actual);
     // Bounded: per-rep classification only for a real swimmable rep count. A non-finite or absurd rep count
     // (bad data) is dosed once at the item level instead of looping without limit on the main thread.
-    if(!Number.isFinite(rawReps)||reps>MAX_PER_REP){const sys=repSystem(actual,1),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult*(Number.isFinite(rawReps)?reps:1),weight);out.repCountWarnings=(out.repCountWarnings||0)+1;return;}
+    if(!Number.isFinite(rawReps)||reps>MAX_PER_REP){const sys=repSystem(actual,1,{athlete,state,session}),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;add(out,sys,stroke,dist*mult*(Number.isFinite(rawReps)?reps:1),weight);out.repCountWarnings=(out.repCountWarnings||0)+1;return;}
     const part=partialMax(actual,dist);
-    for(let rep=1;rep<=reps;rep++){const sys=repSystem(actual,rep),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;
+    for(let rep=1;rep<=reps;rep++){const sys=repSystem(actual,rep,{athlete,state,session}),weight=WEIGHTS[sys]??WEIGHTS.Unclassified;
       if(part&&sys==='Speed / Max'){add(out,sys,stroke,part.max*mult,weight);add(out,part.rest,stroke,(dist-part.max)*mult,WEIGHTS[part.rest]??WEIGHTS.Unclassified);continue;}
       add(out,sys,stroke,dist*mult,weight);}
   }
@@ -297,7 +365,7 @@
   // swimmer training history and Session detail so every screen classifies work the same way.
   function itemSplit(item){if(!item||item.kind!=='set')return{};const out=blank();addSet(out,null,item,null,M.state,1);const r={};for(const[k,v]of Object.entries(out.systems))if(v.metres>0&&k!=='Unclassified')r[k]=v.metres;return r;}
   D.RUSHTON=RUSHTON;D.coachLabel=coachLabel;D.groupOf=groupOf;D.rushton=rushton;D.rushtonHtml=rushtonHtml;D.itemSplit=itemSplit;
-  D.WEIGHTS=WEIGHTS;D.SYSTEMS=SYSTEMS;D.STROKES=STROKES;D.systemFrom=systemFrom;D.strokeFrom=strokeFrom;D.deliveredProjection=deliveredProjection;D.session=sessionDose;D.scopeSummary=scopeSummary;D.athleteWindow=athleteWindow;D.merge=merge;D.top=top;
+  D.WEIGHTS=WEIGHTS;D.SYSTEMS=SYSTEMS;D.STROKES=STROKES;D.systemFrom=systemFrom;D.zoneDetail=zoneDetail;D.repSystem=repSystem;D.strokeFrom=strokeFrom;D.deliveredProjection=deliveredProjection;D.session=sessionDose;D.scopeSummary=scopeSummary;D.athleteWindow=athleteWindow;D.merge=merge;D.top=top;
   if(M.reportingEngine?.registerProvider){
     M.reportingEngine.registerProvider('dosage',({athlete,state,days})=>athleteWindow(athlete,state,days),{
       metric:{id:'dosage',label:'Energy-system / dosage',source:'Dosage + delivered session truth'},

@@ -19,7 +19,7 @@
 // screen remains as the offline/no-account fallback it always was.
 (function(g){
   const M=g.MSOS4,U=M?.util;if(!M?.state||!M?.store||!M?.access)return;
-  const T=M.teamAccess={build:'v4-team-access-20261012-join-link'};
+  const T=M.teamAccess={build:'v4-team-access-20261103-install-once'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const now=()=>U?.now?.()||new Date().toISOString();
@@ -203,7 +203,7 @@
     host.querySelector('[data-coach-join-later]').onclick=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
     host.querySelector('[data-coach-join-go]').onclick=async e=>{const b=e.currentTarget;b.disabled=true;
       try{const r=await T.joinWithInvite(token,t=>{out.textContent=t;});clearUrl();
-        out.textContent=`Done — you're an assistant coach for ${(r.row.assigned_squads||[]).join(', ')||'your squads'}, signed in as ${r.email}.${r.sync?.error?`\nCloud sync is not on yet: ${r.sync.error}`:''}`;
+        out.textContent=`Done — you're an assistant coach for ${(r.row.assigned_squads||[]).join(', ')||'your squads'}, signed in as ${r.email}.${r.sync?.error?`\nCloud sync is not on yet: ${r.sync.error}`:''}`;const ctx=appContext();if(!ctx.standalone){if(ctx.ios)await copyJoinLink(token);out.insertAdjacentHTML('afterend',installHtml(ctx));wireInstall(host);}
         b.textContent='Open the Board';b.disabled=false;b.onclick=()=>{host.innerHTML='';try{M.nav?.clearTransient?.();M.nav?.show?.('board',{restoreScroll:false});M.ui?.renderCurrent?.();}catch{}};
       }catch(err){out.textContent=err.message||String(err);b.disabled=false;}};
   }
@@ -227,23 +227,43 @@
   T.appContext=appContext;
   function tokenFrom(textValue){const t=text(textValue);const m=t.match(/coach_invite=([a-f0-9]{24,128})/i)||t.match(/^([a-f0-9]{24,128})$/i);return m?m[1]:'';}
   T.tokenFrom=tokenFrom;
+  // 3 Nov 2026 (Andy: "We don't really want him to have to hit a link each time. He should be able to just download it
+  // and have it on his phone, and any update is triggered through that"). After joining, the coach is walked through
+  // putting MSOS on his home screen (Android: one Install button; iPhone: Share -> Add to Home Screen), and his join
+  // link is copied so the home-screen copy can be signed in with one Paste. That copy then stays signed in (the
+  // sign-in renews itself) and takes app updates through the normal update notice. His link keeps working while he
+  // is on the team (supabase/functions/msos-coach-join), so a phone that ever needs signing in again never needs a
+  // new invite.
+  let installEvent=null;
+  try{globalThis.addEventListener?.('beforeinstallprompt',e=>{try{e.preventDefault();}catch{}installEvent=e;});globalThis.addEventListener?.('appinstalled',()=>{installEvent=null;});}catch{}
+  function installHtml(ctx=appContext()){
+    if(ctx.standalone)return'';
+    if(ctx.ios)return `<div class="coach-install" data-coach-install style="margin-top:12px;padding:12px 14px;border:1px solid #9fc2d1;border-radius:14px;background:#eef6f9;line-height:1.4"><b>Put MSOS on your home screen</b><ol><li>${ctx.inApp?'Open this page in <b>Safari</b> first (••• or the share button → Open in Safari).':'Tap the <b>Share</b> button (the square with the arrow) at the bottom of Safari.'}</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open MSOS from the new icon and tap <b>Paste link</b> — your join link has been copied. That's it: from then on just open the icon. Updates arrive inside the app.</li></ol></div>`;
+    return `<div class="coach-install" data-coach-install style="margin-top:12px;padding:12px 14px;border:1px solid #9fc2d1;border-radius:14px;background:#eef6f9;line-height:1.4"><b>Put MSOS on your home screen</b>${installEvent?'<div class="hub-actions"><button type="button" class="primary" data-coach-install-go>Install MSOS on this phone</button></div>':'<p>Open the browser menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>'}<p class="muted">You stay signed in. From then on just open the icon — updates arrive inside the app.</p></div>`;
+  }
+  function wireInstall(host){const b=host?.querySelector?.('[data-coach-install-go]');if(!b)return;b.onclick=async()=>{const e=installEvent;if(!e)return;try{e.prompt();const r=await e.userChoice;if(r?.outcome==='accepted'){b.textContent='Installed — open MSOS from your home screen';b.disabled=true;installEvent=null;}}catch{}};}
+  async function copyJoinLink(token){try{await globalThis.navigator?.clipboard?.writeText?.(T.joinLink(token));return true;}catch{return false;}}
+  T.installHtml=installHtml;
   function signInScreen(){
     const host=document.querySelector('#modalHost');if(!host)return;const ctx=appContext();
     const tip=ctx.ios?`<p class="muted">On iPhone, Safari, the home-screen icon and the browser inside a messaging app each keep their <b>own</b> sign-in. You're in <b>${esc(ctx.where)}</b> — sign in here, then always open MSOS this same way.</p>`:'';
-    host.innerHTML=`<div class="modal-backdrop" data-coach-signin><section class="modal"><header><h2>Sign in on this phone</h2><button data-coach-signin-close>×</button></header><div class="modal-body"><p>This copy of MSOS isn't signed in, so it can't get your squads' sessions. Your sessions are safe in the cloud.</p>${tip}<label>Paste the join link Andy sent you<textarea data-coach-signin-link rows="3" placeholder="https://…?coach_invite=…"></textarea></label><p class="muted">Each join link works once. If yours has already been used, ask Andy for a new one (Coach Hub → Coaches & devices).</p><div class="hub-actions"><button type="button" class="primary" data-coach-signin-go>Sign in</button></div><pre data-coach-signin-status></pre></div></section></div>`;
+    host.innerHTML=`<div class="modal-backdrop" data-coach-signin><section class="modal"><header><h2>Sign in on this phone</h2><button data-coach-signin-close>×</button></header><div class="modal-body"><p>This copy of MSOS isn't signed in, so it can't get your squads' sessions. Your sessions are safe in the cloud.</p>${tip}<label>Paste the join link Andy sent you<textarea data-coach-signin-link rows="3" placeholder="https://…?coach_invite=…"></textarea></label><p class="muted">Your join link keeps working for as long as you're on the team — keep Andy's message. Once you're signed in, this phone stays signed in.</p><div class="hub-actions">${globalThis.navigator?.clipboard?.readText?'<button type="button" data-coach-signin-paste>Paste link</button>':''}<button type="button" class="primary" data-coach-signin-go>Sign in</button></div><pre data-coach-signin-status></pre></div></section></div>`;
     try{M.nav?.openLayer?.('modal');}catch{}
     const out=host.querySelector('[data-coach-signin-status]');
     const close=()=>{host.innerHTML='';try{M.nav?.clearTransient?.()}catch{}};
     host.querySelector('[data-coach-signin-close]').onclick=close;
+    host.querySelector('[data-coach-signin-paste]')?.addEventListener('click',async()=>{try{const v=await globalThis.navigator.clipboard.readText();host.querySelector('[data-coach-signin-link]').value=v||'';if(tokenFrom(v))host.querySelector('[data-coach-signin-go]').click();else out.textContent="There's no join link copied. Long-press the link in Andy's message, choose Copy, then tap Paste link.";}catch{out.textContent='Long-press the box above and choose Paste.';}});
     host.querySelector('[data-coach-signin-go]').onclick=async e=>{const b=e.currentTarget,token=tokenFrom(host.querySelector('[data-coach-signin-link]').value);
       if(!token){out.textContent="That doesn't look like a join link. Long-press the link in Andy's message, choose Copy, and paste it here.";return;}
       b.disabled=true;try{const r=await T.joinWithInvite(token,t=>{out.textContent=t;});
-        out.textContent=`Done — signed in as ${r.email}.${ctx.ios?` Keep opening MSOS from ${ctx.where}.`:''}${r.sync?.error?`\nCloud sync is not on yet: ${r.sync.error}`:''}`;
+        out.textContent=`Done — signed in as ${r.email}.${ctx.ios?` Keep opening MSOS from ${ctx.where}.`:''}${r.sync?.error?`\nCloud sync is not on yet: ${r.sync.error}`:''}`;if(!ctx.standalone){if(ctx.ios)await copyJoinLink(token);out.insertAdjacentHTML('afterend',installHtml(ctx));wireInstall(host);}
         try{await M.cloud?.pullTeamRoster?.();await M.cloud?.pullTeamSessions?.();}catch{}
         b.textContent='Open the Board';b.disabled=false;b.onclick=()=>{close();try{M.nav?.show?.('board',{restoreScroll:false});M.ui?.renderCurrent?.();}catch{}};
       }catch(err){out.textContent=err.message||String(err);b.disabled=false;}};
   }
   T.signInScreen=signInScreen;
-  function checkJoinLink(){try{const t=new URL(location.href).searchParams.get('coach_invite');if(t)setTimeout(()=>joinScreen(t),300);}catch{}}
+  function checkJoinLink(){try{const t=new URL(location.href).searchParams.get('coach_invite');if(t){setTimeout(()=>joinScreen(t),300);return;}
+    // The home-screen copy opened and isn't signed in (first open after installing): ask for the link straight away.
+    const a=M.store?.auth?.()||{};if(appContext().standalone&&!a.access_token&&!a.refresh_token)setTimeout(()=>{if(!document.querySelector('#modalHost [data-coach-signin],#modalHost .modal-backdrop'))signInScreen();},800);}catch{}}
   if(typeof document!=='undefined'){if(document.readyState==='complete')checkJoinLink();else if(typeof addEventListener==='function')addEventListener('load',checkJoinLink,{once:true});}
 })(globalThis);

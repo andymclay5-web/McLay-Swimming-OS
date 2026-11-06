@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M||!E?.Evidence||!E?.RacePace)return;
-  const P=M.performanceEngine={build:'v4-performance-20260826-deck-fast-a'};
+  const P=M.performanceEngine={build:'v4-performance-20261103-own-strongest-stroke'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const STROKES=['Freestyle','Backstroke','Breaststroke','Butterfly'];
   const FORMS=['Backstroke','Breaststroke','Butterfly'];
@@ -52,14 +52,27 @@
   // "which stroke needs work" recommendation. stroke-balance.js now caches summary()/weeklyEmphasis() per
   // athlete+day+state-revision, so repeat calls across a render pass are free after the first and the medley
   // branch runs everywhere, including the Board.
+  // 3 Nov 2026 (Andy, Tue PM Board: Conor's '#1 max' showed 'Auto'). Conor has PBs (100/200 Breast SCM) but no rank:
+  // he is a para swimmer with no class recorded, so no para points exist, and a swimmer with no sex recorded gets no
+  // WA points either. Picking which of HIS strokes is strongest doesn't need a para or sex-specific standard -- only
+  // a common yardstick across strokes -- so his own PBs are compared against the WA base times (both sexes' tables
+  // averaged when sex is unknown). This only chooses the stroke; it is never shown as points or used as a standard.
+  function ownStrongestStroke(ath,state=M.state,course='',formOnly=false){
+    const W=M.waPointsEngine;if(!W?.baseFor)return null;const allowed=formOnly?FORMS:STROKES,wanted=text(course).toUpperCase();let src=[];try{src=E.Evidence.pbRows(ath,state)||[]}catch{}
+    const same=src.filter(r=>!wanted||!courseOf(r)||courseOf(r)===wanted),pool=same.length?same:src,best=new Map();
+    for(const r of pool){const st=E.Evidence.rowStroke(r),sec=E.Evidence.seconds(r);if(!allowed.includes(st)||!Number.isFinite(sec)||sec<=0)continue;
+      const bases=[W.baseFor({...ath,current_s_class:null,current_sb_class:null,current_sm_class:null,modifications:''},r,state)];if(!(Number(bases[0]?.base_seconds??bases[0])>0))for(const sex of ['M','F'])bases.push(W.baseFor({id:`_${sex}`,sex},{...r,sex},state));
+      const ok=bases.map(b=>Number(b?.base_seconds??b?.baseSeconds??b)).filter(x=>x>0);if(!ok.length)continue;const ratio=ok.reduce((n,x)=>n+x,0)/ok.length/sec;if(!best.has(st)||best.get(st).ratio<ratio)best.set(st,{stroke:st,ratio,distance:E.Evidence.distance(r),course:courseOf(r),seconds:sec,raw:r});}
+    const top=[...best.values()].sort((a,b)=>b.ratio-a.ratio)[0];return top?{...top,source:'Strongest stroke from his own PBs (no ranking points available)'}:null;
+  }
   function selectStrokeForContext(ath,item,state=M.state,session=null,{formOnly=false}={}){
     if(!ath||!state)return{stroke:'',source:'No athlete evidence',confidence:'none'};
     const course=session?.identity?.course||'',key=`${revision(state)}|${ath.id||E.Evidence.key?.(ath.full_name)||ath.full_name}|${course}|${session?.id||''}|${formOnly?'F':'A'}|${scoreSystem(ath)}`,cache=mapFor(contextCache,state);
     if(cache.has(key))return cache.get(key);
     const event=bestEvent(ath,state,course),system=scoreSystem(ath);let out;
-    if(!event)out={stroke:'',source:rows(ath,state,course).length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};
+    if(!event){const own=ownStrongestStroke(ath,state,course,formOnly);out=own?{stroke:own.stroke,source:own.source,confidence:'low',event:own}:{stroke:'',source:rows(ath,state,course).length?`PB evidence loaded but no ${system} rank`:`No ranked ${system} PB evidence`,confidence:'none'};}
     else if(event.stroke==='IM'&&M.strokeBalance?.recommendStroke){const r=M.strokeBalance.recommendStroke(ath,state,session,{formOnly});out=r?.stroke?{...r,bestEvent:event}:null;}
-    if(!out){const ranked=bestStroke(ath,state,course,formOnly);if(!ranked)out={stroke:'',source:`No ranked ${system} stroke PB evidence`,confidence:'none',bestEvent:event};else{const coach=selectedCoachStroke(ath,state);out=coach&&(!formOnly||coach!=='Freestyle')?{stroke:coach,source:'Recent coach stroke selections',confidence:'medium',bestEvent:event,event:ranked}:{stroke:ranked.stroke,source:`Highest ranked ${system} stroke PB`,confidence:'high',bestEvent:event,event:ranked};}}
+    if(!out){const ranked=bestStroke(ath,state,course,formOnly);if(!ranked){const own=ownStrongestStroke(ath,state,course,formOnly);out=own?{stroke:own.stroke,source:own.source,confidence:'low',bestEvent:event,event:own}:{stroke:'',source:`No ranked ${system} stroke PB evidence`,confidence:'none',bestEvent:event};}else{const coach=selectedCoachStroke(ath,state);out=coach&&(!formOnly||coach!=='Freestyle')?{stroke:coach,source:'Recent coach stroke selections',confidence:'medium',bestEvent:event,event:ranked}:{stroke:ranked.stroke,source:`Highest ranked ${system} stroke PB`,confidence:'high',bestEvent:event,event:ranked};}}
     cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
   }
   function profile(ath,state=M.state,course=''){const ev=bestEvent(ath,state,course),st=bestStroke(ath,state,course,false),form=bestFormStroke(ath,state,course),all=rows(ath,state,course),tests=t400s(ath,state),recent=timed(ath,state),wa=M.waPointsEngine?.tableInfo?.(state)||{active:false,rows:0,version:''},para=isPara(ath),system=scoreSystem(ath),medley=ev?.stroke==='IM',context=medley?selectStrokeForContext(ath,null,state,{identity:{course}},{}):null;return{athlete:ath,course,bestEvent:ev,bestStroke:st,bestFormStroke:form,medleyPrimary:medley,contextStroke:context,pbs:all,t400:tests,timedSets:recent,hasRankedEvidence:!!ev,waPoints:wa,pointStatus:ev?'ranked':all.length?'pbs_without_rank':'no_pbs',isPara:para,scoreSystem:system};}

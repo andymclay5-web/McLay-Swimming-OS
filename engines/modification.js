@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.Modification=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(E,A){
-  const VERSION='3.2.2-ch';
+  const VERSION='3.2.4-kick-base-needs-send-off';
   const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const FIXED={charlottemurphy:.50,conorfischer:.50,mckenziedrage:2/3,mackenziedrage:2/3,amberproudfoot:2/3,matthewkofoed:2/3,rubystace:2/3};
@@ -179,6 +179,11 @@
   function alignReducedRepsToGroupWindow(out,item,baseReps,newReps,{source='No fair performance comparator available',reason='Reps reduced to fit this swimmer; interval recalculated so total time still matches the squad set window',confidence='low'}={}){
     const cycle=Number(item?.cycleSeconds)||0,from=Math.max(1,Number(baseReps)||1),to=Math.max(1,Number(newReps)||1);
     if(!cycle||to>=from)return preserveAuthoredTiming(out,item,reason);
+    // 3 Nov 2026 (Andy, Tue PM: squad 8x50 Fins MAX @2:30; Charlotte and Matt K got 5x50 @4:00, Conor 4x50 @5:00).
+    // Stretching the send-off to fill the squad's time is right for aerobic work (his 3x200 @3:30 example) but
+    // not for max-effort reps: the authored send-off already gives full recovery, so the extra rest only splits
+    // them off the group. Max / sprint reps keep the squad send-off and start with the group; they do fewer reps.
+    if(/\b(?:max|sprint|all[- ]?out)\b/i.test(rawOf(item))&&!isAerobic(item))return preserveAuthoredTiming(out,item,'Max-effort reps keep the squad send-off: it already gives full recovery, and they start with the group');
     const groupWindowSeconds=from*cycle,next=ceil5(groupWindowSeconds/to);
     rewriteCycle(out,Number(out?.cycleSeconds)||cycle,next);
     out.adaptationTiming={mode:'reps-reduced-window-matched',cycleSeconds:next,source,reason,groupWindowSeconds};
@@ -198,12 +203,22 @@
   function applyAmberConstraint(item,ath,ov){const raw=rawOf(item),legDependent=/\b(?:kick|fins?|underwater)\b/i.test(raw)||amberNoArmCue(raw),independent=/\b(?:dive|start|turn|finish)\b/i.test(raw)&&!/\b(?:kick|fins?|underwater)\b/i.test(raw);if(!legDependent||independent)return clone(item);const out=clone(item),requested=text(ov?.patch?.adaptiveMode),mode=AMBER_MODES.some(x=>x.id===requested)?requested:'',selectedStroke=E?.stroke?.(ov?.patch?.stroke||'Choice')||'Choice';out.stroke=selectedStroke;out.equipment=[...(out.equipment||[])].filter(x=>!/\b(?:fins?|kick|paddles?)\b/i.test(String(x)));out.cues=[...(out.cues||[])].filter(c=>!amberNoArmCue(c));adaptiveMeta(out,AMBER_MODES,AMBER_STROKES,'Amber has no functional leg use. Use an upper-body equivalent that preserves the set purpose and rejoin timing. Scull may need up to 2:00 per 50.');out.adaptiveMode=mode;out.adaptivePending=!mode;out.functionalConstraint='no-functional-leg-use';out.constraintApplied='amber-upper-body';return out;}
   function applyConorConstraint(item,ov){const raw=rawOf(item);if(!/\b(?:breaststroke|breast|br)\b/i.test(raw)||!/\bfins?\b/i.test(raw))return clone(item);const out=clone(item),requested=text(ov?.patch?.adaptiveMode),mode=CONOR_MODES.some(x=>x.id===requested)?requested:'Choice non-Breaststroke';adaptiveMeta(out,CONOR_MODES,['Freestyle','Backstroke','Butterfly','Choice'],'No Breaststroke kick with fins.','starter');out.adaptiveMode=mode;out.stroke=mode==='Choice non-Breaststroke'?'Choice':mode;out.adaptationReason='No Breaststroke kick with fins';return out;}
   function adaptiveLabel(out,item,ath){const k=E?.key?.(ath?.full_name)||text(ath?.full_name).toLowerCase().replace(/[^a-z0-9]/g,''),reps=Math.max(1,Number(out?.reps)||1),d=Number(out?.distance)||0,cycle=Number(out?.cycleSeconds)||0;if(k==='amberproudfoot'&&out?.adaptiveOptions?.length){const mode=text(out.adaptiveMode),stroke=E?.stroke?.(out.stroke||'Choice')||'Choice';if(!mode){out.raw=`${reps} × ${d} Upper-body choice${cycle?` @ ${cycleClock(cycle)}`:''}`;out.text=out.raw;out.adaptationReason='Amber upper-body choice · option not selected';return out;}let label='';if(mode==='Pull')label=`Upper-body ${stroke} Pull`;else if(mode==='Paddles'){label=`Upper-body ${stroke} Paddles`;if(!out.equipment.some(x=>/paddles/i.test(String(x))))out.equipment.push('Paddles');}else if(mode==='Swim')label=`Upper-body ${stroke} Swim`;else if(mode==='Drill')label=`Upper-body ${stroke} Drill`;else if(mode==='Scull'){label=`Upper-body ${stroke} Scull`;const min=ceil5((d||50)/50*120);if(cycle<min)rewriteCycle(out,cycle,min);}else label='Upper-body · Body alignment';out.adaptivePending=false;out.raw=`${reps} × ${d} ${label}${Number(out.cycleSeconds)?` @ ${cycleClock(out.cycleSeconds)}`:''}`;out.text=out.raw;out.adaptationReason=`Amber adaptive upper-body · ${mode}`;return out;}if(k==='conorfischer'&&out?.adaptiveOptions?.length){const mode=text(out.adaptiveMode)||'Choice non-Breaststroke';out.raw=`${reps} × ${d} ${mode} with Fins${cycle?` @ ${cycleClock(cycle)}`:''}`;out.text=out.raw;out.adaptationReason='No Breaststroke kick with fins';}return out;}
-  function applyCharlotteKickBase(out,ath,manualShape){if(manualShape||(E?.key?.(ath?.full_name)||'')!=='charlottemurphy'||Number(out?.distance)!==50)return out;if(!/\bkick\b/i.test(rawOf(out)))return out;const c=Number(out.cycleSeconds),base=(c>=130&&c<=140)?c:135;if(base!==c)rewriteCycle(out,c,base);out.kickCycleRange={min:130,base:135,max:140,source:'Coach-confirmed Charlotte 50 kick base'};out.adaptationReason='50 kick base 2:10–2:20';out.adaptationTiming={mode:'athlete-rule',cycleSeconds:base,source:'Coach-confirmed Charlotte 50 kick base'};return out;}
+  // 6 Nov 2026 (Andy, Fri AM: squad 8 x 50 (4 Kick / 4 Drill); Charlotte read "5 × 50 (4 Kick / 4 Drill)"). A written
+  // split that adds up to the reps keeps its proportions: fewer reps are rounded to the nearest whole split (4 / 4 -> 2 / 2),
+  // and a send-off stretched to the squad's time is worked out again for the new rep count.
+  function syncWrittenSplit(out,item){const raw=text(out?.raw||out?.text),m=raw.match(/\((\d{1,2})\s+([A-Za-z][A-Za-z ]*?)\s*\/\s*(\d{1,2})\s+([A-Za-z][A-Za-z ]*?)\)/);if(!m)return out;
+    const a=+m[1],b=+m[3],base=Math.max(1,Number(item?.reps)||1),now=Math.max(1,Number(out?.reps)||1);if(a+b!==base||now>=base)return out;
+    const g=(x,y)=>y?g(y,x%y):x,unit=base/g(a,b),k=Math.max(1,Math.ceil(now/unit-.5)),reps=k*unit;if(reps>=base)return out;
+    const na=a*reps/base,nb=b*reps/base;rewriteLead(out,reps,out.distance);out.raw=text(out.raw).replace(m[0],`(${na} ${m[2]} / ${nb} ${m[4]})`);if(out.text)out.text=text(out.text).replace(m[0],`(${na} ${m[2]} / ${nb} ${m[4]})`);
+    const t=out.adaptationTiming;if(t?.mode==='reps-reduced-window-matched'&&t.groupWindowSeconds>0){const next=ceil5(t.groupWindowSeconds/reps);rewriteCycle(out,Number(out.cycleSeconds)||next,next);t.cycleSeconds=next;}
+    return out;}
+  function applyCharlotteKickBase(out,ath,manualShape){if(manualShape||(E?.key?.(ath?.full_name)||'')!=='charlottemurphy'||Number(out?.distance)!==50)return out;if(!/\bkick\b/i.test(rawOf(out)))return out;if(!(Number(out.cycleSeconds)>0))return out;/* 6 Nov 2026 (Andy, Fri AM: squad 8x50 (4 Kick / 4 Drill) on 10 s rest; Charlotte got @2:15 + 10 s rest). The 2:10-2:20 base replaces a coach send-off; a set on rest has none, so she keeps the squad's rest. */const c=Number(out.cycleSeconds),base=(c>=130&&c<=140)?c:135;if(base!==c)rewriteCycle(out,c,base);out.kickCycleRange={min:130,base:135,max:140,source:'Coach-confirmed Charlotte 50 kick base'};out.adaptationReason='50 kick base 2:10–2:20';out.adaptationTiming={mode:'athlete-rule',cycleSeconds:base,source:'Coach-confirmed Charlotte 50 kick base'};return out;}
 
   function adaptItem(item,ath,state,session){
     if(item?.kind==='cue')return clone(item);if(item?.kind==='group'){const g=clone(item);g.items=(item.items||[]).map(x=>adaptItem(x,ath,state,session));return g;}if(item?.kind!=='set')return clone(item);
     state=state||{};session=session||{};const p=profile(ath,state),ov=activeOverride(item,ath,state,session),manualShape=shapeOverride(ov),individualStroke=strokeOverride(ov),baseReps=Math.max(1,Number(item.reps)||1),baseDist=Number(item.distance)||0,raw=rawOf(item),key=p.key;
     let out=key==='amberproudfoot'?applyAmberConstraint(item,ath,ov):key==='conorfischer'?applyConorConstraint(item,ov):clone(item);if(individualStroke&&key!=='amberproudfoot')out.stroke=individualStroke;
+    if(!manualShape&&p.ratio<.98&&Number(item.timeBoxMinutes)>0){out.adaptationReason=`Timed circuit (${Number(item.timeBoxMinutes)} min) · same as the squad`;return out;}
     if(!manualShape&&p.ratio<.98){
       const evidence=relativeEvidence(item,ath,state,session,individualStroke),quality=isQuality(item),aerobic=isAerobic(item),im=individualStroke?individualStroke==='IM':isIM(item),skill=independentSkill(item),evidenceItem=individualStroke?{...item,stroke:individualStroke}:item,commonSafe=quality&&commonIntervalSafe(evidenceItem,evidence);out.relativeStimulusEvidence=evidence?clone(evidence):null;
       if(skill){out.adaptationReason='Same team exposure · independent skill quality';preserveAuthoredTiming(out,item,'Independent skill quality remains a common-start squad activity');}
@@ -239,7 +254,7 @@
     // for the exception. Removed entirely -- her 50m kicks now go through the exact same general fallback
     // (line ~210 above) as every other swimmer's kick set, with no name-specific carve-out. See
     // tests/mckenzie-kick-interval-not-locked-20260921.cjs.
-    applyCharlotteKickBase(out,ath,manualShape);adaptiveLabel(out,item,ath);applyOverride(out,ov);syncRepeatBreakdown(out,item);return out;
+    syncWrittenSplit(out,item);applyCharlotteKickBase(out,ath,manualShape);adaptiveLabel(out,item,ath);applyOverride(out,ov);syncRepeatBreakdown(out,item);return out;
   }
 
   function samePrescription(a,b){return Number(a?.reps||1)===Number(b?.reps||1)&&Number(a?.distance||0)===Number(b?.distance||0)&&E?.stroke?.(a?.stroke||'')===E?.stroke?.(b?.stroke||'')&&Number(a?.restSeconds||0)===Number(b?.restSeconds||0)&&Number(a?.cycleSeconds||0)===Number(b?.cycleSeconds||0)&&text(a?.raw).replace(/@\s+/g,'@')===text(b?.raw).replace(/@\s+/g,'@')&&text(a?.repeatBreakdownCue)===text(b?.repeatBreakdownCue);}
