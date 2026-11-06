@@ -4,7 +4,7 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else{root.MSOSEngines=root.MSOSEngines||{};root.MSOSEngines.TrainingPolicy=api;}
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
-  const VERSION='1.1.3-20260901';
+  const VERSION='1.1.4-20261107-rest-stays-rest';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const ceil5=n=>Math.ceil(Number(n||0)/5)*5;
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -46,6 +46,9 @@
     if(isKick(item)){const cycle=kickCycleSeconds(item,athlete,volumeRatio);return cycle?{cycleSeconds:cycle,restSeconds:target>0?Math.max(0,cycle-target):null,owner:'kick',authoredCycleSeconds:authoredCycle(item)}:null;}
     const qualityCycle=modifiedQualityCycleSeconds(item,athlete,volumeRatio);if(qualityCycle)return{cycleSeconds:qualityCycle,restSeconds:target>0?Math.max(0,qualityCycle-target):null,owner:'modified-quality',authoredCycleSeconds:authoredCycle(item)};
     if(isRacePace(item)&&target>0){const requiredRest=racePaceRestSeconds(item,target,referenceWorkSeconds),requiredCycle=ceil5(target+requiredRest),cycle=preserveLongerAuthoredCycle(item,requiredCycle);return{cycleSeconds:cycle,restSeconds:Math.max(requiredRest,cycle-target),owner:'race-pace',raceDistance:raceDistance(item),authoredCycleSeconds:authoredCycle(item),requiredCycleSeconds:requiredCycle};}
+    // 7 Nov 2026 (Andy, Sat AM: "200 fr Regeneration 15sR" -> Charlotte "100 REG @ 2:45 · Rest 15 sec", the same as Friday's
+    // kick on 10sR). A set the coach wrote on rest stays on rest: her target time shows, no send-off is made up.
+    if(isAerobic(item)&&authoredRest(item)!=null&&authoredCycle(item)==null)return null;
     if(isAerobic(item)&&target>0){const requiredRest=aerobicRestSeconds(item),requiredCycle=ceil5(target+requiredRest),cycle=preserveLongerAuthoredCycle(item,requiredCycle);return{cycleSeconds:cycle,restSeconds:requiredRest,owner:'aerobic',authoredCycleSeconds:authoredCycle(item),requiredCycleSeconds:requiredCycle};}
     return null;
   }

@@ -120,7 +120,7 @@
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261019c';
+  const TV_PAGE='20261107a';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
@@ -225,12 +225,19 @@
       else if(!sig&&slotSig){slotSig='';await rpc('msos_tv_slot_clear',{p_screen:id});nudge(id);setSlot({state:'idle',position:0});}
       if((slotState.state!=='idle'||Date.now()-slotPolledAt>15000)&&Date.now()-slotPolledAt>2500){slotPolledAt=Date.now();const st=await rpc('msos_tv_slot_state',{p_screen:id});
         const queue=(st?.queue||[]).map(q=>q.name).filter(Boolean),meQueued=(st?.queue||[]).some(q=>q.id===M.tvDisplay?.current?.()?.id);
-        setSlot({showingBy:st?.showing?(st.mine?'':st.by_name||'another coach'):'',waiting:queue,left:st?.touched_at?Math.max(0,(Number(st.hold_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null,open:st?.touched_at?Math.max(0,(Number(st.open_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null});
+        setSlot({onTv:st?.showing?{mine:!!st.mine,by:st.by_name||'',id:st.overlay_id||'',canTake:!!(st.mine||st.owner)}:null,showingBy:st?.showing?(st.mine?'':st.by_name||'another coach'):'',waiting:queue,left:st?.touched_at?Math.max(0,(Number(st.hold_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null,open:st?.touched_at?Math.max(0,(Number(st.open_s)||180)-Math.round((Date.now()-Date.parse(st.touched_at))/1000)):null});
         if(slotState.state==='showing'&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'},st?.showing?`${st.by_name||'Another coach'} is on the TV now`:'Taken off the TV (not used for 15 minutes)');}
         else if(slotState.state==='queued'&&st?.mine){setSlot({state:'showing',position:0},"You're on the TV now");}
         else if(slotState.state==='queued'&&!meQueued&&!st?.mine&&sig){slotSig='';try{M.tvDisplay?.clear?.();}catch{}setSlot({state:'idle'});}}
     }catch(e){setSlot({error:String(e?.message||e)});}finally{slotBusy=false;}}
   L.slotTick=slotTick;
+  // 7 Nov 2026 (Andy: "Now I've left the page it has reset on phone ... the videos playing over and over still but I can't
+  // control anything"): the phone had lost what it put up, so it had nothing to take down while the TV held it for 15 min.
+  // Whatever the TV is showing can now always be taken off from the TV panel -- yours, or anyone's if you're the owner.
+  async function takeOff(){const id=chosenScreen();if(!id)throw new Error('No TV connected');try{M.tvDisplay?.clear?.();}catch{}
+    if(slotSupported){await rpc('msos_tv_slot_clear',{p_screen:id});slotSig='';nudge(id);slotPolledAt=0;}
+    setSlot({state:'idle',position:0,onTv:null});}
+  L.takeOff=takeOff;
   L.screens=()=>screens;L.refreshScreens=refreshScreens;
   function boot(){if(control()?.screenId)setStatus({state:'connecting'});loop();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
