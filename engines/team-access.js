@@ -117,7 +117,22 @@
   // against the real membership row rather than trusting whatever was cached at accept time, so an owner-side
   // squad change or revoke actually reaches the assistant's device once it's next online -- never a blocking
   // dependency of opening the app (local availability must not depend on cloud).
+  // 9 Nov 2026 (Andy: "Kaleb entered a session and took the roll but I can't see it?" -- the same as Fri 6 Nov): Kaleb's phone
+  // was signed in but had no club (organisationId) on it, so it never synced, never checked his role, and ran as the owner
+  // (80 refused owner-only calls, nothing else). A signed-in phone with no club now looks up its own membership row (a
+  // member may always read their own row) and takes the club and role from it.
+  T.findMyClub=async()=>{
+    if(M.state.settings.organisationId||!T.isSignedIn())return null;
+    const uid=text(M.store.auth()?.user?.id);if(!uid)return null;
+    const fetcher=M.cloudSessionEngine?.fetch||M.cloud?.fetch;if(!fetcher)return null;
+    const rows=await fetcher(`/rest/v1/organisation_members?user_id=eq.${encodeURIComponent(uid)}&select=organisation_id,role,display_name,email,active,assigned_squads,permissions`,{method:'GET'});
+    const live=(Array.isArray(rows)?rows:[]).filter(r=>r?.organisation_id&&r.active!==false);
+    if(live.length!==1)return null;
+    M.state.settings.organisationId=live[0].organisation_id;applyMembership(live[0]);M.store?.save?.(M.state);
+    return live[0];
+  };
   T.refreshMembership=async()=>{
+    if(!M.state.settings.organisationId&&T.isSignedIn())return await T.findMyClub();
     const org=M.state.settings.organisationId;
     if(!org||!T.isSignedIn())return null;
     const row=firstRow(await authedRpc('mclay_my_membership',{target_org:org}));
