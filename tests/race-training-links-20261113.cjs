@@ -66,7 +66,7 @@ const S2=`MAIN SET
   // swimmer page: event card + Race links tab
   await p.evaluate(()=>{const M=window.MSOS4;M.nav.show('athletes');});await p.waitForSelector('[data-cn-event]',{timeout:10000});
   await p.evaluate(()=>{const d=document.querySelector('[data-cn-event^="100|"]');d.open=true;d.dispatchEvent(new Event('toggle'));});
-  await p.waitForSelector('[data-re-behind]',{timeout:10000});const card=await p.evaluate(()=>document.querySelector('[data-re-behind]').innerText);
+  await p.waitForSelector('[data-re-behind]',{timeout:10000});const card=await p.evaluate(()=>document.querySelector('[data-re-behind]').textContent.replace(/\s+/g,' '));
   assert.match(card,/What a 100 Back needs/);assert.match(card,/Training behind 2026 New Zealand Short Course Championships/);assert.match(card,/Underwater kick/);assert.match(card,/Underwaters drifting wide/);assert.match(card,/Patterns, not proof/);
   await p.click('[data-cn-tab="races"]');await p.waitForSelector('[data-re-tab]',{timeout:10000});const tab=await p.evaluate(()=>document.querySelector('[data-re-tab]').innerText);
   assert.match(tab,/100 Back SCM · 2:02\.13/);assert.match(tab,/-1\.87s on best/);assert.match(tab,/Patterns/);assert.match(tab,/Training mix · last 8 weeks · 2 sessions/);assert.match(tab,/Underwater kick/);assert.match(tab,/Feeds 100 Back/);

@@ -33,8 +33,8 @@ const SPLITS=[ // Charlotte Murphy 100 Fly, NZ SC Champs (cloud rows, 13 Nov), p
   assert.equal(r.be.front,58.51);assert.equal(Number(r.be.back.toFixed(2)),65.85);assert.equal(Number(r.be.close.toFixed(2)),32.76,'last 25 m');assert.equal(r.be.closeOf,25);
   await p.evaluate(()=>window.MSOS4.nav.show('athletes'));await p.waitForSelector('[data-cn-event^="100|"]',{timeout:10000});
   await p.evaluate(()=>{const d=document.querySelector('[data-cn-event^="100|"]');d.open=true;d.dispatchEvent(new Event('toggle'));});
-  await p.waitForFunction(()=>/closing better|fading more/.test(document.querySelector('[data-re-backend]')?.innerText||''),{timeout:10000});
-  const card=await p.evaluate(()=>document.querySelector('[data-re-backend]').innerText);
+  await p.waitForFunction(()=>/closing better|fading more/.test(document.querySelector('[data-re-backend]')?.textContent||''),{timeout:10000});
+  const card=await p.evaluate(()=>document.querySelector('[data-re-backend]').textContent.replace(/\s+/g,' '));
   assert.match(card,/58\.51 \/ 1:05\.85 · \+7\.34s/,card);assert.match(card,/Back-end work, last 8 weeks: 1 set/,card);assert.match(card,/fading more|closing better/);
   assert.ok(asked.some(u=>/athlete_id=eq\.ch/.test(u)&&/splits=not\.is\.null/.test(u)));
   await p.click('[data-cn-tab="races"]');await p.waitForSelector('[data-re-backend-all]',{timeout:10000});const tab=await p.evaluate(()=>document.querySelector('[data-re-backend-all]').innerText);
