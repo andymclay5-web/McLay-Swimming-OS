@@ -19,7 +19,7 @@
 .re-box{margin-top:10px;padding-top:8px;border-top:1px solid rgba(127,127,127,.25)}.re-box h4{margin:4px 0 6px;font-size:14px}.re-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.12)}
 .re-row b{font-size:14px}.re-row span{font-size:12px;opacity:.8;text-align:right}.re-row small{grid-column:1/-1;font-size:12px;opacity:.75}.re-need{font-size:11px;letter-spacing:1px;opacity:.6}
 .re-bar{height:6px;border-radius:3px;background:rgba(56,132,255,.55);grid-column:1/-1}.re-note{font-size:12px;opacity:.7;margin-top:6px}.re-race{padding:8px 0;border-bottom:1px solid rgba(127,127,127,.15)}.re-race b{font-size:14px}
-.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}`;document.head.appendChild(s);}
+.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}.re-sum{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(56,132,255,.08)}.re-sum h4{margin:0 0 6px;font-size:15px}.re-sum p{margin:4px 0;font-size:14px;line-height:1.35}.re-focus{margin:4px 0 2px 18px;padding:0;font-size:14px}.re-focus li{margin:3px 0}.re-more{margin-top:8px}.re-more>summary{cursor:pointer;font-size:13px;opacity:.75;padding:4px 0}`;document.head.appendChild(s);}
   const chip=id=>{const e=RE().byId[id];return e?`<i data-f="${e.family}">${esc(e.chip)}</i>`:'';};
   const chipRow=ids=>ids?.length?`<div class="re-chips">${ids.map(chip).join('')}</div>`:'';
   const dots=w=>'●'.repeat(Math.round(w))+'○'.repeat(3-Math.round(w));
@@ -50,18 +50,46 @@
   UI.ensureSplits=a=>{const R=RE();if(!a?.id||M.state?.raceSplits?.[a.id]||UI._splitsLoading===a.id)return;if(!M.cloud?.ready?.()){M.state.raceSplits=M.state.raceSplits||{};M.state.raceSplits[a.id]={at:'',rows:[]};return;}UI._splitsLoading=a.id;
     R.loadSplits(a).catch(()=>{M.state.raceSplits=M.state.raceSplits||{};M.state.raceSplits[a.id]={at:'',rows:[]};}).finally(()=>{UI._splitsLoading='';
       for(const el of document.querySelectorAll('[data-re-backend]')){const[d,st,c]=el.dataset.reBackend.split('|');el.outerHTML=UI.backEndHtml(a,{distance:Number(d),stroke:st,course:c});}
+      for(const el of document.querySelectorAll('[data-re-summary]')){const[d,st,c]=el.dataset.reSummary.split('|');el.outerHTML=UI.summaryHtml(a,{distance:Number(d),stroke:st,course:c});}
+      const ov=document.querySelector('[data-re-overview]');if(ov){const c=document.querySelector('[data-cn-course].active')?.dataset.cnCourse||M.state.settings.pathwayCourse||'SCM';ov.outerHTML=UI.overviewHtml(a,c);}
       const all=document.querySelector('[data-re-backend-all]');if(all){const c=document.querySelector('[data-cn-course].active')?.dataset.cnCourse||M.state.settings.pathwayCourse||'SCM';all.outerHTML=UI.backEndAllHtml(a,c);}});};
+
+  // Plain-language summaries (Andy, 14 Nov: "a brief summary tied to training and each event ... what is lacking and what
+  // is being done ... anyone swimmer coach parent can see straight up what's happening and what needs to be worked on").
+  const evName=ev=>`${ev.distance} ${shortStroke(RE().strokeOf(ev.stroke))}`;
+  const list=xs=>xs.map(x=>`${esc(x.label)}${x.sessions?` (${x.sessions})`:''}`).join(' · ');
+  const tryLine=f=>f.suggest?` — try <b>${esc(f.suggest.label)}</b> <span class="re-note">(${esc(f.suggest.text)})</span>`:'';
+  const raceLine=r=>!r?'':`<p>${r.fading?'📉':'📈'} <b>Races:</b> back half ${r.diff>=0?'+':'−'}${Math.abs(r.diff).toFixed(2)}s on the front at the last swim with splits (${esc(day(r.date))})${r.trend==='worse'?' — fading more than before':r.trend==='better'?' — closing better than before':''}.</p>`;
+  UI.summaryHtml=(a,event)=>{const R=RE();const s=R.summary(a,event);const key=`${event.distance}|${event.stroke}|${event.course}`;
+    if(!s.sessions)return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary</h4><p class="muted">No sessions recorded for ${esc(a.full_name)} in the last ${s.weeks} weeks — the summary fills in from the roll.</p></div>`;
+    return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary · last ${s.weeks} weeks (${s.sessions} sessions)</h4>
+      ${s.done.length?`<p>✅ <b>Being done:</b> ${list([...s.done].sort((x,y)=>y.weight-x.weight||y.sessions-x.sessions).slice(0,5))}</p>`:''}
+      ${s.light.length?`<p>⚠️ <b>Light:</b> ${list(s.light)}</p>`:''}
+      ${s.missing.length?`<p>❌ <b>Missing:</b> ${list(s.missing)}</p>`:''}
+      ${raceLine(s.race)}
+      ${s.focus.length?`<p>👉 <b>Work on next:</b></p><ol class="re-focus">${s.focus.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:'<p>👍 Everything this race leans on is getting regular work.</p>'}
+      <p class="re-note">(n) = sessions with that work. Patterns, not proof.</p></div>`;};
+  UI.overviewHtml=(a,course)=>{const R=RE();const o=R.overview(a,{course});
+    if(!o.events.length)return`<div class="re-sum" data-re-overview><h4>What's happening</h4><p class="muted">No ${esc(course)} races in the last 12 months to tie the training to.</p></div>`;
+    const gapLine=g=>`<b>${esc(g.label)}</b> <span class="re-note">(${[...g.missing,...g.light].map(evName).join(', ')}${g.sessions?` · ${g.sessions} session${g.sessions===1?'':'s'}`:' · none'})</span>`;
+    return`<div class="re-sum" data-re-overview><h4>What's happening · ${esc(a.full_name)}</h4><p class="re-note">Last ${o.weeks} weeks · ${o.sessions} sessions · tied to ${o.events.map(evName).join(', ')}</p>
+      ${o.strong.length?`<p>✅ <b>Strong:</b> ${o.strong.slice(0,4).map(t=>esc(t.label)).join(' · ')}</p>`:''}
+      ${o.gaps.length?`<p>⚠️ <b>Needs work:</b> ${o.gaps.slice(0,4).map(gapLine).join(' · ')}</p>`:''}
+      ${o.fading.length?`<p>📉 <b>Races:</b> back half fading in ${o.fading.map(s=>`${evName(s.event)} (${s.race.diff>=0?'+':'−'}${Math.abs(s.race.diff).toFixed(2)}s)`).join(', ')}</p>`:''}
+      ${o.priorities.length?`<p>👉 <b>Priorities:</b></p><ol class="re-focus">${o.priorities.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:''}</div>`;};
 
   // Swimmer page, one event: what this race needs, and the training behind it.
   UI.behindHtml=(a,e,course)=>{try{css();const R=RE();if(!R||!a||!e)return'';const event={distance:Number(e.distance),stroke:e.stroke,course};const needs=R.needs(event).filter(n=>n.weight>=2);
     const last=R.results(a).filter(r=>r.distance===event.distance&&r.stroke===R.strokeOf(event.stroke)&&r.course===course).pop();
     const recent=last&&(Date.now()-new Date(`${last.date}T12:00:00`).getTime())<200*864e5;
+    UI.ensureSplits(a);const summary=UI.summaryHtml(a,event);
     const parts=[`<div class="re-box"><h4>What a ${esc(event.distance)} ${esc(shortStroke(R.strokeOf(event.stroke)))} needs</h4>${chipRow(needs.map(n=>n.id))}</div>`];
-    if(recent)parts.push(behindBlock(`Training behind ${last.meet?esc(last.meet):'the last race'} · ${day(last.date)} · ${clock(last.seconds)}`,R.behind(a,{...event,date:last.date},{weeks:6,before:last.date}),a));
-    UI.ensureSplits(a);parts.push(UI.backEndHtml(a,event));
+    const lastB=recent?R.behind(a,{...event,date:last.date},{weeks:6,before:last.date}):null;
+    if(lastB?.sessions)parts.push(behindBlock(`Training behind ${last.meet?esc(last.meet):'the last race'} · ${day(last.date)} · ${clock(last.seconds)}`,lastB,a));
+    parts.push(UI.backEndHtml(a,event));
     parts.push(behindBlock('Training feeding this event now · last 8 weeks',R.behind(a,event,{weeks:8}),a));
     parts.push('<p class="re-note">Work is labelled automatically from the session wording. Patterns, not proof.</p>');
-    return`<section class="re-behind" data-re-behind>${parts.join('')}</section>`;}catch(err){return`<p class="muted">Race links unavailable: ${esc(err.message||err)}</p>`;}};
+    return`<section class="re-behind" data-re-behind>${summary}<details class="re-more"><summary>Show the detail</summary>${parts.join('')}</details></section>`;}catch(err){return`<p class="muted">Race links unavailable: ${esc(err.message||err)}</p>`;}};
 
   // Swimmer page, "Race links" tab: the whole picture.
   UI.tabHtml=(a,course)=>{try{css();const R=RE();if(!R)return'';const all=R.results(a),yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);
@@ -76,6 +104,7 @@
     const patHtml=pats.length?pats.map(p=>`<div class="re-row"><b>${esc(p.label)}</b><span>${p.faster}/${p.withWork} faster</span><small>${plural(p.sets,'set')} before ${plural(p.races.length,'race')} it matters to: ${p.races.slice(0,5).map(l=>`${l.race.distance} ${esc(shortStroke(l.race.stroke))} ${l.race.change<0?'':'+'}${l.race.change.toFixed(2)}`).join(' · ')}</small></div>`).join(''):'<p class="muted">Needs races with a previous best to compare against.</p>';
     UI.ensureSplits(a);    const capsAll=R.capturesFor(a,R.sessionsFor(a,mix.from,mix.to));const caps=capsAll.filter(c=>c.tags.length);
     return`<section class="page-card re-tab" data-re-tab><div class="eyebrow">RACE LINKS · ${esc(a.full_name)}</div><h2>Training ↔ races</h2>
+      ${UI.overviewHtml(a,course)}
       <div class="re-box"><h4>Recent races and the training behind them</h4>${raceHtml}</div>
       ${UI.backEndAllHtml(a,course)}
       <div class="re-box"><h4>Patterns · last 24 weeks</h4>${patHtml}<p class="re-note">Faster = quicker than their previous best in that event. Patterns, not proof.</p></div>

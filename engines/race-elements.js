@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.2.1-20261114-clearance-ap';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.3.0-20261114-summary';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -30,8 +30,8 @@
     {id:'resisted',family:'speed',label:'Resisted / assisted',chip:'Resisted',re:/parachute|resist(?:ed|ance)|assisted|\bcords?\b|bands? only|\btether|\bdrag\b|bucket/},
     {id:'frontEnd',family:'speed',label:'Front-end speed',chip:'Front-end',re:/front[- ]end|first (?:10|15|20|25)\s*m?\b|fast first|out fast|first 25/},
     {id:'backEnd',family:'speed',label:'Back-end speed',chip:'Back-end',re:/back[- ]end|back half|second (?:half|100|50)|last (?:25|50)\b|neg(?:ative)?[- ]split|closing speed|last turn|strong home|home strong|final (?:25|50)\b/},
-    {id:'racePace',family:'race',label:'Race pace',chip:'Race pace',re:/race[- ]?pace|@\s*\d{2,4}\s*p(?:ace)?\b|\b\d{2,4}\s*p\b|\b\d{2,4}\s*pace\b|\brp\b|race (?:simulation|quality|skills|specific|tempo|intensity|speed|feel)|broken (?:50|100|200|400)|goal pace|of \d{2,4} race/},
-    {id:'anaerobic',family:'race',label:'Lactate / anaerobic',chip:'Lactate',re:/anaerobic|lactate|tolerance|max effort|\bhvo\b/},
+    // race pace is Andy's anaerobic power (race pace / lactate tolerance, as in his dosage model) -- one element, not two
+    {id:'racePace',family:'race',label:'Race pace / anaerobic power',chip:'Race pace',re:/anaerobic|lactate|tolerance|max effort|\bhvo\b|race[- ]?pace|@\s*\d{2,4}\s*p(?:ace)?\b|\b\d{2,4}\s*p\b|\b\d{2,4}\s*pace\b|\brp\b|race (?:simulation|quality|skills|specific|tempo|intensity|speed|feel)|broken (?:50|100|200|400)|goal pace|of \d{2,4} race/},
     {id:'pacing',family:'race',label:'Pacing control',chip:'Pacing',re:/\bdesc(?:end(?:ing)?)?\b|even pac|hold (?:pace|time|speed|fastest)|\bpacing\b|heart[- ]?rate range|\bhr gauge|negative split/},
     // Andy's four-zone focus (reference library, 15 Oct): Aerobic Capacity / Aerobic Power / Anaerobic Power (race pace,
     // lactate) / Anaerobic Capacity (top-end speed) -- aerobic is split so distance work and threshold work read apart.
@@ -55,7 +55,7 @@
     starts:{50:3,100:2,200:1,400:1,800:0},underwater:{50:3,100:3,200:2,400:1,800:1},breakout:{50:3,100:3,200:2,400:1,800:1},
     turns:{50:1,100:2,200:3,400:3,800:3},finish:{50:3,100:3,200:2,400:1,800:1},
     maxSpeed:{50:3,100:2,200:1,400:0,800:0},resisted:{50:3,100:2,200:1,400:0,800:0},frontEnd:{50:3,100:2,200:1,400:1,800:0},backEnd:{50:1,100:3,200:3,400:2,800:1},
-    racePace:{50:2,100:3,200:3,400:3,800:2},anaerobic:{50:1,100:3,200:3,400:2,800:1},pacing:{50:0,100:1,200:2,400:3,800:3},
+    racePace:{50:2,100:3,200:3,400:3,800:2},pacing:{50:0,100:1,200:2,400:3,800:3},
     aerobic:{50:0,100:1,200:2,400:3,800:3},aerobicPower:{50:0,100:2,200:3,400:3,800:2},kick:{50:2,100:2,200:2,400:1,800:1},pull:{50:1,100:1,200:2,400:2,800:2},
     efficiency:{50:1,100:2,200:2,400:3,800:3},technique:{50:1,100:1,200:1,400:1,800:1},breathing:{50:2,100:1,200:1,400:1,800:1},relay:{50:1,100:1,200:0,400:0,800:0}
   };
@@ -83,10 +83,13 @@
           if(last&&!/^\s*\d{1,2}\s*[x×]/i.test(raw)){last.text+=' · '+raw;continue;}
           const row={id:it.id||'',session,block:bl.type,item:it,label:raw,text:raw,stroke:RE.strokeOf(raw),reps:repsInCue(raw)*(rounds||1),metres:0,cueOnly:true};out.push(row);last=row;continue;}
         if(it?.kind!=='set')continue;
-        const raw=text(it.raw||it.text),pat=(it.pattern||[]).map(p=>p?.text).filter(Boolean),reps=(Number(it.reps)||1)*(rounds||1),d=Number(it.distance)||0;
-        const row={id:it.id||'',session,block:bl.type,item:it,label:raw,text:[raw,...pat,...(it.cues||[]).map(c=>typeof c==='string'?c:c?.text)].filter(Boolean).join(' · '),stroke:RE.strokeOf(it.stroke)||RE.strokeOf(raw),zone:it.zone||'',reps,metres:reps*d};out.push(row);last=row;}};
+        const raw=text(it.raw||it.text),reps=(Number(it.reps)||1)*(rounds||1),d=Number(it.distance)||0;
+        // a "6 x Turn" / "6 x 15m Finish" line the parser keeps under a set is its own effort, not part of that set
+        const own=[],extra=[];let cur=own;for(const pt of [...(it.pattern||[]).map(p=>p?.text),...(it.cues||[]).map(c=>typeof c==='string'?c:c?.text)].filter(Boolean)){if(/^\s*\d{1,2}\s*[x×]\s*(?!\d)/i.test(pt)){cur=[pt];extra.push(cur);}else cur.push(pt);}
+        const row={id:it.id||'',session,block:bl.type,item:it,label:raw,text:[raw,...own].filter(Boolean).join(' · '),stroke:RE.strokeOf(it.stroke)||RE.strokeOf(raw),zone:it.zone||'',reps,metres:reps*d};out.push(row);last=row;
+        for(const e of extra){const er={id:'',session,block:bl.type,item:it,label:text(e[0]),text:e.join(' · '),stroke:RE.strokeOf(e[0]),reps:repsInCue(e[0])*(rounds||1),metres:0,cueOnly:true};out.push(er);last=er;}}};
       walk(items,1);
-      for(const r of out.filter(x=>x.block===bl.type&&!x.tagged)){r.tags=RE.tagText(r.text,{zone:r.zone});const ref=RE.refFor(r.label);if(ref){r.ref=ref;for(const t of ref.tags)if(!r.tags.includes(t))r.tags.push(t);}/* 13 Nov 2026 (Andy: "most repeated race pace effort sets are working back end speed in some way"): race pace repeated 3+ times works the back end */if(r.tags.includes('racePace')&&r.reps>=3&&!r.tags.includes('backEnd')){r.tags.push('backEnd');r.backEndWhy='repeated race pace';}if(blockFocus.length)for(const t of RE.tagText(blockFocus.join(' ')))if(!r.tags.includes(t))r.tags.push(t);r.tagged=true;}
+      for(const r of out.filter(x=>x.block===bl.type&&!x.tagged)){r.tags=RE.tagText(r.text,{zone:r.zone});/* 14 Nov 2026: a library set's focus is the purpose of the SESSION it came from, so it only fills in a line whose own words say nothing ("12 x 50 Scull / Drill / Swim Perfect Technique" had picked up race pace from a race-pace session) */const own=[...r.tags];const ref=RE.refFor(r.label);if(ref){r.ref=ref;if(!own.length)for(const t of ref.tags)if(!r.tags.includes(t))r.tags.push(t);}/* 13 Nov 2026 (Andy: "most repeated race pace effort sets are working back end speed in some way"): race pace repeated 3+ times, in the set's own words */if(own.includes('racePace')&&r.reps>=3&&!r.tags.includes('backEnd')){r.tags.push('backEnd');r.backEndWhy='repeated race pace';}if(blockFocus.length)for(const t of RE.tagText(blockFocus.join(' ')))if(!r.tags.includes(t))r.tags.push(t);r.tagged=true;}
       void pending;}
     try{Object.defineProperty(session,'__reSets',{value:out,configurable:true,writable:true,enumerable:false});Object.defineProperty(session,'__reSetsRev',{value:session.updated_at,configurable:true,writable:true,enumerable:false});}catch{}
     return out;};
@@ -96,7 +99,7 @@
   // a line shared by several library sets, or a plain easy / choice / free line, says nothing about purpose on its own
   const GENERIC=/^(?:\d+\s*x\s*)?\d+(?:\.\d)?\s*(?:easy|choice|free(?:style)?|swim|scull|drill|im|kick|pull|back|breast|fly|#1)?\s*(?:\d+\s*s\s*r)?$/;
   const normLine=v=>low(v).replace(/[×]/g,'x').replace(/[—–]/g,'-').replace(/\s*([@:/-])\s*/g,'$1').replace(/\s+/g,' ').trim();
-  let refIdx=null;RE.refIndex=()=>{if(refIdx)return refIdx;const SM=M.sessionMethodology;const lib=[...(SM?.REFLIB||[]),...((SM?.LIB||[]).filter(x=>!x.ref))];if(!lib.length)return new Map();refIdx=new Map();
+  let refIdx=null;RE.refIndex=()=>{if(refIdx)return refIdx;const SM=M.sessionMethodology;/* main and pre sets only: a warm-up / post-set / warm-down line's library focus is the day's purpose, not its own */const lib=[...(SM?.REFLIB||[]),...((SM?.LIB||[]).filter(x=>!x.ref))].filter(x=>/^(?:MAIN|PRE)/i.test(String(x.section||'')));if(!lib.length)return new Map();refIdx=new Map();
     for(const x of lib){const focus=[...(x.focus||[]),...(x.for||[]),...(x.fits||[]).map(f=>low(f).includes('speed')||low(f).includes('max')?'speed':low(f).includes('threshold')?'threshold':low(f).includes('aerobic')?'aerobic':'')].filter(Boolean);
       const tags=[...new Set(focus.flatMap(f=>FOCUS[f]||[]))];const lines=String(x.text||'').split('\n').map(normLine).filter(l=>/\d/.test(l)&&l.length>=8);
       for(const l of lines){if(GENERIC.test(l))continue;if(refIdx.has(l)){if(refIdx.get(l).code!==(x.code||x.id))refIdx.get(l).shared=true;continue;}refIdx.set(l,{code:x.code||x.id,label:x.label,tags,use:x.use||''});}}
@@ -177,5 +180,33 @@
       .map(r=>({date:String(r.result_date||'').slice(0,10),round:r.round||'',seconds:Number(r.result_time_seconds),...RE.backEndOf(r)})).filter(x=>x.front>0).sort((a,b)=>b.date.localeCompare(a.date)||a.seconds-b.seconds);
     if(!rows.length)return null;const latest=rows[0],earlier=rows.slice(1);const avg=earlier.length?earlier.reduce((t,x)=>t+x.diff,0)/earlier.length:null;
     return{rows,latest,earlierAvg:avg,better:avg!=null?latest.diff<avg:null,change:avg!=null?latest.diff-avg:null};};
+  // ---- plain-language summary (Andy, 14 Nov: "a brief summary tied to training and each event ... what is lacking and
+  // what is being done ... anyone swimmer coach parent can see straight up what's happening and what needs to be worked
+  // on"). Per event: each element the race leans on (2-3 dots) is done / light / missing by sessions in the last 8 weeks
+  // (a 3-dot element wants 4+ sessions, a 2-dot one 2+); race splits add whether the back half is fading; the next focus
+  // is the race evidence first, then the biggest gaps, each with a set from Andy's reference library to try. ----
+  const enough=w=>w>=3?4:2;
+  let sugg=null;RE.suggestFor=(id,used=null)=>{if(!sugg){sugg=new Map();const SM=M.sessionMethodology;const lib=(SM?.REFLIB||[]).filter(x=>/^(?:MAIN|PRE)/i.test(x.section||'')).sort((a,b)=>(/^MAIN/i.test(a.section)?0:1)-(/^MAIN/i.test(b.section)?0:1));
+      for(const x of lib){const tg=RE.tagText(x.text);if(tg.includes('racePace')&&/\b(?:[3-9]|1\d)\s*(?:x|rounds?)\b/i.test(x.text))tg.push('backEnd');for(const t of tg){if(!sugg.has(t))sugg.set(t,[]);const fit=(x.focus||[]).flatMap(f=>FOCUS[f]||[]).includes(t==='backEnd'?'racePace':t)?1:0;sugg.get(t).push({fit,code:x.code||x.id,label:x.label,text:String(x.text||'').split('\n').map(text).filter(Boolean).join(' / '),use:x.use||''});}}}
+    const opts=[...(sugg.get(id)||[])].sort((p,q)=>q.fit-p.fit);const pick=opts.find(o=>!used?.has(o.code))||null;if(pick&&used)used.add(pick.code);return pick;};
+  RE.summary=(ath,event,{weeks=8,state=M.state}={})=>{const b=RE.behind(ath,event,{weeks,state});const byId=new Map(b.elements.map(e=>[e.id,e]));const need=RE.needs(event).filter(n=>n.weight>=2);
+    const done=[],light=[],missing=[];for(const n of need){const e=byId.get(n.id),ses=e?.sessions||0,row={id:n.id,label:n.label,weight:n.weight,sessions:ses,sets:Math.round(e?.sets||0)};(ses>=enough(n.weight)?done:ses>0?light:missing).push(row);}
+    const h=RE.backEndHistory(ath,event);let race=null;if(h){const l=h.latest,fading=h.better===false||(h.earlierAvg==null&&l.pct>8);race={date:l.date,diff:l.diff,pct:l.pct,trend:h.earlierAvg==null?null:h.better?'better':'worse',change:h.change,fading,swims:h.rows.length};}
+    const res=RE.results(ath,state).filter(r=>r.distance===Number(event.distance)&&r.stroke===RE.strokeOf(event.stroke)&&(!event.course||r.course===event.course));const lastRace=res.length?res[res.length-1]:null;
+    const focus=[],used=new Set();const add=(id,why)=>{if(focus.length>=2||focus.some(f=>f.id===id))return;focus.push({id,label:RE.byId[id].label,why,suggest:RE.suggestFor(id,used)});};
+    if(race?.fading)add('backEnd',race.trend==='worse'?'back half fading more than before in races':'back half much slower than the front in races');
+    for(const g of [...missing.filter(x=>x.weight>=3),...light.filter(x=>x.weight>=3),...missing,...light])add(g.id,g.sessions?`only ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
+    return{event,weeks,sessions:b.sessions,attended:b.attended,done,light,missing,race,focus,lastRace,captures:b.captures.length};};
+  // whole swimmer: across the events they race most, what is strong, what keeps coming up short, and the top priorities
+  RE.overview=(ath,{course='SCM',weeks=8,state=M.state}={})=>{const yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);const count=new Map();
+    for(const r of RE.results(ath,state))if(r.date>=yearAgo&&r.course===course){const k=`${r.distance}|${r.stroke}`;count.set(k,(count.get(k)||0)+1);}
+    const events=[...count.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>{const[d,st]=k.split('|');return{distance:Number(d),stroke:st,course};});
+    const sums=events.map(ev=>RE.summary(ath,ev,{weeks,state}));const tally=new Map();
+    for(const s of sums){for(const[k,list]of [['done',s.done],['light',s.light],['missing',s.missing]])for(const x of list){const t=tally.get(x.id)||{id:x.id,label:x.label,done:[],light:[],missing:[],sessions:x.sessions,weight:0};t[k].push(s.event);t.weight=Math.max(t.weight,x.weight);tally.set(x.id,t);}}
+    const all=[...tally.values()];const strong=all.filter(t=>t.done.length&&t.done.length>=t.light.length+t.missing.length).sort((a,b)=>b.sessions-a.sessions);
+    const gaps=all.filter(t=>t.light.length+t.missing.length>=Math.max(1,Math.ceil(events.length/2))).sort((a,b)=>(b.missing.length*2+b.light.length)*b.weight-(a.missing.length*2+a.light.length)*a.weight);
+    const fading=sums.filter(s=>s.race?.fading).map(s=>s);const priorities=[],used=new Set();const add=(id,why)=>{if(priorities.length>=3||priorities.some(p=>p.id===id))return;priorities.push({id,label:RE.byId[id].label,why,suggest:RE.suggestFor(id,used)});};
+    if(fading.length)add('backEnd',`back half fading in ${fading.map(s=>`${s.event.distance} ${s.event.stroke}`).join(', ')}`);for(const g of gaps)add(g.id,g.sessions?`light — ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
+    return{events,sums,strong,gaps,fading,priorities,weeks,sessions:sums[0]?.sessions??RE.sessionsFor(ath,new Date(Date.now()-weeks*7*864e5).toISOString().slice(0,10),new Date(Date.now()+864e5).toISOString().slice(0,10),state).length};};
   RE.chips=(tags,max=4)=>(tags||[]).slice(0,max).map(id=>RE.byId[id]?.chip).filter(Boolean);
 })(globalThis);

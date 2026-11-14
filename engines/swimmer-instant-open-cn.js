@@ -10,7 +10,7 @@
   // 14 Nov 2026 (Andy: "Nothing seems to happen when I hit race link"): the tab and this file arrived, but the page that
   // lists engines/race-elements*.js was an older copy, so the race-links code never loaded and the tab drew nothing. The
   // tab now loads those two files itself when they are missing, then draws.
-  const RACE_LINKS_V='20261114-sat';
+  const RACE_LINKS_V='20261114b-sat';
   const raceLinksReady=()=>!!(M.raceElements?.behind&&M.raceElementsUI?.tabHtml);
   let raceLinksLoading=null;
   const loadRaceLinks=()=>raceLinksLoading||(raceLinksLoading=['engines/race-elements.js','engines/race-elements-ui.js'].reduce((chain,src)=>chain.then(()=>new Promise((ok,bad)=>{const el=document.createElement('script');el.src=`${src}?v=${RACE_LINKS_V}`;el.onload=ok;el.onerror=()=>bad(new Error(`${src} did not load`));document.head.appendChild(el);})),Promise.resolve()).then(()=>{if(!raceLinksReady())throw new Error('race links not ready');}).catch(err=>{raceLinksLoading=null;throw err;}));
