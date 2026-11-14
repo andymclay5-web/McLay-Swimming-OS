@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.2.0-20261113-backend';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.2.1-20261114-clearance-ap';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -31,12 +31,12 @@
     {id:'frontEnd',family:'speed',label:'Front-end speed',chip:'Front-end',re:/front[- ]end|first (?:10|15|20|25)\s*m?\b|fast first|out fast|first 25/},
     {id:'backEnd',family:'speed',label:'Back-end speed',chip:'Back-end',re:/back[- ]end|back half|second (?:half|100|50)|last (?:25|50)\b|neg(?:ative)?[- ]split|closing speed|last turn|strong home|home strong|final (?:25|50)\b/},
     {id:'racePace',family:'race',label:'Race pace',chip:'Race pace',re:/race[- ]?pace|@\s*\d{2,4}\s*p(?:ace)?\b|\b\d{2,4}\s*p\b|\b\d{2,4}\s*pace\b|\brp\b|race (?:simulation|quality|skills|specific|tempo|intensity|speed|feel)|broken (?:50|100|200|400)|goal pace|of \d{2,4} race/},
-    {id:'anaerobic',family:'race',label:'Lactate / anaerobic',chip:'Lactate',re:/clearance|anaerobic|lactate|tolerance|vo2|max effort|\bhvo\b|\bcl\b/},
+    {id:'anaerobic',family:'race',label:'Lactate / anaerobic',chip:'Lactate',re:/anaerobic|lactate|tolerance|max effort|\bhvo\b/},
     {id:'pacing',family:'race',label:'Pacing control',chip:'Pacing',re:/\bdesc(?:end(?:ing)?)?\b|even pac|hold (?:pace|time|speed|fastest)|\bpacing\b|heart[- ]?rate range|\bhr gauge|negative split/},
     // Andy's four-zone focus (reference library, 15 Oct): Aerobic Capacity / Aerobic Power / Anaerobic Power (race pace,
     // lactate) / Anaerobic Capacity (top-end speed) -- aerobic is split so distance work and threshold work read apart.
     {id:'aerobic',family:'engine',label:'Aerobic capacity',chip:'Aerobic cap',re:/(?<!an)aerobic(?! power)|regen(?:eration)?|\bdevelopment\b|\bdev\b|\breg\b|\bsteady\b|(?<!anaerobic )capacity/},
-    {id:'aerobicPower',family:'engine',label:'Aerobic power',chip:'Aerobic pwr',re:/aerobic power|threshold|\boverload\b|\bthr\b|\bol\b|heart[- ]?rate|\bhr\b(?! gauge)|\bhr gauge/},
+    {id:'aerobicPower',family:'engine',label:'Aerobic power',chip:'Aerobic pwr',re:/aerobic power|threshold|\boverload\b|\bthr\b|\bol\b|clearance|\bcl\b|vo2|heart[- ]?rate|\bhr\b(?! gauge)|\bhr gauge/},
     {id:'kick',family:'engine',label:'Kick',chip:'Kick',re:/\bkick(?:s|ing)?\b/},
     {id:'pull',family:'engine',label:'Pull / upper-body',chip:'Pull',re:/\bpull\b|paddles?|\bpads\b|\bbuoy\b/},
     {id:'efficiency',family:'technique',label:'Stroke efficiency',chip:'Efficiency',re:/stroke count|\bmsc\b|\bmsl\b|distance per stroke|\bdps\b|stroke length|hold (?:the )?count|\b\d?msc\b|efficien/},
@@ -45,7 +45,7 @@
     {id:'relay',family:'skills',label:'Relay takeovers',chip:'Relay',re:/\brelays?\b|takeovers?|changeovers?/}
   ];
   RE.byId=Object.fromEntries(RE.ELEMENTS.map(e=>[e.id,e]));
-  const ZONE_ELEMENTS={regeneration:'aerobic',development:'aerobic',overload:'aerobicPower',threshold:'aerobicPower',clearance:'anaerobic','race pace':'racePace',sprint:'maxSpeed'};
+  const ZONE_ELEMENTS={regeneration:'aerobic',development:'aerobic',overload:'aerobicPower',threshold:'aerobicPower',clearance:'aerobicPower','race pace':'racePace',sprint:'maxSpeed'};
 
   RE.tagText=(raw,{zone=''}={})=>{const t=low(raw).replace(/[—–]/g,' - ');const out=[];if(!t&&!zone)return out;for(const e of RE.ELEMENTS)if(e.re.test(t))out.push(e.id);const z=ZONE_ELEMENTS[low(zone)];if(z&&!out.includes(z))out.push(z);return out;};
 
