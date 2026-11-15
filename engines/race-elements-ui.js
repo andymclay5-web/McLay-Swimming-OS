@@ -58,8 +58,9 @@
   // is being done ... anyone swimmer coach parent can see straight up what's happening and what needs to be worked on").
   const evName=ev=>`${ev.distance} ${shortStroke(RE().strokeOf(ev.stroke))}`;
   const list=xs=>xs.map(x=>`${esc(x.label)}${x.sessions?` (${x.sessions})`:''}`).join(' · ');
-  const tryLine=f=>f.suggest?` — try <b>${esc(f.suggest.label)}</b> <span class="re-note">(${esc(f.suggest.text)})</span>`:'';
-  const raceLine=r=>!r?'':`<p>${r.fading?'📉':'📈'} <b>Races:</b> back half ${r.diff>=0?'+':'−'}${Math.abs(r.diff).toFixed(2)}s on the front at the last swim with splits (${esc(day(r.date))})${r.trend==='worse'?' — fading more than before':r.trend==='better'?' — closing better than before':''}.</p>`;
+  const tryLine=f=>`${f.advice?.text?`<br><span>${esc(f.advice.text)}</span>`:''}${f.suggest?`<br><span class="re-note">Set to try: <b>${esc(f.suggest.label)}</b> — ${esc(f.suggest.text)}</span>`:''}`;
+  const raceLine=r=>!r?'':`<p>${r.fading?'📉':'📈'} <b>Races:</b> ${r.diff>=0?`back half ${Math.abs(r.diff).toFixed(2)}s slower than the front`:`back half ${Math.abs(r.diff).toFixed(2)}s faster than the front`} at the last swim with splits (${esc(day(r.date))})${r.trend==='worse'?' — fading more than before':r.trend==='better'?' — closing better than before':''}.</p>`;
+  const strokeLine=x=>!x?'':`<p>🏊 <b>${esc(x.stroke)} work:</b> ${x.sets} set${x.sets===1?'':'s'} · ${Math.round(x.metres)}m of ${Math.round(x.total)}m (${Math.round(100*x.share)}%)${x.choice?` · plus ${Math.round(x.choice)}m Choice / #1 that may have been ${esc(x.stroke==='IM'?'IM':x.stroke.toLowerCase())}`:''}${x.share<0.1?' — low for this event':''}.</p>`;
   UI.summaryHtml=(a,event)=>{const R=RE();const s=R.summary(a,event);const key=`${event.distance}|${event.stroke}|${event.course}`;
     if(!s.sessions)return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary</h4><p class="muted">No sessions recorded for ${esc(a.full_name)} in the last ${s.weeks} weeks — the summary fills in from the roll.</p></div>`;
     return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary · last ${s.weeks} weeks (${s.sessions} sessions)</h4>
@@ -67,6 +68,7 @@
       ${s.light.length?`<p>⚠️ <b>Light:</b> ${list(s.light)}</p>`:''}
       ${s.missing.length?`<p>❌ <b>Missing:</b> ${list(s.missing)}</p>`:''}
       ${raceLine(s.race)}
+      ${strokeLine(s.stroke)}
       ${s.focus.length?`<p>👉 <b>Work on next:</b></p><ol class="re-focus">${s.focus.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:'<p>👍 Everything this race leans on is getting regular work.</p>'}
       <p class="re-note">(n) = sessions with that work. Patterns, not proof.</p></div>`;};
   UI.overviewHtml=(a,course)=>{const R=RE();const o=R.overview(a,{course});

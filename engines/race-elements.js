@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.3.0-20261114-summary';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.4.0-20261115-slots';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -68,6 +68,7 @@
     if(id==='breakout'&&s==='Breaststroke')w=Math.min(3,w+0.5);
     if(id==='turns'&&s==='IM')w=Math.min(3,w+0.5);
     if(id==='breathing'&&s==='Breaststroke')w=Math.max(0,w-1);
+    if(id==='breathing'&&s==='Backstroke')w=0;
     return Math.min(3,w);};
   RE.needs=event=>RE.ELEMENTS.map(e=>({id:e.id,label:e.label,weight:RE.weight(e.id,event)})).filter(x=>x.weight>=1).sort((a,b)=>b.weight-a.weight);
 
@@ -168,7 +169,7 @@
     const dist=Number(row.distance),last=pts[pts.length-1].m,k=dist>0&&last!==dist&&Math.abs(last/dist-Math.round(last/dist))<1e-6&&Math.round(last/dist)>=2?dist/last:1;
     return pts.map(x=>({m:Math.round(x.m*k*10)/10,t:x.t}));};
   RE.backEndOf=row=>{const pts=RE.splitsOf(row),D=Number(row.distance),total=Number(row.result_time_seconds??row.seconds)||pts[pts.length-1]?.t;if(!pts.length||!(D>0)||!(total>0))return null;
-    const at=m=>pts.find(x=>Math.abs(x.m-m)<0.01)?.t;const half=at(D/2);if(!(half>0))return null;const front=half,back=total-half;
+    const at=m=>pts.find(x=>Math.abs(x.m-m)<0.01)?.t;const half=at(D/2);if(!(half>0)||half<total*0.35||half>total*0.65)return null;const front=half,back=total-half;
     const q3=at(D*3/4),close=q3>0?total-q3:null;return{front,back,diff:back-front,pct:(back-front)/front*100,close,closeOf:q3>0?D/4:null,total};};
   RE.splitRows=ath=>M.state?.raceSplits?.[ath?.id]?.rows||[];
   RE.loadSplits=async(ath,{force=false}={})=>{const C=M.cloud;if(!ath?.id||!C?.ready?.()||!C.fetchPages)return null;const st=M.state.raceSplits=M.state.raceSplits||{},have=st[ath.id];
@@ -189,14 +190,40 @@
   let sugg=null;RE.suggestFor=(id,used=null)=>{if(!sugg){sugg=new Map();const SM=M.sessionMethodology;const lib=(SM?.REFLIB||[]).filter(x=>/^(?:MAIN|PRE)/i.test(x.section||'')).sort((a,b)=>(/^MAIN/i.test(a.section)?0:1)-(/^MAIN/i.test(b.section)?0:1));
       for(const x of lib){const tg=RE.tagText(x.text);if(tg.includes('racePace')&&/\b(?:[3-9]|1\d)\s*(?:x|rounds?)\b/i.test(x.text))tg.push('backEnd');for(const t of tg){if(!sugg.has(t))sugg.set(t,[]);const fit=(x.focus||[]).flatMap(f=>FOCUS[f]||[]).includes(t==='backEnd'?'racePace':t)?1:0;sugg.get(t).push({fit,code:x.code||x.id,label:x.label,text:String(x.text||'').split('\n').map(text).filter(Boolean).join(' / '),use:x.use||''});}}}
     const opts=[...(sugg.get(id)||[])].sort((p,q)=>q.fit-p.fit);const pick=opts.find(o=>!used?.has(o.code))||null;if(pick&&used)used.add(pick.code);return pick;};
+  // ---- the week's sessions: which slot (Mon PM, Wed AM ...) carries each kind of work, and how often the swimmer is at it.
+  // Andy, 15 Nov: "it could say something more broad like aim to target Monday nights aerobic power focused session, could
+  // benefit from increase exposure". ----
+  const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const slotOf=s=>{const d=dateOf(s);if(!d)return'';const part=String(s?.identity?.dayPart||s?.day_part||s?.dayPart||'').toUpperCase();return`${DAYS[new Date(`${d}T12:00:00`).getDay()]}${part?` ${part}`:''}`;};
+  RE.slotProfile=(ath,{weeks=8,state=M.state}={})=>{const to=iso(new Date(Date.now()+864e5)),from=minusDays(to,weeks*7);
+    const att=new Map();for(const a of state?.attendance||[])if(a.athlete_id===ath.id)att.set(a.session_id,a.status);
+    const held=Object.values(state?.canonicalSessions||{}).filter(s=>{const d=dateOf(s);const sq=s.identity?.squads||s.squads||[];return d&&d>=from&&d<to&&(!ath.squad||sq.includes(ath.squad))&&RE.sessionSets(s).length;});
+    const slots=new Map(),squadHad=new Map(),athHad=new Map();
+    for(const s of held){const k=slotOf(s);const sl=slots.get(k)||{slot:k,held:0,attended:0,el:new Map(),elAtt:new Map()};sl.held++;const here=['present','modified'].includes(att.get(s.id));if(here)sl.attended++;
+      const tags=new Set(RE.sessionSets(s).flatMap(r=>r.tags||[]));for(const t of tags){sl.el.set(t,(sl.el.get(t)||0)+1);if(here)sl.elAtt.set(t,(sl.elAtt.get(t)||0)+1);squadHad.set(t,(squadHad.get(t)||0)+1);if(here)athHad.set(t,(athHad.get(t)||0)+1);}slots.set(k,sl);}
+    return{weeks,from,to,held:held.length,slots:[...slots.values()],squadHad,athHad};};
+  RE.advice=(ath,id,profile)=>{const p=profile;if(!p?.held)return null;const name=String(ath.full_name||'').split(' ')[0]||'They';const label=RE.byId[id]?.label||id;
+    const squadN=p.squadHad.get(id)||0,athN=p.athHad.get(id)||0;
+    const carriers=p.slots.filter(sl=>sl.held>=2&&(sl.el.get(id)||0)/sl.held>=0.4).sort((a,b)=>(b.el.get(id)/b.held)-(a.el.get(id)/a.held)||b.held-a.held);
+    const best=carriers[0];const out={squadN,athN,slot:best?.slot||'',slotShare:best?`${best.el.get(id)} of ${best.held}`:'',slotAttended:best?`${best.elAtt.get(id)||0} of ${best.el.get(id)}`:'',text:''};
+    const missed=squadN-athN>=2&&athN/Math.max(1,squadN)<0.7,thin=squadN<4,slotLow=best&&(best.elAtt.get(id)||0)/best.el.get(id)<0.6;
+    if(missed)out.text=`The squad had ${label.toLowerCase()} in ${squadN} session${squadN===1?'':'s'}; ${name} was at ${athN} — could benefit from more exposure.${best?` ${slotLow?'Aim to get to':'Keep getting to'} ${best.slot} — ${out.slotShare} ${best.slot}s had it; ${name} made ${best.elAtt.get(id)||0} of those.`:''}`;
+    else if(thin)out.text=`Light across the whole squad — ${squadN?`only ${squadN} session${squadN===1?'':'s'}`:'none'} in ${p.weeks} weeks${squadN?` (${name} was at ${athN})`:''}. Worth building into the programme${best?` — it sits in ${best.slot} now`:''}.`;
+    else out.text=`${name} has been at most of it (${athN} of ${squadN} squad sessions)${best?`, mostly ${best.slot}`:''} — add more into ${name}'s own programme.`;
+    return out;};
+  // the event's own stroke: how much of the training was in it (Choice is shown apart -- it may or may not have been)
+  RE.strokeExposure=(ath,event,{weeks=8,state=M.state}={})=>{const st=RE.strokeOf(event.stroke);if(!st||st==='Freestyle')return null;const to=iso(new Date(Date.now()+864e5)),from=minusDays(to,weeks*7);let mine=0,total=0,choice=0,sets=0;
+    for(const{session}of RE.sessionsFor(ath,from,to,state))for(const r of RE.sessionSets(session)){total+=r.metres;if(r.stroke===st||(st==='IM'&&/\bim\b|medley|reverse im/i.test(r.label))){mine+=r.metres;sets++;}else if(!r.stroke&&/choice|#1/i.test(r.label))choice+=r.metres;}
+    return total?{stroke:st,metres:mine,sets,total,choice,share:mine/total}:null;};
   RE.summary=(ath,event,{weeks=8,state=M.state}={})=>{const b=RE.behind(ath,event,{weeks,state});const byId=new Map(b.elements.map(e=>[e.id,e]));const need=RE.needs(event).filter(n=>n.weight>=2);
     const done=[],light=[],missing=[];for(const n of need){const e=byId.get(n.id),ses=e?.sessions||0,row={id:n.id,label:n.label,weight:n.weight,sessions:ses,sets:Math.round(e?.sets||0)};(ses>=enough(n.weight)?done:ses>0?light:missing).push(row);}
     const h=RE.backEndHistory(ath,event);let race=null;if(h){const l=h.latest,fading=h.better===false||(h.earlierAvg==null&&l.pct>8);race={date:l.date,diff:l.diff,pct:l.pct,trend:h.earlierAvg==null?null:h.better?'better':'worse',change:h.change,fading,swims:h.rows.length};}
     const res=RE.results(ath,state).filter(r=>r.distance===Number(event.distance)&&r.stroke===RE.strokeOf(event.stroke)&&(!event.course||r.course===event.course));const lastRace=res.length?res[res.length-1]:null;
     const focus=[],used=new Set();const add=(id,why)=>{if(focus.length>=2||focus.some(f=>f.id===id))return;focus.push({id,label:RE.byId[id].label,why,suggest:RE.suggestFor(id,used)});};
-    if(race?.fading)add('backEnd',race.trend==='worse'?'back half fading more than before in races':'back half much slower than the front in races');
+    if(race?.fading&&RE.weight('backEnd',event)>=2)add('backEnd',race.trend==='worse'?'back half fading more than before in races':'back half much slower than the front in races');
     for(const g of [...missing.filter(x=>x.weight>=3),...light.filter(x=>x.weight>=3),...missing,...light])add(g.id,g.sessions?`only ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
-    return{event,weeks,sessions:b.sessions,attended:b.attended,done,light,missing,race,focus,lastRace,captures:b.captures.length};};
+    const prof=RE.slotProfile(ath,{weeks,state});for(const f of focus)f.advice=RE.advice(ath,f.id,prof);
+    return{event,weeks,sessions:b.sessions,attended:b.attended,done,light,missing,race,focus,lastRace,captures:b.captures.length,stroke:RE.strokeExposure(ath,event,{weeks,state})};};
   // whole swimmer: across the events they race most, what is strong, what keeps coming up short, and the top priorities
   RE.overview=(ath,{course='SCM',weeks=8,state=M.state}={})=>{const yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);const count=new Map();
     for(const r of RE.results(ath,state))if(r.date>=yearAgo&&r.course===course){const k=`${r.distance}|${r.stroke}`;count.set(k,(count.get(k)||0)+1);}
@@ -205,8 +232,9 @@
     for(const s of sums){for(const[k,list]of [['done',s.done],['light',s.light],['missing',s.missing]])for(const x of list){const t=tally.get(x.id)||{id:x.id,label:x.label,done:[],light:[],missing:[],sessions:x.sessions,weight:0};t[k].push(s.event);t.weight=Math.max(t.weight,x.weight);tally.set(x.id,t);}}
     const all=[...tally.values()];const strong=all.filter(t=>t.done.length&&t.done.length>=t.light.length+t.missing.length).sort((a,b)=>b.sessions-a.sessions);
     const gaps=all.filter(t=>t.light.length+t.missing.length>=Math.max(1,Math.ceil(events.length/2))).sort((a,b)=>(b.missing.length*2+b.light.length)*b.weight-(a.missing.length*2+a.light.length)*a.weight);
-    const fading=sums.filter(s=>s.race?.fading).map(s=>s);const priorities=[],used=new Set();const add=(id,why)=>{if(priorities.length>=3||priorities.some(p=>p.id===id))return;priorities.push({id,label:RE.byId[id].label,why,suggest:RE.suggestFor(id,used)});};
-    if(fading.length)add('backEnd',`back half fading in ${fading.map(s=>`${s.event.distance} ${s.event.stroke}`).join(', ')}`);for(const g of gaps)add(g.id,g.sessions?`light — ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
+    const fading=sums.filter(s=>s.race?.fading&&RE.weight('backEnd',s.event)>=2);const priorities=[],used=new Set();const add=(id,why)=>{if(priorities.length>=3||priorities.some(p=>p.id===id))return;priorities.push({id,label:RE.byId[id].label,why,suggest:RE.suggestFor(id,used)});};
+    if(fading.some(f=>RE.weight('backEnd',f.event)>=2))add('backEnd',`back half fading in ${fading.map(s=>`${s.event.distance} ${s.event.stroke}`).join(', ')}`);for(const g of gaps)add(g.id,g.sessions?`light — ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
+    {const prof=RE.slotProfile(ath,{weeks,state});for(const f of priorities)f.advice=RE.advice(ath,f.id,prof);}
     return{events,sums,strong,gaps,fading,priorities,weeks,sessions:sums[0]?.sessions??RE.sessionsFor(ath,new Date(Date.now()-weeks*7*864e5).toISOString().slice(0,10),new Date(Date.now()+864e5).toISOString().slice(0,10),state).length};};
   RE.chips=(tags,max=4)=>(tags||[]).slice(0,max).map(id=>RE.byId[id]?.chip).filter(Boolean);
 })(globalThis);
