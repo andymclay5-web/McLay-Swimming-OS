@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,AR=g.MSOSArchitecture?.AthleteSession;if(!M?.ui||!M?.state)return;
-  const X=M.swimmerInviteBN={build:'v4-swimmer-secure-onboarding-20260824cv',GENERATE_TIMEOUT_MS:120000,STATUS_TICK_MS:1000};
+  const X=M.swimmerInviteBN={build:'v4-swimmer-secure-onboarding-20261116-working-on',GENERATE_TIMEOUT_MS:120000,STATUS_TICK_MS:1000};
   // Real coaching failure this guards against: Andy's own report -- the QR-generate modal froze on
   // "Checking swimmer evidence..." for several literal minutes with zero further status change, and no
   // error ever surfaced. The per-job 12s evidence timeout (swimmer-performance-ci.js) was working and had
@@ -831,9 +831,9 @@
   async function signedUrl(path){const c=cfg();if(!path||!M.cloud?.fetch)return null;try{const r=await M.cloud.fetch(`/storage/v1/object/sign/${encodeURIComponent(c.mediaBucket||'swimming-media')}/${path}`,{method:'POST',body:JSON.stringify({expiresIn:14*86400})});const u=r?.signedURL||r?.signedUrl;return u?`${c.supabaseUrl.replace(/\/$/,'')}/storage/v1${u.startsWith('/')?'':'/'}${u}`:null}catch{return null}}
   async function sharedEvidenceFor(a){const rows=(M.state.captures||[]).filter(c=>ownCapture(c,a)).sort((x,y)=>String(x.created_at||'').localeCompare(String(y.created_at||''))).slice(-12).reverse().map(sharedRow);
     for(const r of rows){if(r.media_path&&['video','photo','voice'].includes(r.type))r.url=await signedUrl(r.media_path);delete r.media_path;}return rows;}
-  let sharedQueue=new Set(),sharedTimer=null;
+  let sharedQueue=new Set(),sharedTimer=null;const publishWorkingOnSoonAt=new Map();/* opening a swimmer on the owner's phone refreshes their portal card, at most every 10 minutes */
   function publishShared(ids){if(!isOwner())return;for(const id of [].concat(ids||[]))if(id)sharedQueue.add(String(id));clearTimeout(sharedTimer);sharedTimer=setTimeout(async()=>{const list=[...sharedQueue];sharedQueue=new Set();
-    for(const id of list){const a=(M.state.athletes||[]).find(x=>String(x.id)===id);if(!a)continue;try{await rpc('msos_publish_swimmer_payload',{p_athlete_id:id,p_payload:{sharedEvidence:await sharedEvidenceFor(a),publishedAt:new Date().toISOString()}});}catch{}await new Promise(r=>setTimeout(r,0));}},1500);}
+    for(const id of list){const a=(M.state.athletes||[]).find(x=>String(x.id)===id);if(!a)continue;try{await rpc('msos_publish_swimmer_payload',{p_athlete_id:id,p_payload:{sharedEvidence:await sharedEvidenceFor(a),workingOn:M.raceElementsUI?.portalWorkingOn?.(a)||null,publishedAt:new Date().toISOString()}});}catch{}await new Promise(r=>setTimeout(r,0));}},1500);}
   const capIds=c=>[c?.athlete_id,...(c?.athlete_ids||[])].filter(Boolean);
   (function installSharedCaptureHook(){const C=M.cloud;if(!C?.stageCapture||C.stageCapture.__msosShared)return;const prev=C.stageCapture;
     const wrapped=cap=>{const r=prev(cap);try{if(['shared','swimmer'].includes(String(cap?.audience||''))||cap?._wasShared)publishShared(capIds(cap));if(cap)cap._wasShared=['shared','swimmer'].includes(String(cap.audience||''));}catch{}return r};
@@ -847,9 +847,9 @@
       const a=due[0];if(!a)return{refreshed:null};
       const{payload,truncatedAt}=await payloadForAsync(a,()=>{});const part={performance:payload.performance,training:payload.training,tests:payload.tests,meet:payload.meet,publishedAt:payload.publishedAt};
       {const order=['performance','training','tests','meet'],i=order.indexOf(truncatedAt);if(i>=0)for(const k of order.slice(i))delete part[k];}/* a stage that ran out of time is left as it was on the portal, never blanked */
-      part.sharedEvidence=await sharedEvidenceFor(a);
+      part.sharedEvidence=await sharedEvidenceFor(a);part.workingOn=M.raceElementsUI?.portalWorkingOn?.(a)||null;/* 16 Nov 2026: "what I'm working on" on the swimmer's own phone */
       await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:part});done[a.id]=new Date().toISOString();M.store?.save?.(M.state);return{refreshed:a.id,truncatedAt};
     }catch(e){return{error:e?.message||String(e)}}finally{refreshAppSwimmers.busy=false}}
-  X.publishShared=publishShared;X.sharedEvidenceFor=sharedEvidenceFor;X.refreshAppSwimmers=refreshAppSwimmers;
+  X.publishWorkingOn=publishShared;X.publishWorkingOnSoon=a=>{if(!a?.id||!isOwner())return false;const k=String(a.id),last=publishWorkingOnSoonAt.get(k)||0;if(Date.now()-last<10*60e3)return false;publishWorkingOnSoonAt.set(k,Date.now());publishShared(k);return true;};X.publishShared=publishShared;X.sharedEvidenceFor=sharedEvidenceFor;X.refreshAppSwimmers=refreshAppSwimmers;
   X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;X.installLinkRequestsButton=installLinkRequestsButton;X.linkRequestsModal=linkRequestsModal;X.linkRequestsBadge=linkRequestsBadge;
 })(globalThis);

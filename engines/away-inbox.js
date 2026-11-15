@@ -17,13 +17,14 @@
 // "saved to his profile" is true.
 (function(g){
   const M=g.MSOS4;if(!M?.state)return;
-  const X=M.awayInbox={build:'v4-away-inbox-20261027'};
+  const X=M.awayInbox={build:'v4-away-inbox-20261116-seen-sticks'};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const DAY=864e5,WINDOW_DAYS=30,POP_DAYS=14;
   const role=()=>{try{return M.access?.role?.()||'owner'}catch{return'owner'}};
   const settings=()=>(M.state.settings=M.state.settings||{});
-  const seenMap=()=>(settings().awaySeen=settings().awaySeen||{});
+  let seenMerged=null;/* what he has seen survives closing the app: merged once with this device's saved UI record */
+  const seenMap=()=>{const st=settings();if(seenMerged!==st||!st.awaySeen){seenMerged=st;try{const m=M.storageEngine?.mergeSeen;st.awaySeen=m?m(M.storageEngine.readUi?.()?.awaySeen,st.awaySeen):(st.awaySeen||{});}catch{st.awaySeen=st.awaySeen||{};}}return(st.awaySeen=st.awaySeen||{});};
   const saveUi=()=>{try{M.storageEngine?.saveUi?.(M.state)}catch{try{M.store?.save?.(M.state)}catch{}}};
   const me=()=>{try{return M.teamAccess?.actor?.()||{role:'owner',name:''}}catch{return{role:'owner',name:''}}};
   const myUserId=()=>M.store?.auth?.()?.user?.id||'';
@@ -48,18 +49,23 @@
       const notes=(M.state.captures||[]).filter(c=>c.session_id===s.id&&c.created_by&&c.created_by!==meId);
       out.push({key:`finish:${s.id}:${f.finishedAt}`,kind:'finish',at,session:s,by,finish:f,edits,notes});}
     return out;}
-  function notesByOthers(now=Date.now(),finishedIds=new Set()){
+  // 16 Nov 2026 (Andy): "If I acknowledge it, it doesn't come up again unless I go looking for it... I want it to be new
+  // every time." Each note he has seen is remembered by its own id, so a session's card only ever pops with the notes he
+  // hasn't seen; the bell's 30-day history still lists everything.
+  const noteSeen=c=>!!seenMap()[`cap:${c?.id}`];
+  function notesByOthers(now=Date.now(),finishedIds=new Set(),{fresh=false}={}){
     const meId=myUserId();if(!meId)return[];const bySession={};
-    for(const c of M.state.captures||[]){if(!c?.created_by||c.created_by===meId||!c.session_id||finishedIds.has(c.session_id))continue;const at=ts(c.created_at);if(!at||now-at>WINDOW_DAYS*DAY)continue;(bySession[c.session_id]||(bySession[c.session_id]=[])).push(c);}
+    for(const c of M.state.captures||[]){if(!c?.created_by||c.created_by===meId||!c.session_id||finishedIds.has(c.session_id)||(fresh&&noteSeen(c)))continue;const at=ts(c.created_at);if(!at||now-at>WINDOW_DAYS*DAY)continue;(bySession[c.session_id]||(bySession[c.session_id]=[])).push(c);}
     return Object.entries(bySession).map(([sid,list])=>{const s=M.state.canonicalSessions?.[sid];const last=Math.max(...list.map(c=>ts(c.created_at)));return{key:`notes:${sid}:${list.length}:${last}`,kind:'notes',at:last,session:s,sessionId:sid,notes:list};});}
   let remote=[],joinCount=0,lastFetch=0,fetching=null;
   X.remote=()=>remote.slice();
   function swimmerItems(now=Date.now()){return remote.filter(a=>now-ts(a.created_at)<=(a.acknowledged_at?WINDOW_DAYS:60)*DAY).map(a=>({key:`swim:${a.id}`,kind:`swim-${a.action_type}`,at:ts(a.created_at),action:a,athlete:athlete(a.athlete_id),session:M.state.canonicalSessions?.[a.session_id]||null}));}
-  X.items=(now=Date.now())=>{const fin=finishedByOthers(now);const ids=new Set(fin.map(x=>x.session.id));
-    const all=[...fin,...notesByOthers(now,ids),...swimmerItems(now)];
+  X.items=(now=Date.now(),{fresh=false}={})=>{const fin=finishedByOthers(now);const ids=new Set(fin.map(x=>x.session.id));
+    if(fresh)for(const f of fin)f.notes=f.notes.filter(c=>!noteSeen(c));
+    const all=[...fin,...notesByOthers(now,ids,{fresh}),...swimmerItems(now)];
     if(joinCount>0)all.push({key:`join:${joinCount}`,kind:'join',at:now,count:joinCount});
     return all.sort((a,b)=>b.at-a.at);};
-  X.unseen=(now=Date.now())=>{const seen=seenMap();return X.items(now).filter(x=>!seen[x.key]&&!x.action?.acknowledged_at&&(x.kind.startsWith('swim')||x.kind==='join'||now-x.at<=POP_DAYS*DAY));};
+  X.unseen=(now=Date.now())=>{const seen=seenMap();return X.items(now,{fresh:true}).filter(x=>!seen[x.key]&&!x.action?.acknowledged_at&&(x.kind.startsWith('swim')||x.kind==='join'||now-x.at<=POP_DAYS*DAY));};
 
   // A remote finish counts in the swimmer's training only if they are marked present for that session.
   function savedToProfile(a,{write=true}={}){const s=M.state.canonicalSessions?.[a.session_id];if(!s)return'missing';
@@ -95,12 +101,13 @@
     if(a.action_type==='finish'){const st=savedToProfile(a,{write:false});
       const lines=[[p.stoppedAtLabel?`Stopped at ${p.stoppedAtLabel}`:p.completion,p.feeling&&`Feeling ${String(p.feeling).toLowerCase()}`,p.rpe&&`RPE ${p.rpe}`].filter(Boolean).join(' · '),p.best&&`Best: ${p.best}`,p.hardest&&`Hardest: ${p.hardest}`,p.note&&!/^no$/i.test(text(p.note))&&`Note: ${p.note}`].filter(Boolean);
       return`<article class="away-card" data-away-key="${esc(x.key)}"><div class="away-kicker">DONE ON THEIR OWN</div><h3>${esc(name)} finished ${esc(sl)}</h3>${lines.map(l=>`<p>${esc(l)}</p>`).join('')}<p class="away-saved ${st}">${st==='saved'?`✓ Saved to ${esc(firstName(ath))}'s profile — counts in their training`:st==='missing'?'This session isn\'t on this phone yet — it is added to their training when it arrives':'Not counted in their training yet — open their profile to check'}</p><div class="away-acts"><button type="button" data-away-athlete="${esc(a.athlete_id)}">Open profile</button></div></article>`;}
+    if(a.action_type==='focus_note')return`<article class="away-card" data-away-key="${esc(x.key)}"><div class="away-kicker">HOW IT’S GOING</div><h3>${esc(name)} · ${esc(p.focus||'what they’re working on')}</h3><p>${esc([p.feeling,p.note&&`“${p.note}”`].filter(Boolean).join(' — '))}</p><div class="away-acts"><button type="button" data-away-athlete="${esc(a.athlete_id)}">Open profile</button></div></article>`;
     const kind=a.action_type==='challenge'?(p.kind==='stroke'?'#1 STROKE CHALLENGE':'CHALLENGE'):'ASKING TO CHANGE A SET';
     const body=a.action_type==='challenge'?(p.kind==='stroke'?`${p.currentStroke||'Unset'} → ${p.proposedStroke||''}${p.reason?` · ${p.reason}`:''}`:[p.reason,p.message].filter(Boolean).join(' — ')):[p.change,p.reason&&`because ${p.reason}`].filter(Boolean).join(' — ');
     return`<article class="away-card" data-away-key="${esc(x.key)}"><div class="away-kicker">${esc(kind)}</div><h3>${esc(name)} · ${esc(sl)}</h3><p>${esc(body)}</p><div class="away-acts"><button type="button" data-away-athlete="${esc(a.athlete_id)}">Open profile</button></div></article>`;}
 
   function host(){let h=document.querySelector('#awaySheet');if(!h){h=document.createElement('div');h.id='awaySheet';h.className='away-sheet';h.hidden=true;document.body.appendChild(h);}return h;}
-  function markSeen(items){const seen=seenMap(),now=new Date().toISOString();for(const x of items){seen[x.key]=now;if(x.kind?.startsWith('swim')&&x.action?.id&&role()==='owner')M.swimmerInviteBN?.acknowledgeSessionAction?.(x.action.id)?.then?.(()=>{x.action.acknowledged_at=now;})?.catch?.(()=>{});}
+  function markSeen(items){const seen=seenMap(),now=new Date().toISOString();for(const x of items){seen[x.key]=now;for(const c of x.notes||[])if(c?.id)seen[`cap:${c.id}`]=now;if(x.kind?.startsWith('swim')&&x.action?.id&&role()==='owner')M.swimmerInviteBN?.acknowledgeSessionAction?.(x.action.id)?.then?.(()=>{x.action.acknowledged_at=now;})?.catch?.(()=>{});}
     const cut=Date.now()-90*DAY;for(const [k,v] of Object.entries(seen))if(ts(v)<cut)delete seen[k];saveUi();paintBell();}
   function open({items=null,history=false}={}){const h=host(),list=items||(history?X.items():X.unseen());
     h.innerHTML=`<div class="away-panel" role="dialog" aria-label="While you were away"><header><h2>${history?'What\'s happened':'While you were away'}</h2><button type="button" data-away-close aria-label="Close">×</button></header>

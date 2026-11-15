@@ -1,7 +1,7 @@
 'use strict';
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines;if(!M?.state)return;
-  const X=M.swimmerFeedbackCU={build:'v4-swimmer-feedback-20260826a'};
+  const X=M.swimmerFeedbackCU={build:'v4-swimmer-feedback-20261116-focus'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??'');
   const selected=()=>{const id=M.state?.settings?.selectedAthleteId;return(M.state?.athletes||[]).find(a=>a.id===id)||null;};
   // Real coaching failure this fixes: this panel only ever asked for feedback on M.currentSession() -- whatever
@@ -14,8 +14,8 @@
   // supported server-side by msos_owner_swimmer_session_actions) returns the athlete's whole feedback record.
   function sessionLabel(sessionId){const s=M.state?.canonicalSessions?.[sessionId];if(!s)return sessionId||'Session';return [s.identity?.date,s.identity?.dayPart,s.identity?.title].filter(Boolean).join(' · ')||sessionId;}
   const isStrokeChallenge=a=>a.action_type==='challenge'&&a.payload?.kind==='stroke'&&!!text(a.payload?.proposedStroke);
-  function label(a){if(a.action_type==='finish')return'Session finish';if(isStrokeChallenge(a))return'#1 stroke challenge';if(a.action_type==='challenge')return'Challenge';return'Edit request';}
-  function detail(a){const p=a.payload||{};if(a.action_type==='finish')return [p.stoppedAtLabel?`Stopped at: ${p.stoppedAtLabel}`:p.completion,p.feeling,p.rpe?`RPE ${p.rpe}`:'',p.best?`Best: ${p.best}`:'',p.hardest?`Hardest: ${p.hardest}`:'',p.note].filter(Boolean).join(' · ');if(isStrokeChallenge(a))return[`${p.currentStroke||'Unset'} → ${p.proposedStroke}`,p.reason].filter(Boolean).join(' · ');if(a.action_type==='challenge')return[p.reason,p.message].filter(Boolean).join(' · ');return[p.change,p.reason].filter(Boolean).join(' · ');}
+  function label(a){if(a.action_type==='focus_note')return'How it’s going (what they’re working on)';if(a.action_type==='finish')return'Session finish';if(isStrokeChallenge(a))return'#1 stroke challenge';if(a.action_type==='challenge')return'Challenge';return'Edit request';}
+  function detail(a){const p=a.payload||{};if(a.action_type==='focus_note')return[p.focus,p.feeling,p.note&&`“${p.note}”`].filter(Boolean).join(' · ');if(a.action_type==='finish')return [p.stoppedAtLabel?`Stopped at: ${p.stoppedAtLabel}`:p.completion,p.feeling,p.rpe?`RPE ${p.rpe}`:'',p.best?`Best: ${p.best}`:'',p.hardest?`Hardest: ${p.hardest}`:'',p.note].filter(Boolean).join(' · ');if(isStrokeChallenge(a))return[`${p.currentStroke||'Unset'} → ${p.proposedStroke}`,p.reason].filter(Boolean).join(' · ');if(a.action_type==='challenge')return[p.reason,p.message].filter(Boolean).join(' · ');return[p.change,p.reason].filter(Boolean).join(' · ');}
   // Real coaching failure this fixes (Andy's own voice-memo spec): a swimmer's stroke challenge needs to be
   // checked against the same evidence Andy would use poolside -- for a medley swimmer, which stroke the
   // training-volume "needs work" logic actually points at (stroke-balance.js's weighted 7-day share); for a
@@ -90,7 +90,7 @@
     panel.querySelector('[data-cu-feedback]')?.remove();
     const box=document.createElement('section');box.className='page-card';box.dataset.cuFeedback='1';box.innerHTML='<div class="eyebrow">SWIMMER FEEDBACK</div><h2>Their record</h2><p class="muted">Loading swimmer edits, challenges and finish log, across every session…</p>';panel.append(box);
     const rows=await M.swimmerInviteBN?.sessionActionsFor?.(ath)||[];if(!box.isConnected)return;
-    if(!rows.length){box.innerHTML='<div class="eyebrow">SWIMMER FEEDBACK</div><h2>Their record</h2><p class="muted">No swimmer edits, challenges or finish log yet, across any session.</p>';return;}
+    if(!rows.length){/* 16 Nov 2026: nothing to show -- one quiet line */box.innerHTML='<p class="muted">No swimmer feedback yet.</p>';return;}
     // Pulls any evidence-approved stroke challenge (written straight to session_adaptations by the swimmer's
     // own device, possibly for a session that isn't the one currently open on Andy's Board) into
     // M.state.adaptationOverrides before rendering, so canApplyStroke/strokeAlreadyApplied below reflect the

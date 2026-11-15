@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.4.0-20261115-slots';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.7.0-20261116-focus-on-roll';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -236,5 +236,55 @@
     if(fading.some(f=>RE.weight('backEnd',f.event)>=2))add('backEnd',`back half fading in ${fading.map(s=>`${s.event.distance} ${s.event.stroke}`).join(', ')}`);for(const g of gaps)add(g.id,g.sessions?`light — ${g.sessions} session${g.sessions===1?'':'s'} in ${weeks} weeks`:`none in ${weeks} weeks`);
     {const prof=RE.slotProfile(ath,{weeks,state});for(const f of priorities)f.advice=RE.advice(ath,f.id,prof);}
     return{events,sums,strong,gaps,fading,priorities,weeks,sessions:sums[0]?.sessions??RE.sessionsFor(ath,new Date(Date.now()-weeks*7*864e5).toISOString().slice(0,10),new Date(Date.now()+864e5).toISOString().slice(0,10),state).length};};
+  // ---- captures as coaching story (Andy, 16 Nov: "i have taken captures of Matthew today. These should be visible on his
+  // profile with intelligence around what, when, why or what we were working on"). Each clip is tied to the set it was
+  // taken on (item link, else the capture title matched to a set in that block -- "Fob fins" -> "400 fins fly kick
+  // (fob)"), the set's labels, Andy's note, and which of the swimmer's events that work feeds. Clips on the same set in
+  // one session read as a sequence ("after instruction ..." marks the after). Recurring words across notes become themes. ----
+  const THEMES=[['knees?|knee bend\\w*','Kick from the hips, not the knees'],['hands?|hand position','Hand position'],['streamline|body ?line|line','Streamline / body line'],['rhythm|tempo|rate','Rhythm / tempo'],['breath|breathing|head','Breathing / head position'],['turns?|walls?|tumble','Turns'],['breakouts?','Breakouts'],['underwater|uw|dolphin|fob','Underwater kick'],['catch|pull|elbow','Catch / pull'],['finish|touch','Finishes'],['start|dive|reaction','Starts'],['hips?|rotation','Hips / rotation']];
+  const wordsOf=t=>low(t).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!/^(the|and|with|for|set|kick|fins|free|swim|easy|from)$/.test(w));
+  RE.captureStory=(ath,{weeks=8,state=M.state,events=[]}={})=>{const from=minusDays(iso(new Date(Date.now()+864e5)),weeks*7);const out=[];
+    for(const c of state?.captures||[]){const who=[...(c.athlete_ids||[]),c.athlete_id].filter(Boolean);const mine=who.includes(ath.id);if(who.length&&!mine)continue;
+      const session=state?.canonicalSessions?.[c.session_id];const d=dateOf(session)||String(c.created_at||'').slice(0,10);if(!d||d<from)continue;
+      if(!who.length){const a=(state?.attendance||[]).find(x=>x.session_id===c.session_id&&x.athlete_id===ath.id);if(!a||!['present','modified'].includes(a.status))continue;}
+      const block=(session?.blocks||[]).find(b=>b.id===c.block_id||b.id===c.session_block_id);const title=text(c.title||c.text_content||'');
+      const sets=RE.sessionSets(session).filter(r=>!block||r.block===block.type);let set=c.item_id?sets.find(r=>r.id===c.item_id):null;
+      if(!set&&title){const tw=wordsOf(title).concat(/\bfob\b/i.test(title)?['fob']:[]),score=r=>{const lw=new Set(wordsOf(r.text).concat(/\bfob\b/i.test(r.text)?['fob']:[]));return tw.filter(w=>lw.has(w)).length+(RE.strokeOf(title)&&RE.strokeOf(title)===r.stroke?1:0)+(/\bkick\b/i.test(title)&&/\bkick\b/i.test(r.text)?1:0)};
+        const best=[...sets].map(r=>[score(r),r]).sort((x,y)=>y[0]-x[0])[0];if(best&&best[0]>0)set=best[1];}
+      const note=text(c.capture_note||c.note||'');const tags=[...new Set([...(set?.tags||[]),...RE.tagText(`${title} ${note}`)])];
+      const themes=THEMES.filter(([re])=>new RegExp(`\\b(?:${re})\\b`,'i').test(`${note} ${title}`)).map(t=>t[1]).filter((t,_,all)=>!(t==='Hips / rotation'&&all.includes('Kick from the hips, not the knees')));
+      out.push({capture:c,date:d,time:String(c.created_at||''),session,block:block?.type||'',blockLabel:block?.title||block?.label||'',set:set?{label:set.label,id:set.id,zone:set.zone||''}:null,title,note,tags,themes,type:String(c.capture_type||'text').toLowerCase(),group:!who.length,after:/\bafter\b|\bthen\b|\bnow\b|\bbetter\b|\bimproved\b/i.test(note),
+        feeds:events.filter(ev=>tags.some(t=>RE.weight(t,ev)>=2))});}
+    out.sort((a,b)=>String(b.time).localeCompare(String(a.time)));
+    // group by session + set, oldest first inside a group so the coaching sequence reads in order
+    const groups=new Map();for(const x of out){const k=`${x.session?.id||x.date}|${x.set?.id||x.set?.label||x.title}`;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x);}
+    const story=[...groups.values()].map(list=>list.sort((a,b)=>String(a.time).localeCompare(String(b.time))));
+    const themeCount=new Map();for(const x of out)for(const t of x.themes)themeCount.set(t,(themeCount.get(t)||0)+1);
+    return{weeks,count:out.length,story,themes:[...themeCount.entries()].sort((a,b)=>b[1]-a[1]),latest:out[0]||null};};
+  // ---- "Working on now" (Andy, 16 Nov: "a place where me and the swimmers can see what we're working on at the moment,
+  // what things are coming through, what evidence we've got around those things ... key points, not big long lists").
+  // Up to three focus cards: what the coach keeps noting in captures (grouped by theme, else by the set's main element),
+  // plus the race-evidence priority if a race shows one. Each card: the focus in the coach's words, how long it has been
+  // noted, latest note, before/after clips, why it matters (which events), and how much of that work is in training. ----
+  /* what the coaches filmed and noted on one swimmer: one card per set ("Fob fins" / "Fob fins 2" are one), newest work first.
+     Used by the profile card and by the Roll, so whoever runs the next session sees it. dose is optional (the Roll skips it). */
+  RE.focusCards=(ath,{weeks=8,state=M.state,events=[],dose=()=>null}={})=>{const st=RE.captureStory(ath,{weeks,state,events});const clips=st.story.flat().filter(x=>!x.group||x.note);
+    /* one card per set the clips were taken on ("Fob fins" / "Fob fins 2" are one), themes listed inside it */
+    const setKey=x=>x.set?.label||String(x.title||'').replace(/\s*\d+\s*$/,'')||'Technique';const by=new Map();for(const x of clips){const k=setKey(x);if(!by.has(k))by.set(k,[]);by.get(k).push(x);}
+    return[...by.entries()].map(([setLabel,list])=>{const tc=new Map();for(const x of list)for(const t of x.themes)tc.set(t,(tc.get(t)||0)+1);const theme=[...tc.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]).slice(0,3).join(', ')||RE.byId[list.flatMap(x=>x.tags).find(t=>RE.byId[t]?.family==='skills')]?.label||'technique';list.sort((a,b)=>String(a.time).localeCompare(String(b.time)));const last=list[list.length-1],first=list[0];
+      const tagCount=new Map();for(const x of list)for(const t of x.tags)tagCount.set(t,(tagCount.get(t)||0)+1);const el=[...tagCount.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]).find(t=>RE.byId[t]&&RE.byId[t].family!=='engine')||[...tagCount.keys()][0]||'';
+      const where=String(list.find(x=>x.title)?.title||setLabel).replace(/\s*\d+\s*$/,'');const days=[...new Set(list.map(x=>x.date))];
+      const feeds=events.filter(ev=>el&&RE.weight(el,ev)>=2);const d=el?dose(el):null;const after=list.filter(x=>x.after);
+      return{kind:'capture',theme,where,element:el,elementLabel:RE.byId[el]?.label||'',clips:list.length,days:days.length,first:first.date,last:last.date,latestNote:last.note||'',before:after.length?(list.filter(x=>!x.after&&x.time<after[after.length-1].time).pop()?.capture?.id||first.capture.id):null,after:after.length?after[after.length-1].capture.id:null,latestClip:last.capture.id,ids:list.map(x=>x.capture?.id).filter(Boolean),session:last.capture?.session_id||last.session?.id||'',feeds,dose:d?{sessions:d.sessions,sets:d.sets}:null,score:list.length+days.length*2+(last.date>=minusDays(iso(new Date()),7)?5:0)};})
+      .sort((a,b)=>b.score-a.score);};
+  RE.workingOn=(ath,{weeks=8,state=M.state}={})=>{const yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);const cnt=new Map();
+    for(const r of RE.results(ath,state))if(r.date>=yearAgo){const k=`${r.distance}|${r.stroke}|${r.course}`;cnt.set(k,(cnt.get(k)||0)+1);}
+    const events=[...cnt.entries()].sort((x,y)=>y[1]-x[1]).slice(0,6).map(([k])=>{const[d,st,c]=k.split('|');return{distance:Number(d),stroke:st,course:c};});
+    const mix=RE.mix(ath,{weeks:4,state,events});const dose=id=>mix.rows.find(r=>r.id===id);
+    const cards=RE.focusCards(ath,{weeks,state,events,dose});
+    const ov=RE.overview(ath,{course:events[0]?.course||'SCM',weeks,state});const race=ov.priorities.find(p=>p.id==='backEnd'&&ov.fading.length)||null;
+    const out=cards.slice(0,race?2:3);if(race){const f=ov.fading[0];const d=dose('backEnd');out.push({kind:'race',theme:'Back-end speed',where:`${f.event.distance} ${f.event.stroke}`,element:'backEnd',elementLabel:'Back-end speed',race:f.race,feeds:ov.fading.map(x=>x.event),dose:d?{sessions:d.sessions,sets:d.sets}:null,advice:race.advice,suggest:race.suggest});}
+    if(!out.length&&ov.priorities[0]){const pr=ov.priorities[0];const d=dose(pr.id);out.push({kind:'gap',theme:pr.label,element:pr.id,elementLabel:pr.label,why:pr.why,advice:pr.advice,suggest:pr.suggest,feeds:ov.events.filter(ev=>RE.weight(pr.id,ev)>=2),dose:d?{sessions:d.sessions,sets:d.sets}:null});}
+    return{cards:out,captures:cards.reduce((n,c)=>n+c.clips,0),events,more:Math.max(0,cards.length-out.filter(c=>c.kind==='capture').length)};};
   RE.chips=(tags,max=4)=>(tags||[]).slice(0,max).map(id=>RE.byId[id]?.chip).filter(Boolean);
 })(globalThis);

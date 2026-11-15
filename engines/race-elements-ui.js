@@ -19,7 +19,7 @@
 .re-box{margin-top:10px;padding-top:8px;border-top:1px solid rgba(127,127,127,.25)}.re-box h4{margin:4px 0 6px;font-size:14px}.re-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.12)}
 .re-row b{font-size:14px}.re-row span{font-size:12px;opacity:.8;text-align:right}.re-row small{grid-column:1/-1;font-size:12px;opacity:.75}.re-need{font-size:11px;letter-spacing:1px;opacity:.6}
 .re-bar{height:6px;border-radius:3px;background:rgba(56,132,255,.55);grid-column:1/-1}.re-note{font-size:12px;opacity:.7;margin-top:6px}.re-race{padding:8px 0;border-bottom:1px solid rgba(127,127,127,.15)}.re-race b{font-size:14px}
-.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}.re-sum{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(56,132,255,.08)}.re-sum h4{margin:0 0 6px;font-size:15px}.re-sum p{margin:4px 0;font-size:14px;line-height:1.35}.re-focus{margin:4px 0 2px 18px;padding:0;font-size:14px}.re-focus li{margin:3px 0}.re-more{margin-top:8px}.re-more>summary{cursor:pointer;font-size:13px;opacity:.75;padding:4px 0}`;document.head.appendChild(s);}
+.re-reply{margin-top:6px;padding:6px 9px;border-radius:9px;background:#eef6f0;color:#1b5b40;font-size:13px}.re-reply small{color:#647a86}.re-roll-focus{margin:-4px 0 10px;padding:8px 10px;border-radius:10px;background:rgba(56,132,255,.08);font-size:13px;line-height:1.35;font-weight:400}.re-roll-focus>div{margin:3px 0}.re-roll-focus .re-clip-btn{padding:2px 8px;font-size:12px;margin-left:4px}.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}.re-sum{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(56,132,255,.08)}.re-sum h4{margin:0 0 6px;font-size:15px}.re-sum p{margin:4px 0;font-size:14px;line-height:1.35}.re-focus{margin:4px 0 2px 18px;padding:0;font-size:14px}.re-focus li{margin:3px 0}.re-more{margin-top:8px}.re-working{border-left:4px solid rgba(56,132,255,.7)}.re-work-list{margin:6px 0 8px 18px;padding:0}.re-work-list li{margin:8px 0;font-size:15px;line-height:1.4}.re-clips-row{display:flex;gap:8px;margin-top:6px}.re-clip-btn{padding:6px 12px;border-radius:16px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:13px}.re-capg{padding:10px 0;border-top:1px solid rgba(127,127,127,.18)}.re-capg b{font-size:15px}.re-clips{display:flex;flex-direction:column;gap:6px;margin-top:6px}.re-clip{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;font:inherit;font-size:14px}.re-clip.after{border-color:rgba(26,143,74,.6)}.re-clip>span:first-child{width:18px;opacity:.8}.re-more>summary{cursor:pointer;font-size:13px;opacity:.75;padding:4px 0}`;document.head.appendChild(s);}
   const chip=id=>{const e=RE().byId[id];return e?`<i data-f="${e.family}">${esc(e.chip)}</i>`:'';};
   const chipRow=ids=>ids?.length?`<div class="re-chips">${ids.map(chip).join('')}</div>`:'';
   const dots=w=>'●'.repeat(Math.round(w))+'○'.repeat(3-Math.round(w));
@@ -79,6 +79,64 @@
       ${o.gaps.length?`<p>⚠️ <b>Needs work:</b> ${o.gaps.slice(0,4).map(gapLine).join(' · ')}</p>`:''}
       ${o.fading.length?`<p>📉 <b>Races:</b> back half fading in ${o.fading.map(s=>`${evName(s.event)} (${s.race.diff>=0?'+':'−'}${Math.abs(s.race.diff).toFixed(2)}s)`).join(', ')}</p>`:''}
       ${o.priorities.length?`<p>👉 <b>Priorities:</b></p><ol class="re-focus">${o.priorities.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:''}</div>`;};
+
+  // Captures as a coaching story on the swimmer's profile: what (the set + its labels), when, why (Andy's note), the
+  // sequence on a set (before -> after the cue), recurring themes, and which of their events the work feeds.
+  const timeOf=t=>{const d=new Date(t);return isNaN(d)?'':d.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'}).replace(' ','').toLowerCase();};
+  const weekday=d=>{const x=new Date(`${d}T12:00:00`);return isNaN(x)?'':x.toLocaleDateString('en-NZ',{weekday:'short',day:'numeric',month:'short'});};
+  const BLOCK={warm_up:'Warm-up',pre_set:'Pre-set',main_set:'Main set',post_set:'Post-set',warm_down:'Warm-down'};
+  UI.capturesHtml=a=>{try{css();const R=RE();if(!R||!a)return'';const yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);const count=new Map();
+    for(const r of R.results(a))if(r.date>=yearAgo){const k=`${r.distance}|${r.stroke}|${r.course}`;count.set(k,(count.get(k)||0)+1);}
+    const events=[...count.entries()].sort((x,y)=>y[1]-x[1]).slice(0,6).map(([k])=>{const[d,st,c]=k.split('|');return{distance:Number(d),stroke:st,course:c};});
+    const st=R.captureStory(a,{weeks:8,events});let story=st.story;if(isSwimmer())story=story.map(g=>g.filter(x=>['shared','swimmer'].includes(x.capture?.audience))).filter(g=>g.length);
+    const first=String(a.full_name||'').split(' ')[0];
+    if(!story.length)return`<section class="page-card" data-re-captures><div class="eyebrow">CAPTURES · ${esc(a.full_name)}</div><h2>What we're working on</h2><p class="muted">No captures of ${esc(first)} in the last 8 weeks.</p></section>`;
+    const icon=t=>t==='video'?'▶':t==='photo'?'▣':t==='voice'?'♪':'✎';
+    const group=g=>{const x=g[0],evs=[...new Map(g.flatMap(c=>c.feeds).map(e=>[`${e.distance}|${e.stroke}`,e])).values()];const tags=[...new Set(g.flatMap(c=>c.tags))];
+      const seq=g.length>=2&&g.some(c=>c.after);
+      return`<div class="re-capg"><div class="re-note">${esc(weekday(x.date))} · ${esc(timeOf(x.time))}${x.block?` · ${esc(BLOCK[x.block]||x.block)}`:''}</div>
+        <b>${esc(x.set?.label||x.title||'Capture')}</b>${chipRow(tags.slice(0,4))}
+        <div class="re-clips">${g.map(c=>`<button type="button" class="re-clip${c.after?' after':''}" data-msos-capture="${esc(c.capture.id)}"><span>${icon(c.type)}</span><span>${c.note?esc(c.note):esc(c.title||c.type)}${c.group?' <i class="re-note">(group)</i>':''}${c.after?' <i class="re-note">· after the cue</i>':''}</span></button>`).join('')}</div>
+        ${seq?`<p class="re-note">Before → after the coaching cue: compare the first and last clip.</p>`:''}
+        ${evs.length?`<p class="re-note">This work feeds ${evs.map(evName).join(', ')}.</p>`:''}</div>`;};
+    return`<section class="page-card" data-re-captures><div class="eyebrow">CAPTURES · ${esc(a.full_name)}</div><h2>What we're working on</h2>
+      <p class="re-note">Last 8 weeks · ${st.count} capture${st.count===1?'':'s'}${st.latest?` · latest ${esc(weekday(st.latest.date))}`:''}</p>
+      ${st.themes.length?`<p>🎯 <b>Recurring:</b> ${st.themes.slice(0,4).map(([t,n])=>`${esc(t)}${n>1?` (${n})`:''}`).join(' · ')}</p>`:''}
+      ${story.slice(0,6).map(group).join('')}${story.length>6?`<p class="re-note">+ ${story.length-6} earlier</p>`:''}</section>`;}catch(err){return`<section class="page-card"><p class="muted">Captures unavailable: ${esc(err.message||err)}</p></section>`;}};
+
+  // ---- The one card (Andy, 16 Nov: "what's little Johnny working on at the moment? Boom. Any coach can see that ... they
+  // can see it themselves, their parents can see it, it's all black and white"). Plain words, three parts: working on /
+  // training lately / developing. Detail stays in the tabs. ----
+  const FAM_WORDS={aerobic:'aerobic base',aerobicPower:'aerobic power',kick:'kick',pull:'pull',technique:'technique and drills',efficiency:'stroke length',maxSpeed:'speed',resisted:'resisted speed',racePace:'race pace',underwater:'underwaters',turns:'turns',starts:'starts',breakout:'breakouts',finish:'finishes',backEnd:'back-end speed',frontEnd:'front-end speed',pacing:'pacing',breathing:'breathing',relay:'relay takeovers'};
+  UI.workingOnText=(a,{state=M.state}={})=>{const R=RE();const w=R.workingOn(a,{state});const first=String(a.full_name||'').split(' ')[0];const lines=[];
+    for(const c of w.cards){if(c.kind==='capture')lines.push({head:`${c.where?`${c.where} — `:''}${c.theme.toLowerCase()}`,body:`${c.latestNote?`“${c.latestNote}”`:''}${c.days>1?` Noted on ${c.days} days since ${day(c.first)}.`:` Noted ${day(c.last)}${c.clips>1?` · ${c.clips} clips`:''}.`}${c.after?' Improving after the cue.':''}`,helps:c.feeds.length?`Helps ${c.feeds.slice(0,3).map(evName).join(', ')}.`:'',clips:[c.before&&c.after&&c.before!==c.after?['Before',c.before]:null,c.after?['After',c.after]:['Clip',c.latestClip]].filter(Boolean),key:`clip:${c.latestClip}`,session:c.session||'',c});
+      else if(c.kind==='race')lines.push({head:`Back half of the ${evName(c.feeds[0]||{distance:c.where.split(' ')[0],stroke:c.where.split(' ')[1]})}`,body:`Back half ${Math.abs(c.race.diff).toFixed(2)}s slower than the front${c.race.trend==='worse'?', fading more than before':''}.`,helps:c.advice?.text||'',clips:[],key:`race:${c.where}`,session:'',c});
+      else lines.push({head:c.theme,body:c.why?`${c.why[0].toUpperCase()}${c.why.slice(1)}.`:'',helps:c.advice?.text||'',clips:[],key:`gap:${c.element}`,session:'',c});}
+    const mix=R.mix(a,{weeks:4,state});const top=[...mix.rows].filter(r=>FAM_WORDS[r.id]).sort((x,y)=>y.sets-x.sets).slice(0,3).map(r=>FAM_WORDS[r.id]);
+    const lately=mix.sessions?`${mix.sessions} session${mix.sessions===1?'':'s'} in the last 4 weeks${top.length?` — mostly ${top.slice(0,-1).join(', ')}${top.length>1?' and ':''}${top[top.length-1]}`:''}.`:`No sessions recorded for ${first} in the last 4 weeks.`;
+    const pbs=R.recentRaces(a,{weeks:12,state}).filter(r=>r.change!=null&&r.change<0).sort((x,y)=>x.change-y.change).slice(0,2);
+    const developing=pbs.length?pbs.map(r=>`New best ${evName(r)} ${clock(r.seconds)} (${r.change.toFixed(2)}s)${r.meet?` at ${r.meet}`:''}`).join(' · '):'';
+    return{first,lines,lately,developing,captures:w.captures};};
+  /* The swimmer's own view (swimmer portal): the same card, built only from captures the coach shared with the swimmer
+     (coach-only notes never leave the coach app). Plain JSON -- the portal is a static page with no engines. */
+  UI.portalWorkingOn=a=>{try{const R=RE();if(!R||!a)return null;const shared=c=>['shared','swimmer'].includes(String(c?.audience||''))||!([c?.athlete_id,...(c?.athlete_ids||[])].filter(Boolean).length);
+    const state={...M.state,captures:(M.state.captures||[]).filter(shared)};const t=UI.workingOnText(a,{state});
+    return{at:new Date().toISOString(),first:t.first,lately:t.lately,developing:t.developing,lines:t.lines.map(l=>({key:l.key,head:l.head[0].toUpperCase()+l.head.slice(1),body:l.body,helps:l.helps,session:l.session,clips:l.clips.map(([label,id])=>({label,id}))}))};}catch(err){return null;}};
+  /* what the swimmer said back about a focus ("focus_note" from the portal), newest first, per swimmer */
+  UI.replies=UI.replies||{};
+  UI.replyFor=(a,l)=>{const list=UI.replies[a?.id]||[];const clipIds=new Set([...l.clips.map(([,id])=>id),...(l.c?.ids||[])]);const head=String(l.head||'').toLowerCase();
+    return list.find(r=>r.payload?.key===l.key||clipIds.has(r.payload?.captureId)||String(r.payload?.focus||'').toLowerCase()===head)||null;};
+  UI.loadReplies=async a=>{try{const rows=await M.swimmerInviteBN?.sessionActionsFor?.(a);const list=(Array.isArray(rows)?rows:[]).filter(r=>r.action_type==='focus_note').sort((x,y)=>String(y.created_at||'').localeCompare(String(x.created_at||'')));
+    const before=JSON.stringify(UI.replies[a.id]||[]);UI.replies[a.id]=list;if(before!==JSON.stringify(list))document.querySelectorAll('[data-re-working]').forEach(el=>{if(el.dataset.reWorking===String(a.id))el.outerHTML=UI.workingOnHtml(a);});return list;}catch(err){return[];}};
+  /* the Roll: whoever runs the session sees what the last coach noticed on each swimmer, with the clip one tap away */
+  UI.rollFocusHtml=(a,{weeks=4}={})=>{try{const R=RE();if(!R?.focusCards||!a)return'';css();const cards=R.focusCards(a,{weeks}).slice(0,2);if(!cards.length)return'';
+    return`<div class="re-roll-focus" data-re-roll-focus="${esc(a.id)}">${cards.map(c=>`<div>🎯 <b>${esc(`${c.where?`${c.where} — `:''}${c.theme.toLowerCase()}`)}</b>${c.latestNote?` · “${esc(c.latestNote)}”`:''} · ${esc(day(c.last))}${c.after?' · improving':''} <button type="button" class="re-clip-btn" data-msos-capture="${esc(c.latestClip)}">▶ Clip</button></div>`).join('')}</div>`;}catch(err){return'';}};
+  UI.workingOnHtml=a=>{try{css();if(!RE()||!a)return'';const t=UI.workingOnText(a);
+    const item=(l,i)=>`<li><b>${esc(l.head[0].toUpperCase()+l.head.slice(1))}</b>${l.body?`<br>${esc(l.body)}`:''}${l.helps?`<br><span class="re-note">${esc(l.helps)}</span>`:''}${l.clips.length?`<div class="re-clips-row">${l.clips.map(([k,id])=>`<button type="button" class="re-clip-btn" data-msos-capture="${esc(id)}">▶ ${esc(k)}</button>`).join('')}</div>`:''}${(r=>r?`<div class="re-reply">💬 <b>${esc(t.first)}:</b> ${esc([r.payload?.feeling,r.payload?.note&&`“${r.payload.note}”`].filter(Boolean).join(' — '))} <small>${esc(day(String(r.created_at||'').slice(0,10)))}</small></div>`:'')(UI.replyFor(a,l))}</li>`;
+    return`<section class="page-card re-working" data-re-working="${esc(a.id)}"><div class="eyebrow">WHAT ${esc(t.first.toUpperCase())} IS WORKING ON</div>
+      ${t.lines.length?`<ol class="re-work-list">${t.lines.map(item).join('')}</ol>`:`<p class="muted">Nothing noted yet — take a capture with a note on ${esc(t.first)} and it shows here.</p>`}
+      <p><b>Training lately:</b> ${esc(t.lately)}</p>
+      ${t.developing?`<p><b>Developing:</b> ${esc(t.developing)}</p>`:''}</section>`;}catch(err){return'';}};
 
   // Swimmer page, one event: what this race needs, and the training behind it.
   UI.behindHtml=(a,e,course)=>{try{css();const R=RE();if(!R||!a||!e)return'';const event={distance:Number(e.distance),stroke:e.stroke,course};const needs=R.needs(event).filter(n=>n.weight>=2);
