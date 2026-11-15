@@ -49,7 +49,9 @@ const k=M.parser.parse('WARM-UP\n12 x 50 Kick @ 1:10 Desc 1-3',{id:'k',course:'S
 const kOut=M.adapt.item(k,CH,state,s);
 assert.ok(kOut.reps<12,'Charlotte does fewer reps');
 const cue=B.cueText(kOut);
-assert.equal(cue,'Desc 1-3',`kick cue should read just "Desc 1-3", got "${cue}"`);
+// 16 Nov 2026: Andy's own whiteboard for this exact set gave Charlotte "7 x 50 Kick ↓1-4 / 5-7" -- 7 reps can't repeat a 1-3,
+// so the regrouped descent stands, once (the 21 Oct junk -- "Desc 1-4 / 5-7 / 5-7 · Desc 1-3 · 12 x 50 Kick..." -- stays gone).
+assert.equal(kOut.reps,7);assert.equal(cue,'Desc 1-4 / 5-7',`kick cue should read just "Desc 1-4 / 5-7", got "${cue}"`);
 // a descend across the whole set is still renumbered for fewer reps
 const whole=M.parser.parse('MAIN SET\n6 x 100 @ 1:40 Desc 1-6',{id:'w',course:'SCM'}).blocks[0].items[0];
 const wOut=E.Modification.adaptItem(whole,CH,state,s);

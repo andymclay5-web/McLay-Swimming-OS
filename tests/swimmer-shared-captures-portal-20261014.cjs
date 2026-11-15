@@ -74,7 +74,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     assert.deepEqual(r.sessionPublish,['athlete','publishedAt','schema','session','sessions'],'a session save publishes only the session parts, never empty results/notes');
     assert.deepEqual(r.pull.shared,['athlete-matthew-robertson'],'the shared capture is recognised as Matthew\'s');
     assert.ok(r.sharedPublish,'Matthew\'s shared notes were published from the owner\'s phone');
-    assert.deepEqual(r.sharedPublish.keys,['publishedAt','sharedEvidence'],'only the shared notes are sent (the rest of his portal is kept)');
+    /* 16 Nov 2026: the shared-capture publish also carries his What I'm working on card (built from shared clips only); results, tests, sessions and training are still never sent here, so the rest of his portal is kept */assert.deepEqual(r.sharedPublish.keys,['publishedAt','sharedEvidence','workingOn'],'only the shared notes and his working-on card are sent (the rest of his portal is kept)');
     const row=r.sharedPublish.rows.find(x=>x.id==='capture-jordan-1');
     assert.ok(row,'Jordan\'s video is in Matthew\'s shared list');
     assert.equal(row.title,'Fly breakout');assert.equal(row.text,'Hold the kick through the breakout','the note travels with it');
