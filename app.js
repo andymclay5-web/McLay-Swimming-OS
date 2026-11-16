@@ -762,7 +762,7 @@
   // the local app can actually populate today are listed; the rest (contact emails, next-meet info, PB/
   // qualifying summaries, etc.) are legitimately unmapped, not silently dropped -- nothing local produces
   // them yet.
-  athletes:['id','organisation_id','full_name','squad','active','date_of_birth','sex','current_s_class','modifications','updated_at','created_by','is_visitor','visitor_home_club','primary_club_name','membership_type'],
+  athletes:['id','organisation_id','full_name','squad','active','date_of_birth','sex','current_s_class','modifications','updated_at','created_by','is_visitor','visitor_home_club','primary_club_name','membership_type','source_profile'],
   // resultsEventHistory (the generic importer's "Meet / PB results"/"Team Manager results" local field) maps
   // onto coach_results, not the similarly-named results_event_history table -- that table has no primary key
   // and RLS disabled, a strong signal it's fed by an external process rather than meant for per-row app
@@ -813,7 +813,7 @@
   /* 19 Oct 2026: swimmers added on the Roll -- visitor / regular and their home club. Only sent when this phone has them,
      so an older copy never blanks what the cloud holds. */
   ...(row.is_visitor!==undefined&&row.is_visitor!==null?{is_visitor:!!row.is_visitor}:{}),...(row.visitor_home_club?{visitor_home_club:row.visitor_home_club}:{}),...(row.primary_club_name?{primary_club_name:row.primary_club_name}:{}),...(row.membership_type?{membership_type:row.membership_type}:{})});
- C.stageAthlete=row=>{if(!row?.id)return false;C.queue('athletes',C.projectAthlete(row));return true};
+ C.stageAthlete=(row,{withProfile=false}={})=>{if(!row?.id)return false;const rec=C.projectAthlete(row);/* 16 Nov 2026: the results names a coach adds in Manage swimmers live in source_profile.results_aliases (the same place the results sync's "link" keeps them); sent only when that edit is saved, so an older copy on a phone never overwrites the cloud's */if(withProfile&&row.source_profile&&typeof row.source_profile==='object')rec.source_profile=row.source_profile;C.queue('athletes',rec);return true};
  // coach_results.swimmer_name is NOT NULL with no server default -- every projection must supply it.
  C.projectCoachResult=row=>{const name=row.athlete_name||M.state.athletes.find(a=>a.id===row.athlete_id)?.full_name||'';return{id:row.id,organisation_id:C.org(),athlete_id:row.athlete_id||null,swimmer_name:name,source_swimmer_name:row.source_swimmer_name||name,result_date:row.result_date||null,meet_name:row.meet_name||null,course:row.pool_course||row.course||null,distance:Number(row.distance)||null,stroke:row.stroke||null,result_time_text:Number.isFinite(Number(row.result_seconds))?U.clock(Number(row.result_seconds)):null,result_seconds:Number.isFinite(Number(row.result_seconds))?Number(row.result_seconds):null,source_type:row.source_type||'manual',created_at:row.created_at||U.now(),updated_at:row.updated_at||U.now(),created_by:C.user()}};
  C.stageCoachResult=row=>{if(!row?.id)return false;C.queue('coach_results',C.projectCoachResult(row));return true};
