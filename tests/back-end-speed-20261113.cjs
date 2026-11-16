@@ -36,7 +36,9 @@ const SPLITS=[ // Charlotte Murphy 100 Fly, NZ SC Champs (cloud rows, 13 Nov), p
   await p.waitForFunction(()=>/closing better|fading more/.test(document.querySelector('[data-re-backend]')?.textContent||''),{timeout:10000});
   const card=await p.evaluate(()=>document.querySelector('[data-re-backend]').textContent.replace(/\s+/g,' '));
   assert.match(card,/58\.51 \/ 1:05\.85 · \+7\.34s/,card);assert.match(card,/Back-end work, last 8 weeks: 1 set/,card);assert.match(card,/fading more|closing better/);
-  assert.ok(asked.some(u=>/athlete_id=eq\.ch/.test(u)&&/splits=not\.is\.null/.test(u)));
+  /* 16 Nov 2026: every official swim is loaded now (meet, venue, round, place -- the event cards list his last swims with
+     or without splits); the back-end view still uses only the swims that have splits */
+  assert.ok(asked.some(u=>/athlete_id=eq\.ch/.test(u)&&/meets\(meet_name,venue/.test(u)&&/approved=eq\.true/.test(u)));
   await p.click('[data-cn-tab="races"]');await p.waitForSelector('[data-re-backend-all]',{timeout:10000});const tab=await p.evaluate(()=>document.querySelector('[data-re-backend-all]').innerText);
   assert.match(tab,/100 Fly · 2:04\.36/,tab);assert.match(tab,/back half \+7\.34s/,tab);assert.match(tab,/1 back-end set in the 6 weeks before/,tab);
   assert.deepEqual(errors,[],errors.join('\n'));console.log('BACK_END_SPEED_PASS');

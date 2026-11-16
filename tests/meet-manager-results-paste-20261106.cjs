@@ -48,9 +48,12 @@ Name Age Team Finals Time
   assert.deepEqual(r.rows,[
     ['a3',100,'Backstroke','LCM',85.19,'2026-10-31'],
     ['a0',100,'Backstroke','LCM',127.52,'2026-10-31'],
-    ['a1',50,'Freestyle','LCM',39.16,'2026-10-31'],
-    ['a2',50,'Butterfly','LCM',46.71,'2026-10-31']],JSON.stringify(r));
-  assert.equal(r.parse,4,'Race results "Read it" uses the meet reader');
+    ['a1',50,'Freestyle','LCM',39.16,'2026-10-31']],JSON.stringify(r));
+  // 16 Nov 2026: skins rounds are left out. In the full results file their printed strokes cannot be right (a
+  // 14-year-old girl's "50 Backstroke" skins round in 27.93), so Matthew Kofoed's 46.71 here is not a trustworthy 50 Fly
+  // and would make a false PB. See tests/data-intake-meet-pdf-20261116.cjs.
+  assert.ok(!r.rows.some(x=>x[0]==='a2'),'a skins-round swim is not imported');
+  assert.equal(r.parse,3,'Race results "Read it" uses the meet reader');
   assert.deepEqual(r.missing,['Matthew Callow'],'club-mates not in MSOS are listed, other clubs are not');
   assert.deepEqual(errors,[],errors.join('\n'));console.log('MEET_MANAGER_RESULTS_PASTE_PASS');
 }finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1);});
