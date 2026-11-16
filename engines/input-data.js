@@ -16,7 +16,7 @@
 // cloud sync. Also exposes parse + PB check for poolside notes (engines/capture-ui.js).
 (function(g){
   const M=g.MSOS4;if(!M?.state)return;
-  const ID=M.inputData={build:'v4-input-data-20261106-meet-text'};
+  const ID=M.inputData={build:'v4-input-data-20261116-no-skins'};
   const U=M.util||{},E=g.MSOSEngines||{};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const text=v=>String(v??'').replace(/\s+/g,' ').trim(),lc=v=>text(v).toLowerCase();
@@ -47,6 +47,8 @@
   function matchName(name){const n=lc(name).replace(/[^a-z' ()-]/g,' ').replace(/\s+/g,' ').trim();if(!n)return{candidates:[],kind:'none'};
     const sq=n.match(/^(.*)\(([^)]+)\)$/),base=sq?sq[1].trim():n,squad=sq?sq[2].trim():'';
     let pool=athletes().filter(a=>lc(a.full_name)===base);if(squad)pool=pool.filter(a=>lc(a.squad)===squad);if(pool.length)return{candidates:pool,kind:'full'};
+    /* the name a swimmer is entered under in meet results, kept in Manage swimmers (source_profile.results_aliases) */
+    pool=athletes().filter(a=>(Array.isArray(a?.source_profile?.results_aliases)?a.source_profile.results_aliases:[]).some(x=>lc(String(x?.name||x||'')).replace(/[^a-z' ()-]/g,' ').replace(/\s+/g,' ').trim()===base));if(pool.length)return{candidates:pool,kind:'full'};
     pool=athletes().filter(a=>lc(boardName(a))===base||lc(a.preferred_name||a.board_name||a.nickname)===base);if(pool.length)return{candidates:pool,kind:'deck'};
     const first=base.split(' ')[0],rest=base.split(' ').slice(1).join(' ');
     pool=athletes().filter(a=>{const parts=lc(a.full_name).split(' ');return parts[0]===first||parts[0].startsWith(first)&&first.length>=3;});
@@ -75,12 +77,16 @@
   // class are ignored). Relays, DQ / NS / scratch and exhibition (X) swims are left out. Swimmers from your own club
   // (the team code your matched swimmers swim for) who aren't in MSOS are listed by name, not guessed.
   function isMeetResults(raw){const t=String(raw||'');return/^\(?Event\s+\d+\s+(?:Boys|Girls|Men|Women|Mixed)\b[^\n]*\b(?:LC|SC)\s+Met(?:er|re)s?\b/im.test(t)&&/Name\s+Age\s+Team|HY-TEK/i.test(t);}
-  function meetResults(raw,{defaults={}}={}){const rows=[],ours=new Map(),other={matched:0,skipped:0};let ev=null,start='',meet='';
+  function meetResults(raw,{defaults={}}={}){const rows=[],ours=new Map(),other={matched:0,skipped:0};let ev=null,start='',meet='',skinsGroup='';
     const clean=n=>n.split(/\s+/).filter(w=>!/^(?:S|SB|SM)\d{1,2}(?:\/(?:S|SB|SM)\d{1,2})*$/i.test(w)&&!/^[A-Z]$/.test(w)).join(' ');
     for(let line of String(raw||'').split(/\r?\n/)){line=line.replace(/\s*\S*\s*HY-TEK'?s MEET MANAGER.*$/i,'').trim();if(!line)continue;
       const mh=line.match(/^(.+?)\s+-\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+\d{1,2}\/\d{1,2}\/\d{4}$/);if(mh){meet=meet||mh[1].trim();start=start||dateOf(mh[2],0);continue;}
       const eh=line.match(/^\(?Event\s+\d+\s+(.*?)\s(\d{2,4})\s+(LC|SC)\s+Met(?:er|re)s?\s+(\w+)(.*?)\)?$/i);
-      if(eh){const stroke=strokeOf(eh[4]);ev=/relay/i.test(eh[5])||!stroke?{skip:true}:{distance:Number(eh[2]),course:eh[3].toUpperCase()==='LC'?'LCM':'SCM',stroke};continue;}
+      /* 16 Nov 2026: skins (elimination rounds) are left out -- the 2026 Aquagym Challenge PDF labels its skins rounds with
+         strokes that cannot be right (a 14-year-old girl's "50 Backstroke" in 27.93), so their times would make false PBs.
+         The rounds after a "skins" event carry the same group ("Men 1-14", "Mixed ... Multi-Class") without the word. */
+      if(eh){const group=eh[1].trim().toLowerCase(),skins=/skins/i.test(eh[5]);if(skins)skinsGroup=group;else if(skinsGroup&&group!==skinsGroup)skinsGroup='';
+        const stroke=strokeOf(eh[4]);ev=/relay/i.test(eh[5])||!stroke||skinsGroup?{skip:true}:{distance:Number(eh[2]),course:eh[3].toUpperCase()==='LC'?'LCM':'SCM',stroke};continue;}
       if(!ev||ev.skip)continue;
       const r=line.match(/^(\*?\d+|-{2,})\s+(.+?)\s+(\d{1,2})\s+([A-Z]{2,6})\s+(\S+)/);if(!r)continue;
       const seconds=timeOf(r[5]);if(seconds==null){other.skipped++;continue;}

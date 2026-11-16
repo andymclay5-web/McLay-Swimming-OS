@@ -2,7 +2,7 @@
 (function(g){
   const M=g.MSOS4,E=g.MSOSEngines?.Evidence,P=M?.performanceEngine;
   if(!M?.state||!P||!E)return;
-  const X=P.pathwayCK={build:'v4-performance-pathway-20260824cv'};
+  const X=P.pathwayCK={build:'v4-performance-pathway-20261116-age-table'};
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const norm=v=>text(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const courseOf=r=>text(E.course?.(r)||r?.course||r?.pool_course).toUpperCase();
@@ -101,6 +101,33 @@
   function buildAthletePathways(ath,{course='',now=today()}={}){
     const c=text(course||M.state?.settings?.pathwayCourse||M.currentSession?.()?.identity?.course||'SCM').toUpperCase(),ranked=P.rankedEvents?.(ath,M.state,c)||[],profile=M.pathway?.profile?.(ath,c)||{},eventMap=new Map((profile?.events||[]).filter(e=>e?.pb).map(e=>[`${Number(e.pb.distance)}|${strokeKey(e.pb.stroke)}`,e])),idx={standards:buildStandardsIndex(),meets:buildMeetsIndex()},events=ranked.map(r=>{const legacy=eventMap.get(`${Number(r.distance)}|${strokeKey(r.stroke)}`)||{pb:{course:r.course||c,distance:r.distance,stroke:r.stroke,result_seconds:r.seconds},qualifying:[],deeper:[]};const ladder=buildEventLadder(ath,{...legacy,distance:r.distance,stroke:r.stroke,pbSeconds:r.seconds,course:r.course||c},{course:c,now,idx});return{...r,ladder};});return{athlete:ath,course:c,events,scm:events.map(e=>({...e,steps:e.ladder.tracks.SCM})),lcm:events.map(e=>({...e,steps:e.ladder.tracks.LCM}))};
   }
+  // 16 Nov 2026 (Andy, on Matthew Callow, just turned 14: "he's not interested in opens yet he wants to know the 14 and
+  // 15 age group medals and winner etc, it should all be on a big table linked to fina points with age specific and age
+  // up specific data"). One table per event and course: each age-group standard (qualifying, national age finalist /
+  // medal / winner benchmarks, NZ and Canterbury age records) for his age now and the age he moves up to, with the WA
+  // points that time is worth and how far his PB is from it. Rows come from the same standards the ladder uses
+  // (same sex / para / active rules); a standard printed for the other course is never shown as this course's.
+  const AGE_ROWS={LCM:[['NAGS qualifying',/^nags$/],['Age finalist',/^national age finalist/],['Age medal',/^national age medal/],['Age winner',/^national age winner/],['NZ age record',/^nz record$/],['Canterbury age record',/^canterbury record$/]],
+    SCM:[['NZSC qualifying',/^nzsc$/],['Division II qualifying',/^division ii$/],['Age finalist',/^national sc age finalist/],['Age medal',/^national sc age medal/],['Age winner',/^national sc age winner/],['Canterbury age record',/^canterbury record$/]]};
+  function ageTable(ath,event,course,{now=today(),ages=null}={}){
+    const c=text(course||event?.course||'SCM').toUpperCase()==='LCM'?'LCM':'SCM',age=ageOn(ath?.date_of_birth,now);
+    const cols=(ages||(age!=null?[age,age+1]:[])).filter(x=>Number.isFinite(Number(x)));if(!cols.length)return null;
+    const d=Number(event?.distance),st=strokeKey(event?.stroke),bucket=buildStandardsIndex().get(`${d}|${st}`)||[];
+    const usable=bucket.filter(r=>active(r)&&sexMatch(r,ath)&&paraMatch(r,ath));
+    const pb=Number(event?.seconds),pts=sec=>{try{const v=Number(M.pathway?.points?.(ath,{distance:d,stroke:event.stroke,course:c,result_seconds:sec,seconds:sec})?.value);return Number.isFinite(v)&&v>0?Math.floor(v):null}catch{return null}};
+    const rows=[];
+    for(const[label,re]of AGE_ROWS[c]){
+      const mine=usable.filter(r=>re.test(norm(programme(r))));if(!mine.length)continue;
+      const cells=cols.map(ag=>{const fit=mine.filter(r=>{const{min,max}=ageBounds(r);return min!=null&&max!=null&&ag>=min&&ag<=max&&max-min<=3;});
+        const own=fit.filter(r=>courseOf(r)===c),pool=own.length?own:fit.filter(r=>courseOf(r)==='BOTH');if(!pool.length)return{age:ag};
+        const best=pool.sort((x,y)=>Number(y?.season||0)-Number(x?.season||0)||(ageBounds(x).max-ageBounds(x).min)-(ageBounds(y).max-ageBounds(y).min))[0],sec=secondsOf(best);
+        if(!Number.isFinite(sec)||sec<=0)return{age:ag};const gap=Number.isFinite(pb)?pb-sec:null;
+        return{age:ag,seconds:sec,points:pts(sec),gap,achieved:gap!=null&&gap<=0,season:text(best?.season),group:text(best?.age_group)};});
+      if(cells.some(x=>x.seconds))rows.push({label,cells});
+    }
+    return rows.length?{course:c,age,ages:cols,pb:Number.isFinite(pb)?{seconds:pb,points:pts(pb)}:null,rows}:null;
+  }
+  P.ageTable=ageTable;
   P.pathwayLadderForEvent=buildEventLadder;
   P.pathwaysForAthlete=buildAthletePathways;
   P.projectedMeetDate=futureMeetDate;

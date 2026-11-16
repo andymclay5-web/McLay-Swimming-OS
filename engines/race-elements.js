@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.7.0-20261116-focus-on-roll';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.8.0-20261116-all-races';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -171,11 +171,14 @@
   RE.backEndOf=row=>{const pts=RE.splitsOf(row),D=Number(row.distance),total=Number(row.result_time_seconds??row.seconds)||pts[pts.length-1]?.t;if(!pts.length||!(D>0)||!(total>0))return null;
     const at=m=>pts.find(x=>Math.abs(x.m-m)<0.01)?.t;const half=at(D/2);if(!(half>0)||half<total*0.35||half>total*0.65)return null;const front=half,back=total-half;
     const q3=at(D*3/4),close=q3>0?total-q3:null;return{front,back,diff:back-front,pct:(back-front)/front*100,close,closeOf:q3>0?D/4:null,total};};
-  RE.splitRows=ath=>M.state?.raceSplits?.[ath?.id]?.rows||[];
+  RE.splitRows=ath=>(M.state?.raceSplits?.[ath?.id]?.rows||[]).filter(r=>RE.splitsOf(r).length);
+  /* 16 Nov 2026 (Andy: "Meet results also need to show where and when it was done with splits showing where possible"):
+     every official swim for the swimmer, with its meet and venue, splits or not */
+  RE.raceRows=ath=>M.state?.raceSplits?.[ath?.id]?.rows||[];
   RE.loadSplits=async(ath,{force=false}={})=>{const C=M.cloud;if(!ath?.id||!C?.ready?.()||!C.fetchPages)return null;const st=M.state.raceSplits=M.state.raceSplits||{},have=st[ath.id];
-    if(have&&!force&&Date.now()-Date.parse(have.at||0)<6*36e5)return have.rows;
-    const rows=await C.fetchPages(`/rest/v1/race_results?select=id,result_date,distance,stroke,course,round,result_time_seconds,result_time_text,splits,meet_id&athlete_id=eq.${encodeURIComponent(ath.id)}&approved=eq.true&splits=not.is.null&order=result_date.desc,id.asc`,1000,5000);
-    st[ath.id]={at:new Date().toISOString(),rows:(rows||[]).filter(r=>RE.splitsOf(r).length)};try{M.store?.save?.(M.state);}catch{}return st[ath.id].rows;};
+    if(have&&have.v===2&&!force&&Date.now()-Date.parse(have.at||0)<6*36e5)return have.rows;
+    const rows=await C.fetchPages(`/rest/v1/race_results?select=id,result_date,distance,stroke,course,round,result_time_seconds,result_time_text,splits,meet_id,official_place,result_status,meets(meet_name,venue,city,start_date,end_date)&athlete_id=eq.${encodeURIComponent(ath.id)}&approved=eq.true&order=result_date.desc,id.asc`,1000,5000);
+    st[ath.id]={v:2,at:new Date().toISOString(),rows:(rows||[]).filter(r=>!/^(dq|dns|dnf|scr)/i.test(String(r.result_status||'')))};try{M.store?.save?.(M.state);}catch{}return st[ath.id].rows;};
   // per event: each swim's back half against front half, newest first, and whether the latest closes better than before
   RE.backEndHistory=(ath,event)=>{const s=RE.strokeOf(event.stroke),c=String(event.course||'').toUpperCase();const rows=RE.splitRows(ath).filter(r=>Number(r.distance)===Number(event.distance)&&RE.strokeOf(r.stroke)===s&&(!c||String(r.course||'').toUpperCase().replace(/^SC$/,'SCM').replace(/^LC$/,'LCM')===c))
       .map(r=>({date:String(r.result_date||'').slice(0,10),round:r.round||'',seconds:Number(r.result_time_seconds),...RE.backEndOf(r)})).filter(x=>x.front>0).sort((a,b)=>b.date.localeCompare(a.date)||a.seconds-b.seconds);
