@@ -1,9 +1,22 @@
 'use strict';
 (function(g){
   const M=g.MSOS4;if(!M?.actions?.openCapture||!M?.ui)return;
-  const UI=M.ui,C=M.captureUI={build:'v4-capture-ui-20260821ah'},baseOpen=M.actions.openCapture.bind(M.actions),baseChrome=UI.configureRoleChrome?.bind(UI),boardUrls=new Map();
+  const UI=M.ui,C=M.captureUI={build:'v4-capture-ui-20261117-working-on'},baseOpen=M.actions.openCapture.bind(M.actions),baseChrome=UI.configureRoleChrome?.bind(UI),boardUrls=new Map();
   const esc=v=>M.util?.escape?M.util.escape(String(v??'')):String(v??''),txt=v=>M.util?.text?M.util.text(v):String(v??'').trim(),selectedCount=modal=>[...modal.querySelectorAll('[data-capture-athlete]')].filter(x=>x.checked).length;
-  const tidySelection=modal=>{const label=modal.querySelector('#captureSelectionLabel');if(label)label.textContent=`${selectedCount(modal)} selected`;};
+  // 17 Nov 2026 (Andy: "now that we've got things we're working on for each swimmer ... when we take videos and captures,
+  // we're sort of drawn back to it"). With one swimmer picked, the capture shows what they are working on (the same
+  // focus cards as their profile, race-elements owns them). Tapping one starts the note with that focus, so the new clip
+  // files under it -- on the profile it becomes the next clip of that work (before / after).
+  const focusCss=()=>{if(document.getElementById('captureFocusCss'))return;const st=document.createElement('style');st.id='captureFocusCss';st.textContent='.capture-focus{display:grid;gap:6px;margin:8px 0;padding:9px 10px;border-radius:12px;background:#eef5ff;border:1px solid #c9dcf5}.capture-focus b{font-size:13px}.capture-focus button{display:block;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid #b9cfe9;background:#fff;font-weight:800;font-size:13px;color:#0d4566}.capture-focus button.active{background:#0d4566;color:#fff}.capture-focus small{display:block;font-weight:500;color:inherit;opacity:.75}';document.head.appendChild(st);};
+  const focusStrip=modal=>{const picked=[...modal.querySelectorAll('[data-capture-athlete]:checked')].map(i=>i.dataset.captureAthlete);let host=modal.querySelector('[data-capture-focus]');
+    const a=picked.length===1?(M.state?.athletes||[]).find(x=>x.id===picked[0]):null;let cards=[];try{cards=a?(M.raceElements?.focusCards?.(a,{weeks:8})||[]).slice(0,3):[];}catch{}
+    if(!cards.length){host?.remove();return;}focusCss();
+    if(!host){host=document.createElement('div');host.dataset.captureFocus='1';host.className='capture-focus';const after=modal.querySelector('.capture-pick-actions')||modal.querySelector('.capture-athlete-head');(after?.parentNode||modal).insertBefore(host,after?after.nextSibling:null);}
+    const first=String(a.full_name||'').split(' ')[0],label=c=>`${c.where?`${c.where} — `:''}${String(c.theme||'').toLowerCase()}`;
+    host.innerHTML=`<b>🎯 ${M.util?.escape?M.util.escape(first):first} is working on</b>${cards.map((c,i)=>`<button type="button" data-capture-focus-pick="${i}">${M.util?.escape?M.util.escape(label(c)):label(c)}${c.latestNote?`<small>“${M.util?.escape?M.util.escape(c.latestNote):c.latestNote}”</small>`:''}</button>`).join('')}`;
+    host.onclick=e=>{const b=e.target.closest?.('[data-capture-focus-pick]');if(!b)return;const c=cards[Number(b.dataset.captureFocusPick)];const box=modal.querySelector('#captureText');if(!c||!box)return;
+      const lead=`${label(c)}: `;if(!box.value.toLowerCase().startsWith(lead.toLowerCase()))box.value=lead+box.value;box.dispatchEvent(new Event('input',{bubbles:true}));for(const x of host.querySelectorAll('button'))x.classList.toggle('active',x===b);box.focus?.();};};
+  const tidySelection=modal=>{const label=modal.querySelector('#captureSelectionLabel');if(label)label.textContent=`${selectedCount(modal)} selected`;try{focusStrip(modal);}catch{}};
   function activeBoardContext(ctx={}){if(ctx.itemId||ctx.blockId)return ctx;const view=M.state?.settings?.view||'';if(view!=='board'&&view!=='tv')return ctx;const s=M.currentSession?.();if(!s)return ctx;const selected=M.state?.settings?.boardBlockBySession?.[s.id],block=(s.blocks||[]).find(b=>b.id===selected)||(s.blocks||[]).find(b=>b.type==='main_set')||(s.blocks||[])[0];return block?{...ctx,blockId:block.id}:ctx;}
   function refreshDeck(){const v=M.state?.settings?.view||'';if(v==='board')UI.renderBoard?.();else if(v==='tv')UI.renderTV?.();}
   function captureTitle(cap){return txt(cap?.text_content||cap?.title||'');}

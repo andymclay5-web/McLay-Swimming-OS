@@ -19,7 +19,7 @@
 .re-box{margin-top:10px;padding-top:8px;border-top:1px solid rgba(127,127,127,.25)}.re-box h4{margin:4px 0 6px;font-size:14px}.re-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.12)}
 .re-row b{font-size:14px}.re-row span{font-size:12px;opacity:.8;text-align:right}.re-row small{grid-column:1/-1;font-size:12px;opacity:.75}.re-need{font-size:11px;letter-spacing:1px;opacity:.6}
 .re-bar{height:6px;border-radius:3px;background:rgba(56,132,255,.55);grid-column:1/-1}.re-note{font-size:12px;opacity:.7;margin-top:6px}.re-race{padding:8px 0;border-bottom:1px solid rgba(127,127,127,.15)}.re-race b{font-size:14px}
-.re-reply{margin-top:6px;padding:6px 9px;border-radius:9px;background:#eef6f0;color:#1b5b40;font-size:13px}.re-reply small{color:#647a86}.re-roll-focus{margin:-4px 0 10px;padding:8px 10px;border-radius:10px;background:rgba(56,132,255,.08);font-size:13px;line-height:1.35;font-weight:400}.re-roll-focus>div{margin:3px 0}.re-roll-focus .re-clip-btn{padding:2px 8px;font-size:12px;margin-left:4px}.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}.re-sum{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(56,132,255,.08)}.re-sum h4{margin:0 0 6px;font-size:15px}.re-sum p{margin:4px 0;font-size:14px;line-height:1.35}.re-focus{margin:4px 0 2px 18px;padding:0;font-size:14px}.re-focus li{margin:3px 0}.re-more{margin-top:8px}.re-working{border-left:4px solid rgba(56,132,255,.7)}.re-work-list{margin:6px 0 8px 18px;padding:0}.re-work-list li{margin:8px 0;font-size:15px;line-height:1.4}.re-clips-row{display:flex;gap:8px;margin-top:6px}.re-clip-btn{padding:6px 12px;border-radius:16px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:13px}.re-capg{padding:10px 0;border-top:1px solid rgba(127,127,127,.18)}.re-capg b{font-size:15px}.re-clips{display:flex;flex-direction:column;gap:6px;margin-top:6px}.re-clip{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;font:inherit;font-size:14px}.re-clip.after{border-color:rgba(26,143,74,.6)}.re-clip>span:first-child{width:18px;opacity:.8}.re-more>summary{cursor:pointer;font-size:13px;opacity:.75;padding:4px 0}`;document.head.appendChild(s);}
+.re-views{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.re-views button{padding:6px 11px;border-radius:999px;border:1px solid #cbdde5;background:#fff;font-weight:800;font-size:12px;color:#0d4566}.re-views button.active{background:#0d4566;color:#fff;border-color:#0d4566}details.re-capg>summary{cursor:pointer;font-size:14px;margin-bottom:4px}.re-reply{margin-top:6px;padding:6px 9px;border-radius:9px;background:#eef6f0;color:#1b5b40;font-size:13px}.re-reply small{color:#647a86}.re-up{color:#1a8f4a}.re-down{color:#c0392b}.re-cap{font-size:12px;padding:4px 0}.re-sum{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(56,132,255,.08)}.re-sum h4{margin:0 0 6px;font-size:15px}.re-sum p{margin:4px 0;font-size:14px;line-height:1.35}.re-focus{margin:4px 0 2px 18px;padding:0;font-size:14px}.re-focus li{margin:3px 0}.re-more{margin-top:8px}.re-working{border-left:4px solid rgba(56,132,255,.7)}.re-work-list{margin:6px 0 8px 18px;padding:0}.re-work-list li{margin:8px 0;font-size:15px;line-height:1.4}.re-clips-row{display:flex;gap:8px;margin-top:6px}.re-clip-btn{padding:6px 12px;border-radius:16px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:13px}.re-capg{padding:10px 0;border-top:1px solid rgba(127,127,127,.18)}.re-capg b{font-size:15px}.re-clips{display:flex;flex-direction:column;gap:6px;margin-top:6px}.re-clip{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;font:inherit;font-size:14px}.re-clip.after{border-color:rgba(26,143,74,.6)}.re-clip>span:first-child{width:18px;opacity:.8}.re-more>summary{cursor:pointer;font-size:13px;opacity:.75;padding:4px 0}`;document.head.appendChild(s);}
   const chip=id=>{const e=RE().byId[id];return e?`<i data-f="${e.family}">${esc(e.chip)}</i>`:'';};
   const chipRow=ids=>ids?.length?`<div class="re-chips">${ids.map(chip).join('')}</div>`:'';
   const dots=w=>'●'.repeat(Math.round(w))+'○'.repeat(3-Math.round(w));
@@ -63,14 +63,14 @@
   const strokeLine=x=>!x?'':`<p>🏊 <b>${esc(x.stroke)} work:</b> ${x.sets} set${x.sets===1?'':'s'} · ${Math.round(x.metres)}m of ${Math.round(x.total)}m (${Math.round(100*x.share)}%)${x.choice?` · plus ${Math.round(x.choice)}m Choice / #1 that may have been ${esc(x.stroke==='IM'?'IM':x.stroke.toLowerCase())}`:''}${x.share<0.1?' — low for this event':''}.</p>`;
   UI.summaryHtml=(a,event)=>{const R=RE();const s=R.summary(a,event);const key=`${event.distance}|${event.stroke}|${event.course}`;
     if(!s.sessions)return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary</h4><p class="muted">No sessions recorded for ${esc(a.full_name)} in the last ${s.weeks} weeks — the summary fills in from the roll.</p></div>`;
-    return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · summary · last ${s.weeks} weeks (${s.sessions} sessions)</h4>
-      ${s.done.length?`<p>✅ <b>Being done:</b> ${list([...s.done].sort((x,y)=>y.weight-x.weight||y.sessions-x.sessions).slice(0,5))}</p>`:''}
-      ${s.light.length?`<p>⚠️ <b>Light:</b> ${list(s.light)}</p>`:''}
-      ${s.missing.length?`<p>❌ <b>Missing:</b> ${list(s.missing)}</p>`:''}
-      ${raceLine(s.race)}
-      ${strokeLine(s.stroke)}
-      ${s.focus.length?`<p>👉 <b>Work on next:</b></p><ol class="re-focus">${s.focus.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:'<p>👍 Everything this race leans on is getting regular work.</p>'}
-      <p class="re-note">(n) = sessions with that work. Patterns, not proof.</p></div>`;};
+    /* 17 Nov 2026 (Andy: "the whole summary section needs to be simplified"): three lines -- what is getting done, the
+       one thing to do next and where it sits in the week, and how the races are finishing. The full breakdown (needs,
+       light, missing, stroke share, a set to try) stays under "Show the detail". */
+    const top=s.focus[0],got=[...s.done].sort((x,y)=>y.weight-x.weight||y.sessions-x.sessions).slice(0,3).map(x=>x.label.toLowerCase());
+    return`<div class="re-sum" data-re-summary="${esc(key)}"><h4>${esc(evName(event))} · training, last ${s.weeks} weeks</h4>
+      ${got.length?`<p>✅ Getting ${esc(got.join(', '))}.</p>`:''}
+      ${top?`<p>👉 <b>Next: ${esc(top.label.toLowerCase())}</b> — ${esc(String(top.why||'').replace(/[.\s]*$/,'.'))}${top.advice?.text?` ${esc(top.advice.text)}`:''}</p>`:'<p>👍 Everything this race leans on is getting regular work.</p>'}
+      ${raceLine(s.race)}</div>`;};
   UI.overviewHtml=(a,course)=>{const R=RE();const o=R.overview(a,{course});
     if(!o.events.length)return`<div class="re-sum" data-re-overview><h4>What's happening</h4><p class="muted">No ${esc(course)} races in the last 12 months to tie the training to.</p></div>`;
     const gapLine=g=>`<b>${esc(g.label)}</b> <span class="re-note">(${[...g.missing,...g.light].map(evName).join(', ')}${g.sessions?` · ${g.sessions} session${g.sessions===1?'':'s'}`:' · none'})</span>`;
@@ -85,6 +85,32 @@
   const timeOf=t=>{const d=new Date(t);return isNaN(d)?'':d.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'}).replace(' ','').toLowerCase();};
   const weekday=d=>{const x=new Date(`${d}T12:00:00`);return isNaN(x)?'':x.toLocaleDateString('en-NZ',{weekday:'short',day:'numeric',month:'short'});};
   const BLOCK={warm_up:'Warm-up',pre_set:'Pre-set',main_set:'Main set',post_set:'Post-set',warm_down:'Warm-down'};
+  // 17 Nov 2026 (Andy: "the roll needs to be for marking off attendance, but they need to be listed on the actual swimmers
+  // page ... they need to be categorised a bit better, stroke, note, timeline ... a reference point for each swimmer that
+  // we can all check"). Every capture of the swimmer over the last six months, one tap to play, in four views of the same
+  // list: Timeline (by session), By stroke, By focus (what was being worked on), Notes (only the ones someone wrote on).
+  const VIEWS=[['timeline','Timeline'],['stroke','By stroke'],['focus','By focus'],['notes','Notes']];
+  const STROKES=['Freestyle','Backstroke','Breaststroke','Butterfly','IM'];
+  const capView=()=>{const v=M.state?.settings?.captureView;return VIEWS.some(x=>x[0]===v)?v:'timeline';};
+  UI.captureLibraryHtml=(a,{view=capView(),weeks=26}={})=>{try{css();const R=RE();if(!R||!a)return'';
+    let list=R.captureStory(a,{weeks}).story.flat();if(isSwimmer())list=list.filter(x=>['shared','swimmer'].includes(x.capture?.audience));
+    list.sort((x,y)=>String(y.time||y.date).localeCompare(String(x.time||x.date)));const first=String(a.full_name||'').split(' ')[0];
+    const icon=t=>t==='video'?'▶':t==='photo'?'▣':t==='voice'?'♪':'✎';
+    const item=(x,{showDate=true}={})=>`<button type="button" class="re-clip${x.after?' after':''}" data-msos-capture="${esc(x.capture.id)}"><span>${icon(x.type)}</span><span><b>${esc(x.set?.label||x.title||'Capture')}</b>${x.note?` — “${esc(x.note)}”`:''}<i class="re-note">${showDate?` · ${esc(day(x.date))}`:''}${x.group?' · group':''}${x.after?' · after the cue':''}</i></span></button>`;
+    const groups=(keyOf,order)=>{const m=new Map();for(const x of list){for(const k of [].concat(keyOf(x)))(m.get(k)||m.set(k,[]).get(k)).push(x);}const keys=[...m.keys()].sort((p,q)=>order?order(p,q):0);return keys.map(k=>[k,m.get(k)]);};
+    let body='';
+    if(view==='timeline'){const g=groups(x=>`${x.date}|${x.session?.identity?.dayPart||x.session?.dayPart||''}`,(p,q)=>q.localeCompare(p));
+      body=g.map(([k,xs])=>{const[d,part]=k.split('|');return`<div class="re-capg"><div class="re-note">${esc(weekday(d))}${part?` · ${esc(part)}`:''}</div><div class="re-clips">${xs.map(x=>item(x,{showDate:false})).join('')}</div></div>`;}).join('');}
+    else if(view==='stroke'){const g=groups(x=>STROKES.includes(x.stroke)?x.stroke:/\b(kick|drill|scull|skill|start|turn|underwater|streamline)\b/i.test(`${x.title} ${x.note} ${x.set?.label||''}`)?'Kick & skills':'Other',(p,q)=>{const o=[...STROKES,'Kick & skills','Other'];return o.indexOf(p)-o.indexOf(q);});
+      body=g.map(([k,xs])=>`<details class="re-capg" open><summary><b>${esc(k)}</b> · ${xs.length}</summary><div class="re-clips">${xs.map(x=>item(x)).join('')}</div></details>`).join('');}
+    else if(view==='focus'){const g=groups(x=>x.themes.length?x.themes:['Not tagged yet'],(p,q)=>p==='Not tagged yet'?1:q==='Not tagged yet'?-1:0);
+      body=g.sort((x,y)=>(x[0]==='Not tagged yet')-(y[0]==='Not tagged yet')||y[1].length-x[1].length).map(([k,xs])=>`<details class="re-capg"${k==='Not tagged yet'?'':' open'}><summary><b>${esc(k)}</b> · ${xs.length}</summary><div class="re-clips">${xs.map(x=>item(x)).join('')}</div></details>`).join('');}
+    else{const notes=list.filter(x=>x.note);body=notes.length?`<div class="re-clips">${notes.map(x=>item(x)).join('')}</div>`:'<p class="muted">No written notes yet.</p>';}
+    return`<section class="page-card" data-re-library="${esc(a.id)}"><div class="eyebrow">CAPTURES · ${esc(a.full_name)}</div><h2>${list.length} capture${list.length===1?'':'s'} · last 6 months</h2>
+      <div class="re-views">${VIEWS.map(([k,l])=>`<button type="button" data-re-capview="${k}" class="${k===view?'active':''}">${l}</button>`).join('')}</div>
+      ${list.length?body:`<p class="muted">No captures of ${esc(first)} yet. Capture from the Board and pick ${esc(first)} — it lands here.</p>`}</section>`;}catch(err){return'';}};
+  if(!UI._libBound){UI._libBound=true;document.addEventListener('click',ev=>{const b=ev.target?.closest?.('[data-re-capview]');if(!b)return;const sec=b.closest('[data-re-library]');const a=(M.state?.athletes||[]).find(x=>x.id===sec?.dataset.reLibrary);if(!a)return;
+    M.state.settings.captureView=b.dataset.reCapview;try{M.storageEngine?.saveUi?.(M.state);}catch{}sec.outerHTML=UI.captureLibraryHtml(a,{view:b.dataset.reCapview});});}
   UI.capturesHtml=a=>{try{css();const R=RE();if(!R||!a)return'';const yearAgo=new Date(Date.now()-365*864e5).toISOString().slice(0,10);const count=new Map();
     for(const r of R.results(a))if(r.date>=yearAgo){const k=`${r.distance}|${r.stroke}|${r.course}`;count.set(k,(count.get(k)||0)+1);}
     const events=[...count.entries()].sort((x,y)=>y[1]-x[1]).slice(0,6).map(([k])=>{const[d,st,c]=k.split('|');return{distance:Number(d),stroke:st,course:c};});
@@ -128,9 +154,6 @@
     return list.find(r=>r.payload?.key===l.key||clipIds.has(r.payload?.captureId)||String(r.payload?.focus||'').toLowerCase()===head)||null;};
   UI.loadReplies=async a=>{try{const rows=await M.swimmerInviteBN?.sessionActionsFor?.(a);const list=(Array.isArray(rows)?rows:[]).filter(r=>r.action_type==='focus_note').sort((x,y)=>String(y.created_at||'').localeCompare(String(x.created_at||'')));
     const before=JSON.stringify(UI.replies[a.id]||[]);UI.replies[a.id]=list;if(before!==JSON.stringify(list))document.querySelectorAll('[data-re-working]').forEach(el=>{if(el.dataset.reWorking===String(a.id))el.outerHTML=UI.workingOnHtml(a);});return list;}catch(err){return[];}};
-  /* the Roll: whoever runs the session sees what the last coach noticed on each swimmer, with the clip one tap away */
-  UI.rollFocusHtml=(a,{weeks=4}={})=>{try{const R=RE();if(!R?.focusCards||!a)return'';css();const cards=R.focusCards(a,{weeks}).slice(0,2);if(!cards.length)return'';
-    return`<div class="re-roll-focus" data-re-roll-focus="${esc(a.id)}">${cards.map(c=>`<div>🎯 <b>${esc(`${c.where?`${c.where} — `:''}${c.theme.toLowerCase()}`)}</b>${c.latestNote?` · “${esc(c.latestNote)}”`:''} · ${esc(day(c.last))}${c.after?' · improving':''} <button type="button" class="re-clip-btn" data-msos-capture="${esc(c.latestClip)}">▶ Clip</button></div>`).join('')}</div>`;}catch(err){return'';}};
   UI.workingOnHtml=a=>{try{css();if(!RE()||!a)return'';const t=UI.workingOnText(a);
     const item=(l,i)=>`<li><b>${esc(l.head[0].toUpperCase()+l.head.slice(1))}</b>${l.body?`<br>${esc(l.body)}`:''}${l.helps?`<br><span class="re-note">${esc(l.helps)}</span>`:''}${l.clips.length?`<div class="re-clips-row">${l.clips.map(([k,id])=>`<button type="button" class="re-clip-btn" data-msos-capture="${esc(id)}">▶ ${esc(k)}</button>`).join('')}</div>`:''}${(r=>r?`<div class="re-reply">💬 <b>${esc(t.first)}:</b> ${esc([r.payload?.feeling,r.payload?.note&&`“${r.payload.note}”`].filter(Boolean).join(' — '))} <small>${esc(day(String(r.created_at||'').slice(0,10)))}</small></div>`:'')(UI.replyFor(a,l))}</li>`;
     return`<section class="page-card re-working" data-re-working="${esc(a.id)}"><div class="eyebrow">WHAT ${esc(t.first.toUpperCase())} IS WORKING ON</div>
@@ -144,6 +167,8 @@
     const recent=last&&(Date.now()-new Date(`${last.date}T12:00:00`).getTime())<200*864e5;
     UI.ensureSplits(a);const summary=UI.summaryHtml(a,event);
     const parts=[`<div class="re-box"><h4>What a ${esc(event.distance)} ${esc(shortStroke(R.strokeOf(event.stroke)))} needs</h4>${chipRow(needs.map(n=>n.id))}</div>`];
+    /* the full picture moved out of the summary: every gap with where it sits in the week and a set to try */
+    {const sm=R.summary(a,event);if(sm.sessions)parts.push(`<div class="re-box"><h4>Last ${sm.weeks} weeks · ${sm.sessions} sessions</h4>${sm.done.length?`<p>✅ <b>Being done:</b> ${list([...sm.done].sort((x,y)=>y.weight-x.weight||y.sessions-x.sessions).slice(0,6))}</p>`:''}${sm.light.length?`<p>⚠️ <b>Light:</b> ${list(sm.light)}</p>`:''}${sm.missing.length?`<p>❌ <b>Missing:</b> ${list(sm.missing)}</p>`:''}${strokeLine(sm.stroke)}${sm.focus.length?`<ol class="re-focus">${sm.focus.map(f=>`<li><b>${esc(f.label)}</b> — ${esc(f.why)}${tryLine(f)}</li>`).join('')}</ol>`:''}<p class="re-note">(n) = sessions with that work. Patterns, not proof.</p></div>`);}
     const lastB=recent?R.behind(a,{...event,date:last.date},{weeks:6,before:last.date}):null;
     if(lastB?.sessions)parts.push(behindBlock(`Training behind ${last.meet?esc(last.meet):'the last race'} · ${day(last.date)} · ${clock(last.seconds)}`,lastB,a));
     parts.push(UI.backEndHtml(a,event));

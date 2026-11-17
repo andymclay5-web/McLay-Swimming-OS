@@ -83,7 +83,7 @@
   const RENDER={session:reportSession,week:reportWeek,season:reportSeason,tests:reportTests,times:reportTimes,swimmer:reportSwimmer};
   function squadsList(){const set=new Set();for(const s of sessions())for(const q of s.identity?.squads||[])set.add(text(q));return[...set].sort();}
   function renderReports(host){const r=rState.report;const sq=['week','season'].includes(r);
-    host.innerHTML=`<section class="page-card"><div class="hp-grid" data-hp-reports>${REPORTS.map(([k,l])=>`<button type="button" class="hp-btn${r===k?' on':''}" data-hp-report="${k}">${esc(l)}</button>`).join('')}</div>${sq?`<label class="hp-pick">Squad<select data-hp-squad><option value="">All squads</option>${squadsList().map(q=>`<option${q===rState.squad?' selected':''}>${esc(q)}</option>`).join('')}</select></label>`:''}</section>${r?`<section class="page-card hp-out" data-hp-out="${r}">${(()=>{try{return RENDER[r]();}catch(e){return`<p class="warn-text">This report could not be built: ${esc(e.message)}</p>`;}})()}</section>`:'<p class="muted hp-pickone">Pick a report.</p>'}${isOwner()?'<section class="page-card"><div class="hub-actions"><button type="button" data-hp-engine>Full reports (squad / swimmer / pathway / evidence)</button></div></section>':''}`;
+    host.innerHTML=`<section class="page-card"><div class="hp-grid" data-hp-reports>${REPORTS.map(([k,l])=>`<button type="button" class="hp-btn${r===k?' on':''}" data-hp-report="${k}">${esc(l)}</button>`).join('')}</div>${sq?`<label class="hp-pick">Squad<select data-hp-squad><option value="">Squad…</option>${squadsList().map(q=>`<option${q===rState.squad?' selected':''}>${esc(q)}</option>`).join('')}</select></label>`:''}</section>${r?`<section class="page-card hp-out" data-hp-out="${r}">${(()=>{try{return RENDER[r]();}catch(e){return`<p class="warn-text">This report could not be built: ${esc(e.message)}</p>`;}})()}</section>`:'<p class="muted hp-pickone">Pick a report.</p>'}${isOwner()?'<section class="page-card"><div class="hub-actions"><button type="button" data-hp-engine>Full reports (squad / swimmer / pathway / evidence)</button></div></section>':''}`;
     host.querySelectorAll('[data-hp-report]').forEach(b=>b.onclick=()=>{rState.report=b.dataset.hpReport;renderReports(host);});
     host.querySelector('[data-hp-squad]')?.addEventListener('change',e=>{rState.squad=e.target.value;renderReports(host);});
     host.querySelector('[data-hp-swimmer]')?.addEventListener('change',e=>{rState.athleteId=e.target.value;renderReports(host);});
@@ -112,20 +112,23 @@
   function renderSwimmers(host){const owner=(M.access?.role?.()||'owner')==='owner',all=athletes(),by=new Map((access||[]).map(r=>[r.athlete_id,r]));
     const hasApp=a=>{const r=by.get(a.id);return!!(r&&(r.devices>0||r.has_account));};
     const squads=[...new Set(all.map(a=>text(a.squad)||'No squad'))].sort();
-    const q=lc(sState.q),list=all.filter(a=>(!sState.squad||(text(a.squad)||'No squad')===sState.squad)&&(!q||lc(a.full_name).includes(q)));
+    const q=lc(sState.q),list=all.filter(a=>(!sState.squad||sState.squad==='*'||(text(a.squad)||'No squad')===sState.squad)&&(!q||lc(a.full_name).includes(q)));
     const card=a=>{const f=swimmerFacts(a.id),race=f.race;const raceTxt=race?`${[race.distance,race.stroke].filter(Boolean).join(' ')} ${clock(race.result_seconds||race.time_seconds)}`:'';
       return`<button type="button" class="hp-row" data-hp-card="${esc(a.id)}"><span><b>${esc(a.full_name)}${hasApp(a)?' <small class="good-text">· app</small>':''}</b><small>${esc(a.squad||'')}${raceTxt?` · ${esc(raceTxt)}`:''}</small></span><span><b>${f.t4?esc(clock(f.t4.result_seconds)):'—'}</b><small>T400 · ${f.sessions} session${f.sessions===1?'':'s'} / 4 wks</small></span></button>`;};
-    const groups=sState.squad?[sState.squad]:squads;
-    const roster=groups.map(sq=>{const rows=list.filter(a=>(text(a.squad)||'No squad')===sq);return rows.length?`<h4>${esc(sq)} · ${rows.length}</h4>${rows.map(card).join('')}`:'';}).join('');
+    /* 17 Nov 2026 (Andy: "Coach Hub with all of the swimmers, each swimmer is having to scroll down, it's no good"): Find or
+       pick a squad first; only the swimmers that match are listed. */
+    const searching=!!(q||sState.squad);/* "All squads" (*) still lists everyone, grouped -- on request, not by default */
+    const groups=sState.squad&&sState.squad!=='*'?[sState.squad]:squads;
+    const roster=!searching?`<p class="muted">Type a name or pick a squad — ${all.length} swimmers.</p>`:groups.map(sq=>{const rows=list.filter(a=>(text(a.squad)||'No squad')===sq);return rows.length?`<h4>${esc(sq)} · ${rows.length}</h4>${rows.map(card).join('')}`:'';}).join('');
     const appRow=a=>{const r=by.get(a.id)||{};const how=[r.has_account?'account':'',r.devices?`${r.devices} QR device${r.devices===1?'':'s'}`:''].filter(Boolean).join(' + ');
       return`<div class="hp-row hp-static"><span><b>${esc(a.full_name)}</b><small>${esc(how)}${r.last_seen_at?` · seen ${esc(ago(r.last_seen_at))}`:''}${r.last_published_at?` · updated ${esc(ago(r.last_published_at))}`:''}${r.open_invites?` · ${r.open_invites} invite open`:''}</small></span><span class="hp-acts">${r.devices?`<button type="button" class="danger" data-hp-revoke="${esc(a.id)}">Revoke QR</button>`:''}</span></div>`;};
     const withApp=all.filter(hasApp);
     host.innerHTML=`${owner?'<section class="page-card"><div class="hp-grid"><button type="button" class="hp-btn" data-hp-add>Add a swimmer</button><button type="button" class="hp-btn" data-hp-give>Give a swimmer the app</button><button type="button" class="hp-btn" data-hp-join>Join requests</button></div></section>':''}
       <section class="page-card"><h3>${owner?'All swimmers':'Your squads'} · ${all.length}</h3><p class="muted">${owner?'Tap a swimmer for their full profile.':'Tap a swimmer for their training and results.'}</p>
         <label class="hp-pick">Find<input type="search" data-hp-q value="${esc(sState.q)}" placeholder="Name" style="border:1px solid #9fbecb;border-radius:10px;padding:8px;font:inherit"></label>
-        <label class="hp-pick">Squad<select data-hp-sq><option value="">All squads</option>${squads.map(x=>`<option${x===sState.squad?' selected':''}>${esc(x)}</option>`).join('')}</select></label>
+        <label class="hp-pick">Squad<select data-hp-sq><option value="">Squad…</option><option value="*"${sState.squad==='*'?' selected':''}>All squads</option>${squads.map(x=>`<option${x===sState.squad?' selected':''}>${esc(x)}</option>`).join('')}</select></label>
         <div data-hp-roster>${roster||'<p class="muted">No swimmer matches.</p>'}</div></section>
-      ${owner?`<section class="page-card"><h3>App access</h3>${access==null?`<p class="muted" data-hp-access-status>${accessErr?esc(accessErr):'Checking…'}</p>`:accessErr?`<p class="warn-text">${esc(accessErr)}</p>`:withApp.length?withApp.map(appRow).join(''):'<p class="muted">No swimmer has the app linked yet.</p>'}${access!=null?'<div class="hub-actions"><button type="button" data-hp-refresh>Refresh</button></div>':''}</section>`:''}`;
+      ${owner?`<details class="page-card" data-hp-access><summary><b>Who has the app</b>${access!=null&&!accessErr?` · ${withApp.length}`:''}</summary>${access==null?`<p class="muted" data-hp-access-status>${accessErr?esc(accessErr):'Checking…'}</p>`:accessErr?`<p class="warn-text">${esc(accessErr)}</p>`:withApp.length?withApp.map(appRow).join(''):'<p class="muted">No swimmer has the app linked yet.</p>'}${access!=null?'<div class="hub-actions"><button type="button" data-hp-refresh>Refresh</button></div>':''}</details>`:''}`;
     const open=id=>{if(owner){M.state.settings.selectedAthleteId=id;M.storageEngine?.saveUi?.(M.state);M.nav?.show?.('athletes',{restoreScroll:false});}else{rState.report='swimmer';rState.athleteId=id;M.coachLoopUI?.openHubPanel?.('reports');}};
     host.querySelectorAll('[data-hp-card]').forEach(b=>b.onclick=()=>open(b.dataset.hpCard));
     const qi=host.querySelector('[data-hp-q]');qi?.addEventListener('input',e=>{sState.q=e.target.value;const pos=e.target.selectionStart;renderSwimmers(host);const n=host.querySelector('[data-hp-q]');if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch{}}});
@@ -158,5 +161,5 @@
     const now=new Date().toISOString(),a={id,full_name:name,squad:text(squad),sex:text(sex)||null,date_of_birth:text(date_of_birth)||null,current_s_class:text(current_s_class).toUpperCase()||null,active:true,created_at:now,updated_at:now};
     M.state.athletes=M.state.athletes||[];M.state.athletes.push(a);try{M.store?.save?.(M.state);}catch{}try{M.cloud?.stageAthlete?.(a);M.cloud?.sendSoon?.(500);}catch{}try{M.performanceEngine?.invalidate?.()}catch{}return a;};
   P.addSwimmer=addSwimmer;
-  P.renderSwimmers=renderSwimmers;P.loadAccess=loadAccess;
+  P.renderSwimmers=renderSwimmers;P.swimmerFind=sState;P.loadAccess=loadAccess;
 })(globalThis);

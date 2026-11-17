@@ -14,7 +14,7 @@
 // that carry the same labels. Patterns, not proof: the views say so.
 (function(g){
   const M=g.MSOS4;if(!M)return;
-  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.8.0-20261116-all-races';
+  const RE=M.raceElements=M.raceElements||{};RE.VERSION='1.9.0-20261117-capture-library';
   const text=v=>String(v??'').replace(/\s+/g,' ').trim();
   const low=v=>text(v).toLowerCase();
 
@@ -256,7 +256,7 @@
         const best=[...sets].map(r=>[score(r),r]).sort((x,y)=>y[0]-x[0])[0];if(best&&best[0]>0)set=best[1];}
       const note=text(c.capture_note||c.note||'');const tags=[...new Set([...(set?.tags||[]),...RE.tagText(`${title} ${note}`)])];
       const themes=THEMES.filter(([re])=>new RegExp(`\\b(?:${re})\\b`,'i').test(`${note} ${title}`)).map(t=>t[1]).filter((t,_,all)=>!(t==='Hips / rotation'&&all.includes('Kick from the hips, not the knees')));
-      out.push({capture:c,date:d,time:String(c.created_at||''),session,block:block?.type||'',blockLabel:block?.title||block?.label||'',set:set?{label:set.label,id:set.id,zone:set.zone||''}:null,title,note,tags,themes,type:String(c.capture_type||'text').toLowerCase(),group:!who.length,after:/\bafter\b|\bthen\b|\bnow\b|\bbetter\b|\bimproved\b/i.test(note),
+      out.push({capture:c,date:d,time:String(c.created_at||''),session,block:block?.type||'',blockLabel:block?.title||block?.label||'',set:set?{label:set.label,id:set.id,zone:set.zone||''}:null,stroke:RE.strokeOf(`${title} ${note}`)||set?.stroke||'',title,note,tags,themes,type:String(c.capture_type||'text').toLowerCase(),group:!who.length,after:/\bafter\b|\bthen\b|\bnow\b|\bbetter\b|\bimproved\b/i.test(note),
         feeds:events.filter(ev=>tags.some(t=>RE.weight(t,ev)>=2))});}
     out.sort((a,b)=>String(b.time).localeCompare(String(a.time)));
     // group by session + set, oldest first inside a group so the coaching sequence reads in order

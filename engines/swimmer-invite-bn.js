@@ -827,7 +827,9 @@
   // owner's phone, or arriving from another coach's phone, republishes just that swimmer's shared notes. A
   // video/photo goes with a private link that lasts 14 days (renewed on every republish); the cloud folder stays
   // coaches-only.
-  const isOwner=()=>(M.access?.role?.()||'owner')==='owner';
+  /* 17 Nov 2026: Kaleb's phone sent ~40 swimmer-page publishes in a second on Monday night, every one refused (owner only):
+     the device role read 'owner' before his team membership had loaded. The cloud membership decides; a signed-in phone whose membership hasn't loaded yet publishes nothing. */
+  const isOwner=()=>{const tm=M.state?.settings?.teamMembership;if(tm&&tm.role)return tm.role==='owner';return !M.teamAccess?.isSignedIn?.()&&(M.access?.role?.()||'owner')==='owner';};
   async function signedUrl(path){const c=cfg();if(!path||!M.cloud?.fetch)return null;try{const r=await M.cloud.fetch(`/storage/v1/object/sign/${encodeURIComponent(c.mediaBucket||'swimming-media')}/${path}`,{method:'POST',body:JSON.stringify({expiresIn:14*86400})});const u=r?.signedURL||r?.signedUrl;return u?`${c.supabaseUrl.replace(/\/$/,'')}/storage/v1${u.startsWith('/')?'':'/'}${u}`:null}catch{return null}}
   async function sharedEvidenceFor(a){const rows=(M.state.captures||[]).filter(c=>ownCapture(c,a)).sort((x,y)=>String(x.created_at||'').localeCompare(String(y.created_at||''))).slice(-12).reverse().map(sharedRow);
     for(const r of rows){if(r.media_path&&['video','photo','voice'].includes(r.type))r.url=await signedUrl(r.media_path);delete r.media_path;}return rows;}
