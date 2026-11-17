@@ -29,6 +29,7 @@ async function boot(browser,{always=false}={}){
       assert.equal(await page.evaluate(()=>document.querySelector('[data-sticky-chat]')?.hidden),false,'the chat button is there');
       await page.evaluate(()=>{window.MSOS4.nav.show('hub');window.MSOS4.coachLoopUI.openHubPanel('input');});await page.waitForSelector('[data-id-card="t400"]',{timeout:5000});
       await page.evaluate(()=>window.MSOS4.coachLoopUI.openHubPanel('reports'));await page.waitForSelector('[data-hp-reports]',{timeout:5000});
+      /* 17 Nov 2026: the poolside bar (with Chat) lives on the Board, not over Coach Hub */await page.evaluate(()=>window.MSOS4.nav.show('board'));await page.waitForSelector('[data-sticky-chat]',{state:'visible',timeout:5000});
       await page.click('[data-sticky-chat]');await page.waitForSelector('.cc-backdrop:not([hidden])',{timeout:5000});
       const heal=await page.evaluate(()=>window.MSOS4.state.settings.lastScriptHeal);
       assert.deepEqual(heal.failed,[],JSON.stringify(heal));assert.ok(heal.healed.length>=3,JSON.stringify(heal));

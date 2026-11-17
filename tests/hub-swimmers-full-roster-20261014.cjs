@@ -32,9 +32,12 @@ function host(){const h={isConnected:true,html:'',handlers:{},set innerHTML(v){t
 
 (async()=>{
   // Owner: every active swimmer is listed, not just the one with the app.
-  {const {M,navs}=load();const h=host();M.hubPanels.renderSwimmers(h);await new Promise(r=>setTimeout(r,10));
+  // 17 Nov 2026 (Andy: no list of every swimmer to scroll): nobody is listed until he searches or picks a squad;
+  // "All squads" still lists every active swimmer, grouped -- the 14 Oct guarantee, now on request.
+  {const {M}=load();const h=host();M.hubPanels.renderSwimmers(h);await new Promise(r=>setTimeout(r,10));assert.ok(!/data-hp-card=/.test(h.html),'no list by default');assert.ok(/Type a name or pick a squad/.test(h.html));}
+  {const {M,navs}=load();const h=host();M.hubPanels.swimmerFind.squad='*';M.hubPanels.renderSwimmers(h);await new Promise(r=>setTimeout(r,10));
     for(const n of['Matthew Robertson','Charlotte Murphy','Ruby Stace'])assert.ok(h.html.includes(n),`${n} missing from the roster`);
-    assert.ok(!/Sophie Newlove/.test(h.html.split('App access')[0]),'inactive swimmer must stay off the roster');
+    assert.ok(!/Sophie Newlove/.test(h.html.split('Who has the app')[0]),'inactive swimmer must stay off the roster');
     assert.ok(/All swimmers · 3/.test(h.html),'roster header counts every active swimmer');
     assert.ok(/National · 2/.test(h.html)&&/Development · 1/.test(h.html),'grouped by squad');
     // The information is on the row.
@@ -42,15 +45,15 @@ function host(){const h={isConnected:true,html:'',handlers:{},set innerHTML(v){t
     assert.ok(/1 session \/ 4 wks/.test(h.html),'recent sessions shown on the row');
     assert.ok(h.html.includes('100 Backstroke T70.1'),'latest race shown on the row');
     // App access is a tag and its own section, not the gate for being listed.
-    const roster=h.html.split('App access')[0];
+    const roster=h.html.split('Who has the app')[0];
     assert.ok(/Matthew Robertson <small class="good-text">· app<\/small>/.test(roster),'app tag on the swimmer who has it');
-    assert.ok(/App access/.test(h.html)&&/1 QR device/.test(h.html.split('App access')[1]),'app-access detail kept underneath');
+    assert.ok(/Who has the app/.test(h.html)&&/1 QR device/.test(h.html.split('Who has the app')[1]),'app-access detail kept underneath');
     // One tap on any swimmer (with or without the app) opens the full profile.
     h.handlers.a3();assert.deepStrictEqual(navs,['athletes']);assert.strictEqual(M.state.settings.selectedAthleteId,'a3');}
   // Assistant: only their squads, and a tap opens that swimmer's report (no owner profile screen).
-  {const {M,navs,panels}=load({role:'assistant'});const h=host();M.hubPanels.renderSwimmers(h);
+  {const {M,navs,panels}=load({role:'assistant'});const h=host();M.hubPanels.swimmerFind.squad='*';M.hubPanels.renderSwimmers(h);
     assert.ok(h.html.includes('Charlotte Murphy')&&!h.html.includes('Ruby Stace'),'assistant sees assigned squads only');
-    assert.ok(!/App access/.test(h.html),'assistant does not see app-access management');
+    assert.ok(!/Who has the app/.test(h.html),'assistant does not see app-access management');
     h.handlers.a2();assert.deepStrictEqual(panels,['reports']);assert.deepStrictEqual(navs,[]);}
   console.log('hub-swimmers-full-roster-20261014: all passed');
 })().catch(e=>{console.error(e);process.exit(1);});

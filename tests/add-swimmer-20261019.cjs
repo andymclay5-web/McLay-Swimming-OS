@@ -8,7 +8,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{const b=await chromium.launch({args:['--no-sandbox']});try{const p=await b.newPage({viewport:{width:390,height:844}});const errors=[];p.on('pageerror',e=>errors.push(e.message));
   await p.goto(BASE);await p.waitForFunction(()=>window.MSOS4?.hubPanels?.createSwimmer&&window.MSOS4?.storageEngine?.ready,{timeout:25000});await p.waitForTimeout(500);
   await p.evaluate(()=>{const M=window.MSOS4;M.state.athletes=[{id:'a1',full_name:'Seth Brown',squad:'National',active:true},{id:'a2',full_name:'Ruby Stace',squad:'Development',active:true}];M.state.pending=[];
-    const h=document.createElement('div');h.id='swTest';document.body.appendChild(h);M.hubPanels.renderSwimmers(h);});
+    const h=document.createElement('div');h.id='swTest';document.body.appendChild(h);/* 17 Nov 2026: the list shows once a squad is picked */M.hubPanels.swimmerFind.squad='*';M.hubPanels.renderSwimmers(h);});
   await p.click('#swTest [data-hp-add]');await p.waitForSelector('[data-hp-add-form]');
   await p.fill('[data-hp-new-name]','seth');await p.click('[data-hp-add-save]');assert.match(await p.textContent('[data-hp-new-status]'),/first and last name/);
   await p.fill('[data-hp-new-name]','Seth Brown');await p.click('[data-hp-add-save]');assert.match(await p.textContent('[data-hp-new-status]'),/already on the roster/);

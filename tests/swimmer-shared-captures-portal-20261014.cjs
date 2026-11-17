@@ -32,7 +32,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       window.fetch=async(url,opts={})=>{const u=String(url);if(/\/rest\/v1\/rpc\/msos_publish_swimmer_payload/.test(u)){published.push(JSON.parse(opts.body));return new Response('1',{status:200});}
         if(/\/rest\/v1\/rpc\/msos_owner_swimmer_access/.test(u))return new Response(JSON.stringify([{athlete_id:'athlete-matthew-robertson',devices:1,has_account:false},{athlete_id:'athlete-elsie-knowles',devices:0,has_account:false}]),{status:200});
         return realFetch(url,opts);};
-      M.store.auth=()=>({access_token:'tok'});C.ready=()=>true;C.org=()=>'org-1';
+      M.store.auth=()=>({access_token:'tok'});C.ready=()=>true;C.org=()=>'org-1';/* 17 Nov 2026: a signed-in phone publishes swimmer pages only when its cloud membership says owner */M.state.settings.teamMembership={role:'owner',active:true};
       const signed=[];
       C.fetch=async(path,opts={})=>{if(/\/storage\/v1\/object\/sign\//.test(path)){signed.push(path);return{signedURL:'/object/sign/swimming-media/x?token=abc'};}
         const t=(path.match(/^\/rest\/v1\/([a-z_]+)\?/)||[])[1];return t==='captures'?cloudCaps:[];};

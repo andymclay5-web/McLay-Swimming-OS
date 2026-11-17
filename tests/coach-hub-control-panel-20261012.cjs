@@ -72,8 +72,8 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 
     // F. Swimmers: every swimmer listed (14 Oct 2026: Andy needs all profiles, not only those with the app), plus
     // who has the app in its own App access section (owner list stubbed -- no cloud here).
-    await page.evaluate(()=>{const M=window.MSOS4;M.swimmerInviteBN=M.swimmerInviteBN||{};M.swimmerInviteBN.rpc=async n=>n==='msos_owner_swimmer_access'?[{athlete_id:'mrob',devices:1,last_seen_at:new Date().toISOString(),has_account:false,last_published_at:null,open_invites:0}]:0;M.coachLoopUI.openHubPanel('swimmers');});
-    await page.waitForFunction(()=>/All swimmers[\s\S]*William Callow[\s\S]*App access[\s\S]*Matthew Robertson/.test(document.querySelector('#hubView')?.textContent||''),{timeout:5000});
+    await page.evaluate(()=>{const M=window.MSOS4;M.swimmerInviteBN=M.swimmerInviteBN||{};M.swimmerInviteBN.rpc=async n=>n==='msos_owner_swimmer_access'?[{athlete_id:'mrob',devices:1,last_seen_at:new Date().toISOString(),has_account:false,last_published_at:null,open_invites:0}]:0;/* 17 Nov 2026: Find + Squad first; All squads lists everyone */M.hubPanels.swimmerFind.squad='*';M.coachLoopUI.openHubPanel('swimmers');});
+    await page.waitForFunction(()=>/All swimmers[\s\S]*William Callow[\s\S]*Who has the app[\s\S]*Matthew Robertson/.test(document.querySelector('#hubView')?.textContent||''),{timeout:5000});
     assert.match(await page.textContent('#hubView'),/Matthew Robertson[\s\S]*1 QR device[\s\S]*seen today/);
 
     // G. Assistant coach: a Hub with their buttons only, and only their squads.

@@ -24,7 +24,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       const rechecked={current:M.release.guardianCurrent(),last:M.state.guardian.runs.at(-1).ok,enabled:s.cloudWritesEnabled};
       const throttled=M.cloud.recheckGuardian();
       return{after,rechecked,throttled};});
-    assert.equal(r.after.enabled,true,`a device-data check must not switch sync off: ${JSON.stringify(r)}`);assert.equal(r.after.sus,null);assert.equal(r.after.current,false);
+    assert.equal(r.after.enabled,true,`a device-data check must not switch sync off: ${JSON.stringify(r)}`);assert.equal(r.after.sus,null);/* 17 Nov 2026: a screen-state check no longer makes the build "not current" either (cloud-gate-reopens-20261117) */assert.equal(r.after.current,true);
     assert.deepEqual(r.rechecked,{current:true,last:true,enabled:true},'the next send re-runs Guardian and it passes');
     assert.equal(r.throttled,false,'no re-run once current');
     assert.deepEqual(errors,[],errors.join('\n'));console.log('GUARDIAN_RECHECK_BEFORE_SEND_PASS');

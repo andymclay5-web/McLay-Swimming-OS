@@ -43,8 +43,14 @@ const SESSIONS=[
   await p.evaluate(()=>{const d=document.querySelector('[data-cn-event^="400|IM"]');d.open=true;d.dispatchEvent(new Event('toggle'));});
   await p.waitForFunction(()=>/Races:/.test(document.querySelector('[data-re-summary]')?.innerText||''),{timeout:10000});
   const card=await p.evaluate(()=>document.querySelector('[data-re-summary]').innerText);
-  assert.match(card,/400 IM · summary · last 8 weeks \(10 sessions\)/,card);assert.match(card,/Light across the whole squad|could benefit from more exposure/,card);assert.match(card,/Being done:/);assert.match(card,/Races: back half 7\.85s slower than the front/,card);assert.match(card,/IM work:/,card);assert.match(card,/fading more than before/);
-  assert.match(card,/Work on next:\s*\n?1?\.?\s*Back-end speed/,card);assert.match(card,/Set to try:/,card);
+  // 17 Nov 2026 (Andy: "the whole summary section needs to be simplified"): three lines -- what is getting done, the one
+  // thing next with where it sits in the week, and how the races finish. The full breakdown moved under Show the detail.
+  assert.match(card,/400 IM · training, last 8 weeks/,card);assert.match(card,/✅ Getting /,card);assert.match(card,/Next: back-end speed/i,card);
+  assert.match(card,/Light across the whole squad|could benefit from more exposure|has been at most of it/,card);assert.match(card,/Races: back half 7\.85s slower than the front/,card);assert.match(card,/fading more than before/);
+  assert.doesNotMatch(card,/Being done:|Set to try:|IM work:|Patterns, not proof/,'the long list is not in the summary');
+  assert.ok(card.split('\n').filter(l=>l.trim()).length<=4,'the summary is short: '+card);
+  const detail=await p.evaluate(()=>{const d=document.querySelector('[data-re-behind] details.re-more');return d?d.textContent:'';});
+  assert.match(detail,/Being done:/,detail);assert.match(detail,/Set to try:/,detail);assert.match(detail,/IM work:/,detail);
   assert.equal(await p.evaluate(()=>document.querySelector('[data-re-behind] details.re-more').open),false,'detail closed by default');
   await p.evaluate(()=>document.querySelector('[data-re-summary]').scrollIntoView());await p.screenshot({path:process.env.SHOT||'/dev/null'}).catch(()=>{});
   await p.click('[data-cn-tab="races"]');await p.waitForFunction(()=>/Priorities/.test(document.querySelector('[data-re-overview]')?.innerText||''),{timeout:10000});

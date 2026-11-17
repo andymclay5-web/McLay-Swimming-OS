@@ -32,6 +32,7 @@ const FILE=path.join(__dirname,'fixtures/2026-aquagym-challenge-results.pdf');
   // 16 Nov 2026 ("fix it so it works next time"): club-mates under a different name are named, with what to do
   assert.match(pv,/AQGCB swimmers? not matched[\s\S]*Name in results/,pv);assert.match(pv,/Zakhar Voinov/);assert.match(pv,/Ollie Stone/);
   // ... he adds the results name in Manage swimmers, previews again, and their swims come in
+  await p.fill('[data-roster-q]','Zakhar');await p.waitForSelector('[data-roster-id="athlete-zakhar-voynov"]',{state:'attached',timeout:5000});/* 17 Nov 2026: Manage swimmers is Find first */
   await p.evaluate(()=>{const row=document.querySelector('[data-roster-id="athlete-zakhar-voynov"]');row.querySelector('[data-roster-aliases]').value='Zakhar Voinov';row.querySelector('[data-roster-save]').click();});
   const stagedAth=await p.evaluate(()=>(window.MSOS4.state.pending||[]).filter(x=>x.table==='athletes'&&x.record.id==='athlete-zakhar-voynov').map(x=>x.record.source_profile));
   assert.deepEqual(stagedAth.at(-1)?.results_aliases?.map(x=>x.name),['Zakhar Voinov'],'the results name is saved to the cloud with the swimmer');

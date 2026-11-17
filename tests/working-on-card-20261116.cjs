@@ -6,7 +6,8 @@
 //  1. One plain card above the tabs: WHAT MATTHEW IS WORKING ON -- the focus in Andy's words, latest note, before/after
 //     clips, which events it helps -- plus Training lately and Developing.
 //  2. Clips open from the card (the capture viewer's button), grouped to the set they were taken on.
-//  3. The Training tab's long lists fold to one line each; All captures sits folded with the story by set.
+//  3. The Training tab's long lists fold to one line each; captures have their own tab (17 Nov: Timeline / By stroke /
+//     By focus / Notes).
 const assert=require('node:assert/strict');
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
@@ -29,11 +30,22 @@ const SESSION=`WARM-UP\n300 Free 15sR\n3 x 100 Back 15sR\n\nPRE-SET\n12 x 50 kic
   assert.doesNotMatch(card,/Awatea|tumble turns/,'other swimmers\' clips and the group note stay out of his card');
   const clips=await p.evaluate(()=>[...document.querySelectorAll('[data-re-working] [data-msos-capture]')].map(b=>[b.textContent.trim(),b.dataset.msosCapture]));
   assert.ok(clips.some(([t,id])=>/Before/.test(t)&&id==='c3')&&clips.some(([t,id])=>/After/.test(t)&&id==='c4'),JSON.stringify(clips));
-  // training tab: folded lists, all captures folded with the story by set
-  await p.waitForSelector('[data-re-captures]',{timeout:10000,state:'attached'});
+  // training tab: the long lists folded to one line each
+  await p.waitForSelector('#athletesView details.cn-fold',{timeout:10000});
   const folds=await p.evaluate(()=>[...document.querySelectorAll('#athletesView details.cn-fold')].map(d=>[d.querySelector('summary')?.innerText.split('·')[0].trim(),d.open]));
-  assert.ok(folds.length>=3&&folds.every(([,o])=>!o),JSON.stringify(folds));assert.ok(folds.some(([t])=>/All captures/.test(t))&&folds.some(([t])=>/Training background/.test(t)),JSON.stringify(folds));
-  const story=await p.evaluate(()=>document.querySelector('[data-re-captures]').textContent.replace(/\s+/g,' '));
-  assert.match(story,/400 fins fly kick \(fob\)/,story);assert.match(story,/4 x 100 Free fins kick/,story);assert.match(story,/Before → after the coaching cue/,story);
+  assert.ok(folds.length>=2&&folds.every(([,o])=>!o),JSON.stringify(folds));assert.ok(folds.some(([t])=>/Training background/.test(t)),JSON.stringify(folds));
+  // 17 Nov 2026: every capture lives on its own Captures tab (Timeline / By stroke / By focus / Notes), not in Training
+  assert.ok(!folds.some(([t])=>/All captures/.test(t)),'captures moved to their own tab');
+  await p.click('[data-cn-tab="captures"]');await p.waitForSelector('[data-re-library]',{timeout:10000});
+  const lib=await p.evaluate(()=>document.querySelector('[data-re-library]').textContent.replace(/\s+/g,' '));
+  assert.match(lib,/400 fins fly kick \(fob\)/,lib);assert.match(lib,/4 x 100 Free fins kick/,lib);
+  assert.deepEqual(await p.evaluate(()=>[...document.querySelectorAll('[data-re-capview]')].map(b=>b.textContent)),['Timeline','By stroke','By focus','Notes']);
+  await p.click('[data-re-capview="focus"]');await p.waitForSelector('[data-re-capview="focus"].active');
+  const focus=await p.evaluate(()=>[...document.querySelectorAll('[data-re-library] details.re-capg > summary')].map(x=>x.textContent.trim()));
+  assert.ok(focus.length>=1&&focus.every(x=>/· \d+$/.test(x)),JSON.stringify(focus));
+  await p.click('[data-re-capview="notes"]');await p.waitForSelector('[data-re-capview="notes"].active');
+  const notes=await p.evaluate(()=>[...document.querySelectorAll('[data-re-library] [data-msos-capture]')].map(b=>b.textContent));
+  assert.ok(notes.length>=1&&notes.every(t=>/“/.test(t)),'Notes view shows only the captures someone wrote on: '+JSON.stringify(notes));
+  assert.equal(await p.evaluate(()=>window.MSOS4.state.settings.captureView),'notes','the chosen view is remembered');
   assert.deepEqual(errors,[],errors.join('\n'));console.log('WORKING_ON_CARD_PASS');console.log(card);
 }finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1);});
