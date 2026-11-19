@@ -30,14 +30,28 @@
   function splitStroke(item,total){const out=[];const comp=item?.composition||[];if(comp.length){for(const c of comp){const st=strokeInText(c?.stroke||c?.text||'');if(STROKES.includes(st))out.push({stroke:st,metres:Number(c.distance)||0});else if(st==='IM'){for(const s of STROKES)out.push({stroke:s,metres:(Number(c.distance)||0)/4});out.push(imPart(Number(c.distance)||0));}else out.push({stroke:'Freestyle',metres:Number(c.distance)||0});}const sum=out.filter(x=>!x.imOnly).reduce((n,x)=>n+x.metres,0);if(sum>0){const scale=total/sum;return out.map(x=>({...x,metres:x.metres*scale}));}}
     const st=strokeInText(item?.stroke||item?.raw||item?.text||'');if(st==='IM')return[...STROKES.map(s=>({stroke:s,metres:total/4})),imPart(total)];if(STROKES.includes(st))return[{stroke:st,metres:total}];if(ONE_STROKE.test(text(item?.raw||item?.text)))return[];/* #1 Stroke not resolved for this swimmer: unknown, not Free */return[{stroke:'Freestyle',metres:total}];
   }
+  // 19 Nov 2026 (Andy + Mike): swim / kick / pull / drill / scull / underwater / skills, each with its stroke ("the stroke
+  // of the kick"). What kind of work a line is comes from the one owner, dosage.js componentFrom; the stroke split
+  // follows the same rule as above (IM shown as IM and a quarter in each stroke; nothing named = Freestyle).
+  const COMPONENTS=['Swim','Kick','Pull','Drill','Scull','Underwater','Skills'];
+  const componentOf=x=>{try{return M.dosageEngine?.componentFrom?.(x)||'Swim';}catch{return'Swim';}};
+  function componentSplit(item,total){
+    const parent=componentOf(item),comp=item?.composition||[];
+    const strokesOf=(value,metres,fallback)=>{const st=strokeInText(value);if(st==='IM')return[...STROKES.map(s=>({stroke:s,metres:metres/4})),imPart(metres)];if(STROKES.includes(st))return[{stroke:st,metres}];return fallback(metres);};
+    const whole=m=>splitStroke(item,m);
+    if(comp.length){const parts=[];for(const c of comp){const d=Number(c?.distance)||0;if(!d)continue;const own=componentOf({raw:c?.text||'',stroke:c?.stroke||''}),k=own==='Swim'?parent:own;for(const x of strokesOf(c?.stroke||c?.text||'',d,m=>strokesOf(item?.stroke||item?.raw||item?.text||'',m,mm=>ONE_STROKE.test(text(item?.raw||item?.text))?[]:[{stroke:'Freestyle',metres:mm}])))parts.push({...x,component:k});}
+      const sum=parts.filter(x=>!x.imOnly).reduce((n,x)=>n+x.metres,0);if(sum>0){const scale=total/sum;return parts.map(x=>({...x,metres:x.metres*scale}));}}
+    return whole(total).map(x=>({...x,component:parent}));
+  }
+  const blankComponents=()=>Object.fromEntries(COMPONENTS.map(k=>[k,{total:0,...Object.fromEntries(REPORT_STROKES.map(s=>[s,0]))}]));
   function walk(items,mult,fn){for(const n of items||[]){if(n?.kind==='group'){walk(n.items||[],mult*Math.max(1,Number(n.rounds)||1),fn);continue;}if(n?.kind==='set')fn(n,mult);}}
-  function sessionDose(session,ath,state=M.state){const att=attendance(session,ath,state),raw=Object.fromEntries(REPORT_STROKES.map(s=>[s,0])),weighted=Object.fromEntries(REPORT_STROKES.map(s=>[s,0]));if(!att.included)return{included:false,raw,weighted,totalRaw:0,totalWeighted:0,attendance:att};for(const block of session?.blocks||[])walk(block.items||[],1,(item,mult)=>{let actual=item;try{actual=E.Modification.adaptItem(item,ath,state,session)||item}catch{}const metres=Math.max(1,Number(actual.reps)||1)*Math.max(0,Number(actual.distance)||0)*mult,w=weight(actual);for(const x of splitStroke(actual,metres)){raw[x.stroke]+=x.metres;weighted[x.stroke]+=x.metres*w;}});return{included:true,raw,weighted,totalRaw:STROKES.reduce((a,s)=>a+raw[s],0),totalWeighted:STROKES.reduce((a,s)=>a+weighted[s],0),attendance:att};}
+  function sessionDose(session,ath,state=M.state){const att=attendance(session,ath,state),raw=Object.fromEntries(REPORT_STROKES.map(s=>[s,0])),weighted=Object.fromEntries(REPORT_STROKES.map(s=>[s,0]));const components=blankComponents();if(!att.included)return{included:false,raw,weighted,components,totalRaw:0,totalWeighted:0,attendance:att};for(const block of session?.blocks||[])walk(block.items||[],1,(item,mult)=>{let actual=item;try{actual=E.Modification.adaptItem(item,ath,state,session)||item}catch{}const metres=Math.max(1,Number(actual.reps)||1)*Math.max(0,Number(actual.distance)||0)*mult,w=weight(actual);for(const x of splitStroke(actual,metres)){raw[x.stroke]+=x.metres;weighted[x.stroke]+=x.metres*w;}for(const x of componentSplit(actual,metres)){const c=components[x.component]||components.Swim;c[x.stroke]+=x.metres;if(!x.imOnly)c.total+=x.metres;}});return{included:true,raw,weighted,components,totalRaw:STROKES.reduce((a,s)=>a+raw[s],0),totalWeighted:STROKES.reduce((a,s)=>a+weighted[s],0),attendance:att};}
   function rangeSessions(state,days=7,anchorDate=''){const all=Object.values(state?.canonicalSessions||{}),anchor=anchorDate?Date.parse(`${anchorDate}T23:59:59`):Date.now();if(!days)return all.filter(s=>{const d=dateOf(s);return d&&d<=anchor;});const cut=anchor-days*dayMs;return all.filter(s=>{const d=dateOf(s);return d&&d<=anchor&&d>cut;});}
   function summary(ath,state=M.state,{days=7,anchorDate=''}={}){
     const key=`${Number(state?.settings?.storageRevision||0)}|${ath?.id||''}|${days}|${anchorDate}`,cache=mapFor(summaryCache,state);
     if(cache.has(key))return cache.get(key);
-    const raw=Object.fromEntries(REPORT_STROKES.map(s=>[s,0])),weighted=Object.fromEntries(REPORT_STROKES.map(s=>[s,0]));let sessions=0,assumedSessions=0;for(const s of rangeSessions(state,days,anchorDate)){const d=sessionDose(s,ath,state);if(!d.included)continue;sessions++;if(d.attendance.source==='squad_assumption')assumedSessions++;for(const st of REPORT_STROKES){raw[st]+=d.raw[st]||0;weighted[st]+=d.weighted[st]||0;}}const tr=STROKES.reduce((a,s)=>a+raw[s],0),tw=STROKES.reduce((a,s)=>a+weighted[s],0),share=Object.fromEntries(REPORT_STROKES.map(s=>[s,tw?weighted[s]/tw*100:0]));
-    const out={athleteId:ath?.id,days,sessions,assumedSessions,raw,weighted,share,totalRaw:tr,totalWeighted:tw,weights:WEIGHTS};
+    const raw=Object.fromEntries(REPORT_STROKES.map(s=>[s,0])),weighted=Object.fromEntries(REPORT_STROKES.map(s=>[s,0]));const components=blankComponents();let sessions=0,assumedSessions=0;for(const s of rangeSessions(state,days,anchorDate)){const d=sessionDose(s,ath,state);if(!d.included)continue;sessions++;if(d.attendance.source==='squad_assumption')assumedSessions++;for(const st of REPORT_STROKES){raw[st]+=d.raw[st]||0;weighted[st]+=d.weighted[st]||0;}for(const k of COMPONENTS)for(const f of Object.keys(components[k]))components[k][f]+=d.components?.[k]?.[f]||0;}const tr=STROKES.reduce((a,s)=>a+raw[s],0),tw=STROKES.reduce((a,s)=>a+weighted[s],0),share=Object.fromEntries(REPORT_STROKES.map(s=>[s,tw?weighted[s]/tw*100:0]));
+    const out={athleteId:ath?.id,days,sessions,assumedSessions,raw,weighted,share,components,totalRaw:tr,totalWeighted:tw,weights:WEIGHTS};
     cache.set(key,out);if(cache.size>500)cache.delete(cache.keys().next().value);return out;
   }
   function weeklyEmphasis(state=M.state,anchorDate=''){
@@ -75,5 +89,15 @@
     const rankedPoints=Object.fromEntries(ranked.filter(r=>STROKES.includes(r.stroke)).map(r=>[r.stroke,Math.round(r.points||0)]));
     return{hasEvidence:!!top,isMedley:false,needsWorkStrokes:[],shares:{},topStroke:top?.stroke||'',rankedPoints};
   }
-  B.STROKES=STROKES;B.REPORT_STROKES=REPORT_STROKES;B.WEIGHTS=WEIGHTS;B.weight=weight;B.strokeInText=strokeInText;B.sessionDose=sessionDose;B.summary=summary;B.weeklyEmphasis=weeklyEmphasis;B.recommendStroke=recommendStroke;B.rangeSessions=rangeSessions;B.challengeEvidence=challengeEvidence;
+  // One table for every screen that shows components (swimmer page, reports): rows Swim / Kick / Pull / ..., one column
+  // per window, each cell the metres and its stroke breakdown. Rows with no metres in any window are left out.
+  function componentsHtml(cols){
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const n=v=>Math.round(v).toLocaleString(),sh=s=>({Freestyle:'Fr',Backstroke:'Bk',Breaststroke:'Br',Butterfly:'Fly',IM:'IM'}[s]||s);
+    const rows=COMPONENTS.filter(k=>cols.some(c=>(c.summary?.components?.[k]?.total||0)>=1));
+    if(!rows.length)return'<p class="muted">No training logged in this window.</p>';
+    return`<div class="sb-comp" data-sb-components><div class="sb-comp-row sb-comp-head"><span></span>${cols.map(c=>`<b>${esc(c.label)}</b>`).join('')}</div>${rows.map(k=>`<div class="sb-comp-row" data-sb-component="${k}"><span><b>${k}</b></span>${cols.map(c=>{const r=c.summary?.components?.[k]||{};const parts=REPORT_STROKES.filter(s=>(r[s]||0)>=1).map(s=>`${sh(s)} ${n(r[s])}`);return`<span><b>${r.total>=1?`${n(r.total)}m`:'—'}</b>${parts.length?`<small>${parts.join(' · ')}</small>`:''}</span>`;}).join('')}</div>`).join('')}</div><style>.sb-comp{display:grid;gap:6px}.sb-comp-row{display:grid;grid-template-columns:minmax(80px,1fr) repeat(${cols.length},minmax(0,1.6fr));gap:8px;align-items:start;border-bottom:1px solid rgba(127,127,127,.18);padding:4px 0}.sb-comp-row small{display:block;opacity:.75;font-size:.82em}.sb-comp-head b{font-size:.85em;opacity:.8}</style>`;
+  }
+  B.componentsHtml=componentsHtml;
+  B.STROKES=STROKES;B.REPORT_STROKES=REPORT_STROKES;B.COMPONENTS=COMPONENTS;B.componentSplit=componentSplit;B.WEIGHTS=WEIGHTS;B.weight=weight;B.strokeInText=strokeInText;B.sessionDose=sessionDose;B.summary=summary;B.weeklyEmphasis=weeklyEmphasis;B.recommendStroke=recommendStroke;B.rangeSessions=rangeSessions;B.challengeEvidence=challengeEvidence;
 })(globalThis);

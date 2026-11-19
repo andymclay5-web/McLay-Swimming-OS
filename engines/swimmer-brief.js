@@ -80,8 +80,12 @@
     const weeks=new Map();for(let i=3;i>=0;i--){const t=new Date();t.setDate(t.getDate()-7*i);const k=monday(t.toISOString().slice(0,10));weeks.set(k,{week:k,sessions:0,metres:0});}
     for(const x of rows){let dose=null;try{dose=D?.session?.(x.s,M.state,{athlete:a,delivered:true});}catch{}const m=Number(dose?.rawMetres)||Number(x.s.finish?.actualDistance)||Number(B?.sessionDistance?.(x.s))||0;if(dose)doses.push(dose);const w=weeks.get(monday(x.d));if(w){w.sessions++;w.metres+=m;}}
     let balance=[],strokes=[];if(D?.merge&&doses.length){const all=D.merge(doses);balance=(D.rushton?.(all.systems)||[]).map(gp=>({group:gp.group,pct:Math.round(gp.pct),metres:Math.round(gp.total),rows:gp.rows.map(r=>({label:r.label,pct:Math.round(r.pct),metres:Math.round(r.metres)}))}));
-      const sm=Object.entries(all.strokes||{}).map(([k,v])=>[k,Number(v?.metres)||0]).filter(([k,v])=>v>0&&!/choice|unspecified/i.test(k)),tot=sm.reduce((n,[,v])=>n+v,0);strokes=sm.sort((x,y)=>y[1]-x[1]).slice(0,5).map(([k,v])=>({stroke:short(k),pct:tot?Math.round(v/tot*100):0,metres:Math.round(v)}));}
-    return{page:'training',name:text(a.full_name),sessions28:rows.length,metres28:metres,lastSeen:rows.map(x=>x.d).sort().at(-1)||'',weeks:[...weeks.values()],balance,strokes,t400,timed};}
+    }
+    // 19 Nov 2026 (Andy + Mike): a swimmer's stroke volumes come from the swimmer owner (stroke-balance.js) -- Free / Back /
+    // Breast / Fly with IM split into them, plus IM shown on its own -- and so do swim / kick / pull / drill.
+    let volumes=null;try{volumes=M.strokeBalance?.summary?.(a,M.state,{days:28})||null;}catch{}
+    if(volumes){const tot=Number(volumes.totalRaw)||0;strokes=(M.strokeBalance.REPORT_STROKES||[]).map(k=>[k,Number(volumes.raw?.[k])||0]).filter(([,v])=>v>=1).map(([k,v])=>({stroke:short(k),pct:tot?Math.round(v/tot*100):0,metres:Math.round(v)}));}
+    return{page:'training',name:text(a.full_name),sessions28:rows.length,metres28:metres,lastSeen:rows.map(x=>x.d).sort().at(-1)||'',weeks:[...weeks.values()],balance,strokes,volumes,t400,timed};}
   function performance(a){const table=eventTable(a);return{page:'performance',name:text(a.full_name),seasonStart:seasonStart(),
     events:table.slice(0,12).map(e=>({event:e.event,points:e.points,system:e.system,scm:e.SCM?.time||'',scmDate:e.SCM?.date||'',scmPts:e.SCM?.points||null,lcm:e.LCM?.time||'',lcmDate:e.LCM?.date||'',lcmPts:e.LCM?.points||null,
       seasonScm:e.seasonSCM?.time||'',seasonLcm:e.seasonLCM?.time||''}))};}
@@ -112,6 +116,7 @@
       +(d.weeks?.length?`<h4>Week by week</h4>${tbl(['Week of','Sessions','Metres'],d.weeks.map(w=>[esc(w.week.slice(5).split('-').reverse().join('/')),esc(w.sessions),`<b>${Number(w.metres||0).toLocaleString()}</b>`]))}`:'')
       +`<h4>Balance · energy systems</h4>${d.balance?.some(b=>b.metres>0)?`<div class="sb-balance">${d.balance.map(b=>`<div class="sb-bal-group"><p><span><b>${esc(b.group)}</b></span><b>${esc(b.pct)}%</b></p>${b.rows.map(r=>`<p class="sb-bal-row${r.metres?'':' none'}"><span>${esc(r.label)}</span>${bar(r.pct)}<b>${r.metres?`${esc(r.pct)}%`:'none'}</b></p>`).join('')}</div>`).join('')}</div>`:none('No classified training in the last 4 weeks')}`
       +(d.strokes?.length?`<h4>Balance · strokes</h4><div class="sb-balance">${d.strokes.map(r=>`<p class="sb-bal-row"><span>${esc(r.stroke)}</span>${bar(r.pct)}<b>${esc(r.pct)}%</b></p>`).join('')}</div>`:'')
+      +(d.volumes&&M.strokeBalance?.componentsHtml?`<h4>Swim · Kick · Pull · Drill · 28 days</h4>${M.strokeBalance.componentsHtml([{label:'28 days',summary:d.volumes}])}`:'')
       +`<h4>T400</h4>${d.t400.length?tbl(['Stroke','Fastest','Latest'],d.t400.map(t=>[esc(t.stroke),`<b>${esc(t.fastest)}</b> <small>${esc(t.fastestDate)}</small>`,`${esc(t.latest)} <small>${esc(t.latestDate)}</small>`])):none('No T400 on record')}`
       +`<h4>Timed sets</h4>${d.timed.length?tbl(['Date','Set','Best','Avg'],d.timed.map(t=>[esc(t.date),`${t.match?'▶ ':''}${esc(t.label)}`,`<b>${esc(t.best)}</b>`,esc(t.average)])):none('No timed sets yet')}`;
     // 19 Oct 2026: short course and long course side by side, each with its World Aquatics points; ranked by points

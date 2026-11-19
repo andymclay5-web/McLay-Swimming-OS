@@ -222,6 +222,21 @@
     if(/#\s*\d\s*stroke\b/i.test(raw))return'#1 Stroke';
     return'Freestyle';
   }
+  // 19 Nov 2026 (Andy + Mike: "we also need to log kick, pretty much the stroke of the kick if we can, pull, drill, all
+  // of the different components and report on each of them"). The one owner for what KIND of work a line is.
+  // Read from the work itself (the part before a " — " cue), so a cue like "attack the last turn" doesn't make a set
+  // "Skills". Fins/paddles are equipment, not a component: "6 x 50 Fins" is Swim, "Paddles + Pull" is Pull.
+  const COMPONENTS=Object.freeze(['Swim','Kick','Pull','Drill','Scull','Underwater','Skills']);
+  function componentFrom(item){
+    const head=txt(String(item?.raw||item?.text||'').split(/\s+[—–]\s+|\s+-\s+(?=[A-Za-z])/)[0]+' '+txt(item?.stroke||''));
+    if(/\bunderwater\b|\bu\/?w\b|\bh2o\b|⬇️|\bdolphin\s+kick\b|\bsdk\b/i.test(head))return'Underwater';
+    if(/\bkick(?:ing)?\b|\bkk\b/i.test(head))return'Kick';
+    if(/\bpull\b|\bpb\b/i.test(head))return'Pull';
+    if(/\bdrills?\b/i.test(head))return'Drill';
+    if(/\bscull(?:ing)?\b/i.test(head))return'Scull';
+    if(/\b(?:starts?|dives?|turns?|breakouts?|skills?)\b/i.test(head))return'Skills';
+    return'Swim';
+  }
   function blank(){
     return{
       rawMetres:0,stimulusUnits:0,
@@ -369,7 +384,7 @@
   // swimmer training history and Session detail so every screen classifies work the same way.
   function itemSplit(item){if(!item||item.kind!=='set')return{};const out=blank();addSet(out,null,item,null,M.state,1);const r={};for(const[k,v]of Object.entries(out.systems))if(v.metres>0&&k!=='Unclassified')r[k]=v.metres;return r;}
   D.RUSHTON=RUSHTON;D.coachLabel=coachLabel;D.groupOf=groupOf;D.rushton=rushton;D.rushtonHtml=rushtonHtml;D.itemSplit=itemSplit;
-  D.WEIGHTS=WEIGHTS;D.SYSTEMS=SYSTEMS;D.STROKES=STROKES;D.systemFrom=systemFrom;D.zoneDetail=zoneDetail;D.repSystem=repSystem;D.strokeFrom=strokeFrom;D.deliveredProjection=deliveredProjection;D.session=sessionDose;D.scopeSummary=scopeSummary;D.athleteWindow=athleteWindow;D.merge=merge;D.top=top;
+  D.WEIGHTS=WEIGHTS;D.SYSTEMS=SYSTEMS;D.STROKES=STROKES;D.systemFrom=systemFrom;D.zoneDetail=zoneDetail;D.repSystem=repSystem;D.strokeFrom=strokeFrom;D.COMPONENTS=COMPONENTS;D.componentFrom=componentFrom;D.deliveredProjection=deliveredProjection;D.session=sessionDose;D.scopeSummary=scopeSummary;D.athleteWindow=athleteWindow;D.merge=merge;D.top=top;
   if(M.reportingEngine?.registerProvider){
     M.reportingEngine.registerProvider('dosage',({athlete,state,days})=>athleteWindow(athlete,state,days),{
       metric:{id:'dosage',label:'Energy-system / dosage',source:'Dosage + delivered session truth'},
