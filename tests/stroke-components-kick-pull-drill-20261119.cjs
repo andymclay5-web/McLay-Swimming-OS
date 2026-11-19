@@ -21,7 +21,7 @@ const SRC=["WARM-UP","400 Choice","4 x 100 (75 Free / 25 Back) Desc 1-4 10sR —
     M.state.attendance=[{id:'a1',session_id:s.id,athlete_id:ath.id,status:'present'}];M.state.settings.storageRevision=(M.state.settings.storageRevision||0)+1;
     const kinds=[];const walk=(items)=>{for(const n of items||[]){if(n.kind==='group'){walk(n.items);continue;}if(n.kind==='set')kinds.push(`${n.raw||n.text} => ${D.componentFrom(n)}`);}};for(const bl of s.blocks)walk(bl.items);
     const sum=B.summary(ath,M.state,{days:7});const c=k=>{const o=sum.components[k];return Object.fromEntries(Object.entries(o).filter(([,v])=>v>=1).map(([f,v])=>[f,Math.round(v)]));};
-    return{kinds,swim:c('Swim'),kick:c('Kick'),pull:c('Pull'),drill:c('Drill'),scull:c('Scull'),uw:c('Underwater'),skills:c('Skills'),totalRaw:sum.totalRaw};},SRC);
+    const it=s.blocks[0].items.find(n=>/75 Free/.test(n.raw||''));return{comp:it?.composition,total4x100:Math.max(1,it.reps)*it.distance,kinds,swim:c('Swim'),kick:c('Kick'),pull:c('Pull'),drill:c('Drill'),scull:c('Scull'),uw:c('Underwater'),skills:c('Skills'),totalRaw:sum.totalRaw};},SRC);
   const kind=re=>r.kinds.find(k=>re.test(k))?.split(' => ')[1];
   assert.equal(kind(/^6 x 50 Kick/),'Kick');assert.equal(kind(/^3 x 100 Pull/),'Pull','"light paddles optional" in the cue does not change it');
   assert.equal(kind(/^2 x 200 IM/),'Swim','"attack the last turn" in the cue is not Skills');assert.equal(kind(/H2O/),'Underwater');
@@ -29,9 +29,10 @@ const SRC=["WARM-UP","400 Choice","4 x 100 (75 Free / 25 Back) Desc 1-4 10sR —
   assert.deepEqual(r.kick,{total:500,Freestyle:50,Backstroke:350,Breaststroke:50,Butterfly:50,IM:200},'kick with its stroke; IM kick shown and split: '+JSON.stringify(r.kick));
   assert.deepEqual(r.pull,{total:300,Backstroke:300},JSON.stringify(r.pull));
   assert.deepEqual(r.drill,{total:200,Butterfly:200});assert.deepEqual(r.scull,{total:200,Freestyle:200});assert.deepEqual(r.uw,{total:50,Freestyle:50});
-  // Not pinned here: the parser does not yet split an inline "(75 Free / 25 Back)" into its parts, so that 4 x 100 counts
-  // as Free for now. Choice / Easy = Free and IM is shown + split, which is what this test is about.
-  assert.equal(r.swim.total,1400);assert.equal(r.swim.IM,400);assert.equal(r.swim.Breaststroke,100,'IM quarter');assert.ok(r.swim.Freestyle>=1000,JSON.stringify(r.swim));
+  // "(75 Free / 25 Back)" on the line splits each 100 (parser-semantics.js reads the bracket as the rep's makeup)
+  assert.deepEqual(r.swim,{total:1400,Freestyle:400+300+200+100,Backstroke:100+100,Breaststroke:100,Butterfly:100,IM:400},'swim: Choice/Easy = Free, the 25 Back of each 100 is Back: '+JSON.stringify(r.swim));
+  assert.deepEqual(r.comp,[{distance:75,text:'Free'},{distance:25,text:'Back'}],'the bracket is the rep\'s makeup');
+  assert.equal(r.total4x100,400,'and it adds no metres');
   assert.equal(r.kick.total+r.pull.total+r.drill.total+r.scull.total+r.uw.total+r.swim.total,r.totalRaw,'components add up to the swimmer\'s metres');
   // the swimmer's Training page (swimmer brief) and the swimmer report both show it
   const page=await p.evaluate(()=>{const M=window.MSOS4,S=M.swimmerBrief;const d=S.page('athlete-matthew-robertson','training');const el=document.createElement('div');el.innerHTML=S.html(d);document.body.appendChild(el);
