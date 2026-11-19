@@ -15,7 +15,10 @@
     'Unclassified':0.35
   });
   const SYSTEMS=Object.freeze(Object.keys(WEIGHTS));
-  const STROKES=Object.freeze(['Freestyle','Backstroke','Breaststroke','Butterfly','IM','Choice / unspecified']);
+  // 19 Nov 2026 (Andy + Mike): no "Choice" stroke any more -- work with no stroke named counts as Freestyle. IM stays its
+  // own stroke here (session distance / session stroke mix); swimmer stroke volumes split it four ways (stroke-balance.js).
+  // "#1 Stroke" is each swimmer's own stroke, so a session-wide count can't name it (per swimmer it resolves).
+  const STROKES=Object.freeze(['Freestyle','Backstroke','Breaststroke','Butterfly','IM','#1 Stroke']);
   const txt=v=>String(v??'').replace(/\s+/g,' ').trim();
   const clone=v=>U.clone?U.clone(v):JSON.parse(JSON.stringify(v));
   const nowDate=()=>new Date();
@@ -216,7 +219,8 @@
     if(/\b(?:breaststroke|breast|\bbr\b)\b/i.test(raw))return'Breaststroke';
     if(/\b(?:butterfly|fly)\b/i.test(raw))return'Butterfly';
     if(/\b(?:individual medley|\bIM\b)\b/i.test(raw))return'IM';
-    return'Choice / unspecified';
+    if(/#\s*\d\s*stroke\b/i.test(raw))return'#1 Stroke';
+    return'Freestyle';
   }
   function blank(){
     return{
@@ -230,7 +234,7 @@
   }
   function add(out,system,stroke,metres,weight){
     const m=Math.max(0,Number(metres)||0),w=Number.isFinite(Number(weight))?Number(weight):(WEIGHTS[system]??WEIGHTS.Unclassified),u=m*w;
-    system=SYSTEMS.includes(system)?system:'Unclassified';stroke=STROKES.includes(stroke)?stroke:'Choice / unspecified';
+    system=SYSTEMS.includes(system)?system:'Unclassified';stroke=STROKES.includes(stroke)?stroke:'Freestyle';
     out.rawMetres+=m;out.stimulusUnits+=u;out.systems[system].metres+=m;out.systems[system].units+=u;out.strokes[stroke].metres+=m;out.strokes[stroke].units+=u;if(system==='Unclassified')out.unclassifiedMetres+=m;
   }
   function finish(out){
