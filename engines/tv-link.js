@@ -37,7 +37,14 @@
   L.deviceId=deviceId;
 
   // ---------- cloud calls ----------
-  async function rpc(name,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;if(!f)throw new Error('Cloud is not available on this phone.');return f(`/rest/v1/rpc/${name}`,{method:'POST',body:JSON.stringify(body||{})});}
+  // 19 Nov 2026 (Andy, 5:22am: the TV kept last night's PM session while his Board was on this morning's AM): a request
+  // that never answers (pool wifi / token refresh) held the publish loop forever, so no later change reached the TV.
+  // Every TV call now gives up after RPC_MS; the loop carries on and the next tick sends the Board as it is now.
+  const RPC_MS=Number(globalThis.MSOS_TV_RPC_MS)||12000;
+  async function rpc(name,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;if(!f)throw new Error('Cloud is not available on this phone.');
+    const ctl=typeof AbortController==='function'?new AbortController():null;let t=0;
+    try{return await Promise.race([f(`/rest/v1/rpc/${name}`,{method:'POST',body:JSON.stringify(body||{}),...(ctl?{signal:ctl.signal}:{})}),new Promise((_,no)=>{t=setTimeout(()=>{try{ctl?.abort();}catch{}no(new Error('The TV service did not answer — trying again'));},RPC_MS);})]);}
+    finally{clearTimeout(t);}}
   L.rpc=rpc;
 
   // ---------- which TV this phone drives ----------
@@ -88,7 +95,7 @@
   async function signedUrl(path){const hit=signed.get(path);if(hit&&hit.until>Date.now())return hit.url;const cfg=M.store?.config?.()||{};
     const r=await rpcFetch(`/storage/v1/object/sign/${BUCKET}/${String(path).split('/').map(encodeURIComponent).join('/')}`,{expiresIn:7200});const p=r?.signedURL||r?.signedUrl||'';if(!p)return'';
     const url=`${String(cfg.supabaseUrl||'').replace(/\/$/,'')}/storage/v1${p.startsWith('/')?p:`/${p}`}`;signed.set(path,{url,until:Date.now()+100*60*1000});return url;}
-  async function rpcFetch(path,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;return f(path,{method:'POST',body:JSON.stringify(body)});}
+  async function rpcFetch(path,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;let t=0;try{return await Promise.race([f(path,{method:'POST',body:JSON.stringify(body)}),new Promise((_,no)=>{t=setTimeout(()=>no(new Error('The TV service did not answer')),RPC_MS);})]);}finally{clearTimeout(t);}}
   async function overlayFrame(session,ctx){const o=M.tvDisplay?.current?.();if(!o)return null;const base={id:o.id,mode:o.mode==='full'?'full':'corner',label:text(o.label)};
     if(o.url)return{...base,kind:M.tvDisplay.linkKind(o.url),url:o.url,youtube:M.tvDisplay.youtubeId(o.url)};
     if(o.swimmer){const SB=M.swimmerBrief,page=o.swimmer.page||'profile';return{...base,kind:'swimmer',page,html:SB?SB.html(SB.page(o.swimmer.id,page)):''};}

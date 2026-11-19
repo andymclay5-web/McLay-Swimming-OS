@@ -24,7 +24,14 @@
     return !!text(session?.currentSource?.text||session?.originalPlan?.text||session?.workout||session?.source);
   }
   function latestStartedSession(now=new Date(),sessions=Object.values(M.state?.canonicalSessions||{})){
-    const nowKey=nzNowKey(now),rows=(sessions||[]).map(session=>({session,key:sessionStartKey(session)})).filter(x=>x.key&&x.key<=nowKey&&hasWorkout(x.session)).sort((a,b)=>b.key.localeCompare(a.key)||String(b.session?.updatedAt||b.session?.updated_at||'').localeCompare(String(a.session?.updatedAt||a.session?.updated_at||''))||String(b.session?.id||'').localeCompare(String(a.session?.id||'')));
+    const nowKey=nzNowKey(now);
+    // 19 Nov 2026 (Andy, 5:21am: Roll taken on this morning's AM · National before its start time; the app reopened on
+    // last night's PM session and sent it to the pool TV): a session the coach already has open for today that starts
+    // within the hour counts as on now, so it stays open. A previous day's pin is still replaced.
+    const soonKey=typeof now==='string'?new Date(Date.parse(nowKey+':00Z')+3600000).toISOString().slice(0,16):nzNowKey(new Date(+now+3600000));
+    const chosen=M.state?.canonicalSessions?.[M.state?.settings?.selectedSessionId||''],ck=sessionStartKey(chosen);
+    if(chosen&&ck&&ck.slice(0,10)===nowKey.slice(0,10)&&ck<=soonKey&&hasWorkout(chosen)&&(sessions||[]).includes(chosen))return chosen;
+    const rows=(sessions||[]).map(session=>({session,key:sessionStartKey(session)})).filter(x=>x.key&&x.key<=nowKey&&hasWorkout(x.session)).sort((a,b)=>b.key.localeCompare(a.key)||String(b.session?.updatedAt||b.session?.updated_at||'').localeCompare(String(a.session?.updatedAt||a.session?.updated_at||''))||String(b.session?.id||'').localeCompare(String(a.session?.id||'')));
     if(!rows.length)return null;const topKey=rows[0].key,selected=M.state?.settings?.selectedSessionId||'',keep=rows.find(x=>x.key===topKey&&x.session?.id===selected);return keep?.session||rows[0].session;
   }
   function selectLatestStarted(now=new Date()){

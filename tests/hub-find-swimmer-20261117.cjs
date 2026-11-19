@@ -29,8 +29,14 @@ const NAMES=['Matthew Callow','Matthew Robertson','Matthew Kofoed','Charlotte Mu
   assert.equal(await p.evaluate(()=>document.querySelectorAll('[data-roster-id]').length),0,'Manage swimmers lists nobody until he searches');
   await p.fill('[data-roster-q]','charlotte');await p.waitForFunction(()=>document.querySelectorAll('[data-roster-id]').length===1,{timeout:5000});
   assert.equal(await p.evaluate(()=>document.querySelector('[data-roster-id]').open),true,'a single match opens straight into its box');
-  await p.fill('[data-roster-id] [data-roster-aliases]','Charlotte T Murphy');await p.click('[data-roster-id] [data-roster-save]');await p.waitForTimeout(300);
+  // 17 Nov 2026 (Andy's phone: the box showed only "Name in results" + Save): every field is visible, none drawn over another
+  const boxes=await p.evaluate(()=>[...document.querySelectorAll('[data-roster-id] .roster-edit-body > *')].map(e=>{const r=e.getBoundingClientRect();return{k:Object.keys(e.dataset)[0]||e.tagName,x:r.x,y:r.y,w:r.width,h:r.height}}));
+  assert.equal(boxes.length,6,JSON.stringify(boxes));
+  for(const a of boxes)for(const b2 of boxes)if(a!==b2)assert.ok(a.x+a.w<=b2.x+1||b2.x+b2.w<=a.x+1||a.y+a.h<=b2.y+1||b2.y+b2.h<=a.y+1,`${a.k} overlaps ${b2.k}: ${JSON.stringify(boxes)}`);
+  await p.fill('[data-roster-id] [data-roster-aliases]','Charlotte T Murphy');await p.selectOption('[data-roster-id] [data-roster-sex]','F');/* 17 Nov: Zakhar had no sex, so race pace could not give times */await p.click('[data-roster-id] [data-roster-save]');await p.waitForTimeout(300);
   assert.deepEqual(await p.evaluate(()=>window.MSOS4.state.athletes.find(a=>a.full_name==='Charlotte Murphy').source_profile?.results_aliases?.map(x=>x.name)),['Charlotte T Murphy']);
+  assert.equal(await p.evaluate(()=>window.MSOS4.state.athletes.find(a=>a.full_name==='Charlotte Murphy').sex),'F','sex is set from the swimmer box');
+  assert.equal(await p.evaluate(()=>(window.MSOS4.state.pending||[]).filter(x=>x.table==='athletes').at(-1)?.record?.sex),'F','and sent to the cloud');
   await p.selectOption('[data-roster-sq]','Fitness');await p.fill('[data-roster-q]','');await p.waitForTimeout(200);
   const fit=await p.evaluate(()=>[...document.querySelectorAll('[data-roster-id]')].map(d=>[d.open,d.querySelector('summary').textContent]));
   assert.ok(fit.length>5&&fit.every(([o,t])=>!o&&/· Fitness/.test(t)),'a squad lists one closed line per swimmer: '+JSON.stringify(fit.slice(0,3)));

@@ -72,6 +72,7 @@
     return `<div class="roster-edit-list">${rows.map(a=>`<details class="roster-edit-row" data-roster-id="${esc(a.id)}"${rows.length===1?' open':''}><summary><b>${esc(a.full_name||'')}</b> · ${esc(a.squad||'No squad')}${a.active===false?' · inactive':''}</summary><div class="roster-edit-body">
       <input data-roster-name value="${esc(a.full_name||'')}" placeholder="Full name">
       <input data-roster-squad value="${esc(a.squad||'')}" placeholder="Squad">
+      <select data-roster-sex title="Sex — needed for race-pace times and age standards"><option value=""${!a.sex?' selected':''}>Sex not set</option><option value="M"${a.sex==='M'?' selected':''}>Male</option><option value="F"${a.sex==='F'?' selected':''}>Female</option></select>
       <input data-roster-aliases value="${esc(resultsNames(a).join(', '))}" placeholder="Name in results (if different)" title="Names this swimmer is entered under in meet results, comma separated">
       <label class="roster-active-toggle"><input type="checkbox" data-roster-active ${a.active!==false?'checked':''}> Active</label>
       <button data-roster-save>Save</button>
@@ -90,6 +91,7 @@
       a.full_name=name;
       a.squad=row.querySelector('[data-roster-squad]').value.trim();
       a.active=row.querySelector('[data-roster-active]').checked;
+      {const sx=row.querySelector('[data-roster-sex]')?.value;if(sx)a.sex=sx;}/* 17 Nov 2026: Zakhar had no sex, so race pace said "Sex required" */
       const want=[...new Set(row.querySelector('[data-roster-aliases]').value.split(',').map(x=>x.trim()).filter(Boolean))],prof=a.source_profile&&typeof a.source_profile==='object'?a.source_profile:{},had=Array.isArray(prof.results_aliases)?prof.results_aliases:[];
       const aliasesChanged=JSON.stringify(resultsNames(a))!==JSON.stringify(want);
       if(aliasesChanged)a.source_profile={...prof,results_aliases:want.map(n=>had.find(x=>String(x?.name||x).trim().toLowerCase()===n.toLowerCase())||{name:n,dob:null,linked_at:new Date().toISOString(),by:'coach'})};

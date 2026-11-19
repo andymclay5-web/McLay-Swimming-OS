@@ -30,7 +30,7 @@
   function blankState(){return{athletes:[],trainingTestTypes:[],trainingTestResults:[],adaptationProfiles:[],adaptationOverrides:[],coachResults:[],resultsEventHistory:[],resultsPbBoard:[],courseConversions:[],_refs:{}}}
   function mergeRows(a=[],b=[]){
     const map=new Map();
-    for(const x of [...(a||[]),...(b||[])]){if(!x)continue;const id=x.id||JSON.stringify([x.athlete_id,x.test_type_id,x.result_date,x.distance,x.stroke,x.result_seconds,x.full_name]);map.set(id,x)}
+    for(const x of [...(a||[]),...(b||[])]){if(!x)continue;const id=x.id||x.result_id||JSON.stringify([x.athlete_id,x.test_type_id,x.result_date||x.pb_date,x.course,x.distance,x.stroke,x.result_seconds??x.pb_seconds??x.result_time_seconds,x.full_name]);/* 17 Nov 2026: results views carry course + pb_seconds, not id */map.set(id,x)}
     return [...map.values()];
   }
   function mergeLegacyEvidence(state,legacy){
