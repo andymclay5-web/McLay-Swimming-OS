@@ -163,9 +163,9 @@
       let j=i+1,kids=[],sumReps=0;
       // 21 Nov 2026 (Andy, Sat AM: "4x50 #1 @200pace @ 1:15" then "1x50 drill" then "Dive start 50 #1 max" -- the two
       // separate swims vanished into the 4 x 50 as a "1 drill / 1 dive start" rotation, 100m short a round). A line that
-      // carries its own work -- a start, MAX/sprint/fast, its own send-off or rest, zone or race pace -- is a swim of its
-      // own, never a description of the reps above. "12 x 50 #1 / 1 x 50 Scull / 1 x 50 Drill / 1 x 50 Swim" still folds.
-      const ownWork=c=>/\b(?:dive|push)\s*start|\bmax\b|\bsprint\b|\bfast\b|@|\bpace\b/i.test(String(c.raw||c.text||''))||c.cycleSeconds!=null||c.restSeconds!=null||!!c.zone||!!c.raceIntent?.distance;
+      // carries its own work -- a dive/push start, or its own send-off or rest -- is a swim of its own, never a description
+      // of the reps above. "12 x 50 #1 / 1 x 50 Scull / 1 x 50 Drill / 1 x 50 Swim" and "1 x 50 @200 pace" still fold.
+      const ownWork=c=>/\b(?:dive|push)\s*start/i.test(String(c.raw||c.text||''))||c.cycleSeconds!=null||c.restSeconds!=null;/* 21 Nov 2026: pace / build / MAX are normal rotation words ("1 x 50 @200 pace"); a start or its own send-off/rest is not */
       while(j<a.length){const c=a[j];if(c?.kind!=='set'||Number(c.distance)!==Number(p.distance)||Number(c.reps)>=Number(p.reps)||ownWork(c))break;kids.push(c);sumReps+=Number(c.reps)||1;j++}
       if(kids.length>=2&&sumReps>0&&Number(p.reps)%sumReps===0){p.pattern=p.pattern||[];for(const c of kids)p.pattern.push({count:Number(c.reps)||1,text:strippedWork(c)});a.splice(i+1,kids.length);continue}
       j=i+1;let parts=[],sum=0;
