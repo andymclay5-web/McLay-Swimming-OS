@@ -1025,3 +1025,13 @@ This does not change the standing caution from the previous addendum and from se
 production-trusted yet.** No build from this pass has been proven on Andy's actual phone. The goal
 remains one canonical session truth, one attendance truth, one navigation authority, one prescription
 authority, one evidence authority, and background services that enrich without ever taking control.
+
+## Addendum — Release ritual and green checks (Claude, 20 Nov 2026)
+
+Claude now pushes to `main` directly (Andy linked GitHub on 19 Nov; no more zip uploads). Every release:
+
+1. Bump the `?v=` tag of every changed runtime file in BOTH `index.html` and `sw.js`.
+2. Bump the build id in `sw.js` (`BUILD`), `engines/release-authority.js` (`BUILD`, `M.CORE`, `generatedAt`, note), `VERSION.txt` — and the offline cache name `CACHE` in `sw.js` to match the build (it had sat on `v4-tue-20261117b` for several builds).
+3. Re-sign the protected files: `sha256sum $(awk '{print $2}' SHA256SUMS.txt) > /tmp/sums && mv /tmp/sums SHA256SUMS.txt`. `tests/release-package.test.js` checks them; they had not been re-signed since 11 Sept, so Full Guardian / Morning Board failed every run.
+4. Pin new tags where release tests expect them (`tests/coherent-runtime-release-20260825.cjs`, `tests/matthew-session-cu.cjs` for the parser tag).
+5. Run every test the GitHub workflows run (`.github/workflows/*.yml`) before pushing, and check the Actions results after. **Do not push on red.** A red check is either a real bug (fix the owner) or a test asserting a superseded decision (update it to the decision, citing it) — never "pre-existing, ignore".

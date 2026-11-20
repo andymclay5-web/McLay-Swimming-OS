@@ -73,6 +73,10 @@
   }
 
   installCloudEvidenceDeferral();
-  S.readyPromise.finally(()=>{released=true;clearTransient();selectLatestStarted();const selectionChanged=G.startupSelection?.changed===true;raf(()=>{if(!G.rendered||selectionChanged)UI.renderCurrent();M.nav?.activateView?.(M.state?.settings?.view||'board');});pending=false;});
+  // 20 Nov 2026 (Full Guardian: "UI.renderBoard is not a function" at boot, now and then): stored data can be ready while
+  // later deferred scripts (board.js and the views) are still downloading -- a slow phone network does exactly this. The
+  // first render waits until every deferred script has run (DOMContentLoaded), so it never renders half an app.
+  const afterScripts=fn=>{if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>fn(),{once:true});else fn();};
+  S.readyPromise.finally(()=>{released=true;clearTransient();selectLatestStarted();const selectionChanged=G.startupSelection?.changed===true;afterScripts(()=>raf(()=>{if(!G.rendered||selectionChanged)UI.renderCurrent();M.nav?.activateView?.(M.state?.settings?.view||'board');}));pending=false;});
   G.pending=()=>pending;G.ready=()=>released;G.nzNowKey=nzNowKey;G.sessionStartKey=sessionStartKey;G.hasWorkout=hasWorkout;G.latestStartedSession=latestStartedSession;G.selectLatestStarted=selectLatestStarted;G.installCloudEvidenceDeferral=installCloudEvidenceDeferral;
 })(globalThis);

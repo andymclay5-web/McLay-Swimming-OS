@@ -1579,7 +1579,7 @@
         const dev=M.targets.aerobic(269,100,'Development',10);
         tests.push(gtest('T400 Development target keeps authored rest model and practical cycle',Math.abs(dev.seconds-72.63)<.02&&dev.sendOff===85));
         const olderFaster=M.targets.t400(ath,{trainingTestTypes:st.trainingTestTypes,trainingTestResults:[...st.trainingTestResults,{athlete_id:'g',test_type_id:'gf',result_seconds:250,pool_course:'SCM',valid_for_anchor:true,result_date:'2026-01-01'}]},'SCM','Freestyle');
-        tests.push(gtest('A newer, slower result outranks an older, faster one',resultSeconds(olderFaster)===269,olderFaster?`got ${resultSeconds(olderFaster)}`:'missing'));
+        /* 20 Nov 2026: Andy's 15 Oct rule is the FASTEST valid T400 (CLAUDE.md 2.30); this self-test still asserted the old latest-first rule and failed every Guardian run since. */tests.push(gtest('An older, faster T400 outranks a newer, slower one (fastest valid anchor)',resultSeconds(olderFaster)===250,olderFaster?`got ${resultSeconds(olderFaster)}`:'missing'));
       }catch(e){tests.push(gtest('T400 exact-stroke contract',false,e.message));}
       try{
         const st={trainingTestTypes:[],trainingTestResults:[]},legacy={
@@ -1597,7 +1597,7 @@
       }catch(e){tests.push(gtest('Saved swimmer legacy pace becomes an immediate Freestyle T400 anchor',false,e.message));}
       try{
         const ath={id:'poolside-ath',full_name:'Poolside Swimmer'},pb={course:'SCM',distance:100,stroke:'Freestyle',result_seconds:60},event={pb,nextNational:{row:{_label:'NZSC',_seconds:55.5},gap:{seconds:4.5,percentage:8.1}},qualifying:[{_label:'Step one',_seconds:58.8},{_label:'Step two',_seconds:57.2}]};
-        const answer=C.poolsidePathwayAnswer(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training',date:'2026-08-10',dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training':session},attendance:[{session_id:'poolside-training',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]};
+        const answer=C.poolsidePathwayAnswer(ath,event),session=M.parser.parse('MAIN SET\n4 x 100 Freestyle Threshold 10s Rest\n4 x 25 Freestyle 100 Race Pace',{id:'poolside-training',date:new Date(Date.now()-3*86400000).toISOString().slice(0,10)/* 20 Nov 2026: was pinned to 10 Aug, which fell out of the 42-day window */,dayPart:'AM',course:'SCM',squads:['National']}),state={canonicalSessions:{'poolside-training':session},attendance:[{session_id:'poolside-training',athlete_id:'poolside-ath',status:'present'}],adaptationProfiles:[],adaptationOverrides:[],timedSets:[]};
         const area=C.trainingArea(ath,pb,{state,days:42});
         tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',answer?.steps.length===2&&Math.abs(answer.next.gapSeconds-1.2)<.001&&area?.sessions===1&&area.metres===500&&area.racePaceExposures===1,`${answer?.steps.length||0} steps · ${area?.metres||0}m`));
       }catch(e){tests.push(gtest('Poolside swimmer answer links pathway steps to recent training area',false,e.message));}
