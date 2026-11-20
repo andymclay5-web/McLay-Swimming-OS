@@ -15,6 +15,9 @@ WARM-DOWN
   const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
   const page=await context.newPage();
+  // 21 Nov 2026: this read the real clock, so it only passed on a weekday afternoon. It is about Monday 7 Sept at
+  // 15:xx in Auckland, so that is the clock it runs on.
+  await page.clock.install({time:new Date('2026-09-07T15:30:00+12:00')});
   const errors=[];
   page.on('pageerror',e=>errors.push(e.stack||e.message));
   page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});

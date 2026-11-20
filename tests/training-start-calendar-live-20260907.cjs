@@ -58,16 +58,18 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
     // specific ones. If the published calendar has genuinely run dry, this now fails with a clear, honest
     // message naming the data's real coverage_end -- a true finding about live data, not a test bug.
     const expectedMonth=await page.evaluate(()=>new Date().toLocaleDateString('en-NZ',{month:'long',year:'numeric'}));
-    const today=await page.evaluate(()=>new Date().toISOString().slice(0,10));
+    const today=await page.evaluate(()=>new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'}));/* NZ date, not UTC (at 7am Saturday UTC is still Friday) */
     await page.click('#sessionSelect');
     await page.waitForSelector('[data-training-calendar-month]',{timeout:5000});
     const month=await page.locator('[data-training-calendar-month]').innerText();
     assert.equal(month,expectedMonth,`Training calendar must open on the current NZ month: got ${month}, expected ${expectedMonth}`);
 
-    const upcoming=(calendar.dates||[])
-      .filter(x=>x.date>=today&&x.status!=='off'&&(x.sessions||[]).length>0)
-      .sort((a,b)=>a.date<b.date?-1:1);
-    assert.ok(upcoming.length>0,`no published calendar entries on/after ${today} -- monthly_calendar.json's coverage_end is ${calendar.coverage_end}; the published training calendar needs extending past this point`);
+    // 21 Nov 2026: monthly_calendar.json ended 4 Oct; since 6 Oct the app's calendar owner (M.calendar, with
+    // engines/standard-timetable.js filling every date after the file) is what the coach sees. Upcoming dates come from
+    // that owner, so the check follows the live schedule rather than the old file.
+    const upcoming=await page.evaluate(async today=>{const C=window.MSOS4.calendar;await C.load();const out=[];for(let i=0;i<21;i++){const d=new Date(Date.parse(today+'T12:00:00Z')+i*86400000).toISOString().slice(0,10);
+      if(d.slice(0,7)!==today.slice(0,7))continue;const sl=(C.slots(d)||[]);if(sl.length)out.push({date:d,sessions:sl.map(x=>({day_part:x.dayPart,squads:String(x.squad||'').split(/\s*\+\s*/).filter(Boolean)}))});}return out},today);
+    assert.ok(upcoming.length>0||today.slice(8)>'25',`no training slots on/after ${today} this month -- the calendar owner (published calendar + standard timetable) has nothing scheduled`);
 
     for(const entry of upcoming.slice(0,4)){
       const cell=page.locator(`[data-training-calendar-date="${entry.date}"]`);

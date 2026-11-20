@@ -2,7 +2,9 @@
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
-const BUILD='v4-final-acceptance-20260825a';
+// 21 Nov 2026: this pinned the 25 Aug build id, so every release since failed here. The check is that the page, the
+// worker and the offline reload all run THE release that is being shipped -- the build named in the release owner.
+const BUILD=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','engines','release-authority.js'),'utf8').match(/const BUILD='([^']+)'/)[1];
 const SOURCE=`WARM-UP
 400 Choice
 4 x 50 as 25 Drill / 25 Swim
@@ -93,7 +95,10 @@ const specs=[
   const dose=await page.evaluate(()=>{const M=MSOS4,s=M.currentSession(),x=M.dosageEngine.scopeSummary(s,M.state,{delivered:true});return{session:x.session,people:x.individual.length,squads:Object.keys(x.squad),team:x.team,metric:M.reportingEngine.METRICS.some(m=>m.id==='dosage')}});assert.equal(dose.session.rawMetres,2600);assert.ok(dose.session.systems.Threshold.metres>=400);assert.ok(dose.session.systems.Overload.metres>=400);assert.ok(dose.session.stimulusUnits>0);assert.ok(dose.people>=5);assert.ok(dose.squads.includes('National'));assert.equal(dose.team.swimmers,dose.people);assert.equal(dose.metric,true);
 
   // Coach Hub and reports expose delivered energy-system/stroke dose, not just metres.
-  await nav('hub');await page.waitForSelector('[data-msos-dosage="hub"]',{timeout:3000});const hub=await page.locator('#hubView').innerText();assert.match(hub,/SEASON|THIS WEEK|TODAY/i);const hubDose=await page.locator('[data-msos-dosage="hub"]').textContent();assert.match(hubDose,/Energy-system stimulus/i);assert.match(hubDose,/Threshold/);assert.match(hubDose,/Weighted stroke focus/i);assert.match(hubDose,/Individual \/ squad \/ team load/i);
+  /* 21 Nov 2026: Andy's 17 Nov Coach Hub ("no full lists to scroll, open-up boxes") took the full dosage card off the hub home;
+     the hub shows today's session detail, and the energy-system / dosage report is in Reports (checked on the next line). */
+  await nav('hub');await page.waitForSelector('#hubView [data-hub-home]',{timeout:5000});const hub=await page.locator('#hubView').innerText();assert.match(hub,/COACH HUB/i);assert.match(hub,/Reports/i);
+  await page.evaluate(()=>MSOS4.coachLoopUI.openHubPanel('session'));await page.waitForSelector('#hubView [data-loop-session-detail]',{timeout:5000});const hubDose=await page.locator('#hubView [data-loop-session-detail]').innerText();assert.match(hubDose,/Threshold/,hubDose);await page.evaluate(()=>MSOS4.coachLoopUI.openHubPanel(null));
   await page.evaluate(()=>MSOS4.navigationEngine.go('reports',{restore:false}));await page.waitForFunction(()=>MSOS4.state.settings.view==='reports'&&document.querySelector('#reportsView.active'));await page.waitForSelector('[data-report-metric][value="dosage"]');await page.waitForSelector('[data-msos-dosage="report"]',{timeout:3000});const reportDose=await page.locator('[data-msos-dosage="report"]').textContent();assert.match(reportDose,/Energy-system \/ dosage/i);assert.match(reportDose,/stimulus/i);assert.match(reportDose,/Matthew Kofoed|Matt/);
 
   // Persistence, Android Back and full offline reopen preserve the active finished session.

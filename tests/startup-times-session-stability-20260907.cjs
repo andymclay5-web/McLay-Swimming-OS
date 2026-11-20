@@ -63,6 +63,9 @@ assert.strictEqual(G.latestStartedSession('2026-09-06T12:00').id,'sunam','latest
   assert.strictEqual(applies,0,'startup evidence placeholder was applied by the gate');
 
   MSOS4.storageEngine.ready=true;resolveReady();await Promise.resolve();await Promise.resolve();
+  // 21 Nov 2026: the boot above ran on the real clock and picked a session; reopening on Mon 7 Sept 18:00 starts from the
+  // coach's stored pin (Saturday's session, an earlier day), which is what this checks is replaced.
+  state.settings.selectedSessionId='sat';
   G.selectLatestStarted('2026-09-07T18:00');
   assert.strictEqual(state.settings.selectedSessionId,'monam');
   assert(saveUiCount>0,'startup selection was not persisted to UI state');
