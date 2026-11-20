@@ -134,8 +134,9 @@ function run(){
 }
 
 function runFailBefore(){
-  const fixedRegex="m=t.match(/^#?(\\d{1,2})\\s+(?!x\\b)(.+)$/i);";
-  const buggyRegex="m=t.match(/^(\\d{1,2})\\s+(?!x\\b)(.+)$/i);";
+  // 21 Nov 2026: the regex now captures the '#' (so "#3 200 pace" names rep 3); the bug it guards is still "no '#'"
+  const fixedRegex="m=t.match(/^(#)?(\\d{1,2})\\s+(?!x\\b)(.+)$/i);";
+  const buggyRegex="m=t.match(/^()(\\d{1,2})\\s+(?!x\\b)(.+)$/i);";
   const slice=app.slice(start,end);
   assert.ok(slice.includes(fixedRegex),'test setup error: could not locate the fixed patternCue() regex -- its wording changed in a way this test does not expect');
   const buggySlice=slice.replace(fixedRegex,buggyRegex);
