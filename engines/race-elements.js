@@ -37,10 +37,10 @@
     // lactate) / Anaerobic Capacity (top-end speed) -- aerobic is split so distance work and threshold work read apart.
     {id:'aerobic',family:'engine',label:'Aerobic capacity',chip:'Aerobic cap',re:/(?<!an)aerobic(?! power)|regen(?:eration)?|\bdevelopment\b|\bdev\b|\breg\b|\bsteady\b|(?<!anaerobic )capacity/},
     {id:'aerobicPower',family:'engine',label:'Aerobic power',chip:'Aerobic pwr',re:/aerobic power|threshold|\boverload\b|\bthr\b|\bol\b|clearance|\bcl\b|vo2|heart[- ]?rate|\bhr\b(?! gauge)|\bhr gauge/},
-    {id:'kick',family:'engine',label:'Kick',chip:'Kick',re:/\bkick(?:s|ing)?\b/},
+    {id:'kick',family:'engine',label:'Kick',chip:'Kick',re:/\bkick(?:s|ing)?\b|\bhbs\b|hands?\s+by\s+(?:your\s+)?sides?/},/* 21 Nov 2026 (Andy): hands by side is a kick set, and a drill for body alignment / position -- it tags Kick and Technique */
     {id:'pull',family:'engine',label:'Pull / upper-body',chip:'Pull',re:/\bpull\b|paddles?|\bpads\b|\bbuoy\b/},
     {id:'efficiency',family:'technique',label:'Stroke efficiency',chip:'Efficiency',re:/stroke count|\bmsc\b|\bmsl\b|distance per stroke|\bdps\b|stroke length|hold (?:the )?count|\b\d?msc\b|efficien/},
-    {id:'technique',family:'technique',label:'Technique / drill',chip:'Technique',re:/\bdrills?\b|\bscull(?:ing)?\b|body ?line|\bposture\b|\brotation\b|\btiming\b|\bcatch\b|technique|\bhbs\b|hands by side|alignment|\bhips\b|perfect\b|\bclean\b/},
+    {id:'technique',family:'technique',label:'Technique / drill',chip:'Technique',re:/\bdrills?\b|\bscull(?:ing)?\b|body ?line|\bposture\b|\brotation\b|\btiming\b|\bcatch\b|technique|\bhbs\b|hands?\s+by\s+(?:your\s+)?sides?|alignment|body\s+position|\bhips\b|perfect\b|\bclean\b/},
     {id:'breathing',family:'technique',label:'Breathing control',chip:'Breathing',re:/hypoxic|\bhyp\s*\d|breath(?:e|ing)?|\b\d\s*hr\b|\bbr\s*\d\b/},
     {id:'relay',family:'skills',label:'Relay takeovers',chip:'Relay',re:/\brelays?\b|takeovers?|changeovers?/}
   ];

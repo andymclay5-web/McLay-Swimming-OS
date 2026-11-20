@@ -230,7 +230,7 @@
   function componentFrom(item){
     const head=txt(String(item?.raw||item?.text||'').split(/\s+[—–]\s+|\s+-\s+(?=[A-Za-z])/)[0]+' '+txt(item?.stroke||''));
     if(/\bunderwater\b|\bu\/?w\b|\bh2o\b|⬇️|\bdolphin\s+kick\b|\bsdk\b/i.test(head))return'Underwater';
-    if(/\bkick(?:ing)?\b|\bkk\b/i.test(head))return'Kick';
+    if(/\bkick(?:ing)?\b|\bkk\b|\bhbs\b|\bhands?\s+by\s+(?:your\s+)?sides?\b/i.test(head))return'Kick';/* 21 Nov 2026 (Andy): hands by side is a kick set (also a body-alignment drill) */
     if(/\bpull\b|\bpb\b/i.test(head))return'Pull';
     if(/\bdrills?\b/i.test(head))return'Drill';
     if(/\bscull(?:ing)?\b/i.test(head))return'Scull';
