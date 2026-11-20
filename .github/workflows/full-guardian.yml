@@ -57,8 +57,8 @@ jobs:
           node tests/dead-live-nav-originals-retired-20260904.cjs
       - name: South Islands Meet field acceptance
         run: |
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install chromium --with-deps >/dev/null 2>&1
+          npm install --no-save --loglevel=error playwright@1.55.0
+          npx playwright install chromium --with-deps >/tmp/pw-install.log 2>&1 || { tail -40 /tmp/pw-install.log; exit 1; }
           python3 -m http.server 8765 >/tmp/msos-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
@@ -66,8 +66,8 @@ jobs:
           node tests/south-islands-meet-field-acceptance-20260828.cjs
       - name: Boot-time evidence refresh cannot touch live coaching state
         run: |
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install chromium --with-deps >/dev/null 2>&1
+          npm install --no-save --loglevel=error playwright@1.55.0
+          npx playwright install chromium --with-deps >/tmp/pw-install.log 2>&1 || { tail -40 /tmp/pw-install.log; exit 1; }
           python3 -m http.server 8765 >/tmp/msos-evidence-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
@@ -75,8 +75,8 @@ jobs:
           node tests/evidence-refresh-authority-20260904.cjs
       - name: Roll add-squad cannot roll back a live session edit
         run: |
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install chromium --with-deps >/dev/null 2>&1
+          npm install --no-save --loglevel=error playwright@1.55.0
+          npx playwright install chromium --with-deps >/tmp/pw-install.log 2>&1 || { tail -40 /tmp/pw-install.log; exit 1; }
           python3 -m http.server 8765 >/tmp/msos-roster-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
@@ -84,8 +84,8 @@ jobs:
           node tests/attendance-roster-add-squad-live-edit-20260904.cjs
       - name: Assistant coach role persists across reload/background/nav/cloud/session-switch, fails closed
         run: |
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install chromium --with-deps >/dev/null 2>&1
+          npm install --no-save --loglevel=error playwright@1.55.0
+          npx playwright install chromium --with-deps >/tmp/pw-install.log 2>&1 || { tail -40 /tmp/pw-install.log; exit 1; }
           python3 -m http.server 8765 >/tmp/msos-jordan-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
