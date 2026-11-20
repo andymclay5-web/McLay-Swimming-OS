@@ -12,7 +12,7 @@ on:
 
 jobs:
   training-board-capture:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 20 Nov 2026: ubuntu-latest is 26.04, which Playwright 1.55 cannot install Chromium on
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

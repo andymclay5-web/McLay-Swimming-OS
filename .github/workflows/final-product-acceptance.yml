@@ -8,7 +8,7 @@ on:
 jobs:
   final-product-acceptance:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 20 Nov 2026: ubuntu-latest is 26.04, which Playwright 1.55 cannot install Chromium on
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
