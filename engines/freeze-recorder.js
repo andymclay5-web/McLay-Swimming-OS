@@ -31,18 +31,26 @@
       counts:{sessions:count(s.canonicalSessions),athletes:count(s.athletes),attendance:count(s.attendance),captures:count(s.captures),pending:count(s.pending),coachResults:count(s.coachResults)},
       online:navigator.onLine,memory:mem,lastAction:lastAction&&now()-lastAction.at<15000?{...lastAction,msBefore:now()-lastAction.at}:null};
   }
-  function record(duration,source){
+  function record(duration,source,extra=null,startedAt=null){
     if(duration<FREEZE_MS)return;
-    const at=now()-duration,c=context(),list=read();
-    const row={id:`${device()}-${at}`,happened_at:new Date(at).toISOString(),duration_ms:Math.round(duration),source,build:String(M.BUILD||M.RELEASE_ATTESTATION?.build||''),view:c.view,detail:c};
-    if(list.some(x=>Math.abs(Date.parse(x.happened_at)-at)<1500))return;// the heartbeat and the long-task report saw the same stall
+    const at=startedAt??(now()-duration),c=context(),list=read();
+    const same=list.find(x=>Math.abs(Date.parse(x.happened_at)-at)<1500);// the heartbeat, long-task and frame reports saw the same stall
+    if(same){if(extra&&!same.detail.scripts){same.detail={...same.detail,...extra};same.sent=false;write(list);queueSend()}return}
+    const row={id:`${device()}-${Math.round(at)}`,happened_at:new Date(at).toISOString(),duration_ms:Math.round(duration),source,build:String(M.BUILD||M.RELEASE_ATTESTATION?.build||''),view:c.view,detail:{...c,...(extra||{})}};
     list.push(row);write(list);F.lastFreeze=row;queueSend();
   }
+  // 21 Nov 2026 (first real records: two 3s stalls on the Board while scrolling, no heavy scroll code): the browser's
+  // long-animation-frame report (Chrome 123+ / Android) names the scripts that ran in the stuck frame -- file, function,
+  // what started it (a timer, an event, a promise) and how long each took. That is what points at the cause.
+  const file=u=>String(u||'').replace(/^https?:\/\/[^/]+\/(?:McLay-Swimming-OS\/)?/i,'').replace(/\?v=.*/,'');
+  try{new PerformanceObserver(l=>{for(const e of l.getEntries()){if(e.duration<FREEZE_MS||document.hidden)continue;
+    const scripts=(e.scripts||[]).slice().sort((a,b)=>b.duration-a.duration).slice(0,6).map(x=>({file:file(x.sourceURL),fn:short(x.sourceFunctionName),invoker:short(x.invoker),type:x.invokerType,ms:Math.round(x.duration),styleMs:Math.round(x.forcedStyleAndLayoutDuration||0)}));
+    record(e.duration,'frame',{scripts,renderMs:Math.round(e.renderStart?e.duration-(e.renderStart-e.startTime):0),styleLayoutMs:Math.round(e.styleAndLayoutStart?e.startTime+e.duration-e.styleAndLayoutStart:0)},performance.timeOrigin+e.startTime)}}).observe({type:'long-animation-frame',buffered:true})}catch{}
   // Heartbeat: a timer that should fire every TICK_MS. If it fires late, the main thread was blocked for the gap.
   let lastTick=now();
   setInterval(()=>{const t=now(),gap=t-lastTick-TICK_MS;lastTick=t;if(document.hidden||hiddenAt)return;if(gap>=FREEZE_MS)record(gap,'heartbeat')},TICK_MS);
   // The browser's own long-task reports (Chrome / Android), which catch stalls a timer can miss at boot.
-  try{new PerformanceObserver(l=>{for(const e of l.getEntries())if(e.duration>=FREEZE_MS&&!document.hidden){const t=performance.timeOrigin+e.startTime;const list=read();if(!list.some(x=>Math.abs(Date.parse(x.happened_at)-t)<1500))record(e.duration,'longtask')}}).observe({type:'longtask',buffered:true})}catch{}
+  try{new PerformanceObserver(l=>{for(const e of l.getEntries())if(e.duration>=FREEZE_MS&&!document.hidden){const t=performance.timeOrigin+e.startTime;const list=read();record(e.duration,'longtask',null,t)}}).observe({type:'longtask',buffered:true})}catch{}
 
   // Sending: best effort, never in the way. Only rows not yet sent; only when signed in to an organisation.
   let sending=false,timer=0;

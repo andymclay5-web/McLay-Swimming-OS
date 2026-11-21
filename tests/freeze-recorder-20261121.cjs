@@ -21,6 +21,8 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
   assert.equal(log.length,1,'one stall, one record: '+JSON.stringify(log.map(x=>[x.duration_ms,x.source])));
   const f=log[0];assert.ok(f.duration_ms>=1300&&f.duration_ms<=2500,String(f.duration_ms));
   assert.equal(f.view,'board');assert.equal(f.detail.session.id,'freeze-sess');
+  // 21 Nov 2026: the stuck frame names the script that ran (the first real records only said "scrolling on the Board")
+  const sc=(f.detail.scripts||[])[0]||{};assert.equal(sc.type,'event-listener',JSON.stringify(f.detail.scripts));assert.match(sc.invoker,/heavyBtn|BUTTON/i,JSON.stringify(sc));assert.ok(sc.ms>=1300,JSON.stringify(sc));
   assert.match(f.detail.lastAction.target,/heavyBtn|data-test-heavy/,JSON.stringify(f.detail.lastAction));assert.equal(f.detail.lastAction.text,'Heavy thing');
   // signed in -> sent once
   await p.evaluate(()=>{const M=window.MSOS4;M.store.saveAuth({access_token:'t',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'048dd1ac-0fea-4b7b-b5bc-eeec00abcb8b'}});M.state.settings.organisationId='9d40beff-e632-414d-9daa-7ee78104ad2a';});
