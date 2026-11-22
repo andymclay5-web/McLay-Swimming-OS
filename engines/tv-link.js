@@ -73,16 +73,22 @@
   // send-off of their own still shows. A set where nobody has anything shows no swimmer row at all.
   function athleteTarget(session,item,a,actual){const p=prescription(session,item,a);const t=targetText(p?.target);if(t)return t;const it=actual||p?.item||item;const own=Number(it?.cycleSeconds),set=Number(item?.cycleSeconds);return own>0&&own!==set?`@ ${clock(own)}`:'';}
   const tick=()=>new Promise(r=>setTimeout(r,0));
+  const SHORT={Freestyle:'Free',Backstroke:'Back',Breaststroke:'Breast',Butterfly:'Fly',IM:'IM'};
   async function setRow(session,item,ctx,withTargets){
     const b=B(),row={k:'set',id:item.id,work:text(b.workLabel(item)),cue:text(b.cueText(item))};
     const timed=!!b.timingIntent?.(item);
-    if(withTargets&&timed&&ctx.group.length){const list=[];for(const a of ctx.group){const t=athleteTarget(session,item,a);if(t)list.push({n:b.name(a,ctx.pool),t});}if(list.length)row.targets=list;await tick();}
+    const hashOne=/#\s*1\b/.test(String(item?.raw||item?.text||''));
+    // 23 Nov 2026 (Andy at the pool: "it's not picking up their strokes for the number one ... we should be picking up
+    // their strokes if we've got them for number one and showing that"): on a #1 set each swimmer shows their own stroke
+    // (the Board's own choice: coach pick, recent, PB), with their target beside it when there is one.
+    const strokeOf=a=>{if(!hashOne)return'';try{const st=b.displayStroke?.(session,item,a)||'';return st&&st!=='Auto'?SHORT[st]||st:''}catch{return''}};
+    if(withTargets&&(timed||hashOne)&&ctx.group.length){const list=[];for(const a of ctx.group){const st=strokeOf(a),t=timed?athleteTarget(session,item,a):'',both=[st,t].filter(Boolean).join(' ');if(both)list.push({n:b.name(a,ctx.pool),t:both});}if(list.length)row.targets=list;await tick();}
     const groups=new Map();
     for(const a of ctx.mods){let actual=null;try{actual=(withTargets?prescription(session,item,a)?.item:null)||E.Modification.adaptItem(item,a,M.state,session);}catch{actual=item;}if(b.shownItem)actual=b.shownItem(item,actual);
       const changed=!E.Modification.samePrescription?.(item,actual),showTiming=!!b.timingIntent?.(actual);if(!changed&&!showTiming)continue;
       const key=b.modGroupKey?b.modGroupKey(actual):JSON.stringify([b.workLabel(actual),b.cueText(actual)]);
       if(!groups.has(key))groups.set(key,{work:text(b.workLabel(actual)),cue:text(b.cueText(actual)),people:[]});
-      groups.get(key).people.push({n:b.name(a,ctx.mods),t:withTargets&&showTiming?athleteTarget(session,item,a,actual):''});}
+      groups.get(key).people.push({n:b.name(a,ctx.mods),t:withTargets?[strokeOf(a),showTiming?athleteTarget(session,item,a,actual):''].filter(Boolean).join(' '):''});}
     if(groups.size)row.mods=[...groups.values()];
     return row;}
   async function nodeRows(session,node,ctx,withTargets){
