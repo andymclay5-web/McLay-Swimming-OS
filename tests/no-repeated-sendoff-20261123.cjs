@@ -8,7 +8,11 @@ const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{const b=await chromium.launch({args:['--no-sandbox']});const errors=[];try{
   const p=await (await b.newContext({viewport:{width:390,height:844},timezoneId:'Pacific/Auckland',serviceWorkers:'block'})).newPage();p.on('pageerror',e=>errors.push(e.message));
-  await p.goto(BASE);await p.waitForFunction(()=>window.MSOS4?.storageEngine?.ready&&window.MSOS4?.tvLink?.buildFrame&&window.MSOS4?.boardStateEngine?.fillPanel,{timeout:30000});await p.waitForTimeout(800);
+  let navAt=Date.now(),navs=0;p.on('framenavigated',f=>{if(f===p.mainFrame()){navAt=Date.now();navs++}});
+  await p.goto(BASE);
+  // the app can reload itself once at start (a newer build found); wait until it has stopped navigating
+  for(let i=0;i<40&&Date.now()-navAt<2500;i++)await p.waitForTimeout(250);
+  await p.waitForFunction(()=>window.MSOS4?.storageEngine?.ready&&window.MSOS4?.tvLink?.buildFrame&&window.MSOS4?.boardStateEngine?.fillPanel,{timeout:30000});await p.waitForTimeout(800);
   const r=await p.evaluate(async()=>{const M=window.MSOS4,S=M.boardStateEngine;
     const s=M.parser.parse('MAIN SET\n100 IM @ 2:00\n8 x 25 Kick MAX #1 kick max @ 0:45\n100 #1 @ 2:00',{date:new Date().toISOString().slice(0,10),dayPart:'AM',squads:['National']});s.id='rep-sess';M.store.putSession(M.state,s);M.state.settings.selectedSessionId=s.id;
     const ath=[['mr','Matt R'],['zac','Zac'],['el','Elsie']].map(([id,n])=>({id,full_name:n+' Test',squad:'National',active:true,sex:'M'}));M.state.athletes=ath;M.state.attendance=ath.map(a=>({session_id:s.id,athlete_id:a.id,status:'present'}));
@@ -27,5 +31,5 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
   assert.equal(r.rows[0].targets,null,`no swimmer row repeating the send-off under "${r.rows[0].work}": ${JSON.stringify(r.rows[0].targets)}`);
   assert.doesNotMatch(JSON.stringify(r.rows[1].targets||[]),/@/,'the #1 kick set shows strokes, not the send-off: '+JSON.stringify(r.rows[1].targets));
   for(const c of r.cards){assert.doesNotMatch(c,/@\s*(2:00|0?:?45)/,'phone Times cards don\'t repeat the send-off: '+c);assert.match(c,/Matt/,'the swimmer (and stroke button) is still there: '+c)}
-  assert.deepEqual(errors,[],errors.join('\n'));console.log('NO_REPEATED_SENDOFF_PASS');
+  assert.deepEqual(errors,[],errors.join('\n'));console.log('NO_REPEATED_SENDOFF_PASS',`navigations=${navs}`);
 }finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1);});
