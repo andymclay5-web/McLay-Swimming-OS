@@ -10,7 +10,7 @@ const assert=require('node:assert/strict');
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{const b=await chromium.launch({args:['--no-sandbox']});const errors=[];try{
-  const p=await (await b.newContext({viewport:{width:390,height:844},timezoneId:'Pacific/Auckland'})).newPage();p.on('pageerror',e=>errors.push(e.message));
+  const p=await (await b.newContext({viewport:{width:390,height:844},timezoneId:'Pacific/Auckland',serviceWorkers:'block'})).newPage();p.on('pageerror',e=>errors.push(e.message));
   const posts=[];await p.route(/\/rest\/v1\/msos_session_journeys/,async r=>{posts.push({body:JSON.parse(r.request().postData()||'[]'),prefer:r.request().headers()['prefer']});await r.fulfill({status:201,body:''})});
   await p.goto(BASE);await p.waitForFunction(()=>window.MSOS4?.storageEngine?.ready&&window.MSOS4?.journeyRecorder,{timeout:30000});
   await p.evaluate(()=>{const M=window.MSOS4;

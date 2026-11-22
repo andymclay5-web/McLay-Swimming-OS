@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
 const{chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
 (async()=>{const b=await chromium.launch({args:['--no-sandbox']});const errors=[];try{
-  const p=await (await b.newContext({viewport:{width:390,height:844},timezoneId:'Pacific/Auckland'})).newPage();p.on('pageerror',e=>errors.push(e.message));
+  const p=await (await b.newContext({viewport:{width:390,height:844},timezoneId:'Pacific/Auckland',serviceWorkers:'block'})).newPage();p.on('pageerror',e=>errors.push(e.message));
   await p.goto(BASE);await p.waitForFunction(()=>window.MSOS4?.storageEngine?.ready&&window.MSOS4?.watchList&&window.MSOS4?.raceElements?.slotProfile,{timeout:30000});
   const before=await p.evaluate(()=>{const M=window.MSOS4,day=n=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);
     M.state.athletes=[{id:'luke',full_name:'Luke Thompson',squad:'National',active:true,sex:'M'},{id:'ash',full_name:'Ashley Brown',squad:'National',active:true,sex:'F'},{id:'cor',full_name:'Coral Sturla',squad:'National',active:true,sex:'F'}];
