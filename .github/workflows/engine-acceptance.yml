@@ -125,6 +125,14 @@ jobs:
           node tests/swimmer-secure-onboarding-bn.cjs
           node tests/matthew-session-cu.cjs
           node tests/matthew-ready-cv.cjs
+      - name: Recent browser regressions (Nov 2026)
+        run: |
+          npm install --no-save --loglevel=error playwright@1.55.0
+          npx playwright install chromium --with-deps >/tmp/pw-install.log 2>&1 || { tail -40 /tmp/pw-install.log; exit 1; }
+          python3 -m http.server 8765 >/tmp/msos-recent-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 1
           node tests/boot-waits-for-slow-scripts-20261120.cjs
           node tests/evidence-views-keep-every-pb-20261117.cjs
           node tests/freeze-recorder-20261121.cjs
