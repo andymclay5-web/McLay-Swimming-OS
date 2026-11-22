@@ -31,14 +31,31 @@
       counts:{sessions:count(s.canonicalSessions),athletes:count(s.athletes),attendance:count(s.attendance),captures:count(s.captures),pending:count(s.pending),coachResults:count(s.coachResults)},
       online:navigator.onLine,memory:mem,slowCards:(M.boardStateEngine?.slowCards||[]).filter(x=>now()-x.at<20000).slice(-4),lastAction:lastAction&&now()-lastAction.at<15000?{...lastAction,msBefore:now()-lastAction.at}:null};
   }
+  // 22 Nov 2026 (Andy: "Those freezes effect me for more like 10 plus seconds"; the records said 3s and 4.4s): a freeze
+  // the coach feels is often several stalls back to back, with the screen barely moving in between. Stalls less than
+  // SPELL_GAP_MS apart are one spell: duration_ms is the whole spell, first stall start to last stall end, and
+  // detail.stalls lists each part (when, how long, which report saw it), detail.blockedMs adds them up.
+  const SPELL_GAP_MS=2500;
   function record(duration,source,extra=null,startedAt=null){
     if(duration<FREEZE_MS)return;
-    const at=startedAt??(now()-duration),c=context(),list=read();
-    const same=list.find(x=>Math.abs(Date.parse(x.happened_at)-at)<1500);// the heartbeat, long-task and frame reports saw the same stall
-    if(same){if(extra&&!same.detail.scripts){same.detail={...same.detail,...extra};same.sent=false;write(list);queueSend()}return}
-    const row={id:`${device()}-${Math.round(at)}`,happened_at:new Date(at).toISOString(),duration_ms:Math.round(duration),source,build:String(M.BUILD||M.RELEASE_ATTESTATION?.build||''),view:c.view,detail:{...c,...(extra||{})}};
+    const at=startedAt??(now()-duration),end=at+duration,list=read();
+    const spell=list.slice().reverse().find(x=>{const s0=Date.parse(x.happened_at),e0=s0+x.duration_ms;return at<=e0+SPELL_GAP_MS&&end>=s0-SPELL_GAP_MS});
+    if(spell){const s0=Date.parse(spell.happened_at),e0=s0+spell.duration_ms,d=spell.detail;d.stalls=d.stalls||[{at:0,ms:spell.duration_ms,source:spell.source}];
+      // the heartbeat, long-task and frame reports often see the same stall: a part that overlaps one already listed is the same part
+      const same=d.stalls.find(x=>at<s0+x.at+x.ms&&end>s0+x.at);
+      if(same){same.ms=Math.max(same.ms,Math.round(end-(s0+same.at)));if(source!=='heartbeat')same.source=source}else d.stalls.push({at:Math.round(at-s0),ms:Math.round(duration),source});
+      if(extra){if(!d.scripts&&extra.scripts){Object.assign(d,extra)}else if(extra.scripts){d.moreScripts=(d.moreScripts||[]).concat(extra.scripts.slice(0,3)).slice(-9)}else if(extra.tap){d.tap=d.tap||extra.tap}}
+      const start=Math.min(s0,at);if(start<s0){const shift=s0-start;d.stalls.forEach(x=>x.at+=shift);spell.happened_at=new Date(start).toISOString()}
+      spell.duration_ms=Math.round(Math.max(e0,end)-start);d.blockedMs=d.stalls.reduce((n,x)=>n+x.ms,0);d.stalls.sort((a,b)=>a.at-b.at);
+      const c=context();d.slowCards=c.slowCards?.length?c.slowCards:d.slowCards;d.lastActionEnd=c.lastAction;
+      spell.sent=false;write(list);F.lastFreeze=spell;queueSend();return}
+    const c=context();
+    const row={id:`${device()}-${Math.round(at)}`,happened_at:new Date(at).toISOString(),duration_ms:Math.round(duration),source,build:String(M.BUILD||M.RELEASE_ATTESTATION?.build||''),view:c.view,detail:{...c,...(extra||{}),stalls:[{at:0,ms:Math.round(duration),source}],blockedMs:Math.round(duration)}};
     list.push(row);write(list);F.lastFreeze=row;queueSend();
   }
+  // 22 Nov 2026: how long a tap took to show anything (Event Timing API, Chrome / Android) -- the wait the coach actually feels.
+  try{new PerformanceObserver(l=>{for(const e of l.getEntries()){if(e.duration<FREEZE_MS||document.hidden||!/^(pointerdown|pointerup|click|touchstart|touchend|keydown)$/.test(e.name))continue;
+    record(e.duration,'tap',{tap:{type:e.name,ms:Math.round(e.duration),waitMs:Math.round((e.processingStart||e.startTime)-e.startTime),target:describe(e.target)}},performance.timeOrigin+e.startTime)}}).observe({type:'event',durationThreshold:104,buffered:true})}catch{}
   // 21 Nov 2026 (first real records: two 3s stalls on the Board while scrolling, no heavy scroll code): the browser's
   // long-animation-frame report (Chrome 123+ / Android) names the scripts that ran in the stuck frame -- file, function,
   // what started it (a timer, an event, a promise) and how long each took. That is what points at the cause.
@@ -58,9 +75,9 @@
   async function send(){
     if(sending)return;const org=M.cloud?.org?.(),user=M.cloud?.user?.();if(!org||!user||!M.cloud?.fetch||!navigator.onLine)return;
     const list=read(),todo=list.filter(x=>!x.sent);if(!todo.length)return;sending=true;
-    try{await M.cloud.fetch('/rest/v1/msos_client_freezes?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},
+    try{await M.cloud.fetch('/rest/v1/msos_client_freezes?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},
         body:JSON.stringify(todo.slice(0,30).map(x=>({id:x.id,organisation_id:org,user_id:user,device:device(),build:x.build,happened_at:x.happened_at,duration_ms:x.duration_ms,view:x.view,detail:{...x.detail,source:x.source}})))});
-      const sent=new Set(todo.slice(0,30).map(x=>x.id));write(read().map(x=>sent.has(x.id)?{...x,sent:true}:x));if(todo.length>30)queueSend();}
+      const sent=new Map(todo.slice(0,30).map(x=>[x.id,x.duration_ms]));write(read().map(x=>sent.get(x.id)===x.duration_ms?{...x,sent:true}:x));if(todo.length>30)queueSend();}
     catch{}finally{sending=false}
   }
   setTimeout(send,20000);setInterval(send,5*60000);

@@ -28,7 +28,13 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
   await p.evaluate(()=>{const M=window.MSOS4;M.store.saveAuth({access_token:'t',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'048dd1ac-0fea-4b7b-b5bc-eeec00abcb8b'}});M.state.settings.organisationId='9d40beff-e632-414d-9daa-7ee78104ad2a';});
   await p.evaluate(()=>window.MSOS4.freezeRecorder.send());await p.waitForTimeout(500);await p.evaluate(()=>window.MSOS4.freezeRecorder.send());await p.waitForTimeout(300);
   assert.equal(posts.length,1,'sent once: '+posts.length);const row=posts[0].body[0];
-  assert.equal(row.organisation_id,'9d40beff-e632-414d-9daa-7ee78104ad2a');assert.equal(row.user_id,'048dd1ac-0fea-4b7b-b5bc-eeec00abcb8b');assert.equal(row.view,'board');assert.match(posts[0].prefer,/ignore-duplicates/);
+  assert.equal(row.organisation_id,'9d40beff-e632-414d-9daa-7ee78104ad2a');assert.equal(row.user_id,'048dd1ac-0fea-4b7b-b5bc-eeec00abcb8b');assert.equal(row.view,'board');assert.match(posts[0].prefer,/merge-duplicates/);
+  // 22 Nov 2026 (Andy: "more like 10 plus seconds"): stalls back to back are one freeze, measured end to end
+  await p.evaluate(()=>{const b=document.createElement('button');b.id='heavy2';b.textContent='Heavy again';b.addEventListener('click',()=>{const t=Date.now();while(Date.now()-t<1200){}});document.body.appendChild(b)});
+  await p.waitForTimeout(4000);await p.click('#heavy2');await p.waitForTimeout(900);await p.click('#heavy2');await p.waitForTimeout(1500);
+  const log2=await p.evaluate(()=>window.MSOS4.freezeRecorder.log());assert.equal(log2.length,2,'two clicks a second apart are one freeze: '+JSON.stringify(log2.map(x=>[x.duration_ms,x.detail.stalls])));
+  const sp=log2[1];assert.equal(sp.detail.stalls.length,2,JSON.stringify(sp.detail.stalls));assert.ok(sp.duration_ms>=2900,'whole spell '+sp.duration_ms);assert.ok(sp.detail.blockedMs>=2200&&sp.detail.blockedMs<sp.duration_ms,'blocked '+sp.detail.blockedMs);
+  await p.evaluate(()=>window.MSOS4.freezeRecorder.send());await p.waitForTimeout(500);assert.equal(posts.length,2,'the spell is sent');assert.equal(posts[1].body.length,1);
   const after=await p.evaluate(()=>({view:window.MSOS4.state.settings.view,sel:window.MSOS4.state.settings.selectedSessionId}));
   assert.deepEqual(after,before,'recording changes nothing');
   assert.deepEqual(errors,[],errors.join('\n'));console.log('FREEZE_RECORDER_PASS',f.duration_ms+'ms',f.detail.lastAction.target);
