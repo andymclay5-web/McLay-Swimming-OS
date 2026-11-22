@@ -58,7 +58,7 @@
 .tvo-card h3{margin:0;font-size:1.6em}.tvo-card>small{opacity:.8;font-weight:700}
 .tvo-card-sec{margin-top:.6em}.tvo-card-sec label{display:block;font-weight:900;letter-spacing:.1em;font-size:.75em;color:#ffd34d}
 .tvo-card-sec p{display:flex;gap:1em;margin:.15em 0}.tvo-card-sec p span{flex:1}
-.tv-swimmers{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.tv-swimmers button{padding:6px 10px;border-radius:16px}
+.tv-swimmers{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.tv-swimmers button{padding:6px 10px;border-radius:16px}.tv-vq-chips{margin:4px 0}.tv-vq-chips button.on{background:#0d4566;color:#fff;border-color:#0d4566}.tv-transport button{flex:1}
 .tv-link-panel{border:1px solid rgba(13,69,102,.25);border-radius:12px;padding:8px 10px;margin-bottom:10px}
 .tv-link-panel h3{margin:0 0 6px}
 .tv-screen-row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)}

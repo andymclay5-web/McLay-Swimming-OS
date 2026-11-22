@@ -82,7 +82,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
   await p.evaluate(()=>{const M=window.MSOS4;M.cloud.fetch=async(path,o)=>{window.__vq=[path,JSON.parse(o.body)];return{videos:[{url:'https://www.youtube.com/watch?v=abcdefghijk',title:'Katie Ledecky freestyle',channel:'Swim'}]};};M.tvDisplay.openControls();});
   await p.fill('[data-tv-q]','Katie Ledecky swimming freestyle');await p.click('[data-tv-find]');await p.waitForSelector('[data-tv-yt="0"]');await p.click('[data-tv-yt="0"][data-tv-m="full"]');
   const tv=await p.evaluate(()=>({q:window.__vq,cur:window.MSOS4.tvDisplay.current()}));
-  assert.deepEqual(tv.q,['/functions/v1/msos-video-search',{query:'Katie Ledecky swimming freestyle'}]);
+  /* 23 Nov 2026: the search also asks for short clips (5 minutes or less) */assert.deepEqual(tv.q,['/functions/v1/msos-video-search',{query:'Katie Ledecky swimming freestyle',maxSeconds:300}]);
   assert.equal(tv.cur.url,'https://www.youtube.com/watch?v=abcdefghijk');assert.equal(tv.cur.mode,'full');
   assert.deepEqual(errors,[],errors.join('\n'));console.log('TUE_NIGHT_WRITER_AWAY_SYNC_TV_PASS');
 }finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1);});

@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261123a';
+  const TV_VERSION='20261123b';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -109,8 +109,28 @@
   // The swimmer panel holds a lot: shrink its type until it all fits in the panel.
   function fitCard(){const c=ovl.querySelector('.tvo-card.sb');if(!c)return;let size=ovl.classList.contains('tvo-full')?34:24,guard=0;c.style.fontSize=`${size}px`;while(c.scrollHeight>c.clientHeight+2&&size>10&&guard++<40){size-=1;c.style.fontSize=`${size}px`;}}
   TV.fitCard=fitCard;
-  let overlayKey='';
-  function drawOverlay(o){if(!o)stopMirror();const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.page:'',o.kind==='swimmer'?o.html:'']):'';if(key===overlayKey)return;overlayKey=key;
+  let overlayKey='',overlayBase='',lastCtlN=0,yt={t:0,state:-1};
+  // 23 Nov 2026 (Andy: "whenever ... I go from corner of the board to the full board, it restarts the video. We want it
+  // to just carry on playing"): changing corner <-> full on the same video moves it, it doesn't start it again. And the
+  // coach's phone can skip back / forward / pause (o.ctl, a counter so each tap acts once).
+  function switchMode(o){const full=o.mode==='full';ovl.className=`tv-overlay tvo-${full?'full':'corner'}`;
+    if(o.kind==='youtube'){fitFrame();setTimeout(fitFrame,300);return;}
+    if(o.kind!=='video'||!o.url)return;
+    if(full){const src=mirror?.video,t=src?src.currentTime:0,paused=src?src.paused:false;if(mirror){stopMirror();const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',()=>{try{v.currentTime=t;if(paused)v.pause();}catch{}fitMedia();},{once:true});}}setTimeout(fitMedia,300);return;}
+    if(TV.fellBackFull){ovl.className='tv-overlay tvo-full';return;}
+    const cur=ovl.querySelector('.tvo-frame video'),t=cur?cur.currentTime:0;if(cur){try{cur.pause();cur.removeAttribute('src');cur.load();}catch{}}startMirror(o,t);}
+  function mediaEl(){return mirror?.video||ovl.querySelector('.tvo-frame video');}
+  function ytCmd(func,args=[]){const fr=ovl.querySelector('.tvo-frame iframe');try{fr?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*');}catch{}}
+  function applyCtl(o){const c=o?.ctl;if(!c||!c.n||c.n===lastCtlN)return;lastCtlN=c.n;const by=c.cmd==='back'?-10:c.cmd==='fwd'?10:0;
+    if(o.kind==='youtube'){if(by)ytCmd('seekTo',[Math.max(0,(yt.t||0)+by),true]);else ytCmd(yt.state===1?'pauseVideo':'playVideo');return;}
+    const v=mediaEl();if(!v)return;if(by){try{const d=Number.isFinite(v.duration)?v.duration:Infinity;v.currentTime=Math.max(0,Math.min(d-0.2,v.currentTime+by));}catch{}}else{try{v.paused?v.play():v.pause();}catch{}}}
+  TV.applyCtl=applyCtl;TV.yt=yt;
+  addEventListener('message',e=>{let m;try{m=typeof e.data==='string'?JSON.parse(e.data):e.data;}catch{return;}if(m?.event==='infoDelivery'&&m.info){if(Number.isFinite(m.info.currentTime))yt.t=m.info.currentTime;if(Number.isFinite(m.info.playerState))yt.state=m.info.playerState;}else if(m?.event==='onStateChange'&&Number.isFinite(m.info))yt.state=m.info;});
+  function drawOverlay(o){if(!o)stopMirror();const key=o?JSON.stringify([o.id,o.mode,o.url||'',o.waiting||false,o.kind==='swimmer'?o.page:'',o.kind==='swimmer'?o.html:'']):'';
+    const base=o?JSON.stringify([o.id,o.url||'',o.waiting||false,o.kind]):'';
+    if(key===overlayKey){applyCtl(o);return;}
+    if(o&&base===overlayBase&&(o.kind==='youtube'||o.kind==='video')&&o.url){overlayKey=key;switchMode(o);applyCtl(o);return;}
+    overlayKey=key;overlayBase=base;lastCtlN=o?.ctl?.n||0;yt.t=0;yt.state=-1;
     // a swimmer side panel narrows the Board to the left so nothing is hidden under it
     const side=!!(o&&o.kind==='swimmer'&&o.mode!=='full');if(document.body.classList.contains('tv-has-side')!==side){document.body.classList.toggle('tv-has-side',side);if(TV.frame)setTimeout(fit,0);}
     if(!o){ovl.className='';ovl.innerHTML='';return;}
@@ -128,7 +148,7 @@
   // clip goes full screen instead -- a whole clip beats a quarter of one.
   let mirror=null;
   function stopMirror(){if(!mirror)return;mirror.stop=true;try{mirror.video.pause();mirror.video.removeAttribute('src');mirror.video.load();}catch{}mirror.video.remove();mirror=null;}
-  function startMirror(o){const frame=ovl.querySelector('.tvo-frame');if(!frame)return;frame.innerHTML='';
+  function startMirror(o,startAt=0){const frame=ovl.querySelector('.tvo-frame');if(!frame)return;frame.innerHTML='';
     const v=document.createElement('video');v.muted=true;v.loop=true;v.autoplay=true;v.setAttribute('playsinline','');v.setAttribute('muted','');v.crossOrigin='anonymous';
     v.style.cssText='position:fixed;left:-4000px;top:-4000px;width:2px;height:2px;opacity:0;pointer-events:none';document.body.appendChild(v);
     const c=document.createElement('canvas');c.className='tvo-mirror';c.style.cssText='position:absolute;left:0;top:0';frame.appendChild(c);
@@ -144,6 +164,7 @@
         if(lit)m.seen=true;else if(++m.blank>90)return fallbackFull(o);}}}}catch{}
       if(!m.seen&&Date.now()-m.start>12000)return fallbackFull(o);
       requestAnimationFrame(tick);};
+    if(startAt>0)v.addEventListener('loadedmetadata',()=>{try{v.currentTime=startAt;}catch{}},{once:true});
     v.addEventListener('loadeddata',()=>requestAnimationFrame(tick),{once:true});v.src=o.url;try{const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch{}
     TV.mirror=m;}
   function fallbackFull(o){stopMirror();ovl.className='tv-overlay tvo-full';const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',fitMedia);setTimeout(fitMedia,300);}TV.fellBackFull=true;}

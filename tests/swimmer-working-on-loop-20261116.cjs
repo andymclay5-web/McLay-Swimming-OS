@@ -37,7 +37,11 @@ const SESSION=`WARM-UP\n400 Free\n\nMAIN SET\n4 x 100 Free kick 15 sr\n8 x 50 Fr
     return route.fulfill({json:[]});});
   await sp.addInitScript(()=>{localStorage.setItem('msos_swimmer_device_token_v1','device-token-test');window.MCLAY_CONFIG={...(window.MCLAY_CONFIG||{}),supabaseUrl:'https://example.supabase.co',supabaseAnonKey:'anon'};});
   await sp.goto(BASE+'swimmer-portal.html');await sp.waitForSelector('.sp-wo',{timeout:15000});
-  const card=await sp.evaluate(()=>document.querySelector('.sp-wo').innerText);if(process.env.SHOT)await sp.screenshot({path:process.env.SHOT});
+  const card=await sp.evaluate(()=>document.querySelector('.sp-wo').innerText);
+  // 23 Nov 2026 (Andy: "every time he opens his phone he should be able to see the last thing we've been working on blatantly")
+  assert.ok(await sp.evaluate(()=>/LATEST/.test(document.querySelector('.sp-wo li.sp-wo-latest')?.innerText||'')),'the newest focus is marked Latest');
+  assert.ok(await sp.evaluate(()=>!!document.querySelector('.sp-wo li.sp-wo-latest details[open] video')),'and its clip is already open');
+  assert.equal(await sp.evaluate(()=>document.querySelectorAll('.sp-wo li.sp-wo-latest').length),1);if(process.env.SHOT)await sp.screenshot({path:process.env.SHOT});
   assert.match(card,/WHAT I’M WORKING ON/);assert.match(card,/Free kick — kick from the hips, not the knees/,card);assert.match(card,/Knees bending a lot/,card);assert.match(card,/▶ Clip/,card);
   assert.doesNotMatch(card,/lazy on the walls/);
   assert.ok(await sp.evaluate(()=>!!document.querySelector('.sp-wo video')),'the shared clip plays on the swimmer card');

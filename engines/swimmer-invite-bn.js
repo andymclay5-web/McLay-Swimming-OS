@@ -836,7 +836,7 @@
     for(const r of rows){if(r.media_path&&['video','photo','voice'].includes(r.type))r.url=await signedUrl(r.media_path);delete r.media_path;}return rows;}
   let sharedQueue=new Set(),sharedTimer=null;const publishWorkingOnSoonAt=new Map();/* opening a swimmer on the owner's phone refreshes their portal card, at most every 10 minutes */
   function publishShared(ids){if(!isOwner())return;for(const id of [].concat(ids||[]))if(id)sharedQueue.add(String(id));clearTimeout(sharedTimer);sharedTimer=setTimeout(async()=>{const list=[...sharedQueue];sharedQueue=new Set();
-    for(const id of list){const a=(M.state.athletes||[]).find(x=>String(x.id)===id);if(!a)continue;try{await rpc('msos_publish_swimmer_payload',{p_athlete_id:id,p_payload:{sharedEvidence:await sharedEvidenceFor(a),workingOn:M.raceElementsUI?.portalWorkingOn?.(a)||null,publishedAt:new Date().toISOString()}});}catch{}await new Promise(r=>setTimeout(r,0));}},1500);}
+    for(const id of list){const a=(M.state.athletes||[]).find(x=>String(x.id)===id);if(!a)continue;try{await rpc('msos_publish_swimmer_payload',{p_athlete_id:id,p_payload:await (async()=>{/* 23 Nov 2026: a card that couldn't be built is left out, so the swimmer's last one stays (null used to wipe it) */const out={sharedEvidence:await sharedEvidenceFor(a),publishedAt:new Date().toISOString()};const wo=M.raceElementsUI?.portalWorkingOn?.(a);if(wo)out.workingOn=wo;return out;})()});}catch{}await new Promise(r=>setTimeout(r,0));}},1500);}
   const capIds=c=>[c?.athlete_id,...(c?.athlete_ids||[])].filter(Boolean);
   (function installSharedCaptureHook(){const C=M.cloud;if(!C?.stageCapture||C.stageCapture.__msosShared)return;const prev=C.stageCapture;
     const wrapped=cap=>{const r=prev(cap);try{if(['shared','swimmer'].includes(String(cap?.audience||''))||cap?._wasShared)publishShared(capIds(cap));if(cap)cap._wasShared=['shared','swimmer'].includes(String(cap.audience||''));}catch{}return r};
@@ -852,7 +852,7 @@
   const POOLSIDE=new Set(['board','roll','times','tv','meet']);
   const coachBusy=()=>POOLSIDE.has(String(M.state?.settings?.view||''))||Date.now()-lastInputAt<20000||document.hidden;
   const portalSig=a=>{const st=M.state||{},id=String(a.id),n=(rows,f)=>(rows||[]).reduce((k,r)=>k+(f(r)?1:0),0);
-    return[st.settings?.evidenceRevision||0,n(st.resultsEventHistory,r=>String(r.athlete_id)===id),n(st.coachResults,r=>String(r.athlete_id)===id),n(st.trainingTestResults,r=>String(r.athlete_id)===id),n(st.captures,c=>ownCapture(c,a)),n(st.attendance,r=>String(r.athlete_id)===id)].join('|')};
+    return['w2'/* 23 Nov 2026: one fresh publish each, to put back a working-on card a null publish wiped */,st.settings?.evidenceRevision||0,n(st.resultsEventHistory,r=>String(r.athlete_id)===id),n(st.coachResults,r=>String(r.athlete_id)===id),n(st.trainingTestResults,r=>String(r.athlete_id)===id),n(st.captures,c=>ownCapture(c,a)),n(st.attendance,r=>String(r.athlete_id)===id)].join('|')};
   async function refreshAppSwimmers(){if(!isOwner()||!M.cloud?.ready?.()||refreshAppSwimmers.busy||coachBusy())return null;refreshAppSwimmers.busy=true;
     try{const rows=await rpc('msos_owner_swimmer_access',{});const st=M.state.settings,done=st.portalFullAt||(st.portalFullAt={}),sigs=st.portalFullSig||(st.portalFullSig={}),now=Date.now();
       const due=(Array.isArray(rows)?rows:[]).filter(r=>(r.devices>0||r.has_account)&&now-(Date.parse(done[r.athlete_id]||'')||0)>6*3600e3).map(r=>(M.state.athletes||[]).find(a=>String(a.id)===String(r.athlete_id))).filter(Boolean);
@@ -861,7 +861,7 @@
       if(coachBusy())return{refreshed:null,busy:true};/* the coach came back while the list was loading */
       const{payload,truncatedAt}=await payloadForAsync(a,()=>{});const part={performance:payload.performance,training:payload.training,tests:payload.tests,meet:payload.meet,publishedAt:payload.publishedAt};
       {const order=['performance','training','tests','meet'],i=order.indexOf(truncatedAt);if(i>=0)for(const k of order.slice(i))delete part[k];}/* a stage that ran out of time is left as it was on the portal, never blanked */
-      part.sharedEvidence=await sharedEvidenceFor(a);part.workingOn=M.raceElementsUI?.portalWorkingOn?.(a)||null;/* 16 Nov 2026: "what I'm working on" on the swimmer's own phone */
+      part.sharedEvidence=await sharedEvidenceFor(a);{const wo=M.raceElementsUI?.portalWorkingOn?.(a);if(wo)part.workingOn=wo;}/* 16 Nov 2026: "what I'm working on" on the swimmer's own phone */
       await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:part});done[a.id]=new Date().toISOString();if(!truncatedAt)sigs[a.id]=sig;M.store?.save?.(M.state);return{refreshed:a.id,truncatedAt};
     }catch(e){return{error:e?.message||String(e)}}finally{refreshAppSwimmers.busy=false}}
   X.publishWorkingOn=publishShared;X.publishWorkingOnSoon=a=>{if(!a?.id||!isOwner())return false;const k=String(a.id),last=publishWorkingOnSoonAt.get(k)||0;if(Date.now()-last<10*60e3)return false;publishWorkingOnSoonAt.set(k,Date.now());publishShared(k);return true;};X.publishShared=publishShared;X.sharedEvidenceFor=sharedEvidenceFor;X.refreshAppSwimmers=refreshAppSwimmers;

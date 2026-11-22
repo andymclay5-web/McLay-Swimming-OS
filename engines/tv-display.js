@@ -44,6 +44,8 @@
   function cardHtml(o){const B=M.swimmerBrief;if(!B)return'<div class="tvo-text">Swimmer pages not loaded</div>';return`<div class="tvo-card sb">${B.html(B.page(o.swimmer.id,o.swimmer.page||'profile'))}</div>`;}
   T.cardHtml=cardHtml;
   T.setMode=mode=>{const cur=M.state.settings?.tvOverlay;if(!cur)return null;return set({...cur,mode:mode==='full'?'full':'corner',at:new Date().toISOString()});};
+  // 23 Nov 2026 (Andy: "some function to fast forward, rewind the actual clip"): back 10s / pause-play / forward 10s on the TV.
+  T.control=cmd=>{const cur=M.state.settings?.tvOverlay;if(!cur)return null;return set({...cur,ctl:{n:(Number(cur.ctl?.n)||0)+1,cmd:['back','fwd','toggle'].includes(cmd)?cmd:'toggle'}});};
   T.clear=()=>set(null);
   T.current=()=>M.state.settings?.tvOverlay||null;
 
@@ -82,7 +84,16 @@
   function sessionCaptures(){const s=M.currentSession?.();const all=(M.state.captures||[]).filter(c=>!s||c.session_id===s.id);return all.slice(-12).reverse();}
   function swimmerChips(){const pool=M.boardEngine?.present?.()||M.ui?.presentAthletes?.()||[];if(!pool.length)return'<p class="muted">Mark the Roll to pick a swimmer here.</p>';
     return`<div class="tv-swimmers">${pool.map(a=>`<button type="button" data-tv-swimmer="${esc(a.id)}">${esc(M.boardEngine?.name?.(a,pool)||a.full_name)}</button>`).join('')}</div>`;}
-  const vq={q:'',busy:false,msg:'',results:[]};
+  const vq={q:'',busy:false,msg:'',results:[],stroke:'',focus:''};
+  // 23 Nov 2026 (Andy: "elite swimmer push-off breakouts ... gave me a 1 hour long clip. That's no help to me poolside";
+  // the search "needs to be a little bit more tied to swimming ... maybe stroke specific"): the coach can tap a stroke and
+  // a focus; the search always asks for swimming clips, and the server keeps clips short (5 minutes or under).
+  const STROKES=['Free','Back','Breast','Fly','IM'],FOCUS=['Start','Underwater','Breakout','Turn','Finish','Drill','Race'];
+  const STROKE_WORD={Free:'freestyle',Back:'backstroke',Breast:'breaststroke',Fly:'butterfly',IM:'individual medley'};
+  T.videoQuery=(typed,stroke='',focus='')=>{const t=text(typed);const parts=[/swim/i.test(t)?'':'swimming',stroke&&!new RegExp(STROKE_WORD[stroke]||stroke,'i').test(t)?STROKE_WORD[stroke]||stroke:'',focus&&!new RegExp(focus,'i').test(t)?focus.toLowerCase():'',t].filter(Boolean);return parts.join(' ').trim();};
+  T.searchVideos=async(q,{maxSeconds=300}={})=>{const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;if(!f)throw new Error('sign in first');return f('/functions/v1/msos-video-search',{method:'POST',body:JSON.stringify({query:q,maxSeconds})});};
+  const dur=v=>{const n=Number(v?.seconds);if(!Number.isFinite(n)||n<=0)return'';const m=Math.floor(n/60),x=Math.round(n%60);return`${m}:${String(x).padStart(2,'0')}`;};
+  T.durationLabel=dur;
   // 27 Oct 2026: the TV reports whether a video it was sent actually started (tv.js -> engines/live-sync.js '_tv').
   T.tvStatus=null;
   try{M.liveSync?.on?.('_tv',p=>{const cur=T.current();if(!cur||(p.id&&cur.id&&p.id!==cur.id))return;T.tvStatus={...p,at:Date.now()};
@@ -92,9 +103,9 @@
     const host=document.querySelector('#modalHost');if(!host)return;const o=T.current(),caps=sessionCaptures();
     host.innerHTML=`<div class="modal-backdrop" data-tv-controls><section class="modal"><header><h2>TV Board</h2><button data-tv-close>×</button></header><div class="modal-body">
       <p class="tv-slot-line" data-tv-slot-line ${slotLine()?'':'hidden'}>${esc(slotLine())}</p><div data-tv-link-panel></div><p class="muted">Put a swimmer, clip, photo, note or video link on top of the Board — in the corner or full screen. Nothing goes on the TV unless you send it here.</p>
-      ${o?`<div class="check-card ok"><b>On the TV now:</b> ${esc(o.label||'')} · ${o.mode==='full'?'full screen':'corner'}${T.tvStatus&&T.tvStatus.id===o.id?` · ${T.tvStatus.state==='playing'?'▶ playing':T.tvStatus.state==='failed'?`can't play: ${esc(T.tvStatus.detail||'')}`:`not started: ${esc(T.tvStatus.detail||'')}`}`:''}</div><div class="hub-actions"><button type="button" data-tv-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?'Shrink to corner':'Make it full screen'}</button><button type="button" class="danger" data-tv-clear>Take it off the TV</button></div>`:''}
+      ${o?`<div class="check-card ok"><b>On the TV now:</b> ${esc(o.label||'')} · ${o.mode==='full'?'full screen':'corner'}${T.tvStatus&&T.tvStatus.id===o.id?` · ${T.tvStatus.state==='playing'?'▶ playing':T.tvStatus.state==='failed'?`can't play: ${esc(T.tvStatus.detail||'')}`:`not started: ${esc(T.tvStatus.detail||'')}`}`:''}</div><div class="hub-actions"><button type="button" data-tv-mode="${o.mode==='full'?'corner':'full'}">${o.mode==='full'?'Shrink to corner':'Make it full screen'}</button><button type="button" class="danger" data-tv-clear>Take it off the TV</button></div>${o.url||o.capture&&o.capture.type==='video'?`<div class="hub-actions tv-transport"><button type="button" data-tv-ctl="back">⏪ 10s</button><button type="button" data-tv-ctl="toggle">⏯ Pause / play</button><button type="button" data-tv-ctl="fwd">10s ⏩</button></div>`:''}`:''}
       ${!o&&M.tvLink?.slot?.()?.onTv?.canTake?`<div class="check-card ok"><b>On the TV now:</b> ${M.tvLink.slot().onTv.mine?'something you put up':esc(M.tvLink.slot().onTv.by||'another coach')+'\u2019s'}</div><div class="hub-actions"><button type="button" class="danger" data-tv-takeoff>Take it off the TV</button></div>`:''}
-      <h3>A video</h3><label class="id-free">Find on YouTube<input data-tv-q enterkeyhint="search" value="${esc(vq.q)}" placeholder="e.g. Katie Ledecky freestyle"></label><div class="hub-actions"><button type="button" data-tv-find>${vq.busy?'Searching…':'Find on YouTube'}</button></div>${vq.msg?`<p class="muted" data-tv-find-msg>${esc(vq.msg)}</p>`:''}${vq.results.map((v,i)=>`<div class="tv-cap-row"><span><b>${esc(v.title||'YouTube video')}</b><small>${esc(v.channel||'')}</small></span><span class="tv-cap-acts"><button type="button" data-tv-yt="${i}" data-tv-m="corner">Corner</button><button type="button" data-tv-yt="${i}" data-tv-m="full">Full</button></span></div>`).join('')}
+      <h3>A video</h3><div class="tv-swimmers tv-vq-chips">${STROKES.map(x=>`<button type="button" data-vq-stroke="${x}" class="${vq.stroke===x?'on':''}" aria-pressed="${vq.stroke===x}">${x}</button>`).join('')}</div><div class="tv-swimmers tv-vq-chips">${FOCUS.map(x=>`<button type="button" data-vq-focus="${x}" class="${vq.focus===x?'on':''}" aria-pressed="${vq.focus===x}">${x}</button>`).join('')}</div><label class="id-free">Find on YouTube (short swimming clips)<input data-tv-q enterkeyhint="search" value="${esc(vq.typed??vq.q)}" placeholder="e.g. Katie Ledecky, or tap a stroke and focus"></label><div class="hub-actions"><button type="button" data-tv-find>${vq.busy?'Searching…':'Find on YouTube'}</button></div>${vq.msg?`<p class="muted" data-tv-find-msg>${esc(vq.msg)}</p>`:''}${vq.results.map((v,i)=>`<div class="tv-cap-row"><span><b>${esc(v.title||'YouTube video')}</b><small>${esc([v.channel||'',dur(v)].filter(Boolean).join(' · '))}</small></span><span class="tv-cap-acts"><button type="button" data-tv-yt="${i}" data-tv-m="corner">Corner</button><button type="button" data-tv-yt="${i}" data-tv-m="full">Full</button></span></div>`).join('')}
       <label class="id-free">Or paste a link<input type="url" data-tv-url placeholder="https://youtu.be/…"></label><div class="hub-actions"><button type="button" data-tv-link="corner">Show in corner</button><button type="button" data-tv-link="full">Show full screen</button></div>
       <h3>From this session</h3>${caps.length?caps.map(c=>{const sm=captureSummary(c);return`<div class="tv-cap-row"><span><b>${esc(sm.type==='note'?'Note':sm.type[0].toUpperCase()+sm.type.slice(1))}</b>${sm.who?` · ${esc(sm.who)}`:''}<small>${esc((sm.text||sm.context||'').slice(0,70))}</small></span><span class="tv-cap-acts"><button type="button" data-tv-cap="${esc(c.id)}" data-tv-m="corner">Corner</button><button type="button" data-tv-cap="${esc(c.id)}" data-tv-m="full">Full</button></span></div>`;}).join(''):'<p class="muted">No captures in this session yet. Use Capture to take a video, photo or note.</p>'}
       <h3>A swimmer</h3>${swimmerChips()}
@@ -108,16 +119,18 @@
     try{M.tvLink?.fillPanel?.(host.querySelector('[data-tv-link-panel]'),openControls);}catch{}
     // 27 Oct 2026 (Andy: "play a YouTube video of Katie Ledecky swimming freestyle, and it will search for that and paste
     // the URL"): the same verified YouTube search the swimmer screen uses (msos-video-search), now on the main TV panel.
-    const findIt=async()=>{const q=String(host.querySelector('[data-tv-q]')?.value||'').trim();if(!q){vq.msg='Type or say what you want to find first.';openControls();return;}
-      vq.q=q;vq.busy=true;vq.msg='';vq.results=[];openControls();
-      try{const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;if(!f)throw new Error('sign in first');const r=await f('/functions/v1/msos-video-search',{method:'POST',body:JSON.stringify({query:q})});vq.results=Array.isArray(r?.videos)?r.videos:[];vq.msg=vq.results.length?`Found ${vq.results.length} — tap Corner or Full to put one on the TV.`:(r?.error||'Nothing found. Try different words.');}
+    host.querySelectorAll('[data-vq-stroke]').forEach(b=>b.addEventListener('click',()=>{vq.typed=host.querySelector('[data-tv-q]')?.value||'';vq.stroke=vq.stroke===b.dataset.vqStroke?'':b.dataset.vqStroke;openControls();}));
+    host.querySelectorAll('[data-vq-focus]').forEach(b=>b.addEventListener('click',()=>{vq.typed=host.querySelector('[data-tv-q]')?.value||'';vq.focus=vq.focus===b.dataset.vqFocus?'':b.dataset.vqFocus;openControls();}));
+    const findIt=async()=>{const typed=String(host.querySelector('[data-tv-q]')?.value||'').trim();vq.typed=typed;if(!typed&&!vq.stroke&&!vq.focus){vq.msg='Tap a stroke or focus, or type what you want to find.';openControls();return;}
+      const q=T.videoQuery(typed,vq.stroke,vq.focus);vq.q=q;vq.busy=true;vq.msg='';vq.results=[];openControls();
+      try{const r=await T.searchVideos(q);vq.results=Array.isArray(r?.videos)?r.videos:[];vq.msg=vq.results.length?`Found ${vq.results.length} for “${q}” — tap Corner or Full to put one on the TV.`:(r?.error||'Nothing short enough found. Try different words.');}
       catch(e){vq.msg=`Search isn't available: ${e.message||e}. Paste a link below instead.`;}
       vq.busy=false;if(document.querySelector('[data-tv-controls]'))openControls();};
     host.querySelector('[data-tv-find]')?.addEventListener('click',findIt);
     host.querySelector('[data-tv-q]')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findIt();}});
     host.querySelectorAll('[data-tv-yt]').forEach(b=>b.onclick=()=>{const v=vq.results[Number(b.dataset.tvYt)];if(!v)return;try{T.showLink(v.url,b.dataset.tvM,v.title||'YouTube video');M.toast?.(`On the TV · ${b.dataset.tvM==='full'?'full screen':'corner'}`);openControls();}catch(e){M.toast?.(e.message);}});
     host.querySelectorAll('[data-tv-link]').forEach(b=>b.onclick=()=>{try{T.showLink(host.querySelector('[data-tv-url]').value,b.dataset.tvLink);M.toast?.('On the TV');openControls();}catch(e){M.toast?.(e.message);}});
-    host.querySelector('[data-tv-mode]')?.addEventListener('click',e=>{T.setMode(e.currentTarget.dataset.tvMode);openControls();});
+    host.querySelector('[data-tv-mode]')?.addEventListener('click',e=>{T.setMode(e.currentTarget.dataset.tvMode);openControls();});host.querySelectorAll('[data-tv-ctl]').forEach(b=>b.addEventListener('click',()=>{T.control(b.dataset.tvCtl);M.toast?.(b.dataset.tvCtl==='back'?'⏪ 10s on the TV':b.dataset.tvCtl==='fwd'?'10s ⏩ on the TV':'⏯ on the TV')}));
     host.querySelector('[data-tv-clear]')?.addEventListener('click',()=>{T.clear();M.toast?.('Taken off the TV');openControls();});
     host.querySelector('[data-tv-takeoff]')?.addEventListener('click',async()=>{try{await M.tvLink.takeOff();M.toast?.('Taken off the TV');}catch(e){M.toast?.(e.message||String(e));}openControls();});
     host.querySelector('[data-tv-open]').onclick=()=>{close();M.nav?.show?.('tv',{restoreScroll:false});};
@@ -193,7 +206,7 @@
       ${cur?`<div class="hub-actions"><button type="button" class="danger" data-goal-clear>Clear goal</button></div>`:''}</section>`;}
   async function find(){const q=text(sw.q||document.querySelector('[data-sw-q]')?.value);if(!q){sw.msg='Say or type what you want to find first.';paintSwimmer();return;}
     sw.q=q;sw.searching=true;sw.msg='';sw.results=[];paintSwimmer();
-    try{const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;const r=await f('/functions/v1/msos-video-search',{method:'POST',body:JSON.stringify({query:q})});
+    try{const r=await T.searchVideos(T.videoQuery(q));
       sw.results=Array.isArray(r?.videos)?r.videos:[];sw.msg=sw.results.length?`Found ${sw.results.length} — tap Corner or Full to show one.`:(r?.error||'Nothing found. Try different words.');}
     catch(e){sw.msg=`Search isn't available: ${e.message}. Use Open YouTube, copy the link, then Paste a link.`;}
     sw.searching=false;if(document.querySelector('[data-tv-swimmer-screen]'))paintSwimmer();}

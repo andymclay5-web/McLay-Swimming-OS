@@ -105,7 +105,7 @@
     const r=await rpcFetch(`/storage/v1/object/sign/${BUCKET}/${String(path).split('/').map(encodeURIComponent).join('/')}`,{expiresIn:7200});const p=r?.signedURL||r?.signedUrl||'';if(!p)return'';
     const url=`${String(cfg.supabaseUrl||'').replace(/\/$/,'')}/storage/v1${p.startsWith('/')?p:`/${p}`}`;signed.set(path,{url,until:Date.now()+100*60*1000});return url;}
   async function rpcFetch(path,body){const f=M.cloud?.fetch||M.cloudSessionEngine?.fetch;let t=0;try{return await Promise.race([f(path,{method:'POST',body:JSON.stringify(body)}),new Promise((_,no)=>{t=setTimeout(()=>no(new Error('The TV service did not answer')),RPC_MS);})]);}finally{clearTimeout(t);}}
-  async function overlayFrame(session,ctx){const o=M.tvDisplay?.current?.();if(!o)return null;const base={id:o.id,mode:o.mode==='full'?'full':'corner',label:text(o.label)};
+  async function overlayFrame(session,ctx){const o=M.tvDisplay?.current?.();if(!o)return null;const base={id:o.id,mode:o.mode==='full'?'full':'corner',label:text(o.label),ctl:o.ctl&&o.ctl.n?{n:o.ctl.n,cmd:String(o.ctl.cmd||'')}:null};
     if(o.url)return{...base,kind:M.tvDisplay.linkKind(o.url),url:o.url,youtube:M.tvDisplay.youtubeId(o.url)};
     if(o.swimmer){const SB=M.swimmerBrief,page=o.swimmer.page||'profile';return{...base,kind:'swimmer',page,html:SB?SB.html(SB.page(o.swimmer.id,page)):''};}
     const c=o.capture||{};const out={...base,kind:c.type==='note'||(!c.media_id&&!c.media_path)?'note':c.type,who:text(c.who),text:text(c.text)};
@@ -136,7 +136,7 @@
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261123a';
+  const TV_PAGE='20261123b';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();
@@ -231,7 +231,7 @@
   async function refreshScreens(force=false){if(!signedIn()||!org())return screens;if(!force&&Date.now()-screensAt<60000)return screens;screensAt=Date.now();try{screens=await L.list();}catch{}return screens;}
   async function probeSlot(){if(slotChecked||!signedIn()||!org())return slotSupported;await refreshScreens();const id=chosenScreen();if(!id)return slotSupported;slotChecked=true;
     try{await rpc('msos_tv_slot_state',{p_screen:id});slotSupported=true;}catch(e){slotSupported=false;if(!/function|schema cache|not find|404/i.test(String(e?.message||'')))slotChecked=false;}return slotSupported;}
-  function mySig(){const o=M.tvDisplay?.current?.();if(!o)return'';const cap=o.capture?.id?(M.state.captures||[]).find(c=>c.id===o.capture.id)?.media_path||'':'';return JSON.stringify([o.id,o.mode,o.swimmer?.page||'',o.url||'',cap]);}
+  function mySig(){const o=M.tvDisplay?.current?.();if(!o)return'';const live=o.capture?.id?(M.state.captures||[]).find(c=>c.id===o.capture.id):null,cap=live?`${live.media_path||''}|${live.media_uploaded_at||''}`:'';return JSON.stringify([o.id,o.mode,o.swimmer?.page||'',o.url||'',cap,o.ctl?.n||0]);}
   function setSlot(next,toast){slotState={...slotState,...next};if(toast)M.toast?.(toast);try{M.tvDisplay?.paintControl?.();M.tvDisplay?.refreshScreens?.();}catch{}}
   async function slotTick(){if(!slotSupported||slotBusy||!isCoach()||!signedIn())return;const id=chosenScreen();if(!id)return;const sig=mySig();
     slotBusy=true;try{

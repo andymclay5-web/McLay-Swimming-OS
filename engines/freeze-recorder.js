@@ -81,5 +81,9 @@
     catch{}finally{sending=false}
   }
   setTimeout(send,20000);setInterval(send,5*60000);
+  // 23 Nov 2026: a quiet failure worth knowing about (e.g. Matthew's "What I'm working on" came back empty and wiped his
+  // card) goes in the same log, with duration 0 and its own source name, so it can be read without asking the coach.
+  F.note=(kind,detail={})=>{try{const c=context(),list=read(),at=now();if(list.some(x=>x.source===kind&&at-Date.parse(x.happened_at)<60000))return;
+    list.push({id:`${device()}-${kind}-${at}`,happened_at:new Date(at).toISOString(),duration_ms:0,source:String(kind).slice(0,40),build:String(M.BUILD||''),view:c.view,detail:{...c,...detail}});write(list);queueSend();}catch{}};
   F.log=read;F.send=send;F.record=record;F.device=device;
 })();

@@ -148,3 +148,6 @@ jobs:
           node tests/board-target-jobs-share-frame-20261122.cjs
           node tests/no-repeated-sendoff-20261123.cjs
           node tests/tv-clip-upright-copy-20261123.cjs
+          node tests/tv-video-carries-on-20261123.cjs
+          node tests/tv-video-search-swimming-20261123.cjs
+          node tests/working-on-never-wiped-20261123.cjs

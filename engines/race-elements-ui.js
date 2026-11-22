@@ -145,9 +145,12 @@
     return{first,lines,lately,developing,captures:w.captures};};
   /* The swimmer's own view (swimmer portal): the same card, built only from captures the coach shared with the swimmer
      (coach-only notes never leave the coach app). Plain JSON -- the portal is a static page with no engines. */
+  // 23 Nov 2026: a focus line with an empty heading (a clip shared with no note) threw here, the whole card came back
+  // empty, and Matthew's "What I'm working on" was wiped on his phone. An empty heading is just empty.
+  const cap1=h=>{h=String(h||'');return h?h[0].toUpperCase()+h.slice(1):''};
   UI.portalWorkingOn=a=>{try{const R=RE();if(!R||!a)return null;const shared=c=>['shared','swimmer'].includes(String(c?.audience||''))||!([c?.athlete_id,...(c?.athlete_ids||[])].filter(Boolean).length);
     const state={...M.state,captures:(M.state.captures||[]).filter(shared)};const t=UI.workingOnText(a,{state});
-    return{at:new Date().toISOString(),first:t.first,lately:t.lately,developing:t.developing,lines:t.lines.map(l=>({key:l.key,head:l.head[0].toUpperCase()+l.head.slice(1),body:l.body,helps:l.helps,session:l.session,clips:l.clips.map(([label,id])=>({label,id}))}))};}catch(err){return null;}};
+    return{at:new Date().toISOString(),first:t.first,lately:t.lately,developing:t.developing,lines:t.lines.map(l=>({key:l.key,head:cap1(l.head),body:l.body,helps:l.helps,session:l.session,clips:l.clips.map(([label,id])=>({label,id}))}))};}catch(err){try{M.freezeRecorder?.note?.('working-on-error',{athlete:a?.id,message:String(err?.message||err),stack:String(err?.stack||'').slice(0,700)})}catch{}return null;}};
   /* what the swimmer said back about a focus ("focus_note" from the portal), newest first, per swimmer */
   UI.replies=UI.replies||{};
   UI.replyFor=(a,l)=>{const list=UI.replies[a?.id]||[];const clipIds=new Set([...l.clips.map(([,id])=>id),...(l.c?.ids||[])]);const head=String(l.head||'').toLowerCase();
@@ -155,7 +158,7 @@
   UI.loadReplies=async a=>{try{const rows=await M.swimmerInviteBN?.sessionActionsFor?.(a);const list=(Array.isArray(rows)?rows:[]).filter(r=>r.action_type==='focus_note').sort((x,y)=>String(y.created_at||'').localeCompare(String(x.created_at||'')));
     const before=JSON.stringify(UI.replies[a.id]||[]);UI.replies[a.id]=list;if(before!==JSON.stringify(list))document.querySelectorAll('[data-re-working]').forEach(el=>{if(el.dataset.reWorking===String(a.id))el.outerHTML=UI.workingOnHtml(a);});return list;}catch(err){return[];}};
   UI.workingOnHtml=a=>{try{css();if(!RE()||!a)return'';const t=UI.workingOnText(a);
-    const item=(l,i)=>`<li><b>${esc(l.head[0].toUpperCase()+l.head.slice(1))}</b>${l.body?`<br>${esc(l.body)}`:''}${l.helps?`<br><span class="re-note">${esc(l.helps)}</span>`:''}${l.clips.length?`<div class="re-clips-row">${l.clips.map(([k,id])=>`<button type="button" class="re-clip-btn" data-msos-capture="${esc(id)}">▶ ${esc(k)}</button>`).join('')}</div>`:''}${(r=>r?`<div class="re-reply">💬 <b>${esc(t.first)}:</b> ${esc([r.payload?.feeling,r.payload?.note&&`“${r.payload.note}”`].filter(Boolean).join(' — '))} <small>${esc(day(String(r.created_at||'').slice(0,10)))}</small></div>`:'')(UI.replyFor(a,l))}</li>`;
+    const item=(l,i)=>`<li><b>${esc(cap1(l.head))}</b>${l.body?`<br>${esc(l.body)}`:''}${l.helps?`<br><span class="re-note">${esc(l.helps)}</span>`:''}${l.clips.length?`<div class="re-clips-row">${l.clips.map(([k,id])=>`<button type="button" class="re-clip-btn" data-msos-capture="${esc(id)}">▶ ${esc(k)}</button>`).join('')}</div>`:''}${(r=>r?`<div class="re-reply">💬 <b>${esc(t.first)}:</b> ${esc([r.payload?.feeling,r.payload?.note&&`“${r.payload.note}”`].filter(Boolean).join(' — '))} <small>${esc(day(String(r.created_at||'').slice(0,10)))}</small></div>`:'')(UI.replyFor(a,l))}</li>`;
     return`<section class="page-card re-working" data-re-working="${esc(a.id)}"><div class="eyebrow">WHAT ${esc(t.first.toUpperCase())} IS WORKING ON</div>
       ${t.lines.length?`<ol class="re-work-list">${t.lines.map(item).join('')}</ol>`:`<p class="muted">Nothing noted yet — take a capture with a note on ${esc(t.first)} and it shows here.</p>`}
       <p><b>Training lately:</b> ${esc(t.lately)}</p>
