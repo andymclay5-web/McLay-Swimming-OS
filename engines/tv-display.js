@@ -31,6 +31,7 @@
   T.showCapture=(captureId,mode='corner')=>{const cap=(M.state.captures||[]).find(c=>c.id===captureId);if(!cap)throw new Error('Capture not found');const c=captureSummary(cap);
     // 19 Oct 2026: a clip that hasn't reached the cloud yet is sent first (it shows on the TV as soon as it lands)
     if(!cap.media_path&&cap.media_id)try{M.cloud?.prioritiseMedia?.(captureId);}catch{}
+    else try{M.cloud?.ensureTvCopy?.(captureId);}catch{}
     return set({id:uid(),mode:mode==='full'?'full':'corner',capture:c,label:[c.who,c.type==='note'?'note':c.type].filter(Boolean).join(' · '),at:new Date().toISOString()});};
   T.showLink=(url,mode='corner',label='')=>{const u=text(url);if(!/^https?:\/\//i.test(u))throw new Error('Paste a full link starting with https://');return set({id:uid(),mode:mode==='full'?'full':'corner',url:u,kind:linkKind(u),label:text(label)||(youtubeId(u)?'YouTube video':'Link'),at:new Date().toISOString()});};
   // Swimmer screen (16 Oct 2026). Andy: "when you bring up a swimmer, the first screen ... is like their profile ... then

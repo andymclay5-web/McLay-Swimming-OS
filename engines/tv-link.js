@@ -109,7 +109,7 @@
     if(o.url)return{...base,kind:M.tvDisplay.linkKind(o.url),url:o.url,youtube:M.tvDisplay.youtubeId(o.url)};
     if(o.swimmer){const SB=M.swimmerBrief,page=o.swimmer.page||'profile';return{...base,kind:'swimmer',page,html:SB?SB.html(SB.page(o.swimmer.id,page)):''};}
     const c=o.capture||{};const out={...base,kind:c.type==='note'||(!c.media_id&&!c.media_path)?'note':c.type,who:text(c.who),text:text(c.text)};
-    if(out.kind!=='note'){const live=(M.state.captures||[]).find(x=>x.id===c.id);const path=live?.media_path||c.media_path;if(path){try{out.url=await signedUrl(path);}catch{}}if(!out.url)out.waiting=true;}
+    if(out.kind!=='note'){const live=(M.state.captures||[]).find(x=>x.id===c.id);const path=live?.media_path||c.media_path;if(path){try{out.url=await signedUrl(path);if(out.url&&live?.media_shrunk_from&&live?.media_uploaded_at)out.url+=`${out.url.includes('?')?'&':'?'}tv=${encodeURIComponent(live.media_uploaded_at)}`;/* 23 Nov 2026: the smaller copy replaces the full-size one at the same place; a new link makes the TV fetch it */}catch{}}if(!out.url)out.waiting=true;}
     return out;}
   async function buildFrame(){const session=M.currentSession?.();const frame={v:1,at:new Date().toISOString(),mode:boardMode()};
     if(!session){frame.tvv=TV_PAGE;frame.empty='No session selected on the coach\'s phone.';if(!slotSupported)frame.overlay=await overlayFrame(null,null);return frame;}
