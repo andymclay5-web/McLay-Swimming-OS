@@ -8,9 +8,13 @@ function parseTime(v){v=txt(v);if(!v)return null;const u=U.seconds?.(v);if(Numbe
 function clone(v){try{return JSON.parse(JSON.stringify(v))}catch{return null}}
 function ensure(){if(!M.state)return null;if(!M.state.meetOps||typeof M.state.meetOps!=='object')M.state.meetOps={};const o=M.state.meetOps;if(!o.races||typeof o.races!=='object')o.races={};if(!Array.isArray(o.evidence))o.evidence=[];o.selectedAthleteId||='';o.selectedRaceKey||='';return o}
 const deck=()=>M.state?.meetFieldDeck||null;
-function backup(){if(restoring||!M.state||!deck())return;try{const s=M.state.settings||{},snap={version:1,saved_at:now(),meetFieldDeck:clone(M.state.meetFieldDeck),meetOps:clone(M.state.meetOps),meetImports:clone(M.state.meetImports||[]),meets:clone(M.state.meets||[]),meetEntries:clone(M.state.meetEntries||[]),meetRaces:clone(M.state.meetRaces||[]),meetEvidence:clone(M.state.meetEvidence||[]),currentMeetId:s.currentMeetId||''};localStorage.setItem(BACKUP_KEY,JSON.stringify(snap))}catch{}}
+function backup(){return}
 function save(){try{M.store?.save?.(M.state)}catch{}try{M.storageEngine?.saveUi?.(M.state)}catch{}backup()}
-function restoreBackup(){if(!M.state||deck())return false;let snap=null;try{snap=JSON.parse(localStorage.getItem(BACKUP_KEY)||'null')}catch{}if(!snap?.meetFieldDeck?.races?.length)return false;restoring=true;try{M.state.meetFieldDeck=clone(snap.meetFieldDeck);if((!M.state.meetOps||!Object.keys(M.state.meetOps.races||{}).length)&&snap.meetOps)M.state.meetOps=clone(snap.meetOps);for(const k of ['meetImports','meets','meetEntries','meetRaces','meetEvidence'])if((!Array.isArray(M.state[k])||!M.state[k].length)&&Array.isArray(snap[k])&&snap[k].length)M.state[k]=clone(snap[k]);M.state.settings=M.state.settings||{};if(!M.state.settings.currentMeetId&&snap.currentMeetId)M.state.settings.currentMeetId=snap.currentMeetId;try{M.store?.save?.(M.state)}catch{}return true}finally{restoring=false}}
+/* 22 Nov 2026: retired. This private localStorage copy of the meet deck was put back whenever the deck was empty -- so a
+   new meet, or switching to a meet with no programme yet, brought the previous meet straight back. The meet deck lives in
+   the app's own saved state (engines/storage.js) and each meet's copy in its workspace (engines/meet-workspace-cy.js).
+   The old copy is removed once; nothing reads it. */
+function restoreBackup(){clearBackup();return false}
 function clearBackup(){try{localStorage.removeItem(BACKUP_KEY)}catch{}}
 function all(){return[...(deck()?.races||[])].sort((a,b)=>(a.event_number-b.event_number)||((a.heat||0)-(b.heat||0))||((a.lane||0)-(b.lane||0))||((a.relay_leg||0)-(b.relay_leg||0)))}
 function relayMembers(r){if(!r?.relay)return[r].filter(Boolean);return all().filter(x=>x.relay&&x.event_number===r.event_number&&(x.heat||0)===(r.heat||0)&&(x.lane||0)===(r.lane||0)).sort((a,b)=>(a.relay_leg||0)-(b.relay_leg||0))}

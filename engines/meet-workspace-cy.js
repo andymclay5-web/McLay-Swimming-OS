@@ -128,7 +128,11 @@
     h.querySelector('[data-mwm-create]').onclick=()=>{
       const title=txt(h.querySelector('[data-mwm-title]')?.value);if(!title)return M.toast?.('Enter the meet name');
       const date=h.querySelector('[data-mwm-date]')?.value||'',venue=txt(h.querySelector('[data-mwm-venue]')?.value),course=h.querySelector('[data-mwm-course]')?.value||'SCM';
-      let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){return M.toast?.(e?.message||String(e))}
+      // 22 Nov 2026: the previous meet's deck (saved into its own workspace when this box opened) is set aside before the
+      // new meet is made current; otherwise the redraw that creating it triggers reads it as "a programme is loaded" and
+      // switches straight back to the previous meet.
+      snapshotCurrent({persist:true});const prevDeck=M.state.meetFieldDeck;M.state.meetFieldDeck=null;
+      let m=null;try{m=M.meet.create({title,date,venue,course,sessions:[]})}catch(e){M.state.meetFieldDeck=prevDeck;return M.toast?.(e?.message||String(e))}
       workspaces()[m.id]={meet_id:m.id,title:m.title,saved_at:now(),deck:null,program:{sources:[],commentaries:[],nowKey:'',selectedKey:'',selectedAthleteId:'',expandedKey:'',selectedSourceId:'',selectedEventNumber:0},ops:blankOps()};
       M.state.meetOps=blankOps();applyProgram(workspaces()[m.id].program);save();closeModal();renderIntentionalEmpty(m.id,m.title);M.toast?.(`${m.title} ready · add Session 1 programme`);
     };

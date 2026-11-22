@@ -42,7 +42,7 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.click('[data-mfa-use]');
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('cold-start'),{timeout:3000});
-  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:3000});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,null,{timeout:3000});
 
   const seedProof=await page.evaluate(()=>[...document.querySelectorAll('[data-meet-program-ba] .ba-seed')].map(n=>{const r=n.getBoundingClientRect();return{value:n.dataset.seedValue||'',left:r.left,right:r.right,width:r.width,display:getComputedStyle(n).display,visible:r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth+0.5}}));
   assert.deepEqual(seedProof.map(x=>x.value),['1:02.20','1:00.44','59.88'],'every competitor seed must be preserved in programme order');
@@ -58,40 +58,29 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   const row=page.locator('.ba-row.aqua').first();
   assert.equal(await row.count(),1,'AquaGym programme row must be visible');
   await row.click();
-  await page.waitForSelector('.ba-row.aqua.expanded .ba-intel',{timeout:3000});
-  await page.waitForSelector('.ba-row.aqua.expanded [data-mpo-quick-note]',{timeout:3000});
-
-  const intel=page.locator('.ba-row.aqua.expanded .ba-intel');
-  const intelText=await intel.innerText();
-  assert.match(intelText,/Seed\s*1:00\.44/,'expanded swimmer must retain its entry time');
-  assert.match(intelText,/Quick note/,'quick typed notes must be directly visible');
-  assert.match(intelText,/Voice commentary/,'voice commentary must be a primary race action');
-  assert.match(intelText,/Capture/,'capture must be a primary race action');
-  assert.match(intelText,/Backup stopwatch/,'stopwatch remains available only as backup');
-  assert.doesNotMatch(intelText,/Talk through race/,'old commentary wording must not remain');
-
-  const backup=page.locator('.ba-row.aqua.expanded details[data-mpo-backup]');
-  assert.equal(await backup.count(),1);
-  assert.equal(await backup.evaluate(n=>n.open),false,'backup stopwatch must be collapsed by default');
+  // 22 Nov 2026: the 30-31 Oct Meet rebuild (Andy: "no stopwatch or typing times ... capture quick race feedback with
+  // optional stroke rate/splits, then results sweeps add official times") replaced the old working card (quick note,
+  // capture, backup stopwatch) with the heat box: seed / PB / result, What you saw, SR, Splits, Talk this heat.
+  await page.waitForSelector('.ba-heatbox [data-ba-sw]',{timeout:3000});
+  const box=page.locator('.ba-heatbox').first();
+  const boxText=await box.innerText();
+  assert.match(boxText,/Aqua One/,'our swimmer is in the heat box');
+  assert.match(boxText,/Seed\s*1:00\.44/,'expanded swimmer must retain its entry time');
+  assert.equal(await box.locator('[data-ba-talk]').count(),1,'talk this heat is a primary race action');
+  assert.doesNotMatch(boxText,/stopwatch/i,'no stopwatch at a meet: times come from the results');
   assert.equal(await page.locator('[data-ba-add-session]').count(),1,'Add session must survive race expansion');
   await page.click('[data-ba-add-session]',{timeout:3000});
   await page.waitForSelector('[data-ba-session]',{timeout:3000});
   await page.click('[data-ba-close]');
 
-  const selectedKey=await page.evaluate(()=>MSOS4.state.meetOps?.selectedRaceKey||'');
-  assert.ok(selectedKey,'programme row must select an exact meet-ops race key');
-  assert.equal(await page.evaluate(()=>MSOS4.state.meetProgramBA?.selectedKey||''),selectedKey,'programme and meet-ops must agree on selected race');
-
-  const note=page.locator('[data-mpo-quick-note]');
+  const note=page.locator('.ba-heatbox [data-ba-eye="notes"]').first();
+  const selectedKey=await note.getAttribute('data-ba-race');
+  assert.ok(selectedKey,'the note belongs to an exact race');
   await note.fill('Held line well; breakout improved.');
-  await page.waitForTimeout(450);
-  assert.equal(await page.evaluate(k=>MSOS4.state.meetOps?.races?.[k]?.notes||'',selectedKey),'Held line well; breakout improved.');
-
-  await page.click('.ba-row.aqua.expanded [data-ba-capture]');
-  await page.waitForSelector('[data-mo-note]',{timeout:3000});
-  await page.fill('[data-mo-note]','Finish timing strong; check stroke count next race.');
-  await page.click('[data-mo-save-note]');
-  await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&e.capture_type==='note'&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:3000});
+  await page.locator('.ba-heatbox [data-ba-eye="stroke_rate_notes"]').first().fill('42');
+  await page.waitForFunction(()=>/Saved to this race/.test(document.querySelector('.ba-heatbox [data-ba-saved]')?.textContent||''),{timeout:3000});
+  const saved=await page.evaluate(k=>{const M=MSOS4,r=M.meetProgramBA?.findRaceByKey?.(k);const x=r?M.meetOpsEngine.recordFor(r,false):Object.values(M.state.meetOps?.races||{}).find(y=>y.notes);return{notes:x?.notes||'',sr:x?.stroke_rate_notes||''}},selectedKey);
+  assert.deepEqual(saved,{notes:'Held line well; breakout improved.',sr:'42'},'what the coach saw is saved to that race');
 
   const rev=await page.evaluate(()=>{MSOS4.store.save(MSOS4.state);return Number(MSOS4.state.settings.storageRevision)||0});
   await page.evaluate(async r=>{await MSOS4.storageEngine.whenPersisted(r)},rev);
@@ -105,28 +94,26 @@ Heat 2 of 2 Finals Starts at 07:40 PM
   await page.waitForFunction(()=>window.MSOS4?.meetProgramBA?.render&&window.MSOS4?.meetProgramOpsBridge,{timeout:5000});
   await page.evaluate(()=>{
    MSOS4.state.settings.view='meet';
-   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-   document.querySelector('#meetView')?.classList.add('active');
+   document.querySelectorAll('.view').forEach(v=>{v.classList.remove('active');v.hidden=true});
+   {const mv=document.querySelector('#meetView');if(mv){mv.classList.add('active');mv.hidden=false}}// views are shown with hidden= as well as .active now
    MSOS4.meetProgramBA.render();
   });
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   await page.waitForFunction(()=>window.MSOS4?.meetProgramOpsBridge?.build?.includes('cold-start'),{timeout:3000});
-  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,{timeout:6000});
+  await page.waitForFunction(()=>document.querySelectorAll('[data-meet-program-ba] .ba-seed').length===3,null,{timeout:6000});
   assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'legacy Guardian Meet deck must already be hidden when the programme authority renders directly');
-  await page.locator('.ba-row.aqua').first().click();
-  await page.waitForSelector('[data-mpo-quick-note]',{timeout:3000});
-  assert.equal(await page.locator('[data-mpo-quick-note]').inputValue(),'Held line well; breakout improved.','quick note must restore on a directly rendered programme');
-  const coldIntelText=await page.locator('.ba-row.aqua.expanded .ba-intel').innerText();
-  assert.match(coldIntelText,/Voice commentary/,'directly rendered race card must expose voice commentary without M.ui.renderMeet');
-  assert.match(coldIntelText,/Capture/,'directly rendered race card must expose Capture without M.ui.renderMeet');
-  assert.doesNotMatch(coldIntelText,/Talk through race/,'directly rendered race card must not fall back to the old controls');
-  await page.waitForFunction(k=>(MSOS4.state.meetOps?.evidence||[]).some(e=>e.race_key===k&&/Finish timing strong/.test(e.text_content||'')),selectedKey,{timeout:5000});
+  // the heat box the coach opened stays open across the reload (an open race stays open until closed)
+  if(!await page.locator('.ba-heatbox').count())await page.locator('.ba-row.aqua').first().click();
+  await page.waitForSelector('.ba-heatbox [data-ba-eye="notes"]',{timeout:3000});
+  assert.equal(await page.locator('.ba-heatbox [data-ba-eye="notes"]').first().inputValue(),'Held line well; breakout improved.','what you saw must restore on a directly rendered programme');
+  assert.equal(await page.locator('.ba-heatbox [data-ba-eye="stroke_rate_notes"]').first().inputValue(),'42');
+  assert.equal(await page.locator('.ba-heatbox [data-ba-talk]').count(),1,'directly rendered heat box keeps Talk this heat without M.ui.renderMeet');
   assert.equal(await page.locator('[data-ba-add-session]').count(),1,'programme controls must still exist after direct restore and race expansion');
   assert.equal(await page.locator('[data-meet-ops-av]:visible').count(),0,'no duplicate working card may reappear after direct restore');
   assert.equal(await page.locator('[data-meet-board-az]:visible').count(),0,'no Guardian Meet deck may reappear after direct restore');
 
   assert.deepEqual(pageErrors,[],'page errors during Meet phone-priority journey');
   assert.deepEqual(consoleErrors,[],'console errors during Meet phone-priority journey');
-  console.log('MEET_PHONE_PRIORITY_ACCEPTANCE_PASS competitors=3 seeds=3 viewport=390 note=primary voice=primary capture=primary stopwatch=secondary add-session=stable direct-programme-render=enhanced legacy-deck=hidden reload=restored');
+  console.log('MEET_PHONE_PRIORITY_ACCEPTANCE_PASS competitors=3 seeds=3 viewport=390 what-you-saw=saved+restored talk=primary stopwatch=none add-session=stable direct-programme-render=enhanced legacy-deck=hidden reload=restored');
  }finally{await browser.close()}
 })().catch(err=>{console.error(err?.stack||err);process.exit(1)});

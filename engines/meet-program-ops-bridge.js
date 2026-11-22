@@ -60,16 +60,8 @@
     document.head.appendChild(s);
   }
 
-  function enhanceSeedRows(p){
-    for(const row of p.querySelectorAll('.ba-row-main')){
-      const seed=row.querySelector(':scope > small');
-      if(!seed)continue;
-      const value=(seed.textContent||'').trim()||'—';
-      seed.classList.add('ba-seed');
-      seed.dataset.seedValue=value;
-    }
-  }
-
+  // 22 Nov 2026: the programme (engines/meet-program-ba.js) marks its own seed cells (class ba-seed, data-seed-value).
+  // This layer used to add them after each render, so a programme drawn before it ran had none.
   // 30 Oct 2026: the race card itself (engines/meet-program-ba.js) now owns what the coach saw -- note, stroke rate,
   // splits -- and has no stopwatch (Andy: "Timing and typing times aren't options ... we're running off a scoreboard").
   // This layer no longer adds its own Quick note / Backup stopwatch / button labels on top of it.
@@ -82,7 +74,6 @@
     document.body.classList.add('meet-program-ba-active');
     ensureStyle();
     hideLegacyLayers();
-    enhanceSeedRows(p);
     enhanceIntel(p);
     return true;
   }

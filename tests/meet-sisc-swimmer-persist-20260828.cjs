@@ -1,4 +1,7 @@
 'use strict';
+// 22 Nov 2026: the 30-31 Oct Meet rebuild (Andy: quick race feedback, results sweeps add the times; all coaches add to the
+// one programme) replaced the per-swimmer .ba-intel card with the heat box (.ba-heatbox: seed, PB, result, what you saw).
+// Same check on the current surface: nothing open until the coach opens a swimmer; it stays open after a delayed refresh.
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
@@ -33,8 +36,8 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
   await page.waitForSelector('[data-mfa-use]',{timeout:3000});await page.click('[data-mfa-use]');
   await page.waitForSelector('[data-meet-program-ba]',{timeout:5000});
   const matt=page.locator('[data-ba-athlete]').filter({hasText:'Matthew'}).first();await matt.click();
-  await page.waitForSelector('.ba-intel',{timeout:3000});
-  assert.match(await page.locator('.ba-intel').innerText(),/2:19\.53/,'Matthew seed should be visible after explicit open');
+  await page.waitForSelector('.ba-heatbox',{timeout:3000});
+  assert.match(await page.locator('.ba-heatbox').innerText(),/2:19\.53/,'Matthew seed should be visible after explicit open');
   await page.evaluate(()=>{
     const M=MSOS4,p=M.state.meetProgramBA,src=p.sources[0];
     src.parsed=M.meetProgramBA.parseProgramme(src.raw,src.source_id);
@@ -43,8 +46,8 @@ Heat 4 of 5 Prelims Starts at 08:27 AM
     M.meetProgramBA.render();
   });
   await page.waitForTimeout(6200);
-  await page.waitForSelector('.ba-intel',{timeout:3000});
-  const text=await page.locator('.ba-intel').innerText();
+  await page.waitForSelector('.ba-heatbox',{timeout:3000});
+  const text=await page.locator('.ba-heatbox').innerText();
   assert.match(text,/Matthew Callow/i,'explicit swimmer must remain open after delayed refresh');
   assert.match(text,/Seed\s*2:19\.53/i,'seed time must remain visible after delayed refresh');
   assert.match(await matt.innerText(),/E1/,'swimmer pill must retain programme event instead of dash');

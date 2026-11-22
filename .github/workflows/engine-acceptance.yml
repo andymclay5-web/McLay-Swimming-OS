@@ -125,3 +125,14 @@ jobs:
           node tests/swimmer-secure-onboarding-bn.cjs
           node tests/matthew-session-cu.cjs
           node tests/matthew-ready-cv.cjs
+          node tests/boot-waits-for-slow-scripts-20261120.cjs
+          node tests/evidence-views-keep-every-pb-20261117.cjs
+          node tests/freeze-recorder-20261121.cjs
+          node tests/reopen-keeps-todays-session-20261119.cjs
+          node tests/roster-push-keeps-cloud-fields-20261122.cjs
+          node tests/rotation-pace-reps-20261121.cjs
+          node tests/sat-am-separate-swims-hbs-20261121.cjs
+          node tests/session-journey-recorder-20261122.cjs
+          node tests/stroke-components-kick-pull-drill-20261119.cjs
+          node tests/stroke-counting-im-choice-20261119.cjs
+          node tests/tv-follows-board-after-hung-call-20261119.cjs

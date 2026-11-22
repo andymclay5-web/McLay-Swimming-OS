@@ -29,6 +29,9 @@ const specs=[
  const page=await context.newPage(),pageErrors=[],consoleErrors=[];
  page.on('pageerror',e=>pageErrors.push(e.stack||e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
  try{
+  // 22 Nov 2026: session intake lists today's published slots, so on a Sunday (no National session) this failed. It is a
+  // weekday National session journey; it runs on a weekday clock.
+  await page.clock.install({time:new Date('2026-11-24T14:00:00+13:00')});
   await page.goto(BASE,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.MSOS4?.storageEngine?.hydrated?.()===true,{timeout:10000});
   await page.waitForFunction(()=>document.body.dataset.guardian==='pass',{timeout:10000});
