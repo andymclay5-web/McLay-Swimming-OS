@@ -943,7 +943,7 @@ C.stageAttendance=row=>{if(!row)return false;C.queue('attendance',C.projectAtten
   if(localBy.role==='owner'&&remoteBy.role==='assistant')C.stageSession(local);
   return{applied:'local',by:localBy};
  };
- C.mediaPath=cap=>{const ext=(cap.mime_type||'').includes('video')?'webm':(cap.mime_type||'').includes('audio')?'webm':(cap.mime_type||'').includes('png')?'png':'jpg';return`v4/${encodeURIComponent(C.org())}/${encodeURIComponent(cap.session_id)}/${encodeURIComponent(cap.id)}/media.${ext}`};
+ C.mediaPath=cap=>{const ext=(cap.mime_type||'').includes('video')?((cap.mime_type||'').includes('mp4')?'mp4':'webm'):(cap.mime_type||'').includes('audio')?'webm':(cap.mime_type||'').includes('png')?'png':'jpg';return`v4/${encodeURIComponent(C.org())}/${encodeURIComponent(cap.session_id)}/${encodeURIComponent(cap.id)}/media.${ext}`};
  C.stageRecoveredLegacyCapture=cap=>{if(!cap)return false;cap.legacy_recovery=true;cap.legacy_recovery_no_session_stage=true;cap.cloud_block_detached=!!cap.legacy_block_id;return C.stageCapture(cap)};
  C.stageCapture=cap=>{if(!cap)return false;const s=M.state.canonicalSessions?.[cap.session_id];if(s&&!cap.legacy_recovery_no_session_stage)C.stageSession(s);if(cap.media_id&&!cap.media_path)C.queue('media',{id:`media:${cap.id}`,capture_id:cap.id,media_id:cap.media_id,path:C.mediaPath(cap),mime_type:cap.mime_type||''},'upload');C.queue('captures',C.projectCapture(cap));C.queue('session_transcriptions',C.evidenceLink(cap));return true};
 
@@ -1132,12 +1132,15 @@ C.enableProduction=()=>{const gate=M.release?.unlockCutover?.();if(!gate?.ready)
     before it is sent -- usually a tenth of the size. The original stays on the phone untouched. No sound in the smaller
     copy (clips play muted on the TV). Returns null when this phone can't do it, the app goes to the background, or the
     copy isn't much smaller -- the original is sent instead. */
- Media.SHRINK_OVER=20*1024*1024;
- Media.shrinkVideo=(blob,{short=720,bps=2000000}={})=>new Promise(resolve=>{let done=false,url='',timer=0,rec=null;const v=document.createElement('video');
+ /* 23 Nov 2026 (Andy, pool TV: putting a clip up "froze up or kicked me off the web browser on the TV"; clips in the cloud
+    were the camera's own 4-7 MB files, under the old 20 MB line, so none had been made smaller): every clip over 1.5 MB
+    now gets the 720p copy, as MP4/H.264 when this phone can make it -- the format TV browsers play most reliably. */
+ Media.SHRINK_OVER=1.5*1024*1024;
+ Media.shrinkWith=(blob,{short=720,bps=2000000,type:want=''}={})=>new Promise(resolve=>{let done=false,url='',timer=0,rec=null;const v=document.createElement('video');
   const finish=(out,why)=>{if(done)return;done=true;Media.lastShrink={why:why||(out?'ok':'not smaller'),from:blob?.size,to:out?.size||0};clearTimeout(timer);try{rec&&rec.state!=='inactive'&&rec.stop();}catch{}try{v.pause();v.removeAttribute('src');v.load();v.remove();}catch{}if(url)URL.revokeObjectURL(url);document.removeEventListener('visibilitychange',hidden);resolve(out);};
   const hidden=()=>{if(document.visibilityState==='hidden')finish(null,'app went to the background');};
   try{if(!blob||!/^video\//.test(blob.type||'video/')||typeof MediaRecorder!=='function'||!HTMLCanvasElement.prototype.captureStream)return resolve(null);
-   const type=['video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1','video/mp4'].find(t=>{try{return MediaRecorder.isTypeSupported(t);}catch{return false;}});if(!type)return resolve(null);
+   const type=want&&(()=>{try{return MediaRecorder.isTypeSupported(want)}catch{return false}})()?want:'';if(!type)return resolve(null);
    document.addEventListener('visibilitychange',hidden);url=URL.createObjectURL(blob);v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.preload='auto';v.style.cssText='position:fixed;left:-4000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';try{document.body.appendChild(v);}catch{}
    timer=setTimeout(()=>finish(null,'clip did not open'),15000);
    v.onerror=()=>finish(null,'clip did not open');
@@ -1151,6 +1154,9 @@ C.enableProduction=()=>{const gate=M.release?.unlockCutover?.();if(!gate?.ready)
     clearTimeout(timer);const secs=Number.isFinite(v.duration)&&v.duration>0?v.duration:120;timer=setTimeout(()=>finish(null,'took too long'),Math.min(600000,Math.max(20000,secs*1500+15000)));
     rec.start(1000);v.play().then(()=>requestAnimationFrame(draw)).catch(e=>finish(null,'could not play: '+(e&&e.message)));};
    v.src=url;}catch{finish(null);}});
+ // MP4/H.264 first (what TV browsers play best); a phone that says it can but writes nothing gets the WebM copy instead.
+ Media.shrinkVideo=async(blob,opts={})=>{for(const type of['video/mp4;codecs=avc1','video/webm;codecs=vp8','video/webm']){let ok=false;try{ok=MediaRecorder.isTypeSupported(type)}catch{}if(!ok)continue;
+   const out=await Media.shrinkWith(blob,{...opts,type});if(out)return out;if(/background|did not open|took too long|could not play/.test(Media.lastShrink?.why||''))return null;}return null};
 })(globalThis);
 
 

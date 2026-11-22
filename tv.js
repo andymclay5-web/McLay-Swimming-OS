@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261107a';
+  const TV_VERSION='20261123a';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -136,7 +136,10 @@
     const size=()=>{const b=ovl.getBoundingClientRect();const w0=v.videoWidth,h0=v.videoHeight;if(!w0||!h0)return;const k=Math.min(b.width/w0,b.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
       if(c.width!==w||c.height!==h){c.width=w;c.height=h;c.style.width=`${w}px`;c.style.height=`${h}px`;c.style.left=`${Math.floor((b.width-w)/2)}px`;c.style.top=`${Math.floor((b.height-h)/2)}px`;}};
     const ctx=c.getContext('2d');
-    const tick=()=>{if(m.stop)return;try{if(v.readyState>=2){size();if(c.width){ctx.drawImage(v,0,0,c.width,c.height);
+    // 23 Nov 2026 (Andy: a clip in the corner froze the TV or closed its browser): painting every screen frame was too
+    // much for the TV's browser. About 15 pictures a second is plenty for a coaching clip and a quarter of the work.
+    let lastPaint=0;
+    const tick=()=>{if(m.stop)return;const now=performance.now();if(now-lastPaint<66){requestAnimationFrame(tick);return}lastPaint=now;try{if(v.readyState>=2){size();if(c.width){ctx.drawImage(v,0,0,c.width,c.height);
       if(!m.seen&&v.currentTime>0.4){let lit=false;try{const d=ctx.getImageData(0,0,c.width,c.height).data;for(let i=0;i<d.length;i+=4*97){if(d[i]+d[i+1]+d[i+2]>30){lit=true;break;}}}catch{lit=true;}
         if(lit)m.seen=true;else if(++m.blank>90)return fallbackFull(o);}}}}catch{}
       if(!m.seen&&Date.now()-m.start>12000)return fallbackFull(o);
