@@ -68,12 +68,15 @@
   function modified(){return B()?.modified?.()||[];}
   function targetText(r){const s=B()?.targetSummary?.(r)||'';const modeled=!!(r?.modeled||(r?.rows||[]).some(x=>x?.modeled));return modeled&&s?`≈ ${s}`:s;}
   function prescription(session,item,a){try{return E.Coordinator.prescription(session,item,a,M.state)||null}catch{return null}}
-  function athleteTarget(session,item,a,actual){const p=prescription(session,item,a);const t=targetText(p?.target);if(t)return t;const it=actual||p?.item||item;return Number(it?.cycleSeconds)>0?`@ ${clock(it.cycleSeconds)}`:'—';}
+  // 23 Nov 2026 (Andy, photo of the pool TV: every swimmer under "100 IM @ 2:00" read "@ 2:00" -- "these times that are
+  // repeating the send off ... there's no need"): a swimmer with no target and the set's own send-off gets nothing; a
+  // send-off of their own still shows. A set where nobody has anything shows no swimmer row at all.
+  function athleteTarget(session,item,a,actual){const p=prescription(session,item,a);const t=targetText(p?.target);if(t)return t;const it=actual||p?.item||item;const own=Number(it?.cycleSeconds),set=Number(item?.cycleSeconds);return own>0&&own!==set?`@ ${clock(own)}`:'';}
   const tick=()=>new Promise(r=>setTimeout(r,0));
   async function setRow(session,item,ctx,withTargets){
     const b=B(),row={k:'set',id:item.id,work:text(b.workLabel(item)),cue:text(b.cueText(item))};
     const timed=!!b.timingIntent?.(item);
-    if(withTargets&&timed&&ctx.group.length){row.targets=[];for(const a of ctx.group){row.targets.push({n:b.name(a,ctx.pool),t:athleteTarget(session,item,a)});}await tick();}
+    if(withTargets&&timed&&ctx.group.length){const list=[];for(const a of ctx.group){const t=athleteTarget(session,item,a);if(t)list.push({n:b.name(a,ctx.pool),t});}if(list.length)row.targets=list;await tick();}
     const groups=new Map();
     for(const a of ctx.mods){let actual=null;try{actual=(withTargets?prescription(session,item,a)?.item:null)||E.Modification.adaptItem(item,a,M.state,session);}catch{actual=item;}if(b.shownItem)actual=b.shownItem(item,actual);
       const changed=!E.Modification.samePrescription?.(item,actual),showTiming=!!b.timingIntent?.(actual);if(!changed&&!showTiming)continue;
