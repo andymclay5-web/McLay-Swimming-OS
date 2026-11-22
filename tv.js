@@ -8,7 +8,7 @@
   const root=document.getElementById('tv'),ovl=document.getElementById('tvOverlay'),statusEl=document.getElementById('tvStatus');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const POLL_MS=g.MSOS_TV_POLL_MS||1500;
-  const TV_VERSION='20261123b';
+  const TV_VERSION='20261123c';
   const TV=g.MSOS_TV={rev:0,frame:null,state:'starting',version:TV_VERSION};
   // TVs keep old copies of pages. When the phone expects a newer TV page, reload once to fetch it.
   function maybeUpdate(f){const want=String(f?.tvv||'');if(!want||want<=TV_VERSION)return false;let tried='';try{tried=sessionStorage.getItem('msos-tv-upd')||'';}catch{}if(tried===want)return false;
@@ -113,12 +113,13 @@
   // 23 Nov 2026 (Andy: "whenever ... I go from corner of the board to the full board, it restarts the video. We want it
   // to just carry on playing"): changing corner <-> full on the same video moves it, it doesn't start it again. And the
   // coach's phone can skip back / forward / pause (o.ctl, a counter so each tap acts once).
-  function switchMode(o){const full=o.mode==='full';ovl.className=`tv-overlay tvo-${full?'full':'corner'}`;
+  function switchMode(o){const full=o.mode==='full';const wasTall=ovl.classList.contains('tvo-tall');ovl.className=`tv-overlay tvo-${full?'full':'corner'}`;if(full)tall(false);else if(wasTall)tall(true);
     if(o.kind==='youtube'){fitFrame();setTimeout(fitFrame,300);return;}
     if(o.kind!=='video'||!o.url)return;
     if(full){const src=mirror?.video,t=src?src.currentTime:0,paused=src?src.paused:false;if(mirror){stopMirror();const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',()=>{try{v.currentTime=t;if(paused)v.pause();}catch{}fitMedia();},{once:true});}}setTimeout(fitMedia,300);return;}
-    if(TV.fellBackFull){ovl.className='tv-overlay tvo-full';return;}
-    const cur=ovl.querySelector('.tvo-frame video'),t=cur?cur.currentTime:0;if(cur){try{cur.pause();cur.removeAttribute('src');cur.load();}catch{}}startMirror(o,t);}
+    const cur=ovl.querySelector('.tvo-frame video'),t=cur?cur.currentTime:0;
+    if(noMirror()){if(cur&&cur.videoHeight>cur.videoWidth){tall(true);fitMedia();setTimeout(fitMedia,300);}else{ovl.className='tv-overlay tvo-full';}return;}
+    if(cur){try{cur.pause();cur.removeAttribute('src');cur.load();}catch{}}startMirror(o,t);}
   function mediaEl(){return mirror?.video||ovl.querySelector('.tvo-frame video');}
   function ytCmd(func,args=[]){const fr=ovl.querySelector('.tvo-frame iframe');try{fr?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*');}catch{}}
   function applyCtl(o){const c=o?.ctl;if(!c||!c.n||c.n===lastCtlN)return;lastCtlN=c.n;const by=c.cmd==='back'?-10:c.cmd==='fwd'?10:0;
@@ -133,11 +134,12 @@
     overlayKey=key;overlayBase=base;lastCtlN=o?.ctl?.n||0;yt.t=0;yt.state=-1;
     // a swimmer side panel narrows the Board to the left so nothing is hidden under it
     const side=!!(o&&o.kind==='swimmer'&&o.mode!=='full');if(document.body.classList.contains('tv-has-side')!==side){document.body.classList.toggle('tv-has-side',side);if(TV.frame)setTimeout(fit,0);}
+    tall(false);TV.nativeCorner=false;
     if(!o){ovl.className='';ovl.innerHTML='';return;}
     ovl.className=`tv-overlay tvo-${o.mode==='full'?'full':'corner'} ${o.kind==='swimmer'?'tvo-swimmer':''}`;
     ovl.innerHTML=`<div class="tvo-frame">${overlayInner(o)}</div>${o.label&&o.kind!=='swimmer'?`<div class="tvo-label">${esc(o.label)}</div>`:''}`;
     stopMirror();
-    if(o.kind==='video'&&o.url&&o.mode!=='full'){startMirror(o);watchMedia(o);return;}
+    if(o.kind==='video'&&o.url&&o.mode!=='full'){if(noMirror())nativeCorner(o);else startMirror(o);watchMedia(o);return;}
     if(o.kind==='swimmer')setTimeout(fitCard,0);
     if(o.kind==='youtube'){fitFrame();setTimeout(fitFrame,300);setTimeout(fitFrame,1500);}
     const m=ovl.querySelector('.tvo-frame video,.tvo-frame img');if(m){m.addEventListener('loadedmetadata',fitMedia);m.addEventListener('load',fitMedia);setTimeout(fitMedia,300);setTimeout(fitMedia,1500);}
@@ -153,7 +155,7 @@
     v.style.cssText='position:fixed;left:-4000px;top:-4000px;width:2px;height:2px;opacity:0;pointer-events:none';document.body.appendChild(v);
     const c=document.createElement('canvas');c.className='tvo-mirror';c.style.cssText='position:absolute;left:0;top:0';frame.appendChild(c);
     const m=mirror={video:v,canvas:c,stop:false,seen:false,start:Date.now(),blank:0};
-    const size=()=>{const b=ovl.getBoundingClientRect();const w0=v.videoWidth,h0=v.videoHeight;if(!w0||!h0)return;const k=Math.min(b.width/w0,b.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
+    const size=()=>{const w0=v.videoWidth,h0=v.videoHeight;if(!w0||!h0)return;if(h0>w0&&!ovl.classList.contains('tvo-tall'))tall(true);const b=ovl.getBoundingClientRect();const k=Math.min(b.width/w0,b.height/h0),w=Math.floor(w0*k),h=Math.floor(h0*k);
       if(c.width!==w||c.height!==h){c.width=w;c.height=h;c.style.width=`${w}px`;c.style.height=`${h}px`;c.style.left=`${Math.floor((b.width-w)/2)}px`;c.style.top=`${Math.floor((b.height-h)/2)}px`;}};
     const ctx=c.getContext('2d');
     // 23 Nov 2026 (Andy: a clip in the corner froze the TV or closed its browser): painting every screen frame was too
@@ -167,7 +169,20 @@
     if(startAt>0)v.addEventListener('loadedmetadata',()=>{try{v.currentTime=startAt;}catch{}},{once:true});
     v.addEventListener('loadeddata',()=>requestAnimationFrame(tick),{once:true});v.src=o.url;try{const p=v.play();if(p&&p.catch)p.catch(()=>{});}catch{}
     TV.mirror=m;}
-  function fallbackFull(o){stopMirror();ovl.className='tv-overlay tvo-full';const frame=ovl.querySelector('.tvo-frame');if(frame){frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');v.addEventListener('loadedmetadata',fitMedia);setTimeout(fitMedia,300);}TV.fellBackFull=true;}
+  // 23 Nov 2026 (Andy: a capture of Matthew "wouldn't show on corner, just switched to full screen (it did show correctly
+  // there)"): this TV can't hand its video frames to the corner picture, so the clip went full screen. A phone clip is
+  // tall, so in the corner it now plays as a tall panel down the right-hand side (the Board moves left, as for a swimmer
+  // card) using the TV's own player, which plays it whole when it is given room its own size. The TV remembers it can't
+  // do the corner picture and goes straight there next time; a wide clip still goes full screen. The coach's phone is told.
+  const NOMIRROR='msos-tv-nomirror';const noMirror=()=>{try{return localStorage.getItem(NOMIRROR)==='1'}catch{return false}};
+  function tall(on){ovl.classList.toggle('tvo-tall',!!on);if(document.body.classList.contains('tv-has-tall')!==!!on){document.body.classList.toggle('tv-has-tall',!!on);if(TV.frame)setTimeout(fit,0);}}
+  TV.tall=tall;
+  function nativeCorner(o,startAt=0,why=''){stopMirror();ovl.className='tv-overlay tvo-corner';const frame=ovl.querySelector('.tvo-frame');if(!frame)return;
+    frame.innerHTML=`<video src="${esc(o.url)}" autoplay muted loop playsinline></video>`;const v=frame.querySelector('video');
+    v.addEventListener('loadedmetadata',()=>{const portrait=v.videoHeight>v.videoWidth;if(portrait){tall(true);}else{tall(false);ovl.className='tv-overlay tvo-full';}
+      try{if(startAt>0)v.currentTime=startAt;}catch{}fitMedia();setTimeout(fitMedia,300);if(why)report('moved',portrait?`shown down the side (${why})`:`shown full screen (${why})`,o);},{once:true});
+    TV.nativeCorner=true;}
+  function fallbackFull(o){const t=mirror?.video?.currentTime||0;try{localStorage.setItem(NOMIRROR,'1')}catch{}TV.fellBackFull=true;return nativeCorner(o,t,'this TV can\'t draw the corner picture');}
   function fit(){layoutCache.clear();layout();}
   function draw(f,slot=false){if(maybeUpdate(f))return;TV.frame=f;root.className='tv-root tv-board';layout();if(!slot)drawOverlay(f.overlay||null);}
   // 19 Oct 2026: the shared slot -- whatever any coach has put on top, with their name on it.
@@ -176,7 +191,7 @@
   // YouTube's player reports through postMessage once it is asked to (enablejsapi); a clip reports through its own events.
   const YT_ERR={2:'that link isn\'t a playable YouTube video',5:'this TV\'s browser can\'t play it',100:'the video was removed or is private',101:'the owner doesn\'t allow it to play inside other apps',150:'the owner doesn\'t allow it to play inside other apps',152:'the owner doesn\'t allow it to play inside other apps',153:'YouTube didn\'t accept the TV page'};
   let watch=null;
-  function report(state,detail,o){TV.mediaStatus={state,detail,id:o?.id||'',at:Date.now()};
+  function report(state,detail,o){TV.mediaStatus={state,detail,id:o?.id||'',at:Date.now()};TV.reports=(TV.reports||[]).slice(-9).concat([[state,detail]]);
     try{live.send?.({topic:live.topic,event:'broadcast',ref:String(++live.ref),payload:{type:'broadcast',event:'tv-status',payload:{id:o?.id||'',kind:o?.kind||'',state,detail}}});}catch{}}
   TV.report=report;
   function watchMedia(o){if(watch)clearTimeout(watch.t);watch=null;if(!o||!['youtube','video'].includes(o.kind)||!o.url&&!o.youtube)return;const w=watch={id:o.id};let done=false;

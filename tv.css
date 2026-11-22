@@ -99,3 +99,7 @@ body.tv-light .tv-t b{color:#000}
 .sb-bar{display:block;height:.6em;background:var(--fg);border-radius:.1em;min-width:2px}
 /* 27 Oct 2026: a video that can't play says so on the TV */
 .tvo-frame{position:relative}.tvo-fail{position:absolute;left:0;right:0;bottom:0;padding:.6em .8em;background:rgba(160,30,30,.92);color:#fff;font-size:clamp(14px,1.6vw,28px);font-weight:700;line-height:1.3}
+
+/* 23 Nov 2026: a tall phone clip in the corner plays as a panel down the right; the Board moves left */
+.tv-overlay.tvo-corner.tvo-tall{top:2vh;bottom:2vh;right:1.5vw;height:96vh;width:54vh;max-width:46vw}
+.tv-has-tall .tv-root{width:calc(100vw - 54vh - 4vw);min-width:52vw}

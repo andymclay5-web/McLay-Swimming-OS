@@ -152,3 +152,4 @@ jobs:
           node tests/tv-video-search-swimming-20261123.cjs
           node tests/working-on-never-wiped-20261123.cjs
           node tests/reference-merge-fast-20261123.cjs
+          node tests/tv-tall-clip-side-panel-20261123.cjs

@@ -136,7 +136,7 @@
   // ---------- publishing ----------
   let lastSig='',lastSent=0,busy=false,timer=0,take=false,lastFrame=null;
   // The TV page checks this and reloads itself when the phone expects a newer TV page (TVs cache pages hard).
-  const TV_PAGE='20261123b';
+  const TV_PAGE='20261123c';
   async function publish({force=false}={}){const c=control();if(!c?.screenId||!isCoach()||!signedIn()||busy)return null;if(status.state==='taken'&&!take)return null;
     const sig=signature();if(!force&&sig===lastSig&&Date.now()-lastSent<HEARTBEAT_MS)return null;
     busy=true;try{const frame=await buildFrame();

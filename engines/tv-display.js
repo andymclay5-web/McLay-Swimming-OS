@@ -97,7 +97,7 @@
   // 27 Oct 2026: the TV reports whether a video it was sent actually started (tv.js -> engines/live-sync.js '_tv').
   T.tvStatus=null;
   try{M.liveSync?.on?.('_tv',p=>{const cur=T.current();if(!cur||(p.id&&cur.id&&p.id!==cur.id))return;T.tvStatus={...p,at:Date.now()};
-    M.toast?.(p.state==='playing'?'▶ Playing on the TV':p.state==='failed'?`The TV can't play it — ${p.detail||''}`:`Not playing on the TV yet — ${p.detail||''}`);
+    M.toast?.(p.state==='playing'?'▶ Playing on the TV':p.state==='moved'?`On the TV · ${p.detail||''}`:p.state==='failed'?`The TV can't play it — ${p.detail||''}`:`Not playing on the TV yet — ${p.detail||''}`);if(p.state!=='playing')try{M.freezeRecorder?.note?.('tv-'+p.state,{tv:{kind:p.kind,detail:p.detail}})}catch{}
     if(document.querySelector('[data-tv-controls]'))openControls();});}catch{}
   function openControls(){
     const host=document.querySelector('#modalHost');if(!host)return;const o=T.current(),caps=sessionCaptures();
