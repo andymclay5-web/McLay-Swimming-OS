@@ -289,7 +289,7 @@
   // Hidden markers stop older modules from injecting their own Hub cards (reporting, data health, dosage).
   function hubButton(key,label,sub,cls=''){return`<button type="button" class="hub-btn ${cls}" ${key}><b>${label}</b>${sub?`<small>${sub}</small>`:''}</button>`;}
   function homeHtml(){const p=hubParts(),owner=p.owner,canWrite=M.access?.can?M.access.can('session.create'):true;let unread=0;try{unread=M.coachChat?.totalUnread?.()||0;}catch{}
-    const big=[hubButton('data-hub-panel="today"','Today','sessions · write · open'),canWrite?hubButton('data-hub-write-now','Write session','straight into the writer'):'',owner?hubButton('data-hub-panel="input"','Input data','T400s · results · test sets'):'',hubButton('data-hub-panel="reports"','Reports &amp; analysis','session · week · season · tests'),hubButton('data-hub-panel="swimmers"','Swimmers','profiles · who has the app'),owner?hubButton('data-hub-tv','TV Board','show the session on the TV'):''].filter(Boolean);
+    const big=[hubButton('data-hub-panel="today"','Today','sessions · write · open'),canWrite?hubButton('data-hub-write-now','Write session','straight into the writer'):'',owner?hubButton('data-hub-panel="input"','Input data','T400s · results · test sets'):'',hubButton('data-hub-panel="reports"','Reports &amp; analysis','session · week · season · tests'),hubButton('data-hub-panel="swimmers"','Swimmers','profiles · who has the app'),hubButton('data-hub-panel="watch"','Watch list','patterns · who needs attention'),owner?hubButton('data-hub-tv','TV Board','show the session on the TV'):''].filter(Boolean);
     const small=[owner?hubButton('data-msos-plan-season','Season plan','','small'):'',hubButton('data-hub-go="meet"','Meet','','small'),hubButton('data-hub-chat',`Coach chat${unread?` <span class="hub-badge">${unread>9?'9+':unread}</span>`:''}`,'','small'),owner?hubButton('data-hub-team','Coaches &amp; devices','','small'):'',owner?hubButton('data-msos-data','Data &amp; references','','small'):''].filter(Boolean);
     return`${p.syncCard}<section class="page-card hub-today" data-hub-today><div class="eyebrow">COACH HUB</div>${p.seasonCard}</section><section class="hub-launch" data-hub-home><div class="hub-grid">${big.join('')}</div><div class="hub-grid hub-grid-small">${small.join('')}</div></section><span hidden data-msos-reports></span><span hidden data-msos-dosage="hub"></span>`;}
   function backBar(title){return`<div class="hub-back"><button type="button" data-hub-back>‹ Coach Hub</button><h2>${title}</h2></div>`;}
@@ -319,7 +319,7 @@
   L.todayHtml=todayHtml;L.slotGroups=slotGroups;L.seasonToday=seasonToday;
 
   let hubPanel=null;
-  const PANEL_TITLES={input:'Input data',reports:'Reports &amp; analysis',swimmers:'Swimmers',today:'Today',session:'Session detail'};
+  const PANEL_TITLES={input:'Input data',reports:'Reports &amp; analysis',swimmers:'Swimmers',watch:'Watch list',today:'Today',session:'Session detail'};
   const MARKERS='<span hidden data-msos-reports></span><span hidden data-msos-data></span><span hidden data-msos-dosage="hub"></span>';
   function openPanel(p){hubPanel=p||null;const h=document.querySelector('#hubView');if(h)h.dataset.loopHubRenderedAt='0';renderCoachHub();try{window.scrollTo(0,0);}catch{}}
   L.openHubPanel=openPanel;L.hubPanel=()=>hubPanel;L.setHubPanel=p=>{hubPanel=p||null;};
@@ -341,9 +341,9 @@
     if(!hubPanel){setStage('hub:home');h.innerHTML=homeHtml();bindToday(h);bindHome(h);finish();return;}
     if(hubPanel!=='today'&&hubPanel!=='session'){setStage(`hub:${hubPanel}`);h.innerHTML=`${backBar(PANEL_TITLES[hubPanel]||'')}<div data-hub-panel-body="${esc(hubPanel)}"></div>${MARKERS}`;bindHome(h);const body=h.querySelector('[data-hub-panel-body]');
       // A panel whose file didn't load says so and fetches it again -- never an empty screen (13 Oct 2026).
-      const need=hubPanel==='input'?['engines/input-data.js',()=>!!M.inputData?.render]:['engines/hub-panels.js',()=>!!M.hubPanels?.renderReports];
+      const need=hubPanel==='input'?['engines/input-data.js',()=>!!M.inputData?.render]:hubPanel==='watch'?['engines/watch-list.js',()=>!!M.watchList?.render]:['engines/hub-panels.js',()=>!!M.hubPanels?.renderReports];
       if(!need[1]()){const want=hubPanel;body.innerHTML=`<p class="page-card muted">Loading this screen…</p>`;Promise.resolve(M.dataAdminUI?.ensureEngine?.(need[0],need[1])).then(ok=>{if(hubPanel!==want)return;if(ok)openPanel(want);else if(body.isConnected)body.innerHTML=`<section class="page-card"><b>This screen didn't load on this phone.</b><p class="muted">Usually a weak connection while the app opened.</p><button type="button" data-hub-reload>Reload the app</button></section>`,body.querySelector('[data-hub-reload]')?.addEventListener('click',()=>location.reload());});finish();return;}
-      try{if(hubPanel==='input')M.inputData?.render?.(body);else if(hubPanel==='reports')M.hubPanels?.renderReports?.(body);else if(hubPanel==='swimmers')M.hubPanels?.renderSwimmers?.(body);}catch(e){body.innerHTML=`<p class="warn-text">${esc(e.message||e)}</p>`;}
+      try{if(hubPanel==='input')M.inputData?.render?.(body);else if(hubPanel==='reports')M.hubPanels?.renderReports?.(body);else if(hubPanel==='swimmers')M.hubPanels?.renderSwimmers?.(body);else if(hubPanel==='watch')M.watchList?.render?.(body);}catch(e){body.innerHTML=`<p class="warn-text">${esc(e.message||e)}</p>`;}
       finish();return;}
     // Today is the day list only. The full per-session page (plan, makeup, dosage, evidence -- below) is no longer
     // the Hub page Andy called sprawled; it opens on its own as Session detail (Reports & analysis > This session).
