@@ -62,7 +62,9 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       out.projected=(({audience,note})=>({audience,note}))(C.projectCapture({id:'own',session_id:'pub-test',capture_type:'text',text_content:'t',audience:'shared',capture_note:'Nice turn'}));
 
       // 4. Background refresh for swimmers who have the app (Matthew has a device; Elsie does not).
-      published.length=0;st.settings.portalFullAt={};
+      published.length=0;st.settings.portalFullAt={};st.settings.portalFullSig={};
+      // 22 Nov 2026: background work -- never while the coach is on a poolside screen (Board/Roll/Times/TV/Meet)
+      st.settings.view='board';out.onBoard=await X.refreshAppSwimmers();out.onBoardSent=published.length;st.settings.view='hub';
       const r1=await X.refreshAppSwimmers();const r2=await X.refreshAppSwimmers();
       out.refresh={first:r1?.refreshed||r1?.error,second:r2?.refreshed??null,keys:published[0]?Object.keys(published[0].p_payload).sort():null,count:published.length};
 
@@ -71,6 +73,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       out.badge=!!document.querySelector('#boardView [data-av-context]');
       window.fetch=realFetch;delete st.canonicalSessions['pub-test'];st.captures=st.captures.filter(c=>!/^capture-jordan/.test(c.id));st.pending=[];
       return out;});
+    assert.equal(r.onBoard,null,'no background portal rebuild while the coach is on the Board');assert.equal(r.onBoardSent,0);
     assert.deepEqual(r.sessionPublish,['athlete','publishedAt','schema','session','sessions'],'a session save publishes only the session parts, never empty results/notes');
     assert.deepEqual(r.pull.shared,['athlete-matthew-robertson'],'the shared capture is recognised as Matthew\'s');
     assert.ok(r.sharedPublish,'Matthew\'s shared notes were published from the owner\'s phone');

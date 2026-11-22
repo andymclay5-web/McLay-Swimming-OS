@@ -29,7 +29,7 @@
     return{view:set.view||'',boardMode:set.boardMode||set.boardView||'',session:session?{id:session.id,date:session.identity?.date,slot:session.identity?.dayPart,blocks:(session.blocks||[]).length}:null,
       athlete:set.selectedAthleteId||'',scrollY:Math.round(window.scrollY||0),domNodes:document.getElementsByTagName('*').length,
       counts:{sessions:count(s.canonicalSessions),athletes:count(s.athletes),attendance:count(s.attendance),captures:count(s.captures),pending:count(s.pending),coachResults:count(s.coachResults)},
-      online:navigator.onLine,memory:mem,slowCards:(M.boardStateEngine?.slowCards||[]).filter(x=>now()-x.at<20000).slice(-4),lastAction:lastAction&&now()-lastAction.at<15000?{...lastAction,msBefore:now()-lastAction.at}:null};
+      online:navigator.onLine,memory:mem,slowCards:(M.boardStateEngine?.slowCards||[]).filter(x=>now()-x.at<20000).slice(-4),portalBuild:(()=>{const b=M.swimmerInviteBN?.lastBuild;return b&&now()-b.at<20000?b:null})(),lastAction:lastAction&&now()-lastAction.at<15000?{...lastAction,msBefore:now()-lastAction.at}:null};
   }
   // 22 Nov 2026 (Andy: "Those freezes effect me for more like 10 plus seconds"; the records said 3s and 4.4s): a freeze
   // the coach feels is often several stalls back to back, with the screen barely moving in between. Stalls less than

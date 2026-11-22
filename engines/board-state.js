@@ -48,15 +48,26 @@
   function currentTargetPanel(itemId){return rowForItem(itemId)?.querySelector?.('.msos-target-panel')||null;}
   function markPanelJob(panel,key){if(panel?.dataset)panel.dataset.msosTargetJob=key;}
   function paintJob(job){if(!job||job.status!=='done')return false;const panel=currentTargetPanel(job.itemId);if(!panel||M.state?.settings?.boardExpandedTargetId!==job.itemId)return false;if(!panel.dataset.msosTargetJob)panel.dataset.msosTargetJob=job.key;if(panel.dataset.msosTargetJob!==job.key)return false;const box=panel.querySelector('[data-msos-target-matrix]');if(!box)return false;box.innerHTML=job.cards.join('');box.dataset.msosTargetElapsed=String(Math.round(job.elapsedMs||0));finishPanelAnchor({id:job.itemId});return true;}
-  function trimJobs(){if(targetJobs.size<=48)return;const rows=[...targetJobs.values()].sort((a,b)=>(a.finishedAt||a.startedAt)-(b.finishedAt||b.startedAt));for(const j of rows.slice(0,targetJobs.size-48))targetJobs.delete(j.key);}
+  function trimJobs(){if(targetJobs.size<=48)return;const rows=[...targetJobs.values()].filter(j=>j.status!=='running').sort((a,b)=>(a.finishedAt||a.startedAt)-(b.finishedAt||b.startedAt));for(const j of rows.slice(0,targetJobs.size-48))targetJobs.delete(j.key);}
   function ensureTargetJob(session,item,group=groupAthletes()){
     if(!session||!item||!group.length||raceEvidencePending(item))return null;
     const key=targetJobKey(session,item,group);let job=targetJobs.get(key);if(job)return job;
     let resolveJob;const promise=new Promise(resolve=>{resolveJob=resolve;});
     job={key,itemId:item.id,sessionId:session.id,status:'running',cards:[],i:0,group:[...group],startedAt:performance?.now?.()??Date.now(),reattachments:0,promise,resolve:resolveJob};targetJobs.set(key,job);trimJobs();
-    const step=()=>{if(job.status!=='running')return;const end=Math.min(job.group.length,job.i+2),f0=ms();for(;job.i<end&&(job.i===end-2||ms()-f0<12);job.i++){try{job.cards.push(targetCard(session,item,job.group[job.i]));}catch{job.cards.push('<div class="msos-target-card"><span>Target unavailable</span></div>');}}if(job.i<job.group.length){requestAnimationFrame(step);return;}job.status='done';job.finishedAt=performance?.now?.()??Date.now();job.elapsedMs=Math.max(0,job.finishedAt-job.startedAt);S.lastTargetTiming={itemId:item.id,status:'done',startedAt:job.startedAt,finishedAt:job.finishedAt,elapsedMs:job.elapsedMs,cards:job.cards.length,group:job.group.length,reattachments:job.reattachments,prewarmed:!currentTargetPanel(item.id)};job.resolve?.(job);paintJob(job);};
-    requestAnimationFrame(step);return job;
+    job.step=()=>{try{job.cards.push(targetCard(session,item,job.group[job.i]));}catch{job.cards.push('<div class="msos-target-card"><span>Target unavailable</span></div>');}job.i++;
+      if(job.i<job.group.length)return;job.status='done';job.finishedAt=performance?.now?.()??Date.now();job.elapsedMs=Math.max(0,job.finishedAt-job.startedAt);S.lastTargetTiming={itemId:item.id,status:'done',startedAt:job.startedAt,finishedAt:job.finishedAt,elapsedMs:job.elapsedMs,cards:job.cards.length,group:job.group.length,reattachments:job.reattachments,prewarmed:!currentTargetPanel(item.id)};job.resolve?.(job);paintJob(job);};
+    schedule();return job;
   }
+  // 22 Nov 2026 (freeze recorder, Andy's phone, Sun 19:57: 2.7s in one Board frame in this job's step, no single card
+  // slow): every set's target job ran its own step each frame, each with its own time slice, so a Board with many sets
+  // added them all up in one frame. One shared pump now: cards from all jobs share one ~12ms slice per frame (at least
+  // one card, so it always moves), the set the coach has open first.
+  let pumping=false;
+  function schedule(){if(pumping)return;pumping=true;requestAnimationFrame(pump);}
+  function pump(){pumping=false;const f0=ms(),open=M.state?.settings?.boardExpandedTargetId;let did=0;
+    for(;;){const running=[...targetJobs.values()].filter(j=>j.status==='running'&&j.step);if(!running.length)return;const job=running.find(j=>j.itemId===open)||running[0];
+      if(did&&ms()-f0>=12)break;job.step();did++;}
+    schedule();}
   function fillPanel(panel,session,item,group=groupAthletes()){
     const box=panel?.querySelector?.('[data-msos-target-matrix]');if(!box)return;
     if(raceEvidencePending(item)){box.innerHTML='<span class="msos-none">Loading PB / race evidence…</span>';return;}

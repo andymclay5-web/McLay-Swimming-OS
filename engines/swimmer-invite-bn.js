@@ -179,10 +179,11 @@
       ['shared_evidence',()=>{out.sharedEvidence=(M.state.captures||[]).filter(c=>ownCapture(c,a)).slice(-12).reverse().map(sharedRow);}],
     ];
     let truncatedAt='';
+    const timing=X.lastBuild={athlete:a?.id||'',at:Date.now(),stages:[['sessions',Date.now()-t0]]};/* 22 Nov 2026: the freeze recorder reads this, so a slow stage on the phone is named */
     for(const[name,run]of stages){
       if(Date.now()-t0>budgetMs){truncatedAt=name;break;}
       step(name);
-      try{run();}catch{}
+      const s0=Date.now();try{run();}catch{}timing.stages.push([name,Date.now()-s0]);timing.at=Date.now();
       await yieldToMainThread();
     }
     return{payload:out,truncatedAt};
@@ -843,14 +844,25 @@
   // Results, T400s and the training record for swimmers who actually have the app: rebuilt in the background on
   // the owner's phone, one swimmer per call, each at most every 6 hours (the session-save publish no longer
   // touches them).
-  async function refreshAppSwimmers(){if(!isOwner()||!M.cloud?.ready?.()||refreshAppSwimmers.busy)return null;refreshAppSwimmers.busy=true;
-    try{const rows=await rpc('msos_owner_swimmer_access',{});const st=M.state.settings,done=st.portalFullAt||(st.portalFullAt={}),now=Date.now();
+  // 22 Nov 2026 (freeze recorder, Andy's phone, Sun 19:57: 11s stuck while he opened the calendar, 6.5s of it this
+  // background rebuild of Matthew's portal page): it is background work, so it never runs while the coach is using the
+  // app poolside or has touched the screen in the last 20 seconds, and it doesn't rebuild a swimmer whose results,
+  // tests, notes and attendance haven't changed since the last publish.
+  let lastInputAt=0;for(const t of['pointerdown','keydown','touchstart','scroll'])try{document.addEventListener(t,()=>{lastInputAt=Date.now()},{capture:true,passive:true})}catch{}
+  const POOLSIDE=new Set(['board','roll','times','tv','meet']);
+  const coachBusy=()=>POOLSIDE.has(String(M.state?.settings?.view||''))||Date.now()-lastInputAt<20000||document.hidden;
+  const portalSig=a=>{const st=M.state||{},id=String(a.id),n=(rows,f)=>(rows||[]).reduce((k,r)=>k+(f(r)?1:0),0);
+    return[st.settings?.evidenceRevision||0,n(st.resultsEventHistory,r=>String(r.athlete_id)===id),n(st.coachResults,r=>String(r.athlete_id)===id),n(st.trainingTestResults,r=>String(r.athlete_id)===id),n(st.captures,c=>ownCapture(c,a)),n(st.attendance,r=>String(r.athlete_id)===id)].join('|')};
+  async function refreshAppSwimmers(){if(!isOwner()||!M.cloud?.ready?.()||refreshAppSwimmers.busy||coachBusy())return null;refreshAppSwimmers.busy=true;
+    try{const rows=await rpc('msos_owner_swimmer_access',{});const st=M.state.settings,done=st.portalFullAt||(st.portalFullAt={}),sigs=st.portalFullSig||(st.portalFullSig={}),now=Date.now();
       const due=(Array.isArray(rows)?rows:[]).filter(r=>(r.devices>0||r.has_account)&&now-(Date.parse(done[r.athlete_id]||'')||0)>6*3600e3).map(r=>(M.state.athletes||[]).find(a=>String(a.id)===String(r.athlete_id))).filter(Boolean);
       const a=due[0];if(!a)return{refreshed:null};
+      const sig=portalSig(a);if(sigs[a.id]===sig){done[a.id]=new Date().toISOString();M.store?.save?.(M.state);return{refreshed:null,unchanged:a.id}}
+      if(coachBusy())return{refreshed:null,busy:true};/* the coach came back while the list was loading */
       const{payload,truncatedAt}=await payloadForAsync(a,()=>{});const part={performance:payload.performance,training:payload.training,tests:payload.tests,meet:payload.meet,publishedAt:payload.publishedAt};
       {const order=['performance','training','tests','meet'],i=order.indexOf(truncatedAt);if(i>=0)for(const k of order.slice(i))delete part[k];}/* a stage that ran out of time is left as it was on the portal, never blanked */
       part.sharedEvidence=await sharedEvidenceFor(a);part.workingOn=M.raceElementsUI?.portalWorkingOn?.(a)||null;/* 16 Nov 2026: "what I'm working on" on the swimmer's own phone */
-      await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:part});done[a.id]=new Date().toISOString();M.store?.save?.(M.state);return{refreshed:a.id,truncatedAt};
+      await rpc('msos_publish_swimmer_payload',{p_athlete_id:String(a.id),p_payload:part});done[a.id]=new Date().toISOString();if(!truncatedAt)sigs[a.id]=sig;M.store?.save?.(M.state);return{refreshed:a.id,truncatedAt};
     }catch(e){return{error:e?.message||String(e)}}finally{refreshAppSwimmers.busy=false}}
   X.publishWorkingOn=publishShared;X.publishWorkingOnSoon=a=>{if(!a?.id||!isOwner())return false;const k=String(a.id),last=publishWorkingOnSoonAt.get(k)||0;if(Date.now()-last<10*60e3)return false;publishWorkingOnSoonAt.set(k,Date.now());publishShared(k);return true;};X.publishShared=publishShared;X.sharedEvidenceFor=sharedEvidenceFor;X.refreshAppSwimmers=refreshAppSwimmers;
   X.payloadFor=payloadFor;X.corePayloadFor=corePayloadFor;X.safeSession=safeSession;X.sessionsFor=sessionsFor;X.safePerformance=safePerformance;X.safeTests=safeTests;X.safeMeet=safeMeet;X.sessionActionsFor=sessionActionsFor;X.verifySessionInteractionLayer=verifySessionInteractionLayer;X.acknowledgeSessionAction=acknowledgeSessionAction;X.rpc=rpc;X.installButton=installButton;X.qrEncode=qrEncode;X.drawQr=drawQr;X.athletesForSquads=athletesForSquads;X.autoPublishSessionToSwimmers=autoPublishSessionToSwimmers;X.payloadForAsync=payloadForAsync;X.sessionsPartFor=sessionsPartFor;X.safeTraining=safeTraining;X.ownCapture=ownCapture;X.athletesFromResultRows=athletesFromResultRows;X.republishFullPayloadFor=republishFullPayloadFor;X.RESULT_IMPORT_TYPES=RESULT_IMPORT_TYPES;X.realAccountSectionHtml=realAccountSectionHtml;X.bindRealAccountSection=bindRealAccountSection;X.installLinkRequestsButton=installLinkRequestsButton;X.linkRequestsModal=linkRequestsModal;X.linkRequestsBadge=linkRequestsBadge;
