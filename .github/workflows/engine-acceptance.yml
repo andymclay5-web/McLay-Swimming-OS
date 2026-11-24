@@ -153,3 +153,4 @@ jobs:
           node tests/working-on-never-wiped-20261123.cjs
           node tests/reference-merge-fast-20261123.cjs
           node tests/tv-tall-clip-side-panel-20261123.cjs
+          node tests/owner-gets-cloud-tests-20261124.cjs

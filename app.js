@@ -1066,6 +1066,14 @@ C.prioritiseMedia=captureId=>{const job=(M.state.pending||[]).find(x=>x.table===
    if(Array.isArray(types)){const r=C.upsertRows(types,st.trainingTestTypes||(st.trainingTestTypes=[]),'training_test_types');st.trainingTestTypes=r.rows;out.tests+=r.added+r.updated}
    if(Array.isArray(results)){const r=C.upsertRows(results,st.trainingTestResults||(st.trainingTestResults=[]),'training_test_results');st.trainingTestResults=r.rows;out.tests+=r.added+r.updated}
    if(out.tests)try{M.performanceEngine?.invalidate?.()}catch{}}
+  // 24 Nov 2026 (Andy: "have we got these t400 free times locked in yet" -- 34 T400s from the paper roll, entered in the
+  // cloud): the owner's phone is where tests are usually typed, but one entered elsewhere (another device, or by Claude
+  // from a photo) must still reach it. Only tests this phone doesn't have are added -- by id, and not a second copy of the
+  // same swimmer, test, date and time; nothing on the phone is changed or removed.
+  if(tests&&role==='owner'){const results=await C.fetch(`/rest/v1/training_test_results?select=*&organisation_id=eq.${org}`);
+   if(Array.isArray(results)){const local=st.trainingTestResults||(st.trainingTestResults=[]),ids=new Set(local.map(x=>x.id)),same=new Set(local.map(x=>`${x.athlete_id}|${x.test_type_id}|${String(x.result_date||'').slice(0,10)}|${Number(x.result_seconds)}`));
+    for(const r of results){const k=`${r.athlete_id}|${r.test_type_id}|${String(r.result_date||'').slice(0,10)}|${Number(r.result_seconds)}`;if(ids.has(r.id)||same.has(k))continue;local.push({...r,result_seconds:Number(r.result_seconds),from_cloud:true});ids.add(r.id);same.add(k);out.tests++}
+    if(out.tests){st.settings.evidenceRevision=(Number(st.settings.evidenceRevision)||0)+1;try{M.performanceEngine?.invalidate?.()}catch{}}}}
   const stamps=[...(att||[]),...(caps||[])].map(x=>x.updated_at).filter(Boolean).sort();if(stamps.length)st.settings.teamDataPulledAt=stamps.pop();
   // A note or video another coach shared with a swimmer reaches that swimmer's phone (only the owner's phone can publish).
   if((out.shared||[]).length&&role==='owner')try{M.swimmerInviteBN?.publishShared?.(out.shared)}catch{}

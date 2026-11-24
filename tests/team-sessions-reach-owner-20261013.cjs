@@ -66,7 +66,7 @@ const BASE=process.env.MSOS4_TEST_URL||'http://127.0.0.1:8765/';
       const ownerBefore=JSON.stringify(M.state.athletes);const owner=await C.pullTeamRoster();const ownerSame=JSON.stringify(M.state.athletes)===ownerBefore;
       M.state.athletes=[];M.access.setRole('assistant',{assistantId:'jordan'});const asst=await C.pullTeamRoster();const names=M.state.athletes.map(a=>a.full_name).sort();M.access.setRole('owner');
       return{owner,ownerSame,asst,names,asked};});
-    assert.equal(roster.owner.skipped,true,'never replaces the owner\'s roster from the cloud');assert.ok(roster.ownerSame);
+    /* 22 Nov 2026: the owner's phone now fills only blank fields (sex, birth date, class) from the cloud -- it still never replaces the roster */assert.ok(!roster.owner.athletes,'never replaces the owner\'s roster from the cloud: '+JSON.stringify(roster.owner));assert.ok(roster.ownerSame);
     assert.deepEqual(roster.names,['Elsie Knowles','William Callow'],'assistant phone now has swimmers for Roll');
     // 4. Chat button after any other pop-up has closed (Andy: "the button doesn't work on mine").
     const chat=await page.evaluate(()=>{const M=window.MSOS4;M.coachChatUI.openPanel();M.coachChatUI.closePanel();document.querySelector('#modalHost').innerHTML='';M.coachChatUI.openPanel();const p=document.querySelector('.cc-backdrop');return!!(p&&p.isConnected&&!p.hidden);});
