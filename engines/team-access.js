@@ -87,6 +87,21 @@
     return user;
   };
   if(/access_token=|error_description=/.test(linkHash))setTimeout(()=>{const go=()=>T.takeLinkSignIn().catch(()=>{});if(M.store?.saveAuth)go();else addEventListener('load',go,{once:true});},0);
+  // 25 Nov 2026 (Andy on the PC: the email link wouldn't take and Supabase then refused more emails -- "just set me up
+  // with a password"): sign in with email + password, no email needed; and a signed-in coach can change it.
+  T.signInWithPassword=async(email,password)=>{
+    email=text(email).toLowerCase();if(!email)throw new Error('Enter your email address.');if(!password)throw new Error('Enter your password.');
+    let data;try{data=await authRequest('/auth/v1/token?grant_type=password',{email,password});}catch(e){throw new Error(/invalid/i.test(e.message)?'That email and password don\'t match.':e.message);}
+    if(!data?.access_token)throw new Error('Sign-in did not return an access token.');
+    const exp=Number(data.expires_at)||Math.floor(Date.now()/1000)+Number(data.expires_in||3600);
+    M.store.saveAuth({access_token:data.access_token,refresh_token:data.refresh_token||'',expires_at:exp,user:data.user||null});
+    return data.user||null;
+  };
+  T.changePassword=async password=>{
+    if(String(password||'').length<8)throw new Error('Use at least 8 characters.');const a=M.store.auth?.()||{};if(!a.access_token)throw new Error('Sign in first.');
+    const c=cfg();const res=await fetch(`${String(c.supabaseUrl).replace(/\/$/,'')}/auth/v1/user`,{method:'PUT',headers:{apikey:c.supabaseAnonKey,Authorization:`Bearer ${a.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({password})});
+    const raw=await res.text();let d=null;try{d=JSON.parse(raw)}catch{}if(!res.ok)throw new Error(d?.msg||d?.message||`Couldn't change the password (${res.status})`);return true;
+  };
   T.verifySignInCode=async(email,code)=>{
     email=text(email).toLowerCase();code=text(code).replace(/\s+/g,'');
     if(!email)throw new Error('Enter your email address.');

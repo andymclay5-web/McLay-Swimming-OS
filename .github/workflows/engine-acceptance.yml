@@ -155,3 +155,4 @@ jobs:
           node tests/tv-tall-clip-side-panel-20261123.cjs
           node tests/owner-gets-cloud-tests-20261124.cjs
           node tests/email-link-sign-in-20261125.cjs
+          node tests/password-sign-in-20261125.cjs
