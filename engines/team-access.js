@@ -64,9 +64,29 @@
 
   T.sendSignInCode=async email=>{
     email=text(email).toLowerCase();if(!email)throw new Error('Enter an email address.');
-    await authRequest('/auth/v1/otp',{email,create_user:true});
+    // 25 Nov 2026 (Andy on the PC: the email held a "Sign in" link, not a code, and it opened andymclay5-web.github.io --
+    // a 404 -- because no return address was given, so Supabase used its site root). The link now comes back to this page.
+    const back=typeof location!=='undefined'&&/^https?:/.test(location.origin||'')?`${location.origin}${location.pathname}`:'';
+    await authRequest(back?`/auth/v1/otp?redirect_to=${encodeURIComponent(back)}`:'/auth/v1/otp',{email,create_user:true});
     return true;
   };
+  // The email's "Sign in" link returns here with the session in the address (#access_token=...). Take it, save it the same
+  // way a typed code does, and clear it from the address bar.
+  const linkHash=typeof location!=='undefined'?String(location.hash||''):'';/* read now, before anything else touches the address */
+  T.takeLinkSignIn=async(hash=linkHash)=>{
+    const h=new URLSearchParams(String(hash||'').replace(/^#/,''));
+    if(h.get('error_description')){const msg=h.get('error_description');history.replaceState(null,'',location.pathname+location.search);M.toast?.(`Sign-in link: ${msg}`);return null;}
+    const at=h.get('access_token');if(!at)return null;
+    history.replaceState(null,'',location.pathname+location.search);
+    const c=cfg();let user=null;try{const r=await fetch(`${String(c.supabaseUrl).replace(/\/$/,'')}/auth/v1/user`,{headers:{apikey:c.supabaseAnonKey,Authorization:`Bearer ${at}`}});if(r.ok)user=await r.json();}catch{}
+    if(!user?.id){M.toast?.('That sign-in link has expired. Send a new one.');return null;}
+    const exp=Number(h.get('expires_at'))||Math.floor(Date.now()/1000)+Number(h.get('expires_in')||3600);
+    M.store.saveAuth({access_token:at,refresh_token:h.get('refresh_token')||'',expires_at:exp,user});
+    try{await T.refreshMembership?.();}catch{}
+    M.toast?.(`Signed in as ${user.email||'you'}`);try{M.ui?.renderCurrent?.();}catch{}
+    return user;
+  };
+  if(/access_token=|error_description=/.test(linkHash))setTimeout(()=>{const go=()=>T.takeLinkSignIn().catch(()=>{});if(M.store?.saveAuth)go();else addEventListener('load',go,{once:true});},0);
   T.verifySignInCode=async(email,code)=>{
     email=text(email).toLowerCase();code=text(code).replace(/\s+/g,'');
     if(!email)throw new Error('Enter your email address.');
