@@ -624,9 +624,23 @@
     };
 
     X.T400_LANE_ORDER=Object.freeze([4,5,3,6,2,7,1,8]);
+    // 25 Nov 2026 (Andy, T400 night: "set up as freestyle, but have the option to change the strokes for individuals
+    // quite easily"). The page's stroke is everyone's default; a swimmer can be switched to their own stroke for this
+    // session only (settings.t400StrokeBySession[sessionId][athleteId]). Their anchor, lane seeding and saved test all
+    // use their own stroke.
+    X.t400StrokeFor=(state=M.state,session=M.currentSession?.(),athleteId,fallback='Freestyle')=>{
+      const own=state?.settings?.t400StrokeBySession?.[session?.id||'']?.[athleteId];
+      return normaliseStroke(own||fallback||'Freestyle');
+    };
+    X.setT400Stroke=(state=M.state,session=M.currentSession?.(),athleteId,stroke)=>{
+      state.settings=state.settings||{};const sid=session?.id||'';if(!sid||!athleteId)return null;
+      const all=state.settings.t400StrokeBySession=state.settings.t400StrokeBySession||{},by=all[sid]=all[sid]||{};
+      if(!stroke)delete by[athleteId];else by[athleteId]=normaliseStroke(stroke);
+      return by[athleteId]||null;
+    };
     X.t400Seed=(state=M.state,session=M.currentSession?.(),stroke='Freestyle')=>{
       const roster=X.t400RosterIds(state,session).map(id=>(state.athletes||[]).find(a=>a.id===id)).filter(a=>a&&a.active!==false);
-      return roster.map(a=>({athlete:a,anchor:M.targets.t400(a,state,session?.identity?.course||'',stroke)}))
+      return roster.map(a=>{const st=X.t400StrokeFor(state,session,a.id,stroke);return{athlete:a,stroke:st,anchor:M.targets.t400(a,state,session?.identity?.course||'',st)}})
         .sort((a,b)=>{
           const av=resultSeconds(a.anchor),bv=resultSeconds(b.anchor);
           if(Number.isFinite(av)&&Number.isFinite(bv))return av-bv;
@@ -1166,17 +1180,22 @@
       .filter(r=>{const a=(M.state.athletes||[]).find(x=>x.id===r.athlete_id);return !a||a.active!==false;})
       .sort((a,b)=>String(b.result_date||b.created_at||'').localeCompare(String(a.result_date||a.created_at||'')));
   }
+  const T4_SHORT={Freestyle:'Free',Backstroke:'Back',Breaststroke:'Breast',Butterfly:'Fly',IM:'IM'},T4_STROKES=['Freestyle','Backstroke','Breaststroke','Butterfly','IM'];
+  // the test's date is the session's date (a UTC "today" put a morning T400 on yesterday)
+  function t400Date(s){const d=text(s?.identity?.date);if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Auckland'}).format(new Date())}catch{return new Date().toISOString().slice(0,10)}}
+  function liveStroke(live,id){return normaliseStroke(live?.strokes?.[id]||live?.stroke||'Freestyle')}
   function renderT400Live(live){
     if(!live)return'';
     const running=live.status==='running',elapsed=running&&live.start_epoch!=null?Math.max(0,(Date.now()-live.start_epoch)/1000):0;
     return `<section class="page-card v4-t400-live">
-      <div class="timing-live-head"><div><div class="eyebrow">LIVE T400 · ${esc(live.stroke)}</div><h2>${running?'Running':'Ready'}</h2></div><b id="v4T400Elapsed">${clock(elapsed)}</b></div>
+      <div class="timing-live-head"><div><div class="eyebrow">LIVE T400 · ${esc(new Set(live.athlete_ids.map(id=>liveStroke(live,id))).size>1?'Mixed strokes':liveStroke(live,live.athlete_ids[0]))}</div><h2>${running?'Running':'Ready'}</h2></div><b id="v4T400Elapsed">${clock(elapsed)}</b></div>
       <div class="timing-live-grid">${live.athlete_ids.map((id,i)=>{
         const a=M.state.athletes.find(x=>x.id===id),v=live.finishes[id],lane=live.lanes?.[id]||M.timing.T400_LANE_ORDER[i]||i+1;
-        return `<button class="timing-athlete ${v?'complete':''}" data-v4-t400-finish="${esc(id)}" ${!running||v?'disabled':''}><strong>L${lane} · ${esc(a?.full_name||id)}</strong><span>${v?clock(v):'FINISH'}</span><small>${v?'Recorded':'Tap as they finish'}</small></button>`;
+        return `<button class="timing-athlete ${v?'complete':''}" data-v4-t400-finish="${esc(id)}" ${!running||v?'disabled':''}><strong>L${lane} · ${esc(a?.full_name||id)}</strong><em class="v4-t400-stroke">${esc(T4_SHORT[liveStroke(live,id)]||liveStroke(live,id))}</em><span>${v?clock(v):'FINISH'}</span><small>${v?'Recorded':'Tap as they finish'}</small></button>`;
       }).join('')}</div>
       <div class="v4-quick-actions">
         <button id="v4StartT400" ${running?'disabled':''}>START ALL</button>
+        <button id="v4UndoT400" ${running&&live.last_finish?'':'disabled'}>Undo last tap</button>
         <button id="v4ResetT400">Reset</button>
         <button id="v4SaveT400" ${Object.values(live.finishes||{}).some(Boolean)?'':'disabled'}>Save results</button>
       </div>
@@ -1207,14 +1226,14 @@
     const heat=t400Heat(s,stroke),athletes=heat.map(x=>x.athlete),ids=new Set(allSeed.map(a=>a.id));
     const addable=(M.state.athletes||[]).filter(a=>a.active!==false&&!ids.has(a.id)).sort((a,b)=>String(a.full_name).localeCompare(String(b.full_name)));
     hydrateT400Live();
-    const live=C.t400Live;
+    const live=C.t400Live,histStrokes=[...new Set([stroke,...allSeed.map(a=>M.timing.t400StrokeFor(M.state,s,a.id,stroke))])];
     h.innerHTML=`
       <section class="page-card v4-times-hero">
         <div class="eyebrow">TIME / TEST · VERSION 4</div><h1>T400</h1>
         <p>Attendance fills the swimmers. Add or remove anyone without changing the session.</p>
-        <label>Stroke<select id="v4T400Stroke">${['Freestyle','Backstroke','Breaststroke','Butterfly','IM'].map(x=>`<option ${x===stroke?'selected':''}>${x}</option>`).join('')}</select></label>
+        <label>Everyone's stroke<select id="v4T400Stroke">${T4_STROKES.map(x=>`<option ${x===stroke?'selected':''}>${x}</option>`).join('')}</select></label>
         ${heatCount>1?`<div class="v4-heat-tabs">${Array.from({length:heatCount},(_,i)=>`<button data-v4-heat="${i}" class="${i===Number(M.state.settings.t400HeatIndex||0)?'active':''}">Heat ${i+1}</button>`).join('')}</div>`:''}
-        <div class="v4-timing-roster">${heat.map(x=>{const a=x.athlete,r=x.anchor;return `<div class="time-row"><div><strong>L${x.lane} · ${esc(a.full_name)}</strong><small>${esc(a.squad||'')}</small></div><div><b>${r?clock(resultSeconds(r)):`No ${esc(stroke)} T400`}</b><button data-v4-remove-timing="${esc(a.id)}" aria-label="Remove">×</button></div></div>`}).join('')||'<p class="muted">No swimmers on this heat.</p>'}</div>
+        <div class="v4-timing-roster">${heat.map(x=>{const a=x.athlete,r=x.anchor;return `<div class="time-row"><div><strong>L${x.lane} · ${esc(a.full_name)}</strong><small>${esc(a.squad||'')}</small></div><div><select class="v4-t400-own" data-v4-t400-own="${esc(a.id)}" aria-label="${esc(a.full_name)} stroke">${T4_STROKES.map(o=>`<option value="${o}" ${o===x.stroke?'selected':''}>${T4_SHORT[o]}</option>`).join('')}</select><b>${r?clock(resultSeconds(r)):'No T400'}</b><button data-v4-remove-timing="${esc(a.id)}" aria-label="Remove">×</button></div></div>`}).join('')||'<p class="muted">No swimmers on this heat.</p>'}</div>
         <div class="v4-add-row"><select id="v4AddTiming"><option value="">＋ Add swimmer</option>${addable.map(a=>`<option value="${esc(a.id)}">${esc(a.full_name)} · ${esc(a.squad||'')}</option>`).join('')}</select><button id="v4ResetRoster">Use attendance</button></div>
         ${!live?'<button id="v4LoadT400" class="v4-primary-action">Load T400 clock</button>':''}
       </section>
@@ -1222,10 +1241,10 @@
       <details class="page-card"><summary>Manual T400 entry</summary>
         <label>Swimmer<select id="v4ManualAthlete">${athletes.map(a=>`<option value="${esc(a.id)}">${esc(a.full_name)}</option>`).join('')}</select></label>
         <label>Time<input id="v4ManualTime" placeholder="4:29.0"></label>
-        <button id="v4ManualSave">Save ${esc(stroke)} T400</button>
+        <button id="v4ManualSave">Save T400 (their stroke)</button>
       </details>
-      <details class="page-card v4-test-history"><summary>T400 history · ${esc(stroke)}</summary>
-        ${t400Histories(stroke).slice(0,30).map(r=>{const a=M.state.athletes.find(x=>x.id===r.athlete_id);return `<div class="v4-data-row"><span>${esc(a?.full_name||r.athlete_id)} · ${esc(r.result_date||'')}</span><b>${clock(resultSeconds(r))}</b><small>${esc(r.pool_course||'')} ${r.valid_for_anchor===false?'· not anchor':''}</small><span class="v4-test-actions"><button data-v4-edit-t400="${esc(r.id)}">Edit</button><button data-v4-delete-t400="${esc(r.id)}">Delete</button></span></div>`}).join('')||'<p class="muted">No saved tests for this stroke.</p>'}
+      <details class="page-card v4-test-history"><summary>T400 history · ${esc(histStrokes.map(x=>T4_SHORT[x]||x).join(', '))}</summary>
+        ${histStrokes.flatMap(t400Histories).sort((a,b)=>String(b.result_date||b.created_at||'').localeCompare(String(a.result_date||a.created_at||''))).slice(0,30).map(r=>{const a=M.state.athletes.find(x=>x.id===r.athlete_id);return `<div class="v4-data-row"><span>${esc(a?.full_name||r.athlete_id)} · ${esc(r.result_date||'')}</span><b>${clock(resultSeconds(r))}</b><small>${histStrokes.length>1?esc(T4_SHORT[testStroke(M.state,r)]||'')+' · ':''}${esc(r.pool_course||'')} ${r.valid_for_anchor===false?'· not anchor':''}</small><span class="v4-test-actions"><button data-v4-edit-t400="${esc(r.id)}">Edit</button><button data-v4-delete-t400="${esc(r.id)}">Delete</button></span></div>`}).join('')||'<p class="muted">No saved tests for this stroke.</p>'}
       </details>
       <section class="page-card"><button id="v4GeneralTiming">Other timed set / stopwatch</button></section>`;
 
@@ -1237,6 +1256,13 @@
       M.state.settings.t400Stroke=e.target.value;M.state.settings.t400HeatIndex=0;M.store.save(M.state);
       C.t400Live=null;persistT400Live();renderTimes();
     });
+    h.querySelectorAll('[data-v4-t400-own]').forEach(sel=>sel.addEventListener('change',e=>{
+      const id=sel.dataset.v4T400Own,st=e.target.value;
+      M.timing.setT400Stroke(M.state,s,id,st===stroke?null:st);
+      // a loaded or running clock keeps timing; only what the swim is saved as changes
+      if(C.t400Live&&C.t400Live.athlete_ids.includes(id)){C.t400Live.strokes={...(C.t400Live.strokes||{}),[id]:normaliseStroke(st)};persistT400Live();}else M.store.save(M.state);
+      renderTimes();
+    }));
     h.querySelector('#v4AddTiming')?.addEventListener('change',e=>{
       if(!e.target.value)return;
       M.timing.add(e.target.value,M.state,s);M.store.save(M.state);renderTimes();
@@ -1250,7 +1276,7 @@
     h.querySelector('#v4LoadT400')?.addEventListener('click',()=>{
       const roster=t400Heat(s,stroke);
       if(!roster.length)return M.toast('Mark swimmers Here or add a swimmer first');
-      C.t400Live={id:uid('t400-live'),session_id:s.id,stroke,heat_index:Number(M.state.settings.t400HeatIndex||0),athlete_ids:roster.map(x=>x.athlete.id),lanes:Object.fromEntries(roster.map(x=>[x.athlete.id,x.lane])),started_at:null,start_epoch:null,status:'ready',finishes:Object.fromEntries(roster.map(x=>[x.athlete.id,null]))};
+      C.t400Live={id:uid('t400-live'),session_id:s.id,stroke,strokes:Object.fromEntries(roster.map(x=>[x.athlete.id,x.stroke||stroke])),heat_index:Number(M.state.settings.t400HeatIndex||0),athlete_ids:roster.map(x=>x.athlete.id),lanes:Object.fromEntries(roster.map(x=>[x.athlete.id,x.lane])),started_at:null,start_epoch:null,status:'ready',finishes:Object.fromEntries(roster.map(x=>[x.athlete.id,null]))};
       persistT400Live();renderTimes();
     });
 
@@ -1274,7 +1300,8 @@
       if(!live)return rows;
       for(const id of live.athlete_ids){
         const sec=live.finishes[id];if(!sec)continue;
-        rows.push(M.timing.saveT400(id,sec,s,M.state,new Date().toISOString().slice(0,10),live.stroke,{source:'timed_v4_poolside',source_label:`Timed T400 ${live.stroke} · MSOS Version 4`,metadata:{lane:live.lanes?.[id]||null,heat:(live.heat_index||0)+1}}));
+        const st=liveStroke(live,id);
+        rows.push(M.timing.saveT400(id,sec,s,M.state,t400Date(s),st,{source:'timed_v4_poolside',source_label:`Timed T400 ${st} · MSOS Version 4`,metadata:{lane:live.lanes?.[id]||null,heat:(live.heat_index||0)+1}}));
       }
       if(rows.length){
         M.store.save(M.state);
@@ -1291,7 +1318,7 @@
         const live=C.t400Live;if(!live||live.status!=='running')return;
         const sec=(Date.now()-live.start_epoch)/1000;
         if(sec<=0)return;
-        live.finishes[b.dataset.v4T400Finish]=Math.round(sec*100)/100;
+        live.finishes[b.dataset.v4T400Finish]=Math.round(sec*100)/100;live.last_finish=b.dataset.v4T400Finish;
         if(live.athlete_ids.every(id=>live.finishes[id])){
           live.status='complete';persistT400Live();
           const rows=saveLiveResults();
@@ -1300,7 +1327,8 @@
         }else persistT400Live();
         renderTimes();
       });
-      h.querySelector('#v4ResetT400')?.addEventListener('click',()=>{C.t400Live=null;persistT400Live();renderTimes();});
+      h.querySelector('#v4UndoT400')?.addEventListener('click',()=>{const live=C.t400Live;if(!live?.last_finish)return;live.finishes[live.last_finish]=null;live.last_finish=null;persistT400Live();renderTimes();});
+      h.querySelector('#v4ResetT400')?.addEventListener('click',()=>{if(Object.values(C.t400Live?.finishes||{}).some(Boolean)&&!confirm('Clear the times recorded so far?'))return;C.t400Live=null;persistT400Live();renderTimes();});
       h.querySelector('#v4SaveT400')?.addEventListener('click',()=>{
         const rows=saveLiveResults();
         if(!rows.length)return M.toast('No finishes recorded');
@@ -1318,8 +1346,9 @@
 
     h.querySelector('#v4ManualSave')?.addEventListener('click',()=>{
       try{
-        const row=M.timing.saveT400(h.querySelector('#v4ManualAthlete').value,h.querySelector('#v4ManualTime').value,s,M.state,new Date().toISOString().slice(0,10),stroke,{source:'manual_v4_poolside',source_label:`Manual T400 ${stroke} · MSOS Version 4`});
-        M.store.save(M.state);M.cloud?.stageTrainingTestResult?.(row);M.toast(`${stroke} T400 ${clock(row.result_seconds)} saved`);renderTimes();
+        const id=h.querySelector('#v4ManualAthlete').value,st=M.timing.t400StrokeFor(M.state,s,id,stroke);
+        const row=M.timing.saveT400(id,h.querySelector('#v4ManualTime').value,s,M.state,t400Date(s),st,{source:'manual_v4_poolside',source_label:`Manual T400 ${st} · MSOS Version 4`});
+        M.store.save(M.state);M.cloud?.stageTrainingTestResult?.(row);M.toast(`${st} T400 ${clock(row.result_seconds)} saved`);renderTimes();
       }catch(e){M.toast(e.message)}
     });
     h.querySelector('#v4GeneralTiming')?.addEventListener('click',()=>{M.state.settings.v4TimingMode='general';M.store.save(M.state);renderTimes();});

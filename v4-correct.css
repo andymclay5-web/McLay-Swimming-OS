@@ -71,3 +71,9 @@
 .v4-target-lane-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}.v4-target-lane-head small{opacity:.7}
 .v4-target-lane-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:6px 0;border-top:1px solid rgba(13,69,102,.09)}.v4-target-lane-row:first-of-type{border-top:0}.v4-target-lane-row>span{font-size:.76rem;font-weight:800;opacity:.72}.v4-target-lane-row>strong{text-align:right;min-width:0}.v4-target-lane-row>small{grid-column:1/-1;font-size:.78rem;opacity:.8}
 .v4-base-mismatch{position:fixed;inset:0;z-index:99999;background:#fff3f3;color:#7b1010;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;gap:12px;font-size:1rem}.v4-base-mismatch strong{font-size:1.25rem;max-width:560px}.v4-base-mismatch span{max-width:680px;overflow-wrap:anywhere}
+/* 25 Nov 2026: each swimmer's own T400 stroke (Freestyle by default) */
+.v4-timing-roster .time-row>div:last-child{display:flex;align-items:center;gap:8px}
+.v4-t400-own{min-height:40px;padding:4px 6px;font-size:15px;border-radius:8px;width:86px;flex:0 0 86px}
+.v4-timing-roster .time-row>div:first-child{min-width:0}
+.timing-athlete .v4-t400-stroke{display:block;font-style:normal;font-size:13px;opacity:.75}
+.v4-timing-roster .time-row>div:last-child b{white-space:nowrap;font-size:15px}
