@@ -36,7 +36,14 @@
   function sysHtml(list){const D=M.dosageEngine;if(!D?.rushtonHtml)return bars(mix(list));const acc={};for(const s of list){const d=dose(s);if(!d)continue;for(const[k,v]of Object.entries(d.systems||{}))if(k!=='Unclassified')acc[k]=(acc[k]||0)+(Number(v.metres)||0);}return D.rushtonHtml(acc);}
   function strokes(list){const acc={};let all=0;for(const s of list){const d=dose(s);if(!d)continue;for(const[k,v]of Object.entries(d.strokes||{})){acc[k]=(acc[k]||0)+(Number(v.metres)||0);all+=Number(v.metres)||0;}}return Object.entries(acc).filter(([,m])=>m>0).sort((a,b)=>b[1]-a[1]).map(([k,m])=>({k,m,pct:all?Math.round(m*100/all):0}));}
   function bars(rows,label=x=>COACH[x.k]?`${COACH[x.k]}${COACH[x.k]!==x.k?` · ${x.k}`:''}`:x.k){return rows.length?`<div class="hp-bars">${rows.map(x=>`<div class="hp-bar"><span>${esc(label(x))}</span><i style="width:${Math.max(2,x.pct)}%"></i><b>${x.pct}% · ${num(x.m)}m</b></div>`).join('')}</div>`:'<p class="muted">No classified training yet.</p>';}
-  function topSys(s){const d=dose(s);if(!d)return'';const t=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres)[0];return t?(COACH[t[0]]||t[0]):'';}
+  // 25 Nov 2026 (Andy: Tue PM National -- brief Anaerobic Power, main set race pace, Board "on brief" -- was listed in the
+  // week as "Aerobic Capacity" because its warm-up and pre-set carried the most metres). A session is named by its main
+  // set, the same way the Board checks it against the brief; the whole session only when there is no main set.
+  const MAIN_RE=/\bmain\b/i;
+  function topSys(s){const mains=(s?.blocks||[]).filter(b=>b?.type==='main_set'||b?.type==='main'||MAIN_RE.test(String(b?.title||'')));
+    if(mains.length){const md=dose({...s,id:`${s.id||'session'}#main`,blocks:mains});const t=Object.entries(md?.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres)[0];if(t)return COACH[t[0]]||t[0];}
+    const d=dose(s);if(!d)return'';const t=Object.entries(d.systems||{}).filter(([k,v])=>k!=='Unclassified'&&v.metres>0).sort((a,b)=>b[1].metres-a[1].metres)[0];return t?(COACH[t[0]]||t[0]):'';}
+  P.sessionFocus=topSys;
   function squadFilter(list,sq){return sq?list.filter(s=>(s.identity?.squads||[]).some(q=>lc(q)===lc(sq))):list;}
   function sessionRow(s){return`<button class="hp-row" data-hp-open="${esc(s.id)}"><span><b>${esc(dayName(s.identity.date))} ${esc(s.identity.dayPart||'')}</b><small>${esc((s.identity.squads||[]).join(' + '))}</small></span><span><b>${num(total(s))}m</b><small>${esc(topSys(s)||'—')}${s.finish?' · finished':''}</small></span></button>`;}
   const isOwner=()=>(M.access?.role?.()||'owner')==='owner';

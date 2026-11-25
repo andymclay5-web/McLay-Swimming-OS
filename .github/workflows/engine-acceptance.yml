@@ -156,3 +156,4 @@ jobs:
           node tests/owner-gets-cloud-tests-20261124.cjs
           node tests/email-link-sign-in-20261125.cjs
           node tests/password-sign-in-20261125.cjs
+          node tests/session-named-by-main-set-20261125.cjs
