@@ -20,7 +20,7 @@
   const dayName=iso=>new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-NZ',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
   const num=n=>Math.round(Number(n)||0).toLocaleString();
   const SYS=['Regeneration','Development','Overload','Threshold','Clearance','Race pace','Speed / Max','Skill / Technical'];
-  const COACH={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power (top)','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Overload','Regeneration':'Regeneration','Skill / Technical':'Skills'};
+  const COACH={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Aerobic Power','Regeneration':'Aerobic Capacity','Skill / Technical':'Skills'};/* 25 Nov 2026: Andy's four zones */
 
   // ---------- data helpers (read-only) ----------
   function sessions(){return Object.values(M.state?.canonicalSessions||{}).filter(s=>s?.identity?.date&&(!M.access?.sessionAllowed||M.access.sessionAllowed(s)));}

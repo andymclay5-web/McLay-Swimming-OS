@@ -358,28 +358,34 @@
   // the progression." The systems themselves are unchanged (systemFrom stays the one classifier); this only names and
   // groups them, and the Anaerobic group is always shown -- 0m is information ("none this week"), not something to hide.
   const esc=v=>U.escape?U.escape(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // 25 Nov 2026 (Andy, verbatim: "aerobic capacity is the zone that includes regeneration & development, aerobic power is
+  // overload, threshold and clearance, anaerobic power is high intensity anaerobic work such as race pace sets and
+  // anaerobic cap is top end speed"): four zones in his progression (AC, AP, AnP, AnC) plus Skills; each set word he
+  // writes (Regen, Dev, Overload, Thr, Clearance) sits inside its zone. The four zones always show -- 0m is information.
   const RUSHTON=Object.freeze([
-    {group:'Aerobic',note:'aerobic capacity → aerobic power',systems:[
+    {group:'Aerobic Capacity',note:'regeneration · development',always:true,systems:[
       {system:'Regeneration',label:'Regeneration',note:'recovery · under 140 bpm'},
-      {system:'Development',label:'Aerobic Capacity',note:'Development · aerobic base'},
-      {system:'Overload',label:'Aerobic Overload',note:'Overload · ~150 bpm'},
-      {system:'Threshold',label:'Aerobic Power',note:'Threshold · 160–165 bpm'},
-      {system:'Clearance',label:'Aerobic Power (top)',note:'Clearance · 165–185 bpm'}]},
-    {group:'Anaerobic',note:'anaerobic power → anaerobic capacity',systems:[
-      {system:'Race pace',label:'Anaerobic Power',note:'race pace · lactate tolerance'},
-      {system:'Speed / Max',label:'Anaerobic Capacity',note:'ATP-PC · top-end speed · assisted / resisted'}]},
-    {group:'Skills',note:'',systems:[{system:'Skill / Technical',label:'Skills',note:'drill · technique'}]}]);
-  const coachLabel=sys=>{for(const g of RUSHTON)for(const r of g.systems)if(r.system===sys)return r.label;return sys;};
+      {system:'Development',label:'Development',note:'aerobic base'}]},
+    {group:'Aerobic Power',note:'overload · threshold · clearance',always:true,systems:[
+      {system:'Overload',label:'Overload',note:'~150 bpm'},
+      {system:'Threshold',label:'Threshold',note:'160–165 bpm'},
+      {system:'Clearance',label:'Clearance',note:'165–185 bpm'}]},
+    {group:'Anaerobic Power',note:'race pace · lactate tolerance',always:true,systems:[
+      {system:'Race pace',label:'Race pace',note:'race pace · lactate tolerance'}]},
+    {group:'Anaerobic Capacity',note:'top-end speed · ATP-PC · assisted / resisted',always:true,systems:[
+      {system:'Speed / Max',label:'Top-end speed',note:'ATP-PC · assisted / resisted'}]},
+    {group:'Skills',note:'drill · technique',systems:[{system:'Skill / Technical',label:'Skills',note:'drill · technique'}]}]);
+  const coachLabel=sys=>{for(const g of RUSHTON)if(g.systems.some(r=>r.system===sys))return g.group;return sys;};
   const groupOf=sys=>{for(const g of RUSHTON)if(g.systems.some(r=>r.system===sys))return g.group;return'';};
   // metres by system ({system: metres} or a dose's {system:{metres}}) -> the grouped rows; aerobic rows with no metres
   // are left out, anaerobic rows always stay.
   function rushton(map){const m=k=>{const v=map?.[k];return Math.max(0,Number(typeof v==='object'&&v?v.metres:v)||0);};
     const all=RUSHTON.reduce((n,g)=>n+g.systems.reduce((a,r)=>a+m(r.system),0),0);
     return RUSHTON.map(g=>{const rows=g.systems.map(r=>({...r,metres:m(r.system),pct:all?m(r.system)/all*100:0}));const total=rows.reduce((a,r)=>a+r.metres,0);
-      return{group:g.group,note:g.note,total,pct:all?total/all*100:0,rows:g.group==='Anaerobic'?rows:rows.filter(r=>r.metres>0)};}).filter(g=>g.group==='Anaerobic'||g.total>0);}
+      return{group:g.group,note:g.note,always:!!g.always,total,pct:all?total/all*100:0,rows:g.systems.length>1?rows.filter(r=>r.metres>0):rows};}).filter(g=>g.always||g.total>0);}
   function rushtonHtml(map,{empty='No classified training yet.'}={}){const groups=rushton(map);if(!groups.some(g=>g.total>0))return`<p class="muted">${esc(empty)}</p>`;
     const n=v=>Math.round(v).toLocaleString(),p=v=>`${Math.round(v)}%`;
-    return`<div class="rushton" data-rushton>${groups.map(g=>`<div class="rushton-group rushton-${g.group.toLowerCase()}"><div class="rushton-head"><b>${esc(g.group)}</b><span>${p(g.pct)} · ${n(g.total)}m</span></div>${g.rows.map(r=>`<div class="rushton-row${r.metres?'':' none'}" data-rushton-system="${esc(r.system)}"><span>${esc(r.label)}<small>${esc(r.note)}</small></span><i style="width:${Math.max(r.metres?2:0,Math.round(r.pct))}%"></i><b>${r.metres?`${p(r.pct)} · ${n(r.metres)}m`:'none'}</b></div>`).join('')}</div>`).join('')}</div>`;}
+    return`<div class="rushton" data-rushton>${groups.map(g=>`<div class="rushton-group rushton-${g.group.toLowerCase().replace(/[^a-z]+/g,'-')}"><div class="rushton-head"><b>${esc(g.group)}</b><span>${g.total?`${p(g.pct)} · ${n(g.total)}m`:'none'}</span></div>${g.rows.map(r=>`<div class="rushton-row${r.metres?'':' none'}" data-rushton-system="${esc(r.system)}"><span>${esc(r.label)}<small>${esc(r.note)}</small></span><i style="width:${Math.max(r.metres?2:0,Math.round(r.pct))}%"></i><b>${r.metres?`${p(r.pct)} · ${n(r.metres)}m`:'none'}</b></div>`).join('')}</div>`).join('')}</div>`;}
   // one set line (no swimmer) -> {system: metres}, the same per-rep / partial-MAX split the reports use. Used by the
   // swimmer training history and Session detail so every screen classifies work the same way.
   function itemSplit(item){if(!item||item.kind!=='set')return{};const out=blank();addSet(out,null,item,null,M.state,1);const r={};for(const[k,v]of Object.entries(out.systems))if(v.metres>0&&k!=='Unclassified')r[k]=v.metres;return r;}

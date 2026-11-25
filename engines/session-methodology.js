@@ -337,7 +337,7 @@
   // type. Display only: never changes the session, Roll or selection. Called by the modal owners themselves
   // (v4-poolside-core.js openNewSession, app.js openSessionEdit) -- no wrapper over their actions.
   // ---------------------------------------------------------------------------
-  const COACH_TERM={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power (top)','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Aerobic + Anaerobic Capacity','Skill / Technical':'Skills'};
+  const COACH_TERM={'Development':'Aerobic Capacity','Threshold':'Aerobic Power','Clearance':'Aerobic Power','Race pace':'Anaerobic Power','Speed / Max':'Anaerobic Capacity','Overload':'Aerobic Power','Regeneration':'Aerobic Capacity','Skill / Technical':'Skills'};/* 25 Nov 2026: Andy -- overload, threshold, clearance are aerobic power; regeneration and development aerobic capacity */
   const sysLabel=sys=>COACH_TERM[sys]?`${COACH_TERM[sys]} (${sys})`:sys;
   // 10 Oct 2026: when a season plan already exists (e.g. it starts next Monday), say so and let the coach
   // open it, instead of always offering "Plan next season" as if nothing had been planned.

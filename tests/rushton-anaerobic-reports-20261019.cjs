@@ -26,20 +26,21 @@ const SESS={
       const g=[...host.querySelectorAll('.rushton-group')].map(x=>({head:x.querySelector('.rushton-head').textContent,rows:[...x.querySelectorAll('.rushton-row')].map(r=>({sys:r.dataset.rushtonSystem,text:r.textContent}))}));host.remove();return g;},id);
     // 1. 13 Oct Dev
     let g=await sessionReport('oct13dev');
-    const an=g.find(x=>/^Anaerobic/.test(x.head));assert.ok(an,'Anaerobic group shown');assert.ok(g.find(x=>/^Aerobic/.test(x.head)),'Aerobic group shown');
-    assert.match(an.rows.find(r=>r.sys==='Race pace').text,/Anaerobic Power[\s\S]*race pace · lactate tolerance[\s\S]*400m/);
-    assert.match(an.rows.find(r=>r.sys==='Speed / Max').text,/Anaerobic Capacity[\s\S]*ATP-PC[\s\S]*200m/);
-    assert.match(an.head,/Anaerobic[\s\S]*600m/);
+    // 25 Nov 2026 (Andy): four zones -- Aerobic Capacity (regeneration, development), Aerobic Power (overload, threshold,
+    // clearance), Anaerobic Power (race pace), Anaerobic Capacity (top-end speed) -- plus Skills
+    const anp=g.find(x=>/^Anaerobic Power/.test(x.head)),anc=g.find(x=>/^Anaerobic Capacity/.test(x.head));assert.ok(anp&&anc,'both anaerobic zones shown');assert.ok(g.find(x=>/^Aerobic Capacity/.test(x.head)),'Aerobic Capacity shown');assert.ok(g.find(x=>/^Aerobic Power/.test(x.head)),'Aerobic Power shown');
+    assert.match(anp.rows.find(r=>r.sys==='Race pace').text,/Race pace[\s\S]*lactate tolerance[\s\S]*400m/);assert.match(anp.head,/Anaerobic Power[\s\S]*400m/);
+    assert.match(anc.rows.find(r=>r.sys==='Speed / Max').text,/Top-end speed[\s\S]*ATP-PC[\s\S]*200m/);assert.match(anc.head,/Anaerobic Capacity[\s\S]*200m/);
     // 2. all-aerobic day still shows the anaerobic side, as none
     g=await sessionReport('oct12');
-    const an12=g.find(x=>/^Anaerobic/.test(x.head));assert.ok(an12,'Anaerobic group shown on an aerobic day');
-    assert.deepEqual(an12.rows.map(r=>/none/.test(r.text)),[true,true],'both anaerobic rows say none');
-    assert.match(g.find(x=>/^Aerobic/.test(x.head)).rows.map(r=>r.text).join('|'),/Regeneration[\s\S]*Aerobic Capacity/);
+    const an12=g.filter(x=>/^Anaerobic/.test(x.head));assert.equal(an12.length,2,'both anaerobic zones shown on an aerobic day');
+    assert.deepEqual(an12.map(x=>/none/.test(x.head)),[true,true],'both anaerobic zones say none');
+    assert.match(g.find(x=>/^Aerobic Capacity/.test(x.head)).rows.map(r=>r.text).join('|'),/Regeneration[\s\S]*Development/,'regeneration and development sit inside Aerobic Capacity');
     // 3. Session detail on Coach Hub uses the same classification
     const detail=await page.evaluate(()=>{const M=window.MSOS4;M.state.settings.selectedSessionId='oct16';M.store.save(M.state);M.coachLoopUI.setHubPanel('session');M.nav.show('hub');M.coachLoopUI.renderCoachHub();
       const box=document.querySelector('#hubView .loop-intelligence [data-rushton]');return box?[...box.querySelectorAll('.rushton-row')].map(r=>({sys:r.dataset.rushtonSystem,text:r.textContent})):null;});
     assert.ok(detail,'Session detail shows the Rushton groups');
-    assert.match(detail.find(r=>r.sys==='Speed / Max').text,/Anaerobic Capacity[\s\S]*\d+m/);
+    assert.match(detail.find(r=>r.sys==='Speed / Max').text,/Top-end speed[\s\S]*\d+m/);
     assert.ok(!/Unclassified/.test(JSON.stringify(detail)),'grouped view has no Unclassified row');
     // 4. swimmer training history counts the anaerobic lines
     const th=await page.evaluate(()=>{const M=window.MSOS4,T=window.MSOSArchitecture.TrainingHistory;const s=M.state.canonicalSessions.oct13dev;const items=[];const walk=(xs,m)=>{for(const x of xs||[]){if(x.kind==='group')walk(x.items,m*(x.rounds||1));else if(x.kind==='set')items.push([x,m]);}};for(const b of s.blocks)walk(b.items,1);
@@ -47,7 +48,7 @@ const SESS={
     assert.equal(th['Race pace'],400,'4 x 50 @200 Pace x 2 rounds');assert.equal(th['Speed / Max'],200,'100 MAX x 2 rounds');
     // 5. swimmer Training tab chips
     const chips=await page.evaluate(()=>window.MSOS4.swimmerTrainingBG.windowHtml('Last 7 days',{confirmedDeliveredMetres:1200,sessions:1,zones:{Development:1000,'Race pace':200}}));
-    assert.match(chips,/Aerobic<\/b> 1,000m[\s\S]*Aerobic Capacity 1,000m[\s\S]*Anaerobic<\/b> 200m[\s\S]*Anaerobic Power 200m[\s\S]*Anaerobic Capacity none/);
+    assert.match(chips,/Aerobic Capacity<\/b> 1,000m[\s\S]*Development 1,000m[\s\S]*Anaerobic Power<\/b> 200m[\s\S]*Race pace 200m[\s\S]*Anaerobic Capacity<\/b> 0m/);
     assert.deepEqual(errors,[],errors.join('\n'));
     console.log('RUSHTON_ANAEROBIC_REPORTS_PASS');
   }finally{await browser.close();}
