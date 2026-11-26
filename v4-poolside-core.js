@@ -106,6 +106,13 @@
   }
   function enhanceTargetSemantics(session){let changed=0;S.walkSets(session,item=>{changed+=enhanceSetTargets(item)});return changed}
 
+  function inlineRotation(line){const m=String(line).match(/^(\s*\d{1,3}\s*[x×]\s*\d{1,4}(?:\.5)?\b)(.*)$/i);if(!m)return null;
+    const body=m[2],re=/(^|[(,;\/]|\s)\s*(\d{1,2})\s*[-–:]\s+([^,;\/()]+?)(?=\s*(?:[,;\/)]|\s\d{1,2}\s*[-–:]\s|$))/g;const hits=[];let x;
+    while((x=re.exec(body))){const n=Number(x[2]),t=x[3].trim();if(n!==hits.length+1||!t||/^\d+\b(?!\s*m\b)/i.test(t))break;hits.push({n,t,start:x.index+x[1].length,end:re.lastIndex});}
+    const reps=Number(m[1].match(/^\s*(\d+)/)[1]);if(hits.length<2||hits.length>reps)return null;
+    let rest=body.slice(0,hits[0].start)+body.slice(hits.at(-1).end);rest=rest.replace(/\(\s*[,;\/]?\s*\)/g,' ').replace(/\(\s*\)/g,' ').replace(/\s+/g,' ').trim();
+    if(/^\)/.test(rest))rest=rest.replace(/^\)\s*/,'');if(/\($/.test(rest))rest=rest.replace(/\s*\($/,'');
+    return{head:`${m[1].trim()}${rest?' '+rest:''}`,parts:hits.map(h=>h.t)};}
   function normaliseText(source){
     const input=String(source??'').replace(/\r/g,'').split('\n');
     const stage=[];
@@ -123,6 +130,10 @@
       line=line.replace(/(\d)\s+i[’']m\b/gi,'$1 IM');
       const hr=headingRounds(line);
       if(hr){stage.push(hr.heading,`${hr.rounds} Rounds:`);if(hr.tail)stage.push(hr.tail);continue}
+      // 27 Nov 2026 (Andy: "12 x 25 @ 0:45 (1- 15m MAX, 2- Underwater)" headlined "12×25 Underwater 15m MAX" -- a bit of
+      // a parser issue on the 25s). A numbered rotation written on the set line ("1- A, 2- B", "1: A / 2: B") is the
+      // same as writing "#1 A" and "#2 B" on the lines under it, which the parser already reads as the rep pattern.
+      const rot=inlineRotation(line);if(rot){stage.push(normaliseCycle(rot.head),...rot.parts.map((t,i)=>`#${i+1} ${t}`));continue}
       stage.push(normaliseCycle(line));
     }
     const out=[];
