@@ -158,3 +158,4 @@ jobs:
           node tests/password-sign-in-20261125.cjs
           node tests/session-named-by-main-set-20261125.cjs
           node tests/t400-own-stroke-20261125.cjs
+          node tests/signed-out-no-renewal-storm-20261127.cjs

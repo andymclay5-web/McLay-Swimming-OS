@@ -45,7 +45,8 @@
   }
   function firstRow(rows){return Array.isArray(rows)?rows[0]||null:rows||null}
 
-  T.isSignedIn=()=>!!M.store.auth()?.access_token;
+  // 27 Nov 2026: a sign-in the cloud has ended (password changed on another device) is not signed in
+  T.isSignedIn=()=>!!M.store.auth()?.access_token&&!M.cloudSessionEngine?.isSignedOut?.();
   T.signedInEmail=()=>text(M.store.auth()?.user?.email||'');
   // Real, per-person authorship (10 Sept 2026, Phase 2: "every edit gets tagged with who made it"). This
   // is what app.js's session-change engine (tx()) stamps onto every change and onto the session document
