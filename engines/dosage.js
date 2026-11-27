@@ -150,7 +150,7 @@
     // the race-target-intent engine (the one owner of that shorthand) instead of a second regex.
     let shorthand=null;try{shorthand=E.RaceTargetIntent?.shorthandPace?.(item);}catch{}
     if(item?.raceIntent||shorthand||either(/\b(?:race\s*pace|\bRP\s*\d|\d+\s*pace)\b/i))return'Race pace';
-    if(either(/\b(?:speed|alactic|neural)\b/i))return'Speed / Max';
+    /* 28 Nov 2026 (Andy: "so sharpeners will be logged as top end speed too") -- bursts of 4-6 max strokes */if(either(/\b(?:speed|alactic|neural|sharpeners?)\b/i))return'Speed / Max';
     // A part-rep max ("15m MAX", "4 x 25 Fins 15m Underwater MAX") is alactic work whatever the rest (partialMax splits it).
     const effortText=raw.replace(restWords,' ');
     if(/(?<!#\s*)\b\d{1,3}\s*m?\s+(?:underwater\s+)?max\b/i.test(effortText))return'Speed / Max';

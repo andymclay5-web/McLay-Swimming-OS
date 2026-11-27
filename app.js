@@ -380,7 +380,7 @@
        if(current){const inline=inlineComposition(line,current.distance);if(inline){current.composition.push(...inline);continue}}
        const node=makeSet(sessionId,type,++order,line,1,single.distance,single.tail);
        // potential component; we resolve after seeing following lines.
-       if(current&&node.distance<current.distance&&!/\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy)\b/i.test(line)&&!/\d\s*s(?:ec)?\s*R\b|\d\s*SR\b/i.test(line)&&!zoneName(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order,_wholeSwim:node});
+       /* 28 Nov 2026 (Andy: '400 fr / 100 sharpeners / 400 IM' -- sharpeners are bursts of 4-6 max strokes, "I either prescribe a number of them or a distance to complete of them"): 100 sharpeners is 100 m of its own, not a breakdown of the 400 */if(current&&node.distance<current.distance&&!/\b(?:@|rest|SR|pace|MAX|build|pull|kick|scull|easy|sharpeners?)\b/i.test(line)&&!/\d\s*s(?:ec)?\s*R\b|\d\s*SR\b/i.test(line)&&!zoneName(line))push({id:node.id,kind:'component',distance:node.distance,text:U.text(single.tail),raw:line,order:node.order,_wholeSwim:node});
        else push(node);
        continue
      }

@@ -75,6 +75,12 @@
     if(Math.abs(cycle-Number(auto.cycleSeconds||0))>.001)patch.cycleSeconds=cycle;
     if(Math.abs(rest-Number(auto.restSeconds||0))>.001)patch.restSeconds=rest;
     if(!jsonSame(equipment,auto.equipment||[]))patch.equipment=equipment;
+    // 28 Nov 2026 (Andy, 6:56 am: "tried 3 times to change Charlotte's 16x100 to 16x50 but it's not saving"). The
+    // patch only kept what differed from the automatic version, but a coach-set shape replaces the automatic shape --
+    // the engine builds it on the squad set (12 x 100). Her automatic distance was already shortened, so a typed 50
+    // matching it was dropped and she read 16 x 100. Any change to reps / distance / send-off / rest saves the whole
+    // shape exactly as typed.
+    if(['reps','distance','cycleSeconds','restSeconds'].some(k=>k in patch)){patch.reps=reps;patch.distance=distance;if(cycle>0||Number(auto.cycleSeconds)>0)patch.cycleSeconds=cycle;if(rest>0||Number(auto.restSeconds)>0)patch.restSeconds=rest;}
     if(!jsonSame(cues,auto.cues||[]))patch.cues=cues;
     upsert(session,item,ath,patch,pending);if(pending)notifyPendingStroke(session,ath,pending);close();persist(session,y);
     M.toast?.(pending?`${ath.full_name} modification updated · stroke change flagged for Andy (${pending.reason})`:Object.keys(patch).length?`${ath.full_name} modification updated`:`${ath.full_name} back to automatic`);

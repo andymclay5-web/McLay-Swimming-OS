@@ -135,6 +135,9 @@
       // the next 2 are underwater ... and so on" (1 MAX, 2 underwater, 1 MAX, ...). It is the same as writing "1 15m MAX"
       // and "2 Underwater" on the lines under it, which the parser already reads as the rep pattern. Only taken as a
       // cycle when the counts go evenly into the reps.
+      // 28 Nov 2026 (Andy): sharpeners are prescribed as a distance ("100 sharpeners" -- metres) or a number of them
+      // ("6 sharpeners" -- bursts, no metres of their own).
+      {const sh=String(line).match(/^\s*(\d{1,2})\s*(?:[x×]\s*)?(sharpeners?)\b(.*)$/i);if(sh&&Number(sh[1])<25){stage.push(`Sharpeners × ${sh[1]}${sh[3]}`);continue}}
       const rot=inlineRotation(line);if(rot){stage.push(normaliseCycle(rot.head),...rot.parts);continue}
       stage.push(normaliseCycle(line));
     }

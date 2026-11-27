@@ -161,3 +161,4 @@ jobs:
           node tests/signed-out-no-renewal-storm-20261127.cjs
           node tests/writer-photo-comes-back-20261127.cjs
           node tests/inline-rotation-headline-20261127.cjs
+          node tests/charlotte-edit-sharpeners-im-20261128.cjs
